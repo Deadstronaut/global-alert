@@ -17,11 +17,12 @@ const uiStore = useUIStore()
 const geoStore = useGeolocationStore()
 const { locale } = useI18n()
 
-// Watch for locale changes to handle RTL
+// Watch for locale changes to handle RTL and set lang attribute
 watch(
   () => locale.value,
   (newLocale) => {
     document.documentElement.setAttribute('dir', newLocale === 'ar' ? 'rtl' : 'ltr')
+    document.documentElement.setAttribute('lang', newLocale)
   },
   { immediate: true },
 )

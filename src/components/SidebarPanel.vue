@@ -173,7 +173,7 @@ watch([rangeStartDate, rangeEndDate], ([start, end]) => {
 
     <!-- Disaster Toggles -->
     <div class="sidebar-section" v-if="!uiStore.sidebarCollapsed">
-      <h3 class="section-title">{{ t('sidebar.disasterToggles') }}</h3>
+      <h2 class="section-title">{{ t('sidebar.disasterToggles') }}</h2>
 
       <div class="disaster-toggles">
         <button
@@ -319,7 +319,7 @@ watch([rangeStartDate, rangeEndDate], ([start, end]) => {
 
     <!-- Severity Legend -->
     <div class="sidebar-section" v-if="!uiStore.sidebarCollapsed">
-      <h3 class="section-title">{{ t('sidebar.legend') }}</h3>
+      <h2 class="section-title">{{ t('sidebar.legend') }}</h2>
       <div class="legend">
         <button
           v-for="severity in severityLevels"
@@ -336,7 +336,7 @@ watch([rangeStartDate, rangeEndDate], ([start, end]) => {
 
     <!-- Time Range -->
     <div class="sidebar-section" v-if="!uiStore.sidebarCollapsed">
-      <h3 class="section-title">Zaman Aralığı</h3>
+      <h2 class="section-title">Zaman Aralığı</h2>
       <div class="time-range-list">
         <button
           v-for="range in timeRanges"
@@ -377,6 +377,7 @@ watch([rangeStartDate, rangeEndDate], ([start, end]) => {
             class="switch-input"
             :checked="isGlobeMode"
             @change="handleViewModeSwitch"
+            aria-label="Toggle 3D Globe Mode"
           />
           <div class="switch-track">
             <span class="track-text text-3d">View 3D</span>
@@ -396,12 +397,13 @@ watch([rangeStartDate, rangeEndDate], ([start, end]) => {
 
         <div class="theme-switch-wrap">
           <span class="theme-mode-label">{{ isDarkMode ? 'Dark Mode' : 'Light Mode' }}</span>
-          <label class="theme-switch">
+          <label class="theme-switch" for="theme-input">
             <input
               id="theme-input"
               type="checkbox"
               :checked="isDarkMode"
               @change="handleThemeSwitch"
+              aria-label="Toggle Dark Mode"
             />
             <div class="theme-slider round">
               <div class="sun-moon">

@@ -1,6 +1,29 @@
 import { corsHeaders } from '../shared/cors.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3'
 
+// Helper to calculate distance in km (Haversine)
+function distanceKm(lat1: number, lng1: number, lat2: number, lng2: number) {
+  const R = 6371
+  const dLat = (lat2 - lat1) * (Math.PI / 180)
+  const dLng = (lng2 - lng1) * (Math.PI / 180)
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(lat1 * (Math.PI / 180)) *
+      Math.cos(lat2 * (Math.PI / 180)) *
+      Math.sin(dLng / 2) *
+      Math.sin(dLng / 2)
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
+  return R * c
+}
+
+function getWildfireSeverity(brightness: number) {
+  if (brightness > 350) return 'critical'
+  if (brightness > 330) return 'high'
+  if (brightness > 315) return 'medium'
+  if (brightness > 300) return 'low'
+  return 'minimal'
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
@@ -8,75 +31,74 @@ Deno.serve(async (req) => {
 
   try {
     const FIRMS_KEY = Deno.env.get('NASA_FIRMS_KEY')
-    let finalWildfires = []
-    let sourceUsed = 'nasa-firms'
+    const aggregatedEvents: any[] = []
+    let sourceUsed = 'nasa-firms-aggregated'
 
     if (!FIRMS_KEY) {
       console.warn('NASA_FIRMS_KEY not found in environment. Falling back to mock data.')
       sourceUsed = 'mock-missing-key'
     } else {
-      try {
-        const controller = new AbortController()
-        const timeoutId = setTimeout(() => controller.abort(), 8000) // 8s timeout
+      // Fetch from multiple satellite sources
+      const satelliteSources = [
+        'VIIRS_SNPP_NRT',
+        'MODIS_TERRA_NRT',
+        'MODIS_AQUA_NRT',
+        'VIIRS_NOAA20_NRT',
+      ]
 
-        // Using VIIRS SNPP NRT worldwide 1 day data
-        const url = `https://firms.modaps.eosdis.nasa.gov/api/area/csv/${FIRMS_KEY}/VIIRS_SNPP_NRT/world/1`
-        const response = await fetch(url, { signal: controller.signal })
+      const fetchPromises = satelliteSources.map(async (sat) => {
+        try {
+          const controller = new AbortController()
+          const timeoutId = setTimeout(() => controller.abort(), 10000) // 10s timeout
+          const url = `https://firms.modaps.eosdis.nasa.gov/api/area/csv/${FIRMS_KEY}/${sat}/world/1`
+          const response = await fetch(url, { signal: controller.signal })
+          clearTimeout(timeoutId)
 
-        clearTimeout(timeoutId)
+          if (response.ok) {
+            const csvData = await response.text()
+            const lines = csvData.split('\n')
+            if (lines.length > 1) {
+              const headers = lines[0].split(',')
+              const latIdx = headers.findIndex((h) => h.trim() === 'latitude')
+              const lngIdx = headers.findIndex((h) => h.trim() === 'longitude')
+              const brightIdx = headers.findIndex((h) => h.trim().includes('bright'))
 
-        if (!response.ok) {
-          throw new Error(`Failed to fetch FIRMS data: ${response.status} ${response.statusText}`)
+              return lines
+                .slice(1)
+                .filter((l) => l.trim().length > 0)
+                .map((line, idx) => {
+                  const cols = line.split(',')
+                  const lat = parseFloat(cols[latIdx]) || 0
+                  const lng = parseFloat(cols[lngIdx]) || 0
+                  const brightness = parseFloat(cols[brightIdx]) || 0
+
+                  return {
+                    id: `nasa-${sat}-${idx}-${lat}-${lng}`,
+                    type: 'wildfire',
+                    title: `Wildfire Alert (${sat} Temp: ${brightness}K)`,
+                    lat: lat,
+                    lng: lng,
+                    severity: getWildfireSeverity(brightness),
+                    timestamp: new Date().toISOString(),
+                    source: `nasa-${sat.toLowerCase().replace('_', '-')}`,
+                    brightness: brightness,
+                  }
+                })
+            }
+          }
+        } catch (e) {
+          console.error(`NASA FIRMS fetch failed for ${sat}:`, e)
         }
+        return []
+      })
 
-        const csvData = await response.text()
-        const lines = csvData.split('\n')
-
-        if (lines.length > 1) {
-          const headers = lines[0].split(',')
-          const latIdx = headers.findIndex((h) => h.trim() === 'latitude')
-          const lngIdx = headers.findIndex((h) => h.trim() === 'longitude')
-          const brightIdx = headers.findIndex((h) => h.trim() === 'bright_ti4')
-
-          // Parse records and map to our format
-          finalWildfires = lines
-            .slice(1)
-            .filter((l) => l.trim().length > 0)
-            .map((line, idx) => {
-              const cols = line.split(',')
-              const lat = parseFloat(cols[latIdx]) || 0
-              const lng = parseFloat(cols[lngIdx]) || 0
-              const brightness = parseFloat(cols[brightIdx]) || 0
-
-              return {
-                id: `nasa-${idx}`,
-                type: 'wildfire',
-                title: `Wildfire Alert (Temp: ${brightness}K)`,
-                lat: lat,
-                lng: lng,
-                severity: brightness > 330 ? 'high' : 'moderate',
-                timestamp: new Date().toISOString(),
-                source: 'nasa-firms',
-              }
-            })
-            // Just take top 100 hottest fires to not choke the UI
-            .sort((a, b) => {
-              const aTemp = parseFloat(a.title.replace('Wildfire Alert (Temp: ', ''))
-              const bTemp = parseFloat(b.title.replace('Wildfire Alert (Temp: ', ''))
-              return bTemp - aTemp
-            })
-            .slice(0, 100)
-        }
-      } catch (e) {
-        console.error('NASA FIRMS fetching failed', e)
-        sourceUsed = 'mock-fetch-failed'
-      }
+      const results = await Promise.all(fetchPromises)
+      results.forEach((list) => aggregatedEvents.push(...list))
     }
 
-    if (sourceUsed.startsWith('mock-')) {
-      // Fallback or Missing Key Mock
-      // Let's seed some realistic large-scale ongoing fires or high risk zones
-      finalWildfires = [
+    // Default mock data if no events found or key missing
+    if (aggregatedEvents.length === 0) {
+      aggregatedEvents.push(
         {
           id: 'wf_mock_1',
           type: 'wildfire',
@@ -86,6 +108,7 @@ Deno.serve(async (req) => {
           severity: 'high',
           timestamp: new Date().toISOString(),
           source: 'mock',
+          brightness: 350,
         },
         {
           id: 'wf_mock_2',
@@ -96,6 +119,7 @@ Deno.serve(async (req) => {
           severity: 'medium',
           timestamp: new Date().toISOString(),
           source: 'mock',
+          brightness: 320,
         },
         {
           id: 'wf_mock_3',
@@ -106,37 +130,34 @@ Deno.serve(async (req) => {
           severity: 'high',
           timestamp: new Date().toISOString(),
           source: 'mock',
+          brightness: 345,
         },
-        {
-          id: 'wf_mock_4',
-          type: 'wildfire',
-          title: 'Amazon Fire - Brazil',
-          lat: -3.41,
-          lng: -60.02,
-          severity: 'high',
-          timestamp: new Date().toISOString(),
-          source: 'mock',
-        },
-        {
-          id: 'wf_mock_5',
-          type: 'wildfire',
-          title: 'Taiga Fire - Siberia',
-          lat: 60.0,
-          lng: 100.0,
-          severity: 'medium',
-          timestamp: new Date().toISOString(),
-          source: 'mock',
-        },
-      ]
+      )
     }
 
-    if (finalWildfires.length > 0) {
-      const supabase = createClient(
-        Deno.env.get('SUPABASE_URL') ?? '',
-        Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
-      )
+    // Spatial Deduplication (Fires within 5km of each other)
+    const finalEvents: any[] = []
+    const sortedEvents = aggregatedEvents.sort((a, b) => (b.brightness || 0) - (a.brightness || 0))
 
-      const eventsToInsert = finalWildfires.map((fw) => ({
+    for (const event of sortedEvents) {
+      const isDuplicate = finalEvents.some((existing) => {
+        return distanceKm(event.lat, event.lng, existing.lat, existing.lng) < 5
+      })
+      if (!isDuplicate) {
+        finalEvents.push(event)
+      }
+    }
+
+    // Limit to top 150 hottest fires
+    const limitedEvents = finalEvents.slice(0, 150)
+
+    const supabase = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
+    )
+
+    if (limitedEvents.length > 0) {
+      const eventsToInsert = limitedEvents.map((fw) => ({
         id: fw.id,
         title: fw.title,
         description: null,
@@ -158,8 +179,13 @@ Deno.serve(async (req) => {
 
     return new Response(
       JSON.stringify({
-        meta: { status: 'success', source: sourceUsed, count: finalWildfires.length },
-        data: finalWildfires,
+        meta: {
+          status: 'success',
+          source: sourceUsed,
+          count: limitedEvents.length,
+          total_fetched: aggregatedEvents.length,
+        },
+        data: limitedEvents,
       }),
       {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },

@@ -1,4 +1,5 @@
 import { corsHeaders } from '../shared/cors.ts'
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3'
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -19,7 +20,7 @@ Deno.serve(async (req) => {
         const timeoutId = setTimeout(() => controller.abort(), 8000) // 8s timeout
 
         // Using VIIRS SNPP NRT worldwide 1 day data
-        const url = `https://firms.modaps.eosdis.nasa.gov/api/country/csv/${FIRMS_KEY}/VIIRS_SNPP_NRT/world/1`
+        const url = `https://firms.modaps.eosdis.nasa.gov/api/area/csv/${FIRMS_KEY}/VIIRS_SNPP_NRT/world/1`
         const response = await fetch(url, { signal: controller.signal })
 
         clearTimeout(timeoutId)
@@ -53,7 +54,7 @@ Deno.serve(async (req) => {
                 title: `Wildfire Alert (Temp: ${brightness}K)`,
                 lat: lat,
                 lng: lng,
-                severity: brightness > 330 ? 'high' : 'medium',
+                severity: brightness > 330 ? 'high' : 'moderate',
                 timestamp: new Date().toISOString(),
                 source: 'nasa-firms',
               }
@@ -127,6 +128,32 @@ Deno.serve(async (req) => {
           source: 'mock',
         },
       ]
+    }
+
+    if (finalWildfires.length > 0) {
+      const supabase = createClient(
+        Deno.env.get('SUPABASE_URL') ?? '',
+        Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
+      )
+
+      const eventsToInsert = finalWildfires.map((fw) => ({
+        id: fw.id,
+        title: fw.title,
+        description: null,
+        lat: fw.lat,
+        lng: fw.lng,
+        severity: fw.severity,
+        timestamp: fw.timestamp,
+        source: fw.source,
+      }))
+
+      const { error: upsertError } = await supabase
+        .from('wildfire_events')
+        .upsert(eventsToInsert, { onConflict: 'id' })
+
+      if (upsertError) {
+        console.error('Error upserting wildfires:', upsertError)
+      }
     }
 
     return new Response(

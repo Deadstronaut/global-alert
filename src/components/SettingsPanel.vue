@@ -73,18 +73,53 @@ function changeLanguage(lang) {
         <h4 class="settings-section-title">{{ t('settings.language') }}</h4>
         <div class="language-buttons">
           <button
-            class="btn btn-ghost"
-            :class="{ 'btn-primary': locale === 'tr' }"
-            @click="changeLanguage('tr')"
-          >
-            🇹🇷 Türkçe
-          </button>
-          <button
-            class="btn btn-ghost"
+            class="btn btn-ghost lang-btn"
             :class="{ 'btn-primary': locale === 'en' }"
             @click="changeLanguage('en')"
           >
-            🇬🇧 English
+            EN
+          </button>
+          <button
+            class="btn btn-ghost lang-btn"
+            :class="{ 'btn-primary': locale === 'es' }"
+            @click="changeLanguage('es')"
+          >
+            ES
+          </button>
+          <button
+            class="btn btn-ghost lang-btn"
+            :class="{ 'btn-primary': locale === 'fr' }"
+            @click="changeLanguage('fr')"
+          >
+            FR
+          </button>
+          <button
+            class="btn btn-ghost lang-btn"
+            :class="{ 'btn-primary': locale === 'ru' }"
+            @click="changeLanguage('ru')"
+          >
+            RU
+          </button>
+          <button
+            class="btn btn-ghost lang-btn"
+            :class="{ 'btn-primary': locale === 'ar' }"
+            @click="changeLanguage('ar')"
+          >
+            AR
+          </button>
+          <button
+            class="btn btn-ghost lang-btn"
+            :class="{ 'btn-primary': locale === 'zh' }"
+            @click="changeLanguage('zh')"
+          >
+            ZH
+          </button>
+          <button
+            class="btn btn-ghost lang-btn"
+            :class="{ 'btn-primary': locale === 'tr' }"
+            @click="changeLanguage('tr')"
+          >
+            TR
           </button>
         </div>
       </div>
@@ -212,11 +247,17 @@ function changeLanguage(lang) {
 
 .language-buttons {
   display: flex;
-  gap: var(--space-sm);
+  flex-wrap: wrap;
+  gap: 8px;
 }
 
-.language-buttons .btn {
-  flex: 1;
+.lang-btn {
+  flex: 1 1 calc(33% - 8px);
+  min-width: 60px;
+  font-size: 0.75rem;
+  font-family: var(--font-mono);
+  font-weight: 700;
+  padding: 8px;
 }
 
 /* Slide transition */

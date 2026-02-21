@@ -14,8 +14,11 @@ export const useDisasterStore = defineStore('disaster', () => {
     const activeSeverities = ref(new Set(['critical', 'high', 'moderate', 'low', 'minimal']));
     const isLoading = ref(false);
     const lastUpdated = ref(null);
+    const startDate = ref(null);
+    const endDate = ref(null);
     const sourcesOnline = ref(0);
     const errors = ref([]);
+    const selectedTimeRange = ref(24); // Default 24 hours
 
     // Polling timers
     const pollingTimers = ref({});
@@ -27,7 +30,26 @@ export const useDisasterStore = defineStore('disaster', () => {
         if (activeLayers.value.has('wildfire')) events.push(...wildfires.value);
         if (activeLayers.value.has('flood')) events.push(...floods.value);
         if (activeLayers.value.has('drought')) events.push(...droughts.value);
-        return events.filter(e => activeSeverities.value.has(e.severity));
+
+        // Filter by Severity
+        let filtered = events.filter(e => activeSeverities.value.has(e.severity));
+
+        // Filter by Time
+        if (startDate.value || endDate.value) {
+            // Calendar Mode: Use explicit range
+            const startStr = startDate.value ? new Date(startDate.value).getTime() : 0;
+            const endStr = endDate.value ? new Date(endDate.value).getTime() : Infinity;
+
+            return filtered.filter(e => {
+                const et = new Date(e.time).getTime();
+                return et >= startStr && et <= endStr;
+            });
+        } else {
+            // Quick Range Mode: From now backwards
+            const now = new Date();
+            const cutoff = new Date(now.getTime() - selectedTimeRange.value * 60 * 60 * 1000);
+            return filtered.filter(e => new Date(e.time).getTime() >= cutoff.getTime());
+        }
     });
 
     const totalCount = computed(() => ({
@@ -48,7 +70,7 @@ export const useDisasterStore = defineStore('disaster', () => {
         errors.value = [];
 
         try {
-            const data = await fetchAllDisasters();
+            const data = await fetchAllDisasters(startDate.value, endDate.value);
             earthquakes.value = data.earthquakes;
             wildfires.value = data.wildfires;
             floods.value = data.floods;
@@ -151,6 +173,9 @@ export const useDisasterStore = defineStore('disaster', () => {
         activeSeverities,
         isLoading,
         lastUpdated,
+        startDate,
+        endDate,
+        selectedTimeRange,
         sourcesOnline,
         errors,
         allEvents,

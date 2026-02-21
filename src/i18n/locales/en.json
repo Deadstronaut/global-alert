@@ -35,6 +35,7 @@
     "legend": "Intensity Scale",
     "myLocation": "My Location",
     "locating": "Locating...",
+    "locationDetected": "Location Detected",
     "locationDenied": "Location permission denied"
   },
   "alerts": {
@@ -50,7 +51,10 @@
     "source": "Source",
     "viewOnMap": "View on Map",
     "newAlert": "New Alert!",
-    "criticalAlert": "CRITICAL ALERT"
+    "criticalAlert": "CRITICAL ALERT",
+    "emergencyTitle": "EMERGENCY ALERT",
+    "emergencyInstruction": "Please move to a safe area and follow instructions from local authorities.",
+    "emergencyDismiss": "Understood"
   },
   "stats": {
     "activeEarthquakes": "Active Earthquakes",

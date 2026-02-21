@@ -9,10 +9,22 @@ import SettingsPanel from '@/components/SettingsPanel.vue'
 import { useDisasterStore } from '@/stores/disaster.js'
 import { useUIStore } from '@/stores/ui.js'
 import { useGeolocationStore } from '@/stores/geolocation.js'
+import { useI18n } from 'vue-i18n'
+import EmergencyPopup from '@/components/EmergencyPopup.vue'
 
 const disasterStore = useDisasterStore()
 const uiStore = useUIStore()
 const geoStore = useGeolocationStore()
+const { locale } = useI18n()
+
+// Watch for locale changes to handle RTL
+watch(
+  () => locale.value,
+  (newLocale) => {
+    document.documentElement.setAttribute('dir', newLocale === 'ar' ? 'rtl' : 'ltr')
+  },
+  { immediate: true },
+)
 
 // Recalculate nearby threats when data or location changes
 watch(
@@ -23,6 +35,21 @@ watch(
     }
   },
   { deep: true },
+)
+
+// Watch for critical threats nearby to trigger the emergency popup
+watch(
+  () => geoStore.nearbyThreats,
+  (threats) => {
+    if (threats && threats.length > 0) {
+      const criticalThreat = threats.find((t) => t.severity === 'critical' || t.severity === 'high')
+      if (criticalThreat && !uiStore.emergencyPopupOpen) {
+        uiStore.activeEmergency = criticalThreat
+        uiStore.emergencyPopupOpen = true
+      }
+    }
+  },
+  { immediate: true },
 )
 
 onMounted(() => {
@@ -56,6 +83,7 @@ onMounted(() => {
     <StatsOverlay />
     <AlertPanel />
     <SettingsPanel />
+    <EmergencyPopup />
 
     <!-- Mobile sidebar toggle button -->
     <button

@@ -1,5 +1,5 @@
 ﻿<script setup>
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { useDisasterStore } from '@/stores/disaster.js'
 import { useUIStore } from '@/stores/ui.js'
 import { useGeolocationStore } from '@/stores/geolocation.js'
@@ -13,14 +13,24 @@ const isGlobeMode = computed(() => uiStore.viewMode === 'globe')
 const isDarkMode = computed(() => uiStore.darkMode)
 
 const disasterTypes = [
-  { key: 'earthquake', icon: '🔴', cssClass: 'btn-earthquake' },
-  { key: 'wildfire', icon: '🔥', cssClass: 'btn-wildfire' },
-  { key: 'flood', icon: '🌊', cssClass: 'btn-flood' },
-  { key: 'drought', icon: '☀️', cssClass: 'btn-drought' },
+  {
+    key: 'earthquake',
+    icon: '⛰️',
+    cssClass: 'btn-earthquake',
+    labelKey: 'stats.activeEarthquakes',
+  },
+  { key: 'wildfire', icon: '🔥', cssClass: 'btn-wildfire', labelKey: 'stats.activeWildfires' },
+  { key: 'flood', icon: '🌊', cssClass: 'btn-flood', labelKey: 'stats.activeFloods' },
+  { key: 'drought', icon: '🔴', cssClass: 'btn-drought', labelKey: 'stats.activeDroughts' },
 ]
 
 const severityLevels = ['critical', 'high', 'moderate', 'low', 'minimal']
-const timeRanges = ['24 Saat', '12 Saat', '6 Saat', '1 Saat', '30 Dakika', '15 Dakika']
+const timeRanges = ['24 Saat', '12 Saat', '6 Saat', '3 Saat', '1 Saat', '30 Dakika', '15 Dakika']
+const selectedTimeRange = ref('24 Saat')
+const today = new Date().toISOString().slice(0, 10)
+const rangeStartDate = ref(today)
+const rangeEndDate = ref('')
+const calendarPickValue = ref(today)
 
 function handleLocate() {
   geoStore.requestLocation().then(() => {
@@ -43,6 +53,96 @@ function handleViewModeSwitch(event) {
 function handleThemeSwitch(event) {
   uiStore.darkMode = event.target.checked
 }
+
+function getSourceStatusClass(count) {
+  if (count >= 4) return 'source-level-4'
+  if (count === 3) return 'source-level-3'
+  if (count === 2) return 'source-level-2'
+  if (count === 1) return 'source-level-1'
+  return 'source-level-0'
+}
+
+function selectTimeRange(rangeLabel) {
+  const map = {
+    '24 Saat': 24,
+    '12 Saat': 12,
+    '6 Saat': 6,
+    '3 Saat': 3,
+    '1 Saat': 1,
+    '30 Dakika': 0.5,
+    '15 Dakika': 0.25,
+  }
+
+  const hours = map[rangeLabel] || 24
+  disasterStore.selectedTimeRange = hours
+  selectedTimeRange.value = rangeLabel
+
+  // Selecting a quick range should logically clear the custom calendar range
+  // to avoid confusion, and reset back to "now" focused polling.
+  rangeStartDate.value = today
+  rangeEndDate.value = ''
+  calendarPickValue.value = today
+
+  // Reset store to default "poll" mode without specific day boundaries
+  disasterStore.startDate = null
+  disasterStore.endDate = null
+  disasterStore.fetchAll()
+}
+
+function handleSingleCalendarPick(event) {
+  const picked = event.target.value
+  if (!picked) return
+
+  // Start a new selection cycle if there is no active range yet
+  // or an existing range is already complete.
+  if (!rangeStartDate.value || rangeEndDate.value) {
+    rangeStartDate.value = picked
+    rangeEndDate.value = ''
+    calendarPickValue.value = picked
+    return
+  }
+
+  // Complete the range on the second pick.
+  if (picked < rangeStartDate.value) {
+    rangeEndDate.value = rangeStartDate.value
+    rangeStartDate.value = picked
+  } else {
+    rangeEndDate.value = picked
+  }
+  calendarPickValue.value = picked
+  selectedTimeRange.value = '' // Clear quick range label when using calendar
+}
+
+const selectedRangeLabel = computed(() => {
+  if (!rangeStartDate.value) return 'Tarih seçin'
+  if (!rangeEndDate.value || rangeEndDate.value === rangeStartDate.value)
+    return rangeStartDate.value
+  return `${rangeStartDate.value} - ${rangeEndDate.value}`
+})
+
+import { watch } from 'vue'
+
+watch([rangeStartDate, rangeEndDate], ([start, end]) => {
+  if (!start) return
+
+  const startDateObj = new Date(start)
+  startDateObj.setHours(0, 0, 0, 0)
+  disasterStore.startDate = startDateObj.toISOString()
+
+  let endDateObj = null
+  if (end) {
+    endDateObj = new Date(end)
+  } else {
+    // Single day selected, use that for the end date as well (end of the day)
+    endDateObj = new Date(start)
+  }
+
+  endDateObj.setHours(23, 59, 59, 999)
+  disasterStore.endDate = endDateObj.toISOString()
+
+  // Auto-fetch using the new date boundaries
+  disasterStore.fetchAll()
+})
 </script>
 
 <template>
@@ -84,7 +184,7 @@ function handleThemeSwitch(event) {
           @click="disasterStore.toggleLayer(dtype.key)"
         >
           <span class="toggle-icon">{{ dtype.icon }}</span>
-          <span class="toggle-label">{{ t(`disasters.${dtype.key}`) }}</span>
+          <span class="toggle-label">{{ t(dtype.labelKey) }}</span>
           <span
             class="badge"
             :class="{
@@ -156,10 +256,13 @@ function handleThemeSwitch(event) {
         v-for="range in timeRanges"
         :key="`mini-${range}`"
         class="btn-icon collapsed-action time-mini"
+        :class="{ active: selectedTimeRange === range }"
+        @click="selectTimeRange(range)"
         :title="range"
       >
         {{ range.replace(' Saat', 's').replace(' Dakika', 'd') }}
       </button>
+      <button class="btn-icon collapsed-action calendar-mini" title="Takvim">📅</button>
 
       <div class="collapsed-divider"></div>
 
@@ -182,7 +285,11 @@ function handleThemeSwitch(event) {
       <div class="collapsed-divider"></div>
 
       <!-- 5) Kalan seçenekler -->
-      <button class="btn-icon collapsed-action" @click="handleLocate" :title="t('sidebar.myLocation')">
+      <button
+        class="btn-icon collapsed-action"
+        @click="handleLocate"
+        :title="t('sidebar.myLocation')"
+      >
         📍
       </button>
       <button
@@ -193,9 +300,21 @@ function handleThemeSwitch(event) {
       >
         🔄
       </button>
-      <button class="btn-icon collapsed-action" @click="uiStore.toggleSettings()" :title="t('app.settings')">
+      <button
+        class="btn-icon collapsed-action"
+        @click="uiStore.toggleSettings()"
+        :title="t('app.settings')"
+      >
         ⚙️
       </button>
+
+      <div
+        class="collapsed-sources"
+        :class="getSourceStatusClass(disasterStore.sourcesOnline)"
+        v-if="disasterStore.lastUpdated"
+      >
+        {{ disasterStore.sourcesOnline }}/4
+      </div>
     </div>
 
     <!-- Severity Legend -->
@@ -219,9 +338,33 @@ function handleThemeSwitch(event) {
     <div class="sidebar-section" v-if="!uiStore.sidebarCollapsed">
       <h3 class="section-title">Zaman Aralığı</h3>
       <div class="time-range-list">
-        <button v-for="range in timeRanges" :key="range" class="time-range-btn">
+        <button
+          v-for="range in timeRanges"
+          :key="range"
+          class="time-range-btn"
+          :class="{ active: selectedTimeRange === range }"
+          @click="selectTimeRange(range)"
+        >
           {{ range }}
         </button>
+      </div>
+
+      <div class="date-filter-card">
+        <div class="date-filters">
+          <label class="date-label">
+            <span>Takvim (Tek Gün / Aralık)</span>
+            <input
+              type="date"
+              class="date-input"
+              :value="calendarPickValue"
+              @change="handleSingleCalendarPick"
+            />
+          </label>
+          <span class="date-hint">
+            1 seçim: tek gün. 2 seçim: aralık. Sonraki seçim yeni aralık başlatır.
+          </span>
+          <span class="date-range-preview">{{ selectedRangeLabel }}</span>
+        </div>
       </div>
     </div>
 
@@ -261,73 +404,80 @@ function handleThemeSwitch(event) {
               @change="handleThemeSwitch"
             />
             <div class="theme-slider round">
-            <div class="sun-moon">
-              <svg id="moon-dot-1" class="moon-dot" viewBox="0 0 100 100">
-                <circle cx="50" cy="50" r="50"></circle>
-              </svg>
-              <svg id="moon-dot-2" class="moon-dot" viewBox="0 0 100 100">
-                <circle cx="50" cy="50" r="50"></circle>
-              </svg>
-              <svg id="moon-dot-3" class="moon-dot" viewBox="0 0 100 100">
-                <circle cx="50" cy="50" r="50"></circle>
-              </svg>
-              <svg id="light-ray-1" class="light-ray" viewBox="0 0 100 100">
-                <circle cx="50" cy="50" r="50"></circle>
-              </svg>
-              <svg id="light-ray-2" class="light-ray" viewBox="0 0 100 100">
-                <circle cx="50" cy="50" r="50"></circle>
-              </svg>
-              <svg id="light-ray-3" class="light-ray" viewBox="0 0 100 100">
-                <circle cx="50" cy="50" r="50"></circle>
-              </svg>
-              <svg id="cloud-1" class="cloud-dark" viewBox="0 0 100 100">
-                <circle cx="50" cy="50" r="50"></circle>
-              </svg>
-              <svg id="cloud-2" class="cloud-dark" viewBox="0 0 100 100">
-                <circle cx="50" cy="50" r="50"></circle>
-              </svg>
-              <svg id="cloud-3" class="cloud-dark" viewBox="0 0 100 100">
-                <circle cx="50" cy="50" r="50"></circle>
-              </svg>
-              <svg id="cloud-4" class="cloud-light" viewBox="0 0 100 100">
-                <circle cx="50" cy="50" r="50"></circle>
-              </svg>
-              <svg id="cloud-5" class="cloud-light" viewBox="0 0 100 100">
-                <circle cx="50" cy="50" r="50"></circle>
-              </svg>
-              <svg id="cloud-6" class="cloud-light" viewBox="0 0 100 100">
-                <circle cx="50" cy="50" r="50"></circle>
-              </svg>
-            </div>
-            <div class="stars">
-              <svg id="star-1" class="star" viewBox="0 0 20 20">
-                <path
-                  d="M 0 10 C 10 10,10 10 ,0 10 C 10 10 , 10 10 , 10 20 C 10 10 , 10 10 , 20 10 C 10 10 , 10 10 , 10 0 C 10 10,10 10 ,0 10 Z"
-                ></path>
-              </svg>
-              <svg id="star-2" class="star" viewBox="0 0 20 20">
-                <path
-                  d="M 0 10 C 10 10,10 10 ,0 10 C 10 10 , 10 10 , 10 20 C 10 10 , 10 10 , 20 10 C 10 10 , 10 10 , 10 0 C 10 10,10 10 ,0 10 Z"
-                ></path>
-              </svg>
-              <svg id="star-3" class="star" viewBox="0 0 20 20">
-                <path
-                  d="M 0 10 C 10 10,10 10 ,0 10 C 10 10 , 10 10 , 10 20 C 10 10 , 10 10 , 20 10 C 10 10 , 10 10 , 10 0 C 10 10,10 10 ,0 10 Z"
-                ></path>
-              </svg>
-              <svg id="star-4" class="star" viewBox="0 0 20 20">
-                <path
-                  d="M 0 10 C 10 10,10 10 ,0 10 C 10 10 , 10 10 , 10 20 C 10 10 , 10 10 , 20 10 C 10 10 , 10 10 , 10 0 C 10 10,10 10 ,0 10 Z"
-                ></path>
-              </svg>
-            </div>
+              <div class="sun-moon">
+                <svg id="moon-dot-1" class="moon-dot" viewBox="0 0 100 100">
+                  <circle cx="50" cy="50" r="50"></circle>
+                </svg>
+                <svg id="moon-dot-2" class="moon-dot" viewBox="0 0 100 100">
+                  <circle cx="50" cy="50" r="50"></circle>
+                </svg>
+                <svg id="moon-dot-3" class="moon-dot" viewBox="0 0 100 100">
+                  <circle cx="50" cy="50" r="50"></circle>
+                </svg>
+                <svg id="light-ray-1" class="light-ray" viewBox="0 0 100 100">
+                  <circle cx="50" cy="50" r="50"></circle>
+                </svg>
+                <svg id="light-ray-2" class="light-ray" viewBox="0 0 100 100">
+                  <circle cx="50" cy="50" r="50"></circle>
+                </svg>
+                <svg id="light-ray-3" class="light-ray" viewBox="0 0 100 100">
+                  <circle cx="50" cy="50" r="50"></circle>
+                </svg>
+                <svg id="cloud-1" class="cloud-dark" viewBox="0 0 100 100">
+                  <circle cx="50" cy="50" r="50"></circle>
+                </svg>
+                <svg id="cloud-2" class="cloud-dark" viewBox="0 0 100 100">
+                  <circle cx="50" cy="50" r="50"></circle>
+                </svg>
+                <svg id="cloud-3" class="cloud-dark" viewBox="0 0 100 100">
+                  <circle cx="50" cy="50" r="50"></circle>
+                </svg>
+                <svg id="cloud-4" class="cloud-light" viewBox="0 0 100 100">
+                  <circle cx="50" cy="50" r="50"></circle>
+                </svg>
+                <svg id="cloud-5" class="cloud-light" viewBox="0 0 100 100">
+                  <circle cx="50" cy="50" r="50"></circle>
+                </svg>
+                <svg id="cloud-6" class="cloud-light" viewBox="0 0 100 100">
+                  <circle cx="50" cy="50" r="50"></circle>
+                </svg>
+              </div>
+              <div class="stars">
+                <svg id="star-1" class="star" viewBox="0 0 20 20">
+                  <path
+                    d="M 0 10 C 10 10,10 10 ,0 10 C 10 10 , 10 10 , 10 20 C 10 10 , 10 10 , 20 10 C 10 10 , 10 10 , 10 0 C 10 10,10 10 ,0 10 Z"
+                  ></path>
+                </svg>
+                <svg id="star-2" class="star" viewBox="0 0 20 20">
+                  <path
+                    d="M 0 10 C 10 10,10 10 ,0 10 C 10 10 , 10 10 , 10 20 C 10 10 , 10 10 , 20 10 C 10 10 , 10 10 , 10 0 C 10 10,10 10 ,0 10 Z"
+                  ></path>
+                </svg>
+                <svg id="star-3" class="star" viewBox="0 0 20 20">
+                  <path
+                    d="M 0 10 C 10 10,10 10 ,0 10 C 10 10 , 10 10 , 10 20 C 10 10 , 10 10 , 20 10 C 10 10 , 10 10 , 10 0 C 10 10,10 10 ,0 10 Z"
+                  ></path>
+                </svg>
+                <svg id="star-4" class="star" viewBox="0 0 20 20">
+                  <path
+                    d="M 0 10 C 10 10,10 10 ,0 10 C 10 10 , 10 10 , 10 20 C 10 10 , 10 10 , 20 10 C 10 10 , 10 10 , 10 0 C 10 10,10 10 ,0 10 Z"
+                  ></path>
+                </svg>
+              </div>
             </div>
           </label>
         </div>
       </div>
 
       <button class="btn btn-primary sidebar-action-btn" @click="handleLocate">
-        📍 {{ geoStore.isTracking ? t('sidebar.myLocation') : t('sidebar.locating') }}
+        📍
+        {{
+          geoStore.isTracking
+            ? t('sidebar.locating')
+            : geoStore.hasLocation
+              ? t('sidebar.locationDetected')
+              : t('sidebar.myLocation')
+        }}
       </button>
 
       <button
@@ -336,6 +486,13 @@ function handleThemeSwitch(event) {
         :disabled="disasterStore.isLoading"
       >
         🔄 {{ t('app.refreshAll') }}
+      </button>
+
+      <button
+        class="btn btn-ghost sidebar-action-btn"
+        @click="uiStore.showHeatmap = !uiStore.showHeatmap"
+      >
+        🔥 {{ uiStore.showHeatmap ? 'Heatmap: ON' : 'Heatmap: OFF' }}
       </button>
 
       <button class="btn btn-ghost sidebar-action-btn" @click="uiStore.toggleSettings()">
@@ -349,7 +506,7 @@ function handleThemeSwitch(event) {
         {{ t('app.lastUpdated') }}:
         {{ new Date(disasterStore.lastUpdated).toLocaleTimeString('tr-TR') }}
       </span>
-      <span class="footer-sources">
+      <span class="footer-sources" :class="getSourceStatusClass(disasterStore.sourcesOnline)">
         {{ disasterStore.sourcesOnline }}/4 {{ t('stats.sourcesOnline') }}
       </span>
     </div>
@@ -427,7 +584,6 @@ function handleThemeSwitch(event) {
   opacity: 1;
 }
 
-
 .sidebar-section,
 .sidebar-actions,
 .sidebar-footer,
@@ -473,6 +629,31 @@ function handleThemeSwitch(event) {
   width: 100%;
   text-align: left;
   justify-content: flex-start;
+  opacity: 0.62;
+  filter: saturate(0.65) brightness(0.88);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.disaster-toggle.active {
+  opacity: 1;
+  filter: saturate(1.15) brightness(1.05);
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.14), rgba(255, 255, 255, 0.04));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.25),
+    0 0 14px rgba(77, 163, 255, 0.18);
+}
+
+.sidebar-icons-only .btn-icon {
+  opacity: 0.58;
+  filter: saturate(0.7);
+}
+
+.sidebar-icons-only .btn-icon.active {
+  opacity: 1;
+  filter: saturate(1.2);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.2),
+    0 0 12px rgba(77, 163, 255, 0.18);
 }
 
 .toggle-icon {
@@ -579,6 +760,59 @@ function handleThemeSwitch(event) {
   color: var(--color-text-primary);
 }
 
+.time-range-btn.active {
+  background: rgba(77, 163, 255, 0.2);
+  border-color: rgba(77, 163, 255, 0.5);
+  color: var(--color-text-primary);
+}
+
+.date-filter-card {
+  margin-top: 8px;
+  border: 1px solid var(--glass-border);
+  border-radius: 10px;
+  padding: 8px;
+  background: rgba(255, 255, 255, 0.03);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.date-filters {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.date-label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 0.68rem;
+  color: var(--color-text-muted);
+}
+
+.date-input {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--glass-border);
+  color: var(--color-text-primary);
+  border-radius: 8px;
+  padding: 8px;
+  font-size: 0.78rem;
+  width: 100%;
+}
+
+.date-hint {
+  font-size: 0.64rem;
+  line-height: 1.35;
+  color: var(--color-text-muted);
+}
+
+.date-range-preview {
+  font-size: 0.68rem;
+  color: var(--color-text-secondary);
+  font-family: var(--font-mono);
+}
+
 .sidebar-icons-only {
   display: flex;
   flex-direction: column;
@@ -607,6 +841,10 @@ function handleThemeSwitch(event) {
   letter-spacing: 0.01em;
 }
 
+.calendar-mini {
+  font-size: 0.9rem;
+}
+
 .severity-mini {
   font-size: 14px;
   line-height: 1;
@@ -627,6 +865,34 @@ function handleThemeSwitch(event) {
 }
 .severity-mini.low {
   color: var(--color-low);
+}
+
+.collapsed-sources {
+  margin-top: auto;
+  padding-top: 8px;
+  font-size: 0.62rem;
+  font-family: var(--font-mono);
+  opacity: 0.95;
+}
+
+.source-level-0 {
+  color: #8a8f99 !important;
+}
+
+.source-level-1 {
+  color: #ef4444 !important;
+}
+
+.source-level-2 {
+  color: #f59e0b !important;
+}
+
+.source-level-3 {
+  color: #eab308 !important;
+}
+
+.source-level-4 {
+  color: #22c55e !important;
 }
 
 .sidebar-actions {
@@ -1081,6 +1347,8 @@ function handleThemeSwitch(event) {
   display: flex;
   flex-direction: column;
   gap: 2px;
+  align-items: center;
+  text-align: center;
 }
 
 .footer-text {
@@ -1128,6 +1396,5 @@ html[data-theme='light'] .footer-sources {
   .quick-switches {
     justify-content: space-between;
   }
-
 }
 </style>

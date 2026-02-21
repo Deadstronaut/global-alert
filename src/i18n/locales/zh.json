@@ -1,0 +1,103 @@
+{
+  "app": {
+    "title": "GEWS - 全球早期预警系统",
+    "subtitle": "联合国灾害监测平台",
+    "loading": "正在加载数据...",
+    "loadingSubtext": "正在获取卫星数据",
+    "lastUpdated": "最后更新",
+    "refreshAll": "刷新所有数据",
+    "returnToGlobe": "返回地球仪",
+    "settings": "设置",
+    "close": "关闭",
+    "error": "错误",
+    "retry": "重试",
+    "noData": "未找到数据",
+    "offline": "离线 - 显示缓存数据"
+  },
+  "disasters": {
+    "earthquake": "地震",
+    "wildfire": "野火",
+    "flood": "洪水",
+    "drought": "干旱",
+    "all": "所有灾害"
+  },
+  "severity": {
+    "critical": "极端",
+    "high": "高",
+    "moderate": "中",
+    "low": "低",
+    "minimal": "极低"
+  },
+  "sidebar": {
+    "title": "灾害图层",
+    "activeLayers": "活动图层",
+    "disasterToggles": "灾害过滤器",
+    "legend": "强度等级",
+    "myLocation": "我的位置",
+    "locating": "正在定位...",
+    "locationDetected": "已检测到位置",
+    "locationDenied": "位置权限被拒绝"
+  },
+  "alerts": {
+    "title": "最近威胁",
+    "noThreats": "未检测到附近的威胁",
+    "distance": "距离 {distance} 公里",
+    "magnitude": "震级",
+    "depth": "深度",
+    "confidence": "置信度",
+    "brightness": "亮度",
+    "severity": "严重程度",
+    "time": "时间",
+    "source": "来源",
+    "viewOnMap": "在地图上查看",
+    "newAlert": "新警报！",
+    "criticalAlert": "极端警报",
+    "emergencyTitle": "紧急警报",
+    "emergencyInstruction": "请移动到安全区域并听从当地政府的指示。",
+    "emergencyDismiss": "明白"
+  },
+  "stats": {
+    "activeEarthquakes": "活动地震",
+    "activeWildfires": "活动野火",
+    "activeFloods": "活动洪水",
+    "activeDroughts": "干旱区",
+    "totalEvents": "总计事件",
+    "sourcesOnline": "在线来源"
+  },
+  "settings": {
+    "title": "设置",
+    "display": "显示",
+    "highContrast": "高对比度",
+    "safeMode": "安全模式（低 GPU）",
+    "safeModeDesc": "停止 3D 动画，节省电量",
+    "notifications": "通知",
+    "enablePush": "推送通知",
+    "alertRadius": "警报半径",
+    "alertRadiusKm": "{radius} 公里",
+    "language": "语言",
+    "accessibility": "无障碍",
+    "colorblindMode": "色盲模式",
+    "colorblindDesc": "使用图案和图标代替颜色"
+  },
+  "map": {
+    "zoomIn": "放大",
+    "zoomOut": "缩小",
+    "clusterCount": "{count} 个事件",
+    "viewDetails": "查看详情"
+  },
+  "detail": {
+    "title": "事件详情",
+    "location": "位置",
+    "coordinates": "坐标",
+    "reportedAt": "报告时间",
+    "updatedAt": "更新时间",
+    "dataSource": "数据源",
+    "shareEvent": "分享"
+  },
+  "time": {
+    "justNow": "刚刚",
+    "minutesAgo": "{count} 分钟前",
+    "hoursAgo": "{count} 小时前",
+    "daysAgo": "{count} 天前"
+  }
+}

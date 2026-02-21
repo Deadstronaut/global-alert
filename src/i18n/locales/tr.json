@@ -35,6 +35,7 @@
     "legend": "Yoğunluk Ölçeği",
     "myLocation": "Konumum",
     "locating": "Konum belirleniyor...",
+    "locationDetected": "Konum Saptandı",
     "locationDenied": "Konum izni reddedildi"
   },
   "alerts": {
@@ -50,7 +51,10 @@
     "source": "Kaynak",
     "viewOnMap": "Haritada Göster",
     "newAlert": "Yeni Uyarı!",
-    "criticalAlert": "KRİTİK UYARI"
+    "criticalAlert": "KRİTİK UYARI",
+    "emergencyTitle": "ACİL DURUM ALARMI",
+    "emergencyInstruction": "Lütfen güvenli bir bölgeye geçin ve yerel yetkililerin talimatlarını izleyin.",
+    "emergencyDismiss": "Anladım"
   },
   "stats": {
     "activeEarthquakes": "Aktif Deprem",

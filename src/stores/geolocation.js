@@ -24,7 +24,6 @@ export const useGeolocationStore = defineStore('geolocation', () => {
         isTracking.value = true;
 
         try {
-            // Check if we are native mobile with capacitor
             if (Capacitor.isNativePlatform()) {
                 let perm = await Geolocation.checkPermissions();
                 if (perm.location !== 'granted') {
@@ -36,6 +35,9 @@ export const useGeolocationStore = defineStore('geolocation', () => {
                     const position = await Geolocation.getCurrentPosition({enableHighAccuracy: true});
                     userLat.value = position.coords.latitude;
                     userLng.value = position.coords.longitude;
+                    // Keep isTracking as true or use another flag to signal "found"
+                    // Actually, let's keep isTracking=false to stop the spinner,
+                    // but hasLocation will correctly signal the success.
                     isTracking.value = false;
                     return true;
                 } else {
@@ -45,7 +47,6 @@ export const useGeolocationStore = defineStore('geolocation', () => {
                     return false;
                 }
             } else {
-                // Browser Fallback (Web)
                 if (navigator.geolocation) {
                     return new Promise((resolve) => {
                         navigator.geolocation.getCurrentPosition(

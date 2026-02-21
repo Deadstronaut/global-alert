@@ -2,6 +2,7 @@
 import { ref, onMounted, onBeforeUnmount, watch } from 'vue'
 import { useDisasterStore } from '@/stores/disaster.js'
 import { useUIStore } from '@/stores/ui.js'
+import { useGeolocationStore } from '@/stores/geolocation.js'
 import { useI18n } from 'vue-i18n'
 import { getSeverityHex } from '@/services/adapters/DisasterEvent.js'
 import L from 'leaflet'
@@ -10,10 +11,13 @@ import 'leaflet/dist/leaflet.css'
 const { t } = useI18n()
 const disasterStore = useDisasterStore()
 const uiStore = useUIStore()
+const geoStore = useGeolocationStore()
 
 const mapContainer = ref(null)
 let map = null
 let markersLayer = null
+let heatmapLayer = null
+let userMarker = null
 let baseTileLayer = null
 let wheelTargetZoom = null
 let wheelAnimFrame = null
@@ -45,7 +49,6 @@ function applyBaseTiles() {
 function initMap() {
   if (!mapContainer.value || map) return
 
-  // Strict vertical bounds, infinite horizontal wraps
   const maxBounds = [
     [-90, -180],
     [90, 180],
@@ -70,19 +73,17 @@ function initMap() {
     attributionControl: false,
   })
 
-  // Replace default stepped wheel zoom with a smooth interpolated zoom.
   map.scrollWheelZoom.disable()
 
-  // Base tile layer (dark/light theme aware)
   applyBaseTiles()
 
-  // Zoom control in custom position
   L.control.zoom({ position: 'bottomright' }).addTo(map)
 
-  // Markers layer group
   markersLayer = L.layerGroup().addTo(map)
 
   updateMarkers()
+  updateHeatmap()
+  updateUserMarker()
 }
 
 function clamp(val, min, max) {
@@ -138,6 +139,47 @@ function startSmoothWheelZoom() {
   mapContainer.value.addEventListener('wheel', wheelListener, { passive: false })
 }
 
+function updateHeatmap() {
+  if (!map) return
+
+  if (heatmapLayer) {
+    map.removeLayer(heatmapLayer)
+    heatmapLayer = null
+  }
+
+  if (!uiStore.showHeatmap) return
+
+  const events = disasterStore.allEvents
+  const intensityMap = {
+    critical: 1.0,
+    high: 0.8,
+    moderate: 0.6,
+    low: 0.3,
+    minimal: 0.1,
+  }
+
+  const heatData = events.map((event) => {
+    return [event.lat, event.lng, intensityMap[event.severity] || 0.1]
+  })
+
+  // We explicitly check if L.heatLayer exists, as dynamic import is async
+  if (L.heatLayer) {
+    heatmapLayer = L.heatLayer(heatData, {
+      radius: 50, // Massive radius for continuous regional blending
+      blur: 40, // High blur to merge discrete data points into continuous clouds
+      maxZoom: 6, // Prevents intense clustering locally, keeps it macroscopic
+      gradient: {
+        0.2: '#90a4ae', // Gray (Minimal)
+        0.4: '#00e676', // Green (Low)
+        0.6: '#ffd600', // Yellow (Moderate)
+        0.8: '#ff9100', // Orange (High)
+        1.0: '#ff1744', // Red (Critical)
+      },
+      minOpacity: 0.4,
+    }).addTo(map)
+  }
+}
+
 function updateMarkers() {
   if (!markersLayer) return
   markersLayer.clearLayers()
@@ -151,8 +193,8 @@ function updateMarkers() {
     const icon = L.divIcon({
       className: `disaster-marker ${pulseClass}`,
       html: `
-        <div class="marker-dot" style="background: ${color}; box-shadow: 0 0 10px ${color};">
-          <span class="marker-icon">${event.icon}</span>
+        <div class="marker-dot" style="background: ${color}; box-shadow: 0 0 10px ${color}; opacity: ${uiStore.showHeatmap ? '0.4' : '1'};">
+          <span class="marker-icon" style="opacity: ${uiStore.showHeatmap ? '0' : '1'};">${event.icon}</span>
         </div>
       `,
       iconSize: [24, 24],
@@ -176,6 +218,34 @@ function updateMarkers() {
   })
 }
 
+function updateUserMarker() {
+  if (!map) return
+
+  if (geoStore.hasLocation) {
+    const coords = [geoStore.userLat, geoStore.userLng]
+    if (userMarker) {
+      userMarker.setLatLng(coords)
+    } else {
+      const userIcon = L.divIcon({
+        className: 'user-location-marker',
+        html: `
+          <div class="user-pin">
+            <div class="pin-head"></div>
+            <div class="pin-pulse"></div>
+          </div>
+        `,
+        iconSize: [30, 30],
+        iconAnchor: [15, 15],
+      })
+      userMarker = L.marker(coords, { icon: userIcon, zIndexOffset: 1000 }).addTo(map)
+      userMarker.bindTooltip('Konumunuz', { permanent: false, direction: 'top' })
+    }
+  } else if (userMarker) {
+    map.removeLayer(userMarker)
+    userMarker = null
+  }
+}
+
 function flyToRegion(lat, lng, zoom) {
   if (map) {
     map.flyTo([lat, lng], zoom, {
@@ -185,7 +255,6 @@ function flyToRegion(lat, lng, zoom) {
   }
 }
 
-// Watch for region changes (from globe click)
 watch(
   () => uiStore.selectedRegion,
   (region) => {
@@ -195,11 +264,27 @@ watch(
   },
 )
 
-// Watch for data updates
 watch(
   () => disasterStore.allEvents,
   () => {
     updateMarkers()
+    updateHeatmap()
+  },
+  { deep: true },
+)
+
+watch(
+  () => uiStore.showHeatmap,
+  () => {
+    updateMarkers()
+    updateHeatmap()
+  },
+)
+
+watch(
+  () => geoStore.userCoords,
+  () => {
+    updateUserMarker()
   },
   { deep: true },
 )
@@ -211,10 +296,14 @@ watch(
   },
 )
 
-onMounted(() => {
+onMounted(async () => {
+  window.L = L
+  if (!L.heatLayer) {
+    await import('leaflet.heat')
+  }
+
   initMap()
   startSmoothWheelZoom()
-  // Wait a tick for the container to fully expand to 100vh bounds
   setTimeout(() => {
     if (map) map.invalidateSize()
   }, 100)
@@ -302,8 +391,6 @@ onBeforeUnmount(() => {
 .marker-pulse .marker-dot::after {
   content: '';
   position: absolute;
-  top: -4px;
-  left: -4px;
   width: 28px;
   height: 28px;
   border-radius: 50%;

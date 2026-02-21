@@ -1,0 +1,103 @@
+{
+  "app": {
+    "title": "GEWS - النظام العالمي للإنذار المبكر",
+    "subtitle": "منصة رصد الكوارث التابعة للأمم المتحدة",
+    "loading": "جاري تحميل البيانات...",
+    "loadingSubtext": "جاري جلب بيانات الأقمار الصناعية",
+    "lastUpdated": "آخر تحديث",
+    "refreshAll": "تحديث جميع البيانات",
+    "returnToGlobe": "العودة إلى الكرة الأرضية",
+    "settings": "الإعدادات",
+    "close": "إغلاق",
+    "error": "خطأ",
+    "retry": "إعادة المحاولة",
+    "noData": "لم يتم العثور على بيانات",
+    "offline": "غير متصل - عرض البيانات المخزنة مؤقتًا"
+  },
+  "disasters": {
+    "earthquake": "الزلازل",
+    "wildfire": "حرائق الغابات",
+    "flood": "الفيضانات",
+    "drought": "الجفاف",
+    "all": "جميع الكوارث"
+  },
+  "severity": {
+    "critical": "حرجة",
+    "high": "عالية",
+    "moderate": "متوسطة",
+    "low": "منخفضة",
+    "minimal": "ضئيلة"
+  },
+  "sidebar": {
+    "title": "طبقات الكوارث",
+    "activeLayers": "الطبقات النشطة",
+    "disasterToggles": "فلاتر الكوارث",
+    "legend": "مقياس الكثافة",
+    "myLocation": "موقعي",
+    "locating": "جاري تحديد الموقع...",
+    "locationDetected": "تم تحديد الموقع",
+    "locationDenied": "تم رفض إذن الوصول إلى الموقع"
+  },
+  "alerts": {
+    "title": "أقرب التهديدات",
+    "noThreats": "لم يتم اكتشاف تهديدات قريبة",
+    "distance": "على بعد {distance} كم",
+    "magnitude": "القوة",
+    "depth": "العمق",
+    "confidence": "الثقة",
+    "brightness": "السطوع",
+    "severity": "الخطورة",
+    "time": "الوقت",
+    "source": "المصدر",
+    "viewOnMap": "عرض على الخارطة",
+    "newAlert": "تنبيه جديد!",
+    "criticalAlert": "تنبيه حرج",
+    "emergencyTitle": "تنبيه طارئ",
+    "emergencyInstruction": "يرجى الانتقال إلى منطقة آمنة واتباع تعليمات السلطات المحلية.",
+    "emergencyDismiss": "مفهوم"
+  },
+  "stats": {
+    "activeEarthquakes": "الزلازل النشطة",
+    "activeWildfires": "حرائق الغابات النشطة",
+    "activeFloods": "الفيضانات النشطة",
+    "activeDroughts": "مناطق الجفاف",
+    "totalEvents": "إجمالي الأحداث",
+    "sourcesOnline": "المصادر المتصلة"
+  },
+  "settings": {
+    "title": "الإعدادات",
+    "display": "العرض",
+    "highContrast": "تباين عالٍ",
+    "safeMode": "الوضع الآمن (GPU منخفض)",
+    "safeModeDesc": "يوقف الرسوم المتحركة ثلاثية الأبعاد، يوفر البطارية",
+    "notifications": "الإشعارات",
+    "enablePush": "إشعارات الدفع",
+    "alertRadius": "نطاق التنبيه",
+    "alertRadiusKm": "{radius} كم",
+    "language": "اللغة",
+    "accessibility": "إمكانية الوصول",
+    "colorblindMode": "وضع عمى الألوان",
+    "colorblindDesc": "يستخدم الأنماط والأيقونات بدلاً من الألوان"
+  },
+  "map": {
+    "zoomIn": "تكبير",
+    "zoomOut": "تصغير",
+    "clusterCount": "{count} أحداث",
+    "viewDetails": "عرض التفاصيل"
+  },
+  "detail": {
+    "title": "تفاصيل الحدث",
+    "location": "الموقع",
+    "coordinates": "الإحداثيات",
+    "reportedAt": "تم الإبلاغ في",
+    "updatedAt": "تم التحديث في",
+    "dataSource": "مصدر البيانات",
+    "shareEvent": "مشاركة"
+  },
+  "time": {
+    "justNow": "الآن",
+    "minutesAgo": "منذ {count} دقائق",
+    "hoursAgo": "منذ {count} ساعات",
+    "daysAgo": "منذ {count} أيام"
+  }
+}

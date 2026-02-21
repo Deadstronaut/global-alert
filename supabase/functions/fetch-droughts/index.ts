@@ -1,4 +1,5 @@
 import { corsHeaders } from '../shared/cors.ts'
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3'
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -44,7 +45,7 @@ Deno.serve(async (req) => {
               title: item.fields.name,
               lat: lat,
               lng: lng,
-              severity: item.fields.status === 'ongoing' ? 'high' : 'medium',
+              severity: item.fields.status === 'ongoing' ? 'high' : 'moderate',
               timestamp: new Date().toISOString(),
               source: 'reliefweb',
             }
@@ -76,7 +77,7 @@ Deno.serve(async (req) => {
           title: 'Prolonged Dry Spell - California',
           lat: 36.77,
           lng: -119.41,
-          severity: 'medium',
+          severity: 'moderate',
           timestamp: new Date().toISOString(),
           source: 'mock',
         },
@@ -86,11 +87,37 @@ Deno.serve(async (req) => {
           title: 'Water Scarcity - Spain',
           lat: 39.32,
           lng: -4.83,
-          severity: 'medium',
+          severity: 'moderate',
           timestamp: new Date().toISOString(),
           source: 'mock',
         },
       ]
+    }
+
+    if (finalDroughts.length > 0) {
+      const supabase = createClient(
+        Deno.env.get('SUPABASE_URL') ?? '',
+        Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
+      )
+
+      const eventsToInsert = finalDroughts.map((f: any) => ({
+        id: f.id,
+        title: f.title,
+        description: null,
+        lat: f.lat,
+        lng: f.lng,
+        severity: f.severity,
+        timestamp: f.timestamp,
+        source: f.source,
+      }))
+
+      const { error: upsertError } = await supabase
+        .from('drought_events')
+        .upsert(eventsToInsert, { onConflict: 'id' })
+
+      if (upsertError) {
+        console.error('Error upserting droughts:', upsertError)
+      }
     }
 
     return new Response(

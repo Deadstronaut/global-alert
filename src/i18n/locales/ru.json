@@ -1,0 +1,103 @@
+{
+  "app": {
+    "title": "GEWS - Глобальная система раннего предупреждения",
+    "subtitle": "Платформа мониторинга стихийных бедствий ООН",
+    "loading": "Загрузка данных...",
+    "loadingSubtext": "Получение спутниковых данных",
+    "lastUpdated": "Последнее обновление",
+    "refreshAll": "Обновить все данные",
+    "returnToGlobe": "Вернуться к глобусу",
+    "settings": "Настройки",
+    "close": "Закрыть",
+    "error": "Ошибка",
+    "retry": "Повторить",
+    "noData": "Данные не найдены",
+    "offline": "Вне сети — показ кэшированных данных"
+  },
+  "disasters": {
+    "earthquake": "Землетрясения",
+    "wildfire": "Лесные пожары",
+    "flood": "Наводнения",
+    "drought": "Засухи",
+    "all": "Все бедствия"
+  },
+  "severity": {
+    "critical": "Критическая",
+    "high": "Высокая",
+    "moderate": "Умеренная",
+    "low": "Низкая",
+    "minimal": "Минимальная"
+  },
+  "sidebar": {
+    "title": "Слои бедствий",
+    "activeLayers": "Активные слои",
+    "disasterToggles": "Фильтры бедствий",
+    "legend": "Шкала интенсивности",
+    "myLocation": "Мое местоположение",
+    "locating": "Определение местоположения...",
+    "locationDetected": "Местоположение определено",
+    "locationDenied": "Доступ к местоположению запрещен"
+  },
+  "alerts": {
+    "title": "Ближайшие угрозы",
+    "noThreats": "Ближайших угроз не обнаружено",
+    "distance": "в {distance} км",
+    "magnitude": "Магнитуда",
+    "depth": "Глубина",
+    "confidence": "Достоверность",
+    "brightness": "Яркость",
+    "severity": "Тяжесть",
+    "time": "Время",
+    "source": "Источник",
+    "viewOnMap": "Показать на карте",
+    "newAlert": "Новое оповещение!",
+    "criticalAlert": "КРИТИЧЕСКОЕ ОПОВЕЩЕНИЕ",
+    "emergencyTitle": "ЭКСТРЕННОЕ ОПОВЕЩЕНИЕ",
+    "emergencyInstruction": "Пожалуйста, перейдите в безопасную зону и следуйте инструкциям местных властей.",
+    "emergencyDismiss": "Понятно"
+  },
+  "stats": {
+    "activeEarthquakes": "Активные землетрясения",
+    "activeWildfires": "Активные лесные пожары",
+    "activeFloods": "Активные наводнения",
+    "activeDroughts": "Зоны засухи",
+    "totalEvents": "Всего событий",
+    "sourcesOnline": "Источники онлайн"
+  },
+  "settings": {
+    "title": "Настройки",
+    "display": "Экран",
+    "highContrast": "Высокий контраст",
+    "safeMode": "Безопасный режим (Низкий GPU)",
+    "safeModeDesc": "Останавливает 3D-анимацию, бережет батарею",
+    "notifications": "Уведомления",
+    "enablePush": "Push-уведомления",
+    "alertRadius": "Радиус оповещения",
+    "alertRadiusKm": "{radius} км",
+    "language": "Язык",
+    "accessibility": "Доступность",
+    "colorblindMode": "Режим для дальтоников",
+    "colorblindDesc": "Использует узоры и иконки вместо цветов"
+  },
+  "map": {
+    "zoomIn": "Приблизить",
+    "zoomOut": "Отдалить",
+    "clusterCount": "{count} событий",
+    "viewDetails": "Подробнее"
+  },
+  "detail": {
+    "title": "Детали события",
+    "location": "Место",
+    "coordinates": "Координаты",
+    "reportedAt": "Сообщено в",
+    "updatedAt": "Обновлено в",
+    "dataSource": "Источник данных",
+    "shareEvent": "Поделиться"
+  },
+  "time": {
+    "justNow": "Только что",
+    "minutesAgo": "{count} мин. назад",
+    "hoursAgo": "{count} ч. назад",
+    "daysAgo": "{count} дн. назад"
+  }
+}

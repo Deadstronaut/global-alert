@@ -1,4 +1,5 @@
 import { corsHeaders } from '../shared/cors.ts'
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3'
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -45,7 +46,7 @@ Deno.serve(async (req) => {
               title: item.fields.name,
               lat: lat,
               lng: lng,
-              severity: item.fields.status === 'ongoing' ? 'high' : 'medium',
+              severity: item.fields.status === 'ongoing' ? 'high' : 'moderate',
               timestamp: new Date().toISOString(), // Fallback timestamp
               source: 'reliefweb',
             }
@@ -84,7 +85,7 @@ Deno.serve(async (req) => {
               title: titleMatch[1].replace('<![CDATA[', '').replace(']]>', ''),
               lat: geoLatMatch ? parseFloat(geoLatMatch[1]) : 0,
               lng: geoLngMatch ? parseFloat(geoLngMatch[1]) : 0,
-              severity: 'medium',
+              severity: 'moderate',
               timestamp: new Date().toISOString(),
               source: 'gdacs',
             })
@@ -113,7 +114,7 @@ Deno.serve(async (req) => {
             title: 'River Overflow - Germany',
             lat: 51.16,
             lng: 10.45,
-            severity: 'medium',
+            severity: 'moderate',
             timestamp: new Date().toISOString(),
             source: 'mock',
           },
@@ -128,6 +129,32 @@ Deno.serve(async (req) => {
             source: 'mock',
           },
         ]
+      }
+    }
+
+    if (finalFloods.length > 0) {
+      const supabase = createClient(
+        Deno.env.get('SUPABASE_URL') ?? '',
+        Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
+      )
+
+      const eventsToInsert = finalFloods.map((f: any) => ({
+        id: f.id,
+        title: f.title,
+        description: null,
+        lat: f.lat,
+        lng: f.lng,
+        severity: f.severity,
+        timestamp: f.timestamp,
+        source: f.source,
+      }))
+
+      const { error: upsertError } = await supabase
+        .from('flood_events')
+        .upsert(eventsToInsert, { onConflict: 'id' })
+
+      if (upsertError) {
+        console.error('Error upserting floods:', upsertError)
       }
     }
 

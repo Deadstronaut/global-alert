@@ -1,37 +1,15 @@
 <script setup>
 import { useDisasterStore } from '@/stores/disaster.js'
 import { useUIStore } from '@/stores/ui.js'
-import { useI18n } from 'vue-i18n'
 
-const { t } = useI18n()
 const disasterStore = useDisasterStore()
 const uiStore = useUIStore()
 
 const statCards = [
-  {
-    key: 'earthquake',
-    icon: '🔴',
-    label: 'stats.activeEarthquakes',
-    colorClass: 'stat-earthquake',
-  },
-  {
-    key: 'wildfire',
-    icon: '🔥',
-    label: 'stats.activeWildfires',
-    colorClass: 'stat-wildfire',
-  },
-  {
-    key: 'flood',
-    icon: '🌊',
-    label: 'stats.activeFloods',
-    colorClass: 'stat-flood',
-  },
-  {
-    key: 'drought',
-    icon: '☀️',
-    label: 'stats.activeDroughts',
-    colorClass: 'stat-drought',
-  },
+  { key: 'earthquake', icon: '⛰️', colorClass: 'stat-earthquake' },
+  { key: 'wildfire', icon: '🔥', colorClass: 'stat-wildfire' },
+  { key: 'flood', icon: '🌊', colorClass: 'stat-flood' },
+  { key: 'drought', icon: '🔴', colorClass: 'stat-drought' },
 ]
 </script>
 
@@ -53,7 +31,6 @@ const statCards = [
       <span class="stat-icon">{{ stat.icon }}</span>
       <div class="stat-data">
         <span class="counter-value">{{ disasterStore.totalCount[stat.key] }}</span>
-        <span class="counter-label">{{ t(stat.label) }}</span>
       </div>
     </div>
   </div>
@@ -87,7 +64,8 @@ const statCards = [
   gap: var(--space-sm);
   padding: var(--space-sm) var(--space-md);
   pointer-events: all;
-  min-width: 100px;
+  min-width: 90px;
+  justify-content: center;
 }
 
 .stat-icon {
@@ -97,23 +75,14 @@ const statCards = [
 .stat-data {
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
+  align-items: center;
 }
 
-.stat-earthquake .counter-value {
-  color: var(--color-earthquake);
-}
-.stat-wildfire .counter-value {
-  color: var(--color-wildfire);
-}
-.stat-flood .counter-value {
-  color: var(--color-flood);
-}
-.stat-drought .counter-value {
-  color: var(--color-drought);
+.counter-value {
+  font-weight: 700;
+  color: var(--color-text-primary);
 }
 
-/* Tablet Layout (Avoid Sidebar Overlap) */
 @media (max-width: 1150px) {
   .stats-overlay {
     left: auto;
@@ -129,7 +98,6 @@ const statCards = [
   }
 }
 
-/* Mobile Layout (2x2 Grid at the top) */
 @media (max-width: 768px) {
   .stats-overlay {
     top: var(--space-sm);
@@ -151,7 +119,6 @@ const statCards = [
     top: calc(var(--space-sm) + 8px);
   }
 
-  /* This is the class applied when sidebar is open */
   .stats-overlay.hidden-on-mobile {
     display: none !important;
   }
@@ -165,11 +132,6 @@ const statCards = [
 
   .counter-value {
     font-size: 1.05rem;
-  }
-
-  .counter-label {
-    font-size: 0.6rem;
-    text-align: center;
   }
 
   .stat-data {

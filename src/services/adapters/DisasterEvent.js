@@ -1,4 +1,4 @@
-/**
+﻿/**
  * DisasterEvent - Unified data model for all disaster types.
  * All API adapters normalize their data into this format.
  */
@@ -98,10 +98,10 @@ export function getSeverityHex(severity) {
         [SEVERITY.MINIMAL]: '#17becf'
     } : {
         [SEVERITY.CRITICAL]: '#ff1744',
-        [SEVERITY.HIGH]: '#ff6d00',
+        [SEVERITY.HIGH]: '#ff9100',
         [SEVERITY.MODERATE]: '#ffd600',
         [SEVERITY.LOW]: '#00e676',
-        [SEVERITY.MINIMAL]: '#00bfa5'
+        [SEVERITY.MINIMAL]: '#90a4ae'
     };
     return map[severity] || map[SEVERITY.LOW];
 }
@@ -111,10 +111,10 @@ export function getSeverityHex(severity) {
  */
 export function getDisasterIcon(type) {
     const map = {
-        [DISASTER_TYPE.EARTHQUAKE]: '🔴',
+        [DISASTER_TYPE.EARTHQUAKE]: '⛰️',
         [DISASTER_TYPE.WILDFIRE]: '🔥',
         [DISASTER_TYPE.FLOOD]: '🌊',
-        [DISASTER_TYPE.DROUGHT]: '☀️'
+        [DISASTER_TYPE.DROUGHT]: '🔴'
     };
     return map[type] || '⚠️';
 }
@@ -153,3 +153,4 @@ export function deduplicateByProximity(events, radiusKm = 10) {
     }
     return result;
 }
+

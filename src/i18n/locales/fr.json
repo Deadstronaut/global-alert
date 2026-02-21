@@ -1,0 +1,103 @@
+{
+  "app": {
+    "title": "GEWS - Système mondial d'alerte précoce",
+    "subtitle": "Plateforme de surveillance des catastrophes des Nations Unies",
+    "loading": "Chargement des données...",
+    "loadingSubtext": "Récupération des données satellites",
+    "lastUpdated": "Dernière mise à jour",
+    "refreshAll": "Actualiser toutes les données",
+    "returnToGlobe": "Retour au globe",
+    "settings": "Paramètres",
+    "close": "Fermer",
+    "error": "Erreur",
+    "retry": "Réessayer",
+    "noData": "Aucune donnée trouvée",
+    "offline": "Hors ligne - Affichage des données mises en cache"
+  },
+  "disasters": {
+    "earthquake": "Tremblements de terre",
+    "wildfire": "Feux de forêt",
+    "flood": "Inundations",
+    "drought": "Sécheresses",
+    "all": "Toutes les catastrophes"
+  },
+  "severity": {
+    "critical": "Critique",
+    "high": "Élevée",
+    "moderate": "Modérée",
+    "low": "Faible",
+    "minimal": "Minimale"
+  },
+  "sidebar": {
+    "title": "Couches de catastrophes",
+    "activeLayers": "Couches actives",
+    "disasterToggles": "Filtres de catastrophes",
+    "legend": "Échelle d'intensité",
+    "myLocation": "Ma position",
+    "locating": "Localisation...",
+    "locationDetected": "Position détectée",
+    "locationDenied": "Autorisation de localisation refusée"
+  },
+  "alerts": {
+    "title": "Menaces les plus proches",
+    "noThreats": "Aucune menace à proximité détectée",
+    "distance": "à {distance} km",
+    "magnitude": "Magnitude",
+    "depth": "Profondeur",
+    "confidence": "Confiance",
+    "brightness": "Luminosité",
+    "severity": "Gravité",
+    "time": "Heure",
+    "source": "Source",
+    "viewOnMap": "Voir sur la carte",
+    "newAlert": "Nouvelle alerte !",
+    "criticalAlert": "ALERTE CRITIQUE",
+    "emergencyTitle": "ALERTE D'URGENCE",
+    "emergencyInstruction": "Veuillez vous déplacer vers une zone sûre et suivre les instructions des autorités locales.",
+    "emergencyDismiss": "Compris"
+  },
+  "stats": {
+    "activeEarthquakes": "Séismes actifs",
+    "activeWildfires": "Feux de forêt actifs",
+    "activeFloods": "Inundations actives",
+    "activeDroughts": "Zones de sécheresse",
+    "totalEvents": "Total des événements",
+    "sourcesOnline": "Sources en ligne"
+  },
+  "settings": {
+    "title": "Paramètres",
+    "display": "Affichage",
+    "highContrast": "Contraste élevé",
+    "safeMode": "Mode sans échec (GPU faible)",
+    "safeModeDesc": "Arrête les animations 3D, économise la batterie",
+    "notifications": "Notifications",
+    "enablePush": "Notifications Push",
+    "alertRadius": "Rayon d'alerte",
+    "alertRadiusKm": "{radius} km",
+    "language": "Langue",
+    "accessibility": "Accessibilité",
+    "colorblindMode": "Mode daltonien",
+    "colorblindDesc": "Utilise des motifs et des icônes au lieu des couleurs"
+  },
+  "map": {
+    "zoomIn": "Zoomer",
+    "zoomOut": "Dézoomer",
+    "clusterCount": "{count} événements",
+    "viewDetails": "Voir les détails"
+  },
+  "detail": {
+    "title": "Détails de l'événement",
+    "location": "Emplacement",
+    "coordinates": "Coordonnées",
+    "reportedAt": "Signalé à",
+    "updatedAt": "Mis à jour à",
+    "dataSource": "Source de données",
+    "shareEvent": "Partager"
+  },
+  "time": {
+    "justNow": "À l'instant",
+    "minutesAgo": "il y a {count} minutes",
+    "hoursAgo": "il y a {count} heures",
+    "daysAgo": "il y a {count} jours"
+  }
+}

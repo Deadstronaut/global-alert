@@ -7,15 +7,15 @@
   --color-text-muted: #8c97b3;
   --color-accent: #4aa3ff;
   --color-info: #69d2ff;
-  --color-critical: #ff1744;
-  --color-high: #ff6d00;
-  --color-moderate: #ffd600;
-  --color-low: #00e676;
-  --color-minimal: #00bfa5;
-  --color-earthquake: #ff4d5e;
-  --color-wildfire: #ff9138;
-  --color-flood: #4db4ff;
-  --color-drought: #ffc247;
+  --color-critical: #ff1744; /* Red */
+  --color-high: #ff9100; /* Orange */
+  --color-moderate: #ffd600; /* Yellow */
+  --color-low: #00e676; /* Green */
+  --color-minimal: #90a4ae; /* Gray */
+  --color-earthquake: #ff5a5f;
+  --color-wildfire: #ff8c00;
+  --color-flood: #2196f3;
+  --color-drought: #78909c;
   --glass-border: rgba(255, 255, 255, 0.18);
   --space-sm: 8px;
   --space-md: 16px;
@@ -27,6 +27,81 @@
   --z-stats: 92;
   --z-alerts: 94;
   --z-loading: 999;
+}
+
+/* Global User Pin Styles (Shared between 2D Map and 3D Globe) */
+.user-pin,
+.user-globe-marker {
+  position: relative;
+  width: 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.pin-head {
+  width: 16px;
+  height: 16px;
+  background: #2196f3;
+  border: 3px solid white;
+  border-radius: 50%;
+  box-shadow: 0 0 15px rgba(33, 150, 243, 0.6);
+  z-index: 2;
+  flex-shrink: 0;
+}
+
+.pin-pulse {
+  position: absolute;
+  width: 16px;
+  height: 16px;
+  background: rgba(33, 150, 243, 0.4);
+  border-radius: 50%;
+  z-index: 1;
+  animation: pin-pulse 2s infinite;
+}
+
+@keyframes pin-pulse {
+  0% { transform: scale(1); opacity: 0.8; }
+  100% { transform: scale(4.5); opacity: 0; }
+}
+
+/* Base Marker Centering for MapView */
+.disaster-marker {
+  display: flex !important;
+  align-items: center;
+  justify-content: center;
+}
+
+.marker-dot {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  flex-shrink: 0;
+}
+  background: rgba(33, 150, 243, 0.4);
+  border-radius: 50%;
+  z-index: 1;
+  animation: pin-pulse 2s infinite;
+}
+
+@keyframes pin-pulse {
+  0% {
+    transform: translate(-50%, -50%) scale(1);
+    opacity: 0.8;
+  }
+  100% {
+    transform: translate(-50%, -50%) scale(4);
+    opacity: 0;
+  }
+}
+
+[data-theme='light'] .pin-head {
+  border-color: #f4f7ff;
 }
 
 html[data-theme='light'] {

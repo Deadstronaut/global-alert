@@ -1,0 +1,103 @@
+{
+  "app": {
+    "title": "GEWS - Sistema Global de Alerta Temprana",
+    "subtitle": "Plataforma de Monitoreo de Desastres de las Naciones Unidas",
+    "loading": "Cargando datos...",
+    "loadingSubtext": "Obteniendo datos satelitales",
+    "lastUpdated": "Última actualización",
+    "refreshAll": "Actualizar todos los datos",
+    "returnToGlobe": "Volver al globo",
+    "settings": "Ajustes",
+    "close": "Cerrar",
+    "error": "Error",
+    "retry": "Reintentar",
+    "noData": "No se encontraron datos",
+    "offline": "Sin conexión - Mostrando datos en caché"
+  },
+  "disasters": {
+    "earthquake": "Terremotos",
+    "wildfire": "Incendios forestales",
+    "flood": "Inundaciones",
+    "drought": "Sequías",
+    "all": "Todos los desastres"
+  },
+  "severity": {
+    "critical": "Crítico",
+    "high": "Alto",
+    "moderate": "Moderado",
+    "low": "Bajo",
+    "minimal": "Mínimo"
+  },
+  "sidebar": {
+    "title": "Capas de desastres",
+    "activeLayers": "Capas activas",
+    "disasterToggles": "Filtros de desastres",
+    "legend": "Escala de intensidad",
+    "myLocation": "Mi ubicación",
+    "locating": "Localizando...",
+    "locationDetected": "Ubicación detectada",
+    "locationDenied": "Permiso de ubicación denegado"
+  },
+  "alerts": {
+    "title": "Amenazas más cercanas",
+    "noThreats": "No se detectaron amenazas cercanas",
+    "distance": "A {distance} km de distancia",
+    "magnitude": "Magnitud",
+    "depth": "Profundidad",
+    "confidence": "Confianza",
+    "brightness": "Brillo",
+    "severity": "Gravedad",
+    "time": "Hora",
+    "source": "Fuente",
+    "viewOnMap": "Ver en el mapa",
+    "newAlert": "¡Nueva alerta!",
+    "criticalAlert": "ALERTA CRÍTICA",
+    "emergencyTitle": "ALERTA DE EMERGENCIA",
+    "emergencyInstruction": "Por favor, diríjase a una zona segura y siga las instrucciones de las autoridades locales.",
+    "emergencyDismiss": "Entendido"
+  },
+  "stats": {
+    "activeEarthquakes": "Terremotos activos",
+    "activeWildfires": "Incendios forestales activos",
+    "activeFloods": "Inundaciones activas",
+    "activeDroughts": "Zonas de sequía",
+    "totalEvents": "Eventos totales",
+    "sourcesOnline": "Fuentes en línea"
+  },
+  "settings": {
+    "title": "Ajustes",
+    "display": "Pantalla",
+    "highContrast": "Alto contraste",
+    "safeMode": "Modo seguro (Bajo GPU)",
+    "safeModeDesc": "Detiene las animaciones 3D, ahorra batería",
+    "notifications": "Notificaciones",
+    "enablePush": "Notificaciones Push",
+    "alertRadius": "Radio de alerta",
+    "alertRadiusKm": "{radius} km",
+    "language": "Idioma",
+    "accessibility": "Accesibilidad",
+    "colorblindMode": "Modo daltónico",
+    "colorblindDesc": "Usa patrones e iconos en lugar de colores"
+  },
+  "map": {
+    "zoomIn": "Acercar",
+    "zoomOut": "Alejar",
+    "clusterCount": "{count} eventos",
+    "viewDetails": "Ver detalles"
+  },
+  "detail": {
+    "title": "Detalles del evento",
+    "location": "Ubicación",
+    "coordinates": "Coordenadas",
+    "reportedAt": "Reportado el",
+    "updatedAt": "Actualizado el",
+    "dataSource": "Fuente de datos",
+    "shareEvent": "Compartir"
+  },
+  "time": {
+    "justNow": "Recién ahora",
+    "minutesAgo": "hace {count} minutos",
+    "hoursAgo": "hace {count} horas",
+    "daysAgo": "hace {count} días"
+  }
+}

@@ -2,10 +2,12 @@
 import { ref, onMounted, onBeforeUnmount, watch, nextTick } from 'vue'
 import { useDisasterStore } from '@/stores/disaster.js'
 import { useUIStore } from '@/stores/ui.js'
+import { useGeolocationStore } from '@/stores/geolocation.js'
 import { getSeverityHex } from '@/services/adapters/DisasterEvent.js'
 
 const disasterStore = useDisasterStore()
 const uiStore = useUIStore()
+const geoStore = useGeolocationStore()
 
 const globeContainer = ref(null)
 let globeInstance = null
@@ -81,6 +83,20 @@ async function initGlobe() {
     })
     .onGlobeClick(({ lat, lng }) => {
       uiStore.transitionToMap(lat, lng, 6)
+    })
+    .htmlElementsData([])
+    .htmlLat((d) => d.lat)
+    .htmlLng((d) => d.lng)
+    .htmlElement(() => {
+      const el = document.createElement('div')
+      el.style.transform = 'translate(-50%, -50%)' // Center exactly on lat/lng
+      el.innerHTML = `
+        <div class="user-globe-marker">
+          <div class="pin-head"></div>
+          <div class="pin-pulse"></div>
+        </div>
+      `
+      return el
     })(globeContainer.value)
 
   // Auto-rotate
@@ -106,16 +122,58 @@ function updateGlobeData() {
 
   const events = disasterStore.allEvents
 
-  // Points
-  globeInstance.pointsData(events)
+  if (uiStore.showHeatmap) {
+    // Clear normal markers
+    globeInstance.pointsData([])
+    globeInstance.ringsData([])
+    globeInstance.labelsData([])
 
-  // Rings only for critical/high severity
-  const criticalEvents = events.filter((e) => e.severity === 'critical' || e.severity === 'high')
-  globeInstance.ringsData(criticalEvents)
+    // Define weight map
+    const weightMap = {
+      critical: 5,
+      high: 3,
+      moderate: 2,
+      low: 1,
+      minimal: 0.5,
+    }
 
-  // Labels only for critical events
-  const labeled = events.filter((e) => e.severity === 'critical').slice(0, 20)
-  globeInstance.labelsData(labeled)
+    // Prepare data for 3D Heatmap (HexBins)
+    const heatData = events.map((e) => ({
+      lat: e.lat,
+      lng: e.lng,
+      weight: weightMap[e.severity] || 1,
+    }))
+
+    globeInstance
+      .hexBinPointsData(heatData)
+      .hexBinPointWeight('weight')
+      .hexBinResolution(4)
+      .hexMargin(0.2)
+      .hexTopColor((d) => (d.sumWeight > 8 ? '#ff0033' : d.sumWeight > 4 ? '#ff9900' : '#ffff00'))
+      .hexSideColor((d) => (d.sumWeight > 8 ? '#ff0033' : d.sumWeight > 4 ? '#ff9900' : '#ffff00'))
+      .hexAltitude((d) => Math.min(0.25, d.sumWeight * 0.02))
+  } else {
+    // Clear 3D Heatmap
+    globeInstance.hexBinPointsData([])
+
+    // Normal Markers
+    globeInstance.pointsData(events)
+
+    // Rings only for critical/high severity
+    const criticalEvents = events.filter((e) => e.severity === 'critical' || e.severity === 'high')
+    globeInstance.ringsData(criticalEvents)
+
+    // Labels only for critical events
+    const labeled = events.filter((e) => e.severity === 'critical').slice(0, 20)
+    globeInstance.labelsData(labeled)
+  }
+
+  // Always update user marker if available
+  if (geoStore.hasLocation) {
+    globeInstance.htmlElementsData([{ lat: geoStore.userLat, lng: geoStore.userLng }])
+  } else {
+    globeInstance.htmlElementsData([])
+  }
 }
 
 function handleResize() {
@@ -131,6 +189,23 @@ watch(
     updateGlobeData()
   },
   { deep: true },
+)
+
+// Watch for location changes
+watch(
+  () => geoStore.userCoords,
+  () => {
+    updateGlobeData()
+  },
+  { deep: true },
+)
+
+// Watch for heatmap toggle
+watch(
+  () => uiStore.showHeatmap,
+  () => {
+    updateGlobeData()
+  },
 )
 
 // Watch for safe mode

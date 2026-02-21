@@ -34,6 +34,7 @@ export const API_ENDPOINTS = {
  * Supabase Edge Function URLs
  */
 export const EDGE_FUNCTIONS = {
+    HISTORICAL: `${supabaseUrl}/functions/v1/fetch-historical-events`,
     EARTHQUAKES: `${supabaseUrl}/functions/v1/fetch-earthquakes`,
     WILDFIRES: `${supabaseUrl}/functions/v1/fetch-wildfires`,
     FLOODS: `${supabaseUrl}/functions/v1/fetch-floods`,

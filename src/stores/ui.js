@@ -15,12 +15,17 @@ export const useUIStore = defineStore('ui', () => {
     // Panels
     const alertPanelOpen = ref(false);
     const settingsPanelOpen = ref(false);
+    const emergencyPopupOpen = ref(false);
+    const activeEmergency = ref(null);
 
     // Accessibility
     const darkMode = ref(true);
     const highContrast = ref(false);
     const safeMode = ref(false);
     const colorblindMode = ref(false);
+
+    // Heatmap visualization toggle
+    const showHeatmap = ref(false);
 
     function applyThemeAttrs() {
         const theme = highContrast.value ? 'high-contrast' : (darkMode.value ? 'dark' : 'light');
@@ -92,10 +97,13 @@ export const useUIStore = defineStore('ui', () => {
         sidebarCollapsed,
         alertPanelOpen,
         settingsPanelOpen,
+        emergencyPopupOpen,
+        activeEmergency,
         darkMode,
         highContrast,
         safeMode,
         colorblindMode,
+        showHeatmap,
         transitionToMap,
         transitionToGlobe,
         selectDisaster,

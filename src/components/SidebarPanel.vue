@@ -11,6 +11,10 @@ const uiStore = useUIStore()
 const geoStore = useGeolocationStore()
 const isGlobeMode = computed(() => uiStore.viewMode === 'globe')
 const isDarkMode = computed(() => uiStore.darkMode)
+const isMobile = computed(() => typeof window !== 'undefined' && window.innerWidth <= 768)
+
+// Force expand on mobile to avoid unreadable "icons-only" bottom sheet
+const isCollapsed = computed(() => uiStore.sidebarCollapsed && !isMobile.value)
 
 const disasterTypes = [
   {
@@ -157,7 +161,7 @@ watch([rangeStartDate, rangeEndDate], ([start, end]) => {
     <div class="sidebar-header">
       <div class="sidebar-brand">
         <span class="brand-icon">🌍</span>
-        <div class="brand-text" v-if="!uiStore.sidebarCollapsed">
+        <div class="brand-text" v-if="!isCollapsed">
           <h1 class="brand-title">GEWS</h1>
           <p class="brand-subtitle">{{ t('app.subtitle') }}</p>
         </div>
@@ -165,14 +169,14 @@ watch([rangeStartDate, rangeEndDate], ([start, end]) => {
       <button
         class="btn-icon btn-ghost sidebar-toggle"
         @click="uiStore.toggleSidebar()"
-        :title="uiStore.sidebarCollapsed ? 'Expand' : 'Collapse'"
+        :title="isCollapsed ? 'Expand' : 'Collapse'"
       >
-        {{ uiStore.sidebarCollapsed ? '→' : '←' }}
+        {{ isCollapsed ? '→' : '←' }}
       </button>
     </div>
 
     <!-- Disaster Toggles -->
-    <div class="sidebar-section" v-if="!uiStore.sidebarCollapsed">
+    <div class="sidebar-section" v-if="!isCollapsed">
       <h2 class="section-title">{{ t('sidebar.disasterToggles') }}</h2>
 
       <div class="disaster-toggles">
@@ -200,7 +204,7 @@ watch([rangeStartDate, rangeEndDate], ([start, end]) => {
     </div>
 
     <!-- Collapsed icons only -->
-    <div class="sidebar-icons-only" v-if="uiStore.sidebarCollapsed">
+    <div class="sidebar-icons-only" v-if="isCollapsed">
       <!-- 1) Afet filtreleri -->
       <button
         v-for="dtype in disasterTypes"
@@ -269,10 +273,10 @@ watch([rangeStartDate, rangeEndDate], ([start, end]) => {
       <!-- 4) 2D/3D ve Dark/Light -->
       <button
         class="btn-icon collapsed-action"
-        :title="isGlobeMode ? 'View 3D' : 'View 2D'"
+        :title="isGlobeMode ? 'View 2D' : 'View 3D'"
         @click="isGlobeMode ? uiStore.transitionToMap(20, 30, 3) : uiStore.transitionToGlobe()"
       >
-        {{ isGlobeMode ? '🌍' : '🗺️' }}
+        {{ isGlobeMode ? '🗺️' : '🌍' }}
       </button>
       <button
         class="btn-icon collapsed-action"
@@ -318,7 +322,7 @@ watch([rangeStartDate, rangeEndDate], ([start, end]) => {
     </div>
 
     <!-- Severity Legend -->
-    <div class="sidebar-section" v-if="!uiStore.sidebarCollapsed">
+    <div class="sidebar-section" v-if="!isCollapsed">
       <h2 class="section-title">{{ t('sidebar.legend') }}</h2>
       <div class="legend">
         <button
@@ -335,7 +339,7 @@ watch([rangeStartDate, rangeEndDate], ([start, end]) => {
     </div>
 
     <!-- Time Range -->
-    <div class="sidebar-section" v-if="!uiStore.sidebarCollapsed">
+    <div class="sidebar-section" v-if="!isCollapsed">
       <h2 class="section-title">Zaman Aralığı</h2>
       <div class="time-range-list">
         <button
@@ -369,7 +373,7 @@ watch([rangeStartDate, rangeEndDate], ([start, end]) => {
     </div>
 
     <!-- Actions -->
-    <div class="sidebar-actions" v-if="!uiStore.sidebarCollapsed">
+    <div class="sidebar-actions" v-if="!isCollapsed">
       <div class="quick-switches">
         <label class="switch-3d-cyan">
           <input
@@ -503,7 +507,7 @@ watch([rangeStartDate, rangeEndDate], ([start, end]) => {
     </div>
 
     <!-- Last Updated -->
-    <div class="sidebar-footer" v-if="!uiStore.sidebarCollapsed && disasterStore.lastUpdated">
+    <div class="sidebar-footer" v-if="!isCollapsed && disasterStore.lastUpdated">
       <span class="footer-text">
         {{ t('app.lastUpdated') }}:
         {{ new Date(disasterStore.lastUpdated).toLocaleTimeString('tr-TR') }}
@@ -1377,13 +1381,15 @@ html[data-theme='light'] .footer-sources {
     right: 0;
     width: 100%;
     max-width: none;
-    height: min(56vh, 460px);
-    border-radius: 18px 18px 0 0;
+    height: min(65vh, 520px);
+    border-radius: 24px 24px 0 0;
     border: 1px solid var(--glass-border);
     border-bottom: none;
     transform: translateY(102%);
-    padding-bottom: calc(var(--space-md) + 8px);
-    box-shadow: 0 -12px 32px rgba(0, 0, 0, 0.35);
+    padding-bottom: env(safe-area-inset-bottom, 20px);
+    box-shadow: 0 -12px 40px rgba(0, 0, 0, 0.5);
+    background: var(--glass-bg);
+    backdrop-filter: blur(20px) saturate(180%);
   }
 
   .sidebar.sidebar-open {
@@ -1395,8 +1401,55 @@ html[data-theme='light'] .footer-sources {
     padding: var(--space-md);
   }
 
+  .sidebar-header {
+    padding-bottom: var(--space-sm);
+    margin-bottom: var(--space-xs);
+    border-bottom: 2px solid rgba(255, 255, 255, 0.05);
+  }
+
+  /* Handle for the bottom sheet */
+  .sidebar::before {
+    content: '';
+    position: absolute;
+    top: 8px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 40px;
+    height: 4px;
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 2px;
+  }
+
   .quick-switches {
-    justify-content: space-between;
+    justify-content: space-around;
+    padding: var(--space-sm) 0;
+  }
+
+  .disaster-toggles {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 8px;
+  }
+
+  .disaster-toggle {
+    padding: 12px 10px;
+    justify-content: center;
+    flex-direction: column;
+    gap: 4px;
+    text-align: center;
+    min-height: 80px;
+  }
+
+  .toggle-icon {
+    font-size: 1.4rem;
+  }
+
+  .toggle-label {
+    font-size: 0.7rem;
+  }
+
+  .legend {
+    grid-template-columns: repeat(2, 1fr);
   }
 }
 </style>

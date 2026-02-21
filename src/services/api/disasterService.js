@@ -1,6 +1,6 @@
 import {parseUSGS} from '../adapters/earthquakeAdapter.js';
 import {createDisasterEvent, deduplicateByProximity} from '../adapters/DisasterEvent.js';
-import {supabase} from './config.js';
+import {EDGE_FUNCTIONS} from './config.js';
 
 /**
  * Helper to hydrate plain JSON objects from backend with getters
@@ -15,10 +15,17 @@ function hydrateEvents(dataArray) {
  */
 export async function fetchEarthquakes(period = 'day', minMagnitude = '2.5') {
     try {
-        const {data, error} = await supabase.functions.invoke('fetch-earthquakes', {
-            body: {period, minMagnitude}
+        const res = await fetch(EDGE_FUNCTIONS.EARTHQUAKES, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`
+            },
+            body: JSON.stringify({period, minMagnitude})
         });
-        if (error) throw error;
+        if (!res.ok) throw new Error('Failed to fetch earthquakes');
+        const data = await res.json();
+
         // USGS returns raw GeoJSON, needs client adapter
         const evs = parseUSGS(data);
         return deduplicateByProximity(evs, 15);
@@ -33,8 +40,16 @@ export async function fetchEarthquakes(period = 'day', minMagnitude = '2.5') {
  */
 export async function fetchWildfires() {
     try {
-        const {data, error} = await supabase.functions.invoke('fetch-wildfires');
-        if (error) throw error;
+        const res = await fetch(EDGE_FUNCTIONS.WILDFIRES, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`
+            }
+        });
+        if (!res.ok) throw new Error('Failed to fetch wildfires');
+        const data = await res.json();
+
         // Edge function already normalizes and formats the data object internally
         const mappedData = data && data.data ? data.data : [];
         const hydratedData = hydrateEvents(mappedData);
@@ -50,8 +65,16 @@ export async function fetchWildfires() {
  */
 export async function fetchFloods() {
     try {
-        const {data, error} = await supabase.functions.invoke('fetch-floods');
-        if (error) throw error;
+        const res = await fetch(EDGE_FUNCTIONS.FLOODS, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`
+            }
+        });
+        if (!res.ok) throw new Error('Failed to fetch floods');
+        const data = await res.json();
+
         // Edge function already normalizes and formats the data object internally
         const mappedData = data && data.data ? data.data : [];
         return deduplicateByProximity(mappedData, 20);
@@ -66,8 +89,16 @@ export async function fetchFloods() {
  */
 export async function fetchDroughts() {
     try {
-        const {data, error} = await supabase.functions.invoke('fetch-droughts');
-        if (error) throw error;
+        const res = await fetch(EDGE_FUNCTIONS.DROUGHTS, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`
+            }
+        });
+        if (!res.ok) throw new Error('Failed to fetch droughts');
+        const data = await res.json();
+
         // Edge function already normalizes and formats the data object internally
         const mappedData = data && data.data ? data.data : [];
         const hydratedData = hydrateEvents(mappedData);

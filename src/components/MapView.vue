@@ -15,6 +15,10 @@ const mapContainer = ref(null)
 let map = null
 let markersLayer = null
 let baseTileLayer = null
+let wheelTargetZoom = null
+let wheelAnimFrame = null
+let wheelFocusLatLng = null
+let wheelListener = null
 
 function getTileConfig() {
   const useDarkTiles = uiStore.highContrast || uiStore.darkMode
@@ -52,15 +56,22 @@ function initMap() {
     zoom: 3,
     minZoom: 1.55,
     maxZoom: 30,
-    zoomSnap: 0.1,
-    zoomDelta: 0.1,
-    wheelPxPerZoomLevel: 260,
+    zoomSnap: 0,
+    zoomDelta: 0.03,
+    wheelPxPerZoomLevel: 520,
+    wheelDebounceTime: 16,
+    zoomAnimation: true,
+    zoomAnimationThreshold: 1,
+    markerZoomAnimation: true,
     maxBounds: maxBounds,
     maxBoundsViscosity: 1.0,
     worldCopyJump: true,
     zoomControl: false,
     attributionControl: false,
   })
+
+  // Replace default stepped wheel zoom with a smooth interpolated zoom.
+  map.scrollWheelZoom.disable()
 
   // Base tile layer (dark/light theme aware)
   applyBaseTiles()
@@ -72,6 +83,59 @@ function initMap() {
   markersLayer = L.layerGroup().addTo(map)
 
   updateMarkers()
+}
+
+function clamp(val, min, max) {
+  return Math.max(min, Math.min(max, val))
+}
+
+function startSmoothWheelZoom() {
+  if (!map || !mapContainer.value) return
+
+  const step = () => {
+    if (!map || wheelTargetZoom === null) {
+      wheelAnimFrame = null
+      return
+    }
+
+    const current = map.getZoom()
+    const next = current + (wheelTargetZoom - current) * 0.22
+    const done = Math.abs(wheelTargetZoom - current) < 0.002
+    const zoomTo = done ? wheelTargetZoom : next
+
+    if (wheelFocusLatLng) {
+      map.setZoomAround(wheelFocusLatLng, zoomTo, { animate: false })
+    } else {
+      map.setZoom(zoomTo, { animate: false })
+    }
+
+    if (done) {
+      wheelAnimFrame = null
+      return
+    }
+
+    wheelAnimFrame = requestAnimationFrame(step)
+  }
+
+  wheelListener = (event) => {
+    if (!map) return
+    event.preventDefault()
+
+    const current = map.getZoom()
+    const deltaZoom = -event.deltaY * 0.0025
+    const min = map.getMinZoom()
+    const max = map.getMaxZoom()
+
+    if (wheelTargetZoom === null) wheelTargetZoom = current
+    wheelTargetZoom = clamp(wheelTargetZoom + deltaZoom, min, max)
+    wheelFocusLatLng = map.containerPointToLatLng(map.mouseEventToContainerPoint(event))
+
+    if (!wheelAnimFrame) {
+      wheelAnimFrame = requestAnimationFrame(step)
+    }
+  }
+
+  mapContainer.value.addEventListener('wheel', wheelListener, { passive: false })
 }
 
 function updateMarkers() {
@@ -149,6 +213,7 @@ watch(
 
 onMounted(() => {
   initMap()
+  startSmoothWheelZoom()
   // Wait a tick for the container to fully expand to 100vh bounds
   setTimeout(() => {
     if (map) map.invalidateSize()
@@ -156,6 +221,14 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
+  if (wheelAnimFrame) {
+    cancelAnimationFrame(wheelAnimFrame)
+    wheelAnimFrame = null
+  }
+  if (mapContainer.value && wheelListener) {
+    mapContainer.value.removeEventListener('wheel', wheelListener)
+    wheelListener = null
+  }
   if (map) {
     map.remove()
     map = null

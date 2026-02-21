@@ -101,6 +101,7 @@ function handleThemeSwitch(event) {
 
     <!-- Collapsed icons only -->
     <div class="sidebar-icons-only" v-if="uiStore.sidebarCollapsed">
+      <!-- 1) Afet filtreleri -->
       <button
         v-for="dtype in disasterTypes"
         :key="dtype.key"
@@ -110,6 +111,90 @@ function handleThemeSwitch(event) {
         :title="t(`disasters.${dtype.key}`)"
       >
         {{ dtype.icon }}
+      </button>
+
+      <div class="collapsed-divider"></div>
+
+      <!-- 2) Yoğunluk ölçeği -->
+      <button
+        class="btn-icon collapsed-action severity-mini critical"
+        :class="{ inactive: !disasterStore.isSeverityActive('critical') }"
+        @click="disasterStore.toggleSeverity('critical')"
+        :title="t('severity.critical')"
+      >
+        ●
+      </button>
+      <button
+        class="btn-icon collapsed-action severity-mini high"
+        :class="{ inactive: !disasterStore.isSeverityActive('high') }"
+        @click="disasterStore.toggleSeverity('high')"
+        :title="t('severity.high')"
+      >
+        ●
+      </button>
+      <button
+        class="btn-icon collapsed-action severity-mini moderate"
+        :class="{ inactive: !disasterStore.isSeverityActive('moderate') }"
+        @click="disasterStore.toggleSeverity('moderate')"
+        :title="t('severity.moderate')"
+      >
+        ●
+      </button>
+      <button
+        class="btn-icon collapsed-action severity-mini low"
+        :class="{ inactive: !disasterStore.isSeverityActive('low') }"
+        @click="disasterStore.toggleSeverity('low')"
+        :title="t('severity.low')"
+      >
+        ●
+      </button>
+
+      <div class="collapsed-divider"></div>
+
+      <!-- 3) Zaman aralığı -->
+      <button
+        v-for="range in timeRanges"
+        :key="`mini-${range}`"
+        class="btn-icon collapsed-action time-mini"
+        :title="range"
+      >
+        {{ range.replace(' Saat', 's').replace(' Dakika', 'd') }}
+      </button>
+
+      <div class="collapsed-divider"></div>
+
+      <!-- 4) 2D/3D ve Dark/Light -->
+      <button
+        class="btn-icon collapsed-action"
+        :title="isGlobeMode ? 'View 3D' : 'View 2D'"
+        @click="isGlobeMode ? uiStore.transitionToMap(20, 30, 3) : uiStore.transitionToGlobe()"
+      >
+        {{ isGlobeMode ? '🌍' : '🗺️' }}
+      </button>
+      <button
+        class="btn-icon collapsed-action"
+        :title="isDarkMode ? 'Dark Mode' : 'Light Mode'"
+        @click="uiStore.darkMode = !uiStore.darkMode"
+      >
+        {{ isDarkMode ? '🌙' : '☀️' }}
+      </button>
+
+      <div class="collapsed-divider"></div>
+
+      <!-- 5) Kalan seçenekler -->
+      <button class="btn-icon collapsed-action" @click="handleLocate" :title="t('sidebar.myLocation')">
+        📍
+      </button>
+      <button
+        class="btn-icon collapsed-action"
+        @click="disasterStore.fetchAll()"
+        :disabled="disasterStore.isLoading"
+        :title="t('app.refreshAll')"
+      >
+        🔄
+      </button>
+      <button class="btn-icon collapsed-action" @click="uiStore.toggleSettings()" :title="t('app.settings')">
+        ⚙️
       </button>
     </div>
 
@@ -499,6 +584,49 @@ function handleThemeSwitch(event) {
   flex-direction: column;
   gap: var(--space-sm);
   align-items: center;
+}
+
+.collapsed-divider {
+  width: 24px;
+  height: 1px;
+  background: var(--glass-border);
+  margin: 2px 0;
+}
+
+.collapsed-action {
+  width: 34px;
+  height: 34px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.time-mini {
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+}
+
+.severity-mini {
+  font-size: 14px;
+  line-height: 1;
+}
+
+.severity-mini.inactive {
+  opacity: 0.35;
+}
+
+.severity-mini.critical {
+  color: var(--color-critical);
+}
+.severity-mini.high {
+  color: var(--color-high);
+}
+.severity-mini.moderate {
+  color: var(--color-moderate);
+}
+.severity-mini.low {
+  color: var(--color-low);
 }
 
 .sidebar-actions {

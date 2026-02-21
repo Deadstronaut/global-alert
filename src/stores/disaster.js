@@ -11,6 +11,7 @@ export const useDisasterStore = defineStore('disaster', () => {
     const floods = ref([]);
     const droughts = ref([]);
     const activeLayers = ref(new Set(['earthquake', 'wildfire', 'flood', 'drought']));
+    const activeSeverities = ref(new Set(['critical', 'high', 'moderate', 'low', 'minimal']));
     const isLoading = ref(false);
     const lastUpdated = ref(null);
     const sourcesOnline = ref(0);
@@ -26,7 +27,7 @@ export const useDisasterStore = defineStore('disaster', () => {
         if (activeLayers.value.has('wildfire')) events.push(...wildfires.value);
         if (activeLayers.value.has('flood')) events.push(...floods.value);
         if (activeLayers.value.has('drought')) events.push(...droughts.value);
-        return events;
+        return events.filter(e => activeSeverities.value.has(e.severity));
     });
 
     const totalCount = computed(() => ({
@@ -104,6 +105,19 @@ export const useDisasterStore = defineStore('disaster', () => {
         return activeLayers.value.has(type);
     }
 
+    function toggleSeverity(severity) {
+        if (activeSeverities.value.has(severity)) {
+            activeSeverities.value.delete(severity);
+        } else {
+            activeSeverities.value.add(severity);
+        }
+        activeSeverities.value = new Set(activeSeverities.value);
+    }
+
+    function isSeverityActive(severity) {
+        return activeSeverities.value.has(severity);
+    }
+
     function loadFromCache() {
         const cached = loadAllCachedData();
         if (cached.earthquakes.length) earthquakes.value = cached.earthquakes;
@@ -134,6 +148,7 @@ export const useDisasterStore = defineStore('disaster', () => {
         floods,
         droughts,
         activeLayers,
+        activeSeverities,
         isLoading,
         lastUpdated,
         sourcesOnline,
@@ -145,6 +160,8 @@ export const useDisasterStore = defineStore('disaster', () => {
         fetchByType,
         toggleLayer,
         isLayerActive,
+        toggleSeverity,
+        isSeverityActive,
         loadFromCache,
         startPolling,
         stopPolling

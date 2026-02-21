@@ -19,6 +19,9 @@ const disasterTypes = [
   { key: 'drought', icon: '☀️', cssClass: 'btn-drought' },
 ]
 
+const severityLevels = ['critical', 'high', 'moderate', 'low', 'minimal']
+const timeRanges = ['24 Saat', '12 Saat', '6 Saat', '1 Saat', '30 Dakika', '15 Dakika']
+
 function handleLocate() {
   geoStore.requestLocation().then(() => {
     if (geoStore.hasLocation) {
@@ -59,7 +62,6 @@ function handleThemeSwitch(event) {
           <p class="brand-subtitle">{{ t('app.subtitle') }}</p>
         </div>
       </div>
-
       <button
         class="btn-icon btn-ghost sidebar-toggle"
         @click="uiStore.toggleSidebar()"
@@ -115,22 +117,26 @@ function handleThemeSwitch(event) {
     <div class="sidebar-section" v-if="!uiStore.sidebarCollapsed">
       <h3 class="section-title">{{ t('sidebar.legend') }}</h3>
       <div class="legend">
-        <div class="legend-item">
-          <span class="severity-dot critical"></span>
-          <span>{{ t('severity.critical') }}</span>
-        </div>
-        <div class="legend-item">
-          <span class="severity-dot high"></span>
-          <span>{{ t('severity.high') }}</span>
-        </div>
-        <div class="legend-item">
-          <span class="severity-dot moderate"></span>
-          <span>{{ t('severity.moderate') }}</span>
-        </div>
-        <div class="legend-item">
-          <span class="severity-dot low"></span>
-          <span>{{ t('severity.low') }}</span>
-        </div>
+        <button
+          v-for="severity in severityLevels"
+          :key="severity"
+          class="legend-item legend-filter-btn"
+          :class="{ inactive: !disasterStore.isSeverityActive(severity) }"
+          @click="disasterStore.toggleSeverity(severity)"
+        >
+          <span class="severity-dot" :class="severity"></span>
+          <span>{{ t(`severity.${severity}`) }}</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Time Range -->
+    <div class="sidebar-section" v-if="!uiStore.sidebarCollapsed">
+      <h3 class="section-title">Zaman Aralığı</h3>
+      <div class="time-range-list">
+        <button v-for="range in timeRanges" :key="range" class="time-range-btn">
+          {{ range }}
+        </button>
       </div>
     </div>
 
@@ -336,6 +342,7 @@ function handleThemeSwitch(event) {
   opacity: 1;
 }
 
+
 .sidebar-section,
 .sidebar-actions,
 .sidebar-footer,
@@ -393,8 +400,8 @@ function handleThemeSwitch(event) {
 }
 
 .legend {
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 6px;
 }
 
@@ -404,6 +411,87 @@ function handleThemeSwitch(event) {
   gap: var(--space-sm);
   font-size: 0.75rem;
   color: var(--color-text-secondary);
+  border: none;
+  background: transparent;
+  width: auto;
+  text-align: left;
+}
+
+.legend-filter-btn {
+  cursor: pointer;
+  padding: 6px 8px;
+  border-radius: 8px;
+  transition:
+    background 0.2s ease,
+    opacity 0.2s ease,
+    transform 0.2s ease;
+}
+
+.legend-filter-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.legend-filter-btn.inactive {
+  opacity: 0.42;
+}
+
+.legend-filter-btn:active {
+  transform: scale(0.98);
+}
+
+.severity-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  box-shadow: 0 0 8px currentColor;
+}
+
+.severity-dot.critical {
+  background: var(--color-critical);
+  color: var(--color-critical);
+}
+
+.severity-dot.high {
+  background: var(--color-high);
+  color: var(--color-high);
+}
+
+.severity-dot.moderate {
+  background: var(--color-moderate);
+  color: var(--color-moderate);
+}
+
+.severity-dot.low {
+  background: var(--color-low);
+  color: var(--color-low);
+}
+
+.severity-dot.minimal {
+  background: var(--color-minimal);
+  color: var(--color-minimal);
+}
+
+.time-range-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.time-range-btn {
+  border: 1px solid var(--glass-border);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--color-text-secondary);
+  border-radius: 8px;
+  padding: 7px 8px;
+  font-size: 0.72rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-align: center;
+}
+
+.time-range-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--color-text-primary);
 }
 
 .sidebar-icons-only {
@@ -428,7 +516,7 @@ function handleThemeSwitch(event) {
 
 .quick-switches {
   display: flex;
-  align-items: center;
+  align-items: flex-end;
   justify-content: space-between;
   gap: var(--space-sm);
 }
@@ -438,12 +526,15 @@ function handleThemeSwitch(event) {
   flex-direction: column;
   align-items: center;
   gap: 4px;
+  justify-content: flex-end;
+  min-height: 54px;
 }
 
 .theme-mode-label {
   font-size: 0.65rem;
   color: var(--color-text-muted);
   line-height: 1;
+  margin: 0;
 }
 
 .switch-3d-cyan {
@@ -909,5 +1000,6 @@ html[data-theme='light'] .footer-sources {
   .quick-switches {
     justify-content: space-between;
   }
+
 }
 </style>

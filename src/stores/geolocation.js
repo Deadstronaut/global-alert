@@ -1,95 +1,85 @@
 import {defineStore} from 'pinia';
 import {ref, computed} from 'vue';
 import {distanceKm} from '@/services/adapters/DisasterEvent.js';
+import {Capacitor} from '@capacitor/core';
+import {Geolocation} from '@capacitor/geolocation';
 
 export const useGeolocationStore = defineStore('geolocation', () => {
-    // State
     const userLat = ref(null);
     const userLng = ref(null);
     const isTracking = ref(false);
-    const permissionStatus = ref('prompt'); // 'prompt' | 'granted' | 'denied'
+    const permissionStatus = ref('prompt'); // 'prompt', 'granted', 'denied'
     const nearbyThreats = ref([]);
-    const alertRadius = ref(200); // km
+    const alertRadius = ref(50); // Default 50km radius
     const locationError = ref(null);
 
-    // Computed
     const hasLocation = computed(() => userLat.value !== null && userLng.value !== null);
-
     const userCoords = computed(() => {
         if (!hasLocation.value) return null;
-        return {lat: userLat.value, lng: userLng.value};
+        return [userLat.value, userLng.value];
     });
 
-    // Actions
     async function requestLocation() {
         locationError.value = null;
+        isTracking.value = true;
 
-        // Try Capacitor Geolocation first, then browser fallback
         try {
-            if (window.Capacitor?.isNativePlatform()) {
-                const {Geolocation} = await import('@capacitor/geolocation');
-                const perm = await Geolocation.checkPermissions();
+            // Check if we are native mobile with capacitor
+            if (Capacitor.isNativePlatform()) {
+                let perm = await Geolocation.checkPermissions();
+                if (perm.location !== 'granted') {
+                    perm = await Geolocation.requestPermissions();
+                }
 
-                if (perm.location === 'denied') {
+                if (perm.location === 'granted') {
+                    permissionStatus.value = 'granted';
+                    const position = await Geolocation.getCurrentPosition({enableHighAccuracy: true});
+                    userLat.value = position.coords.latitude;
+                    userLng.value = position.coords.longitude;
+                    isTracking.value = false;
+                    return true;
+                } else {
                     permissionStatus.value = 'denied';
+                    locationError.value = "Konum izni reddedildi.";
+                    isTracking.value = false;
                     return false;
                 }
-
-                if (perm.location === 'prompt') {
-                    const requested = await Geolocation.requestPermissions();
-                    if (requested.location === 'denied') {
-                        permissionStatus.value = 'denied';
-                        return false;
-                    }
+            } else {
+                // Browser Fallback (Web)
+                if (navigator.geolocation) {
+                    return new Promise((resolve) => {
+                        navigator.geolocation.getCurrentPosition(
+                            (position) => {
+                                permissionStatus.value = 'granted';
+                                userLat.value = position.coords.latitude;
+                                userLng.value = position.coords.longitude;
+                                isTracking.value = false;
+                                resolve(true);
+                            },
+                            (error) => {
+                                permissionStatus.value = error.code === error.PERMISSION_DENIED ? 'denied' : 'prompt';
+                                locationError.value = error.message;
+                                isTracking.value = false;
+                                resolve(false);
+                            },
+                            {enableHighAccuracy: true, timeout: 10000}
+                        );
+                    });
+                } else {
+                    locationError.value = "Tarayıcınız konum servisini desteklemiyor.";
+                    isTracking.value = false;
+                    return false;
                 }
-
-                const position = await Geolocation.getCurrentPosition({
-                    enableHighAccuracy: true,
-                    timeout: 10000
-                });
-
-                userLat.value = position.coords.latitude;
-                userLng.value = position.coords.longitude;
-                permissionStatus.value = 'granted';
-                isTracking.value = true;
-                return true;
             }
-
-            // Browser Geolocation API fallback
-            if (navigator.geolocation) {
-                return new Promise((resolve) => {
-                    navigator.geolocation.getCurrentPosition(
-                        (position) => {
-                            userLat.value = position.coords.latitude;
-                            userLng.value = position.coords.longitude;
-                            permissionStatus.value = 'granted';
-                            isTracking.value = true;
-                            resolve(true);
-                        },
-                        (error) => {
-                            locationError.value = error.message;
-                            permissionStatus.value = error.code === 1 ? 'denied' : 'prompt';
-                            resolve(false);
-                        },
-                        {enableHighAccuracy: true, timeout: 10000}
-                    );
-                });
-            }
-
-            locationError.value = 'Geolocation not supported';
-            return false;
         } catch (error) {
             locationError.value = error.message;
+            isTracking.value = false;
             return false;
         }
     }
 
-    /**
-     * Calculate nearby threats from all disaster events
-     * @param {Array} allEvents - all active disaster events
-     */
     function calculateNearbyThreats(allEvents) {
-        if (!hasLocation.value || !allEvents.length) {
+        if (!hasLocation.value || !allEvents || !allEvents.length) {
             nearbyThreats.value = [];
             return;
         }
@@ -101,7 +91,7 @@ export const useGeolocationStore = defineStore('geolocation', () => {
             }))
             .filter(event => event.distance <= alertRadius.value)
             .sort((a, b) => a.distance - b.distance)
-            .slice(0, 20);
+            .slice(0, 20); // Show max 20 nearby threats to keep performance
     }
 
     function setAlertRadius(km) {

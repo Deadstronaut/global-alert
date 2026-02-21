@@ -31,7 +31,6 @@ async function initGlobe() {
   globeInstance = Globe()
     .globeImageUrl(getTextureUrl())
     .bumpImageUrl('/textures/earth-topology.png')
-    .backgroundImageUrl('/textures/night-sky.png')
     .showAtmosphere(true)
     .atmosphereColor('#3a7bd5')
     .atmosphereAltitude(0.25)
@@ -123,9 +122,6 @@ function updateGlobeData() {
   const events = disasterStore.allEvents
 
   if (uiStore.showHeatmap) {
-    // Clear normal markers
-    globeInstance.pointsData([])
-    globeInstance.ringsData([])
     globeInstance.labelsData([])
 
     // Define weight map
@@ -137,7 +133,50 @@ function updateGlobeData() {
       minimal: 0.5,
     }
 
-    // Prepare data for 3D Heatmap (HexBins)
+    const heatData = events.map((e) => ({
+      lat: e.lat,
+      lng: e.lng,
+      weight: weightMap[e.severity] || 1,
+    }))
+
+    if (uiStore.showHexbins) {
+      // CLEAR HEATMAP (HexBins can be both, but we differentiate)
+      globeInstance
+        .hexBinPointsData(heatData)
+        .hexBinPointWeight('weight')
+        .hexBinResolution(4)
+        .hexMargin(0.05) // Tighter honeycomb look
+        .hexTopColor((d) => (d.sumWeight > 8 ? '#ff0033' : d.sumWeight > 4 ? '#ff9900' : '#ffd600'))
+        .hexSideColor((d) =>
+          d.sumWeight > 8 ? '#ff0033' : d.sumWeight > 4 ? '#ff9900' : '#ffd600',
+        )
+        .hexAltitude(0.01) // Flatter "petek" look as per drought.uk
+    } else {
+      globeInstance
+        .hexBinPointsData(heatData)
+        .hexBinPointWeight('weight')
+        .hexBinResolution(4)
+        .hexMargin(0.2)
+        .hexTopColor((d) => (d.sumWeight > 8 ? '#ff0033' : d.sumWeight > 4 ? '#ff9900' : '#ffff00'))
+        .hexSideColor((d) =>
+          d.sumWeight > 8 ? '#ff0033' : d.sumWeight > 4 ? '#ff9900' : '#ffff00',
+        )
+        .hexAltitude((d) => Math.min(0.25, d.sumWeight * 0.02))
+    }
+  } else if (uiStore.showHexbins) {
+    // Clear normal markers
+    globeInstance.pointsData([])
+    globeInstance.ringsData([])
+    globeInstance.labelsData([])
+
+    const weightMap = {
+      critical: 5,
+      high: 3,
+      moderate: 2,
+      low: 1,
+      minimal: 0.5,
+    }
+
     const heatData = events.map((e) => ({
       lat: e.lat,
       lng: e.lng,
@@ -147,11 +186,11 @@ function updateGlobeData() {
     globeInstance
       .hexBinPointsData(heatData)
       .hexBinPointWeight('weight')
-      .hexBinResolution(4)
-      .hexMargin(0.2)
-      .hexTopColor((d) => (d.sumWeight > 8 ? '#ff0033' : d.sumWeight > 4 ? '#ff9900' : '#ffff00'))
-      .hexSideColor((d) => (d.sumWeight > 8 ? '#ff0033' : d.sumWeight > 4 ? '#ff9900' : '#ffff00'))
-      .hexAltitude((d) => Math.min(0.25, d.sumWeight * 0.02))
+      .hexBinResolution(uiStore.safeMode ? 3 : 4)
+      .hexMargin(0.05)
+      .hexTopColor((d) => (d.sumWeight > 8 ? '#ff0033' : d.sumWeight > 4 ? '#ff9900' : '#ffd600'))
+      .hexSideColor((d) => (d.sumWeight > 8 ? '#ff0033' : d.sumWeight > 4 ? '#ff9900' : '#ffd600'))
+      .hexAltitude(0.01)
   } else {
     // Clear 3D Heatmap
     globeInstance.hexBinPointsData([])
@@ -200,9 +239,9 @@ watch(
   { deep: true },
 )
 
-// Watch for heatmap toggle
+// Watch for heatmap/hexbin toggle
 watch(
-  () => uiStore.showHeatmap,
+  () => [uiStore.showHeatmap, uiStore.showHexbins],
   () => {
     updateGlobeData()
   },

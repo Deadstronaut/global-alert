@@ -50,6 +50,7 @@
     "time": "Time",
     "source": "Source",
     "viewOnMap": "View on Map",
+    "events": "Events",
     "newAlert": "New Alert!",
     "criticalAlert": "CRITICAL ALERT",
     "emergencyTitle": "EMERGENCY ALERT",
@@ -77,7 +78,10 @@
     "language": "Language",
     "accessibility": "Accessibility",
     "colorblindMode": "Colorblind Mode",
-    "colorblindDesc": "Uses patterns and icons instead of colors"
+    "colorblindDesc": "Uses patterns and icons instead of colors",
+    "showHeatmap": "Show Heatmap",
+    "showHexbins": "Show Hexagonal Bins",
+    "showHexbinsDesc": "Honeycomb-style cluster visualization"
   },
   "map": {
     "zoomIn": "Zoom In",

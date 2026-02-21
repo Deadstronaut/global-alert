@@ -29,7 +29,7 @@ const disasterTypes = [
 ]
 
 const severityLevels = ['critical', 'high', 'moderate', 'low', 'minimal']
-const timeRanges = ['24 Saat', '12 Saat', '6 Saat', '3 Saat', '1 Saat', '30 Dakika', '15 Dakika']
+const timeRanges = ['10 Dakika', '30 Dakika', '2 Saat', '6 Saat', '12 Saat', '24 Saat']
 const selectedTimeRange = ref('24 Saat')
 const today = new Date().toISOString().slice(0, 10)
 const rangeStartDate = ref(today)
@@ -68,13 +68,12 @@ function getSourceStatusClass(count) {
 
 function selectTimeRange(rangeLabel) {
   const map = {
-    '24 Saat': 24,
-    '12 Saat': 12,
-    '6 Saat': 6,
-    '3 Saat': 3,
-    '1 Saat': 1,
+    '10 Dakika': 10 / 60,
     '30 Dakika': 0.5,
-    '15 Dakika': 0.25,
+    '2 Saat': 2,
+    '6 Saat': 6,
+    '12 Saat': 12,
+    '24 Saat': 24,
   }
 
   const hours = map[rangeLabel] || 24

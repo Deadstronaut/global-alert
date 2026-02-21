@@ -7,6 +7,7 @@ import { useI18n } from 'vue-i18n'
 import { getSeverityHex } from '@/services/adapters/DisasterEvent.js'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
+import { latLngToCell, cellToBoundary } from 'h3-js'
 
 const { t } = useI18n()
 const disasterStore = useDisasterStore()
@@ -17,12 +18,14 @@ const mapContainer = ref(null)
 let map = null
 let markersLayer = null
 let heatmapLayer = null
+let hexbinsLayer = null
 let userMarker = null
 let baseTileLayer = null
 let wheelTargetZoom = null
 let wheelAnimFrame = null
 let wheelFocusLatLng = null
 let wheelListener = null
+let canvasRenderer = null
 
 function getTileConfig() {
   const useDarkTiles = uiStore.highContrast || uiStore.darkMode
@@ -71,6 +74,7 @@ function initMap() {
     worldCopyJump: true,
     zoomControl: false,
     attributionControl: false,
+    preferCanvas: true,
   })
 
   map.scrollWheelZoom.disable()
@@ -80,9 +84,11 @@ function initMap() {
   L.control.zoom({ position: 'bottomright' }).addTo(map)
 
   markersLayer = L.layerGroup().addTo(map)
-
+  hexbinsLayer = L.layerGroup().addTo(map)
+  canvasRenderer = L.canvas({ padding: 0.5 })
   updateMarkers()
   updateHeatmap()
+  updateHexbins()
   updateUserMarker()
 }
 
@@ -139,6 +145,57 @@ function startSmoothWheelZoom() {
   mapContainer.value.addEventListener('wheel', wheelListener, { passive: false })
 }
 
+function updateHexbins() {
+  if (!map || !hexbinsLayer) return
+
+  hexbinsLayer.clearLayers()
+  if (!uiStore.showHexbins) return
+
+  const events = disasterStore.allEvents
+  const h3ActiveCells = {}
+
+  // Aggregate by H3 cell
+  events.forEach((e) => {
+    const h3Index = latLngToCell(e.lat, e.lng, 4)
+    if (!h3ActiveCells[h3Index]) {
+      h3ActiveCells[h3Index] = {
+        maxSeverity: e.severity,
+        events: [],
+      }
+    }
+    const severities = ['minimal', 'low', 'moderate', 'high', 'critical']
+    if (severities.indexOf(e.severity) > severities.indexOf(h3ActiveCells[h3Index].maxSeverity)) {
+      h3ActiveCells[h3Index].maxSeverity = e.severity
+    }
+    h3ActiveCells[h3Index].events.push(e)
+  })
+
+  // Render Active Cells
+  Object.entries(h3ActiveCells).forEach(([h3Index, data]) => {
+    const boundary = cellToBoundary(h3Index)
+    const color = getSeverityHex(data.maxSeverity)
+
+    const polygon = L.polygon(boundary, {
+      color: color,
+      fillColor: color,
+      fillOpacity: 0.6,
+      weight: 1.5,
+      opacity: 0.9,
+      renderer: canvasRenderer,
+      className: 'hexbin-polygon active',
+    })
+
+    polygon.bindPopup(`
+      <div class="disaster-popup">
+        <h4>${data.events.length} ${t('alerts.events')}</h4>
+        <p>${t('alerts.severity')}: ${data.maxSeverity.toUpperCase()}</p>
+      </div>
+    `)
+
+    hexbinsLayer.addLayer(polygon)
+  })
+}
+
 function updateHeatmap() {
   if (!map) return
 
@@ -183,6 +240,8 @@ function updateHeatmap() {
 function updateMarkers() {
   if (!markersLayer) return
   markersLayer.clearLayers()
+
+  if (uiStore.showHeatmap || uiStore.showHexbins) return
 
   const events = disasterStore.allEvents
 
@@ -269,15 +328,17 @@ watch(
   () => {
     updateMarkers()
     updateHeatmap()
+    updateHexbins()
   },
   { deep: true },
 )
 
 watch(
-  () => uiStore.showHeatmap,
+  () => [uiStore.showHeatmap, uiStore.showHexbins],
   () => {
     updateMarkers()
     updateHeatmap()
+    updateHexbins()
   },
 )
 
@@ -352,7 +413,7 @@ onBeforeUnmount(() => {
 
 /* Override default Leaflet background which normally causes the "white space" flash when zooming out */
 .leaflet-container {
-  background: var(--color-bg) !important;
+  background: transparent !important;
 }
 
 .leaflet-popup-content-wrapper {

@@ -50,6 +50,7 @@
     "time": "Zaman",
     "source": "Kaynak",
     "viewOnMap": "Haritada Göster",
+    "events": "Olaylar",
     "newAlert": "Yeni Uyarı!",
     "criticalAlert": "KRİTİK UYARI",
     "emergencyTitle": "ACİL DURUM ALARMI",
@@ -77,7 +78,10 @@
     "language": "Dil",
     "accessibility": "Erişilebilirlik",
     "colorblindMode": "Renk Körü Modu",
-    "colorblindDesc": "Renk yerine desen ve ikonlar kullanılır"
+    "colorblindDesc": "Renk yerine desen ve ikonlar kullanılır",
+    "showHeatmap": "Isı Haritasını Göster",
+    "showHexbins": "Petek Görünümü (Hexbin)",
+    "showHexbinsDesc": "Altıgen petekler halinde kümeleme"
   },
   "map": {
     "zoomIn": "Yakınlaştır",

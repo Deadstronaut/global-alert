@@ -36,6 +36,19 @@ function changeLanguage(lang) {
           <span class="toggle-switch"></span>
         </label>
         <p class="settings-desc">{{ t('settings.safeModeDesc') }}</p>
+
+        <label class="settings-toggle">
+          <span>{{ t('settings.showHeatmap') }}</span>
+          <input type="checkbox" v-model="uiStore.showHeatmap" />
+          <span class="toggle-switch"></span>
+        </label>
+
+        <label class="settings-toggle">
+          <span>{{ t('settings.showHexbins') }}</span>
+          <input type="checkbox" v-model="uiStore.showHexbins" />
+          <span class="toggle-switch"></span>
+        </label>
+        <p class="settings-desc">{{ t('settings.showHexbinsDesc') }}</p>
       </div>
 
       <!-- Accessibility -->

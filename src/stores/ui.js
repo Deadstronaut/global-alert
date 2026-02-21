@@ -24,8 +24,9 @@ export const useUIStore = defineStore('ui', () => {
     const safeMode = ref(false);
     const colorblindMode = ref(false);
 
-    // Heatmap visualization toggle
+    // Heatmap / Hexbin visualization toggle
     const showHeatmap = ref(false);
+    const showHexbins = ref(false);
 
     function applyThemeAttrs() {
         const theme = highContrast.value ? 'high-contrast' : (darkMode.value ? 'dark' : 'light');
@@ -41,6 +42,14 @@ export const useUIStore = defineStore('ui', () => {
 
     watch(colorblindMode, (val) => {
         document.documentElement.setAttribute('data-colorblind', val ? 'true' : 'false');
+    });
+
+    watch(showHexbins, (val) => {
+        if (val) showHeatmap.value = false;
+    });
+
+    watch(showHeatmap, (val) => {
+        if (val) showHexbins.value = false;
     });
 
     // Actions
@@ -104,6 +113,7 @@ export const useUIStore = defineStore('ui', () => {
         safeMode,
         colorblindMode,
         showHeatmap,
+        showHexbins,
         transitionToMap,
         transitionToGlobe,
         selectDisaster,

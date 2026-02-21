@@ -88,7 +88,15 @@ export function getSeverityColor(severity) {
  * Returns hex color for globe.gl points
  */
 export function getSeverityHex(severity) {
-    const map = {
+    const isColorblindMode = typeof document !== 'undefined' &&
+        document.documentElement.getAttribute('data-colorblind') === 'true';
+    const map = isColorblindMode ? {
+        [SEVERITY.CRITICAL]: '#1f77b4',
+        [SEVERITY.HIGH]: '#ff7f0e',
+        [SEVERITY.MODERATE]: '#9467bd',
+        [SEVERITY.LOW]: '#2ca02c',
+        [SEVERITY.MINIMAL]: '#17becf'
+    } : {
         [SEVERITY.CRITICAL]: '#ff1744',
         [SEVERITY.HIGH]: '#ff6d00',
         [SEVERITY.MODERATE]: '#ffd600',

@@ -17,14 +17,18 @@ export const useUIStore = defineStore('ui', () => {
     const settingsPanelOpen = ref(false);
 
     // Accessibility
+    const darkMode = ref(true);
     const highContrast = ref(false);
     const safeMode = ref(false);
     const colorblindMode = ref(false);
 
+    function applyThemeAttrs() {
+        const theme = highContrast.value ? 'high-contrast' : (darkMode.value ? 'dark' : 'light');
+        document.documentElement.setAttribute('data-theme', theme);
+    }
+
     // Apply data attributes to document for CSS
-    watch(highContrast, (val) => {
-        document.documentElement.setAttribute('data-theme', val ? 'high-contrast' : 'default');
-    });
+    watch([highContrast, darkMode], applyThemeAttrs, {immediate: true});
 
     watch(safeMode, (val) => {
         document.documentElement.setAttribute('data-safe-mode', val ? 'true' : 'false');
@@ -88,6 +92,7 @@ export const useUIStore = defineStore('ui', () => {
         sidebarCollapsed,
         alertPanelOpen,
         settingsPanelOpen,
+        darkMode,
         highContrast,
         safeMode,
         colorblindMode,

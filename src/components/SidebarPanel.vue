@@ -10,6 +10,7 @@ const disasterStore = useDisasterStore()
 const uiStore = useUIStore()
 const geoStore = useGeolocationStore()
 const isGlobeMode = computed(() => uiStore.viewMode === 'globe')
+const isDarkMode = computed(() => uiStore.darkMode)
 
 const disasterTypes = [
   { key: 'earthquake', icon: '🔴', cssClass: 'btn-earthquake' },
@@ -34,6 +35,10 @@ function handleViewModeSwitch(event) {
     return
   }
   uiStore.transitionToMap(20, 30, 3)
+}
+
+function handleThemeSwitch(event) {
+  uiStore.darkMode = event.target.checked
 }
 </script>
 
@@ -131,28 +136,104 @@ function handleViewModeSwitch(event) {
 
     <!-- Actions -->
     <div class="sidebar-actions" v-if="!uiStore.sidebarCollapsed">
-      <label class="switch-3d-cyan">
-        <input
-          type="checkbox"
-          class="switch-input"
-          :checked="isGlobeMode"
-          @change="handleViewModeSwitch"
-        />
-        <div class="switch-track">
-          <span class="track-text text-3d">View 3D</span>
-          <span class="track-text text-2d">View 2D</span>
-          <div class="switch-knob">
-            <div class="cube">
-              <div class="face front"></div>
-              <div class="face back"></div>
-              <div class="face right"></div>
-              <div class="face left"></div>
-              <div class="face top"></div>
-              <div class="face bottom"></div>
+      <div class="quick-switches">
+        <label class="switch-3d-cyan">
+          <input
+            type="checkbox"
+            class="switch-input"
+            :checked="isGlobeMode"
+            @change="handleViewModeSwitch"
+          />
+          <div class="switch-track">
+            <span class="track-text text-3d">View 3D</span>
+            <span class="track-text text-2d">View 2D</span>
+            <div class="switch-knob">
+              <div class="cube">
+                <div class="face front"></div>
+                <div class="face back"></div>
+                <div class="face right"></div>
+                <div class="face left"></div>
+                <div class="face top"></div>
+                <div class="face bottom"></div>
+              </div>
             </div>
           </div>
+        </label>
+
+        <div class="theme-switch-wrap">
+          <span class="theme-mode-label">{{ isDarkMode ? 'Dark Mode' : 'Light Mode' }}</span>
+          <label class="theme-switch">
+            <input
+              id="theme-input"
+              type="checkbox"
+              :checked="isDarkMode"
+              @change="handleThemeSwitch"
+            />
+            <div class="theme-slider round">
+            <div class="sun-moon">
+              <svg id="moon-dot-1" class="moon-dot" viewBox="0 0 100 100">
+                <circle cx="50" cy="50" r="50"></circle>
+              </svg>
+              <svg id="moon-dot-2" class="moon-dot" viewBox="0 0 100 100">
+                <circle cx="50" cy="50" r="50"></circle>
+              </svg>
+              <svg id="moon-dot-3" class="moon-dot" viewBox="0 0 100 100">
+                <circle cx="50" cy="50" r="50"></circle>
+              </svg>
+              <svg id="light-ray-1" class="light-ray" viewBox="0 0 100 100">
+                <circle cx="50" cy="50" r="50"></circle>
+              </svg>
+              <svg id="light-ray-2" class="light-ray" viewBox="0 0 100 100">
+                <circle cx="50" cy="50" r="50"></circle>
+              </svg>
+              <svg id="light-ray-3" class="light-ray" viewBox="0 0 100 100">
+                <circle cx="50" cy="50" r="50"></circle>
+              </svg>
+              <svg id="cloud-1" class="cloud-dark" viewBox="0 0 100 100">
+                <circle cx="50" cy="50" r="50"></circle>
+              </svg>
+              <svg id="cloud-2" class="cloud-dark" viewBox="0 0 100 100">
+                <circle cx="50" cy="50" r="50"></circle>
+              </svg>
+              <svg id="cloud-3" class="cloud-dark" viewBox="0 0 100 100">
+                <circle cx="50" cy="50" r="50"></circle>
+              </svg>
+              <svg id="cloud-4" class="cloud-light" viewBox="0 0 100 100">
+                <circle cx="50" cy="50" r="50"></circle>
+              </svg>
+              <svg id="cloud-5" class="cloud-light" viewBox="0 0 100 100">
+                <circle cx="50" cy="50" r="50"></circle>
+              </svg>
+              <svg id="cloud-6" class="cloud-light" viewBox="0 0 100 100">
+                <circle cx="50" cy="50" r="50"></circle>
+              </svg>
+            </div>
+            <div class="stars">
+              <svg id="star-1" class="star" viewBox="0 0 20 20">
+                <path
+                  d="M 0 10 C 10 10,10 10 ,0 10 C 10 10 , 10 10 , 10 20 C 10 10 , 10 10 , 20 10 C 10 10 , 10 10 , 10 0 C 10 10,10 10 ,0 10 Z"
+                ></path>
+              </svg>
+              <svg id="star-2" class="star" viewBox="0 0 20 20">
+                <path
+                  d="M 0 10 C 10 10,10 10 ,0 10 C 10 10 , 10 10 , 10 20 C 10 10 , 10 10 , 20 10 C 10 10 , 10 10 , 10 0 C 10 10,10 10 ,0 10 Z"
+                ></path>
+              </svg>
+              <svg id="star-3" class="star" viewBox="0 0 20 20">
+                <path
+                  d="M 0 10 C 10 10,10 10 ,0 10 C 10 10 , 10 10 , 10 20 C 10 10 , 10 10 , 20 10 C 10 10 , 10 10 , 10 0 C 10 10,10 10 ,0 10 Z"
+                ></path>
+              </svg>
+              <svg id="star-4" class="star" viewBox="0 0 20 20">
+                <path
+                  d="M 0 10 C 10 10,10 10 ,0 10 C 10 10 , 10 10 , 10 20 C 10 10 , 10 10 , 20 10 C 10 10 , 10 10 , 10 0 C 10 10,10 10 ,0 10 Z"
+                ></path>
+              </svg>
+            </div>
+            </div>
+          </label>
         </div>
-      </label>
+      </div>
 
       <button class="btn btn-primary sidebar-action-btn" @click="handleLocate">
         📍 {{ geoStore.isTracking ? t('sidebar.myLocation') : t('sidebar.locating') }}
@@ -344,6 +425,27 @@ function handleViewModeSwitch(event) {
   justify-content: center;
   font-size: 0.8rem;
 }
+
+.quick-switches {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-sm);
+}
+
+.theme-switch-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.theme-mode-label {
+  font-size: 0.65rem;
+  color: var(--color-text-muted);
+  line-height: 1;
+}
+
 .switch-3d-cyan {
   --w: 110px;
   --h: 40px;
@@ -499,6 +601,261 @@ function handleViewModeSwitch(event) {
   }
 }
 
+.theme-switch {
+  position: relative;
+  display: inline-block;
+  width: 60px;
+  height: 34px;
+  flex-shrink: 0;
+}
+
+.theme-switch #theme-input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.theme-slider {
+  position: absolute;
+  cursor: pointer;
+  inset: 0;
+  background-color: #2196f3;
+  transition: 0.4s;
+  z-index: 0;
+  overflow: hidden;
+}
+
+.sun-moon {
+  position: absolute;
+  height: 26px;
+  width: 26px;
+  left: 4px;
+  bottom: 4px;
+  background-color: yellow;
+  transition: 0.4s;
+}
+
+#theme-input:checked + .theme-slider {
+  background-color: #000;
+}
+
+#theme-input:checked + .theme-slider .sun-moon {
+  transform: translateX(26px);
+  background-color: #fff;
+  animation: rotate-center 0.6s ease-in-out both;
+}
+
+.moon-dot {
+  opacity: 0;
+  transition: 0.4s;
+  fill: gray;
+}
+
+#theme-input:checked + .theme-slider .sun-moon .moon-dot {
+  opacity: 1;
+}
+
+.theme-slider.round {
+  border-radius: 34px;
+}
+
+.theme-slider.round .sun-moon {
+  border-radius: 50%;
+}
+
+#moon-dot-1 {
+  left: 10px;
+  top: 3px;
+  position: absolute;
+  width: 6px;
+  height: 6px;
+  z-index: 4;
+}
+
+#moon-dot-2 {
+  left: 2px;
+  top: 10px;
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  z-index: 4;
+}
+
+#moon-dot-3 {
+  left: 16px;
+  top: 18px;
+  position: absolute;
+  width: 3px;
+  height: 3px;
+  z-index: 4;
+}
+
+#light-ray-1 {
+  left: -8px;
+  top: -8px;
+  position: absolute;
+  width: 43px;
+  height: 43px;
+  z-index: -1;
+  fill: #fff;
+  opacity: 10%;
+}
+
+#light-ray-2 {
+  left: -50%;
+  top: -50%;
+  position: absolute;
+  width: 55px;
+  height: 55px;
+  z-index: -1;
+  fill: #fff;
+  opacity: 10%;
+}
+
+#light-ray-3 {
+  left: -18px;
+  top: -18px;
+  position: absolute;
+  width: 60px;
+  height: 60px;
+  z-index: -1;
+  fill: #fff;
+  opacity: 10%;
+}
+
+.cloud-light {
+  position: absolute;
+  fill: #eee;
+  animation: cloud-move 6s infinite;
+}
+
+.cloud-dark {
+  position: absolute;
+  fill: #ccc;
+  animation: cloud-move 6s infinite;
+  animation-delay: 1s;
+}
+
+#cloud-1 {
+  left: 30px;
+  top: 15px;
+  width: 40px;
+}
+
+#cloud-2 {
+  left: 44px;
+  top: 10px;
+  width: 20px;
+}
+
+#cloud-3 {
+  left: 18px;
+  top: 24px;
+  width: 30px;
+}
+
+#cloud-4 {
+  left: 36px;
+  top: 18px;
+  width: 40px;
+}
+
+#cloud-5 {
+  left: 48px;
+  top: 14px;
+  width: 20px;
+}
+
+#cloud-6 {
+  left: 22px;
+  top: 26px;
+  width: 30px;
+}
+
+@keyframes cloud-move {
+  0% {
+    transform: translateX(0);
+  }
+  40% {
+    transform: translateX(4px);
+  }
+  80% {
+    transform: translateX(-4px);
+  }
+  100% {
+    transform: translateX(0);
+  }
+}
+
+.stars {
+  transform: translateY(-32px);
+  opacity: 0;
+  transition: 0.4s;
+}
+
+.star {
+  fill: #fff;
+  position: absolute;
+  transition: 0.4s;
+  animation: star-twinkle 2s infinite;
+}
+
+#theme-input:checked + .theme-slider .stars {
+  transform: translateY(0);
+  opacity: 1;
+}
+
+#star-1 {
+  width: 20px;
+  top: 2px;
+  left: 3px;
+  animation-delay: 0.3s;
+}
+
+#star-2 {
+  width: 6px;
+  top: 16px;
+  left: 3px;
+}
+
+#star-3 {
+  width: 12px;
+  top: 20px;
+  left: 10px;
+  animation-delay: 0.6s;
+}
+
+#star-4 {
+  width: 18px;
+  top: 0;
+  left: 18px;
+  animation-delay: 1.3s;
+}
+
+@keyframes star-twinkle {
+  0% {
+    transform: scale(1);
+  }
+  40% {
+    transform: scale(1.2);
+  }
+  80% {
+    transform: scale(0.8);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+@keyframes rotate-center {
+  0% {
+    transform: translateX(26px) rotate(0);
+  }
+  100% {
+    transform: translateX(26px) rotate(360deg);
+  }
+}
+
 .sidebar-footer {
   padding-top: var(--space-sm);
   border-top: 1px solid var(--glass-border);
@@ -516,6 +873,10 @@ function handleViewModeSwitch(event) {
 .footer-sources {
   font-size: 0.6rem;
   color: var(--color-info);
+}
+
+html[data-theme='light'] .footer-sources {
+  color: #2f4f8f;
 }
 
 /* Mobile */
@@ -543,6 +904,10 @@ function handleViewModeSwitch(event) {
   .sidebar-collapsed {
     width: 100%;
     padding: var(--space-md);
+  }
+
+  .quick-switches {
+    justify-content: space-between;
   }
 }
 </style>

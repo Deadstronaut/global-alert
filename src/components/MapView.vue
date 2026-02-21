@@ -14,6 +14,29 @@ const uiStore = useUIStore()
 const mapContainer = ref(null)
 let map = null
 let markersLayer = null
+let baseTileLayer = null
+
+function getTileConfig() {
+  const useDarkTiles = uiStore.highContrast || uiStore.darkMode
+  return useDarkTiles
+    ? {
+        url: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
+        opts: { subdomains: 'abcd', maxZoom: 19, noWrap: false },
+      }
+    : {
+        url: 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',
+        opts: { subdomains: 'abcd', maxZoom: 19, noWrap: false },
+      }
+}
+
+function applyBaseTiles() {
+  if (!map) return
+  const { url, opts } = getTileConfig()
+  if (baseTileLayer) {
+    map.removeLayer(baseTileLayer)
+  }
+  baseTileLayer = L.tileLayer(url, opts).addTo(map)
+}
 
 function initMap() {
   if (!mapContainer.value || map) return
@@ -39,12 +62,8 @@ function initMap() {
     attributionControl: false,
   })
 
-  // Dark tile layer
-  L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-    subdomains: 'abcd',
-    maxZoom: 19,
-    noWrap: false, // Allow horizontal wrap
-  }).addTo(map)
+  // Base tile layer (dark/light theme aware)
+  applyBaseTiles()
 
   // Zoom control in custom position
   L.control.zoom({ position: 'bottomright' }).addTo(map)
@@ -121,6 +140,13 @@ watch(
   { deep: true },
 )
 
+watch(
+  () => [uiStore.darkMode, uiStore.highContrast],
+  () => {
+    applyBaseTiles()
+  },
+)
+
 onMounted(() => {
   initMap()
   // Wait a tick for the container to fully expand to 100vh bounds
@@ -133,6 +159,7 @@ onBeforeUnmount(() => {
   if (map) {
     map.remove()
     map = null
+    baseTileLayer = null
   }
 })
 </script>
@@ -248,5 +275,35 @@ onBeforeUnmount(() => {
   gap: 2px;
   font-size: 0.7rem;
   color: rgba(255, 255, 255, 0.82);
+}
+
+html[data-theme='light'] .leaflet-popup-content-wrapper {
+  background: #f4f7ff !important;
+  color: #111a2c !important;
+  border: 1px solid rgba(17, 26, 44, 0.2);
+}
+
+html[data-theme='light'] .leaflet-popup-tip {
+  background: #f4f7ff !important;
+}
+
+html[data-theme='light'] .leaflet-popup-close-button {
+  color: #111a2c !important;
+}
+
+html[data-theme='light'] .disaster-popup {
+  color: #111a2c;
+}
+
+html[data-theme='light'] .disaster-popup h4 {
+  color: #111a2c;
+}
+
+html[data-theme='light'] .disaster-popup p {
+  color: #243655;
+}
+
+html[data-theme='light'] .popup-meta {
+  color: #32496f;
 }
 </style>

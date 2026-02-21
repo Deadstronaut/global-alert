@@ -26,6 +26,7 @@ const disasterTypes = [
   { key: 'wildfire', icon: '🔥', cssClass: 'btn-wildfire', labelKey: 'stats.activeWildfires' },
   { key: 'flood', icon: '🌊', cssClass: 'btn-flood', labelKey: 'stats.activeFloods' },
   { key: 'drought', icon: '🔴', cssClass: 'btn-drought', labelKey: 'stats.activeDroughts' },
+  { key: 'food_security', icon: '🌾', cssClass: 'btn-food', labelKey: 'stats.activeFoodSecurity' },
 ]
 
 const severityLevels = ['critical', 'high', 'moderate', 'low', 'minimal']
@@ -59,10 +60,10 @@ function handleThemeSwitch(event) {
 }
 
 function getSourceStatusClass(count) {
-  if (count >= 4) return 'source-level-4'
-  if (count === 3) return 'source-level-3'
-  if (count === 2) return 'source-level-2'
-  if (count === 1) return 'source-level-1'
+  if (count >= 5) return 'source-level-4'
+  if (count === 4) return 'source-level-3'
+  if (count === 3) return 'source-level-2'
+  if (count === 2 || count === 1) return 'source-level-1'
   return 'source-level-0'
 }
 
@@ -316,7 +317,7 @@ watch([rangeStartDate, rangeEndDate], ([start, end]) => {
         :class="getSourceStatusClass(disasterStore.sourcesOnline)"
         v-if="disasterStore.lastUpdated"
       >
-        {{ disasterStore.sourcesOnline }}/4
+        {{ disasterStore.sourcesOnline }}/5
       </div>
     </div>
 
@@ -512,7 +513,7 @@ watch([rangeStartDate, rangeEndDate], ([start, end]) => {
         {{ new Date(disasterStore.lastUpdated).toLocaleTimeString('tr-TR') }}
       </span>
       <span class="footer-sources" :class="getSourceStatusClass(disasterStore.sourcesOnline)">
-        {{ disasterStore.sourcesOnline }}/4 {{ t('stats.sourcesOnline') }}
+        {{ disasterStore.sourcesOnline }}/5 {{ t('stats.sourcesOnline') }}
       </span>
     </div>
   </aside>

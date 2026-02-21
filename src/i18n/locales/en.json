@@ -19,6 +19,7 @@
     "wildfire": "Wildfires",
     "flood": "Floods",
     "drought": "Droughts",
+    "food_security": "Food Security",
     "all": "All Disasters"
   },
   "severity": {
@@ -62,6 +63,7 @@
     "activeWildfires": "Active Wildfires",
     "activeFloods": "Active Floods",
     "activeDroughts": "Drought Zones",
+    "activeFoodSecurity": "Food Security Alerts",
     "totalEvents": "Total Events",
     "sourcesOnline": "Sources Online"
   },

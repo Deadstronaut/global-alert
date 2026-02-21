@@ -19,6 +19,7 @@
     "wildfire": "Yangınlar",
     "flood": "Seller",
     "drought": "Kuraklık",
+    "food_security": "Gıda Güvenliği",
     "all": "Tüm Afetler"
   },
   "severity": {
@@ -62,6 +63,7 @@
     "activeWildfires": "Aktif Yangın",
     "activeFloods": "Aktif Sel",
     "activeDroughts": "Kuraklık Bölgesi",
+    "activeFoodSecurity": "Gıda Güvenliği Alarmı",
     "totalEvents": "Toplam Olay",
     "sourcesOnline": "Çevrimiçi Kaynak"
   },

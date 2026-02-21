@@ -22,8 +22,6 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const aggregatedDroughts: any[] = []
-
     // 1. Fetch from ReliefWeb
     const fetchReliefWeb = async () => {
       try {
@@ -103,32 +101,61 @@ Deno.serve(async (req) => {
     }
 
     const [rwResults, gdacsResults] = await Promise.all([fetchReliefWeb(), fetchGDACS()])
-    aggregatedDroughts.push(...rwResults, ...gdacsResults)
+    let aggregatedDroughts = [...rwResults, ...gdacsResults]
 
     // Deduplication Logic
-    const finalDroughts: any[] = []
+    const deduplicated: any[] = []
     for (const event of aggregatedDroughts) {
-      const isDuplicate = finalDroughts.some((existing) => {
+      const isDuplicate = deduplicated.some((existing) => {
         return distanceKm(event.lat, event.lng, existing.lat, existing.lng) < 100
       })
       if (!isDuplicate) {
-        finalDroughts.push(event)
+        deduplicated.push(event)
       }
     }
 
-    // Default mock data if no events found
-    if (finalDroughts.length === 0) {
-      finalDroughts.push({
-        id: 'd_mock_1',
-        type: 'drought',
-        title: 'Severe Drought - Horn of Africa',
-        lat: 5.15,
-        lng: 46.19,
-        severity: 'high',
-        timestamp: new Date().toISOString(),
-        source: 'mock',
-      })
+    // 3. Enhance with Precipitation Anomaly Logic (Top 5 only to save API credits/time)
+    const topDroughts = deduplicated.slice(0, 5)
+    const otherDroughts = deduplicated.slice(5)
+
+    const checkAnomaly = async (event: any) => {
+      try {
+        const today = new Date()
+        const thirtyDaysAgo = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000)
+
+        const currentUrl = `https://api.open-meteo.com/v1/forecast?latitude=${event.lat}&longitude=${event.lng}&past_days=30&daily=precipitation_sum&timezone=auto`
+        const cRes = await fetch(currentUrl)
+        const cData = await cRes.json()
+        const currentSum =
+          cData.daily?.precipitation_sum?.reduce((a: number, b: number) => a + (b || 0), 0) || 0
+
+        // Historical Comparison (Archive API)
+        const histYear = today.getFullYear() - 1
+        const hStart = new Date(thirtyDaysAgo)
+        hStart.setFullYear(histYear)
+        const hEnd = new Date(today)
+        hEnd.setFullYear(histYear)
+        const hUrl = `https://archive-api.open-meteo.com/v1/archive?latitude=${event.lat}&longitude=${event.lng}&start_date=${hStart.toISOString().split('T')[0]}&end_date=${hEnd.toISOString().split('T')[0]}&daily=precipitation_sum`
+
+        const hRes = await fetch(hUrl)
+        const hData = await hRes.json()
+        const histSum =
+          hData.daily?.precipitation_sum?.reduce((a: number, b: number) => a + (b || 0), 0) || 1
+
+        const anomaly = (currentSum - histSum) / histSum
+        if (anomaly < -0.3) {
+          event.title = `[Rainfall Deficit] ${event.title}`
+          event.severity = anomaly < -0.6 ? 'critical' : 'high'
+          event.description = `Precipitation anomaly: ${Math.round(anomaly * 100)}% vs last year.`
+        }
+      } catch (e) {
+        console.error('Anomaly check failed for:', event.title, e)
+      }
+      return event
     }
+
+    const enhancedTop = await Promise.all(topDroughts.map((d) => checkAnomaly(d)))
+    const finalDroughts = [...enhancedTop, ...otherDroughts]
 
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
@@ -139,7 +166,7 @@ Deno.serve(async (req) => {
       const eventsToInsert = finalDroughts.map((f: any) => ({
         id: f.id,
         title: f.title,
-        description: null,
+        description: f.description || null,
         lat: f.lat,
         lng: f.lng,
         severity: f.severity,

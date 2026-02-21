@@ -23,7 +23,8 @@ export const DISASTER_TYPE = {
     EARTHQUAKE: 'earthquake',
     WILDFIRE: 'wildfire',
     FLOOD: 'flood',
-    DROUGHT: 'drought'
+    DROUGHT: 'drought',
+    FOOD_SECURITY: 'food_security'
 };
 
 /**
@@ -114,7 +115,8 @@ export function getDisasterIcon(type) {
         [DISASTER_TYPE.EARTHQUAKE]: '⛰️',
         [DISASTER_TYPE.WILDFIRE]: '🔥',
         [DISASTER_TYPE.FLOOD]: '🌊',
-        [DISASTER_TYPE.DROUGHT]: '🔴'
+        [DISASTER_TYPE.DROUGHT]: '🔴',
+        [DISASTER_TYPE.FOOD_SECURITY]: '🌾'
     };
     return map[type] || '⚠️';
 }

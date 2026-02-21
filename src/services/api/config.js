@@ -38,7 +38,8 @@ export const EDGE_FUNCTIONS = {
     EARTHQUAKES: `${supabaseUrl}/functions/v1/fetch-earthquakes`,
     WILDFIRES: `${supabaseUrl}/functions/v1/fetch-wildfires`,
     FLOODS: `${supabaseUrl}/functions/v1/fetch-floods`,
-    DROUGHTS: `${supabaseUrl}/functions/v1/fetch-droughts`
+    DROUGHTS: `${supabaseUrl}/functions/v1/fetch-droughts`,
+    FOOD_SECURITY: `${supabaseUrl}/functions/v1/fetch-food-security`
 };
 
 /**
@@ -48,7 +49,8 @@ export const POLLING_INTERVALS = {
     earthquake: 60 * 1000,       // 1 minute
     wildfire: 15 * 60 * 1000,   // 15 minutes
     flood: 5 * 60 * 1000,       // 5 minutes
-    drought: 60 * 60 * 1000     // 1 hour
+    drought: 60 * 60 * 1000,     // 1 hour
+    food_security: 60 * 60 * 1000 // 1 hour
 };
 
 /**

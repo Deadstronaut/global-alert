@@ -1,6 +1,6 @@
 import {defineStore} from 'pinia';
 import {ref, computed} from 'vue';
-import {fetchAllDisasters, fetchEarthquakes, fetchWildfires, fetchFloods, fetchDroughts} from '@/services/api/disasterService.js';
+import {fetchAllDisasters, fetchEarthquakes, fetchWildfires, fetchFloods, fetchDroughts, fetchFoodSecurity} from '@/services/api/disasterService.js';
 import {cacheEvents, loadAllCachedData} from '@/services/offlineCache.js';
 import {POLLING_INTERVALS} from '@/services/api/config.js';
 
@@ -10,7 +10,8 @@ export const useDisasterStore = defineStore('disaster', () => {
     const wildfires = ref([]);
     const floods = ref([]);
     const droughts = ref([]);
-    const activeLayers = ref(new Set(['earthquake', 'wildfire', 'flood', 'drought']));
+    const foodSecurity = ref([]);
+    const activeLayers = ref(new Set(['earthquake', 'wildfire', 'flood', 'drought', 'food_security']));
     const activeSeverities = ref(new Set(['critical', 'high', 'moderate', 'low', 'minimal']));
     const isLoading = ref(false);
     const lastUpdated = ref(null);
@@ -30,6 +31,7 @@ export const useDisasterStore = defineStore('disaster', () => {
         if (activeLayers.value.has('wildfire')) events.push(...wildfires.value);
         if (activeLayers.value.has('flood')) events.push(...floods.value);
         if (activeLayers.value.has('drought')) events.push(...droughts.value);
+        if (activeLayers.value.has('food_security')) events.push(...foodSecurity.value);
 
         // Filter by Severity
         let filtered = events.filter(e => activeSeverities.value.has(e.severity));
@@ -57,7 +59,8 @@ export const useDisasterStore = defineStore('disaster', () => {
         wildfire: wildfires.value.length,
         flood: floods.value.length,
         drought: droughts.value.length,
-        total: earthquakes.value.length + wildfires.value.length + floods.value.length + droughts.value.length
+        foodSecurity: foodSecurity.value.length,
+        total: earthquakes.value.length + wildfires.value.length + floods.value.length + droughts.value.length + foodSecurity.value.length
     }));
 
     const criticalEvents = computed(() =>
@@ -75,6 +78,7 @@ export const useDisasterStore = defineStore('disaster', () => {
             wildfires.value = data.wildfires;
             floods.value = data.floods;
             droughts.value = data.droughts;
+            foodSecurity.value = data.foodSecurity;
             sourcesOnline.value = data.sourcesOnline;
             lastUpdated.value = data.fetchedAt;
 
@@ -83,6 +87,7 @@ export const useDisasterStore = defineStore('disaster', () => {
             cacheEvents('wildfire', data.wildfires);
             cacheEvents('flood', data.floods);
             cacheEvents('drought', data.droughts);
+            cacheEvents('food_security', data.foodSecurity);
         } catch (error) {
             errors.value.push(error.message);
             console.error('[GEWS] Fetch all failed:', error);
@@ -97,14 +102,15 @@ export const useDisasterStore = defineStore('disaster', () => {
                 earthquake: fetchEarthquakes,
                 wildfire: fetchWildfires,
                 flood: fetchFloods,
-                drought: fetchDroughts
+                drought: fetchDroughts,
+                food_security: fetchFoodSecurity
             };
 
             const fetcher = fetchers[type];
             if (!fetcher) return;
 
             const data = await fetcher();
-            const storeMap = {earthquake: earthquakes, wildfire: wildfires, flood: floods, drought: droughts};
+            const storeMap = {earthquake: earthquakes, wildfire: wildfires, flood: floods, drought: droughts, food_security: foodSecurity};
             storeMap[type].value = data;
             cacheEvents(type, data);
             lastUpdated.value = new Date().toISOString();
@@ -146,6 +152,7 @@ export const useDisasterStore = defineStore('disaster', () => {
         if (cached.wildfires.length) wildfires.value = cached.wildfires;
         if (cached.floods.length) floods.value = cached.floods;
         if (cached.droughts.length) droughts.value = cached.droughts;
+        if (cached.foodSecurity && cached.foodSecurity.length) foodSecurity.value = cached.foodSecurity;
     }
 
     function startPolling() {
@@ -157,6 +164,8 @@ export const useDisasterStore = defineStore('disaster', () => {
         pollingTimers.value.flood = setInterval(() => fetchByType('flood'), POLLING_INTERVALS.flood);
         // Drought: every 1 hour
         pollingTimers.value.drought = setInterval(() => fetchByType('drought'), POLLING_INTERVALS.drought);
+        // Food Security: every 1 hour
+        pollingTimers.value.food_security = setInterval(() => fetchByType('food_security'), POLLING_INTERVALS.food_security);
     }
 
     function stopPolling() {
@@ -169,6 +178,7 @@ export const useDisasterStore = defineStore('disaster', () => {
         wildfires,
         floods,
         droughts,
+        foodSecurity,
         activeLayers,
         activeSeverities,
         isLoading,

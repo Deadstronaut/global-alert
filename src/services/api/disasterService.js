@@ -86,6 +86,14 @@ export async function fetchDroughts() {
 }
 
 /**
+ * Fetch food security data from direct live endpoint
+ */
+export async function fetchFoodSecurity() {
+    const raw = await fetchLive(EDGE_FUNCTIONS.FOOD_SECURITY);
+    return deduplicateByProximity(raw, 50);
+}
+
+/**
  * Fetch all disaster data in parallel
  * @returns {Promise<Object>}
  */
@@ -98,17 +106,19 @@ export async function fetchAllDisasters(startDate = null, endDate = null) {
             wildfires: deduplicateByProximity(hydratedData.filter(e => e.type === 'wildfire'), 5),
             floods: deduplicateByProximity(hydratedData.filter(e => e.type === 'flood'), 20),
             droughts: deduplicateByProximity(hydratedData.filter(e => e.type === 'drought'), 20),
+            foodSecurity: deduplicateByProximity(hydratedData.filter(e => e.type === 'food_security'), 50),
             fetchedAt: new Date().toISOString(),
-            sourcesOnline: hydratedData.length > 0 ? 4 : 0
+            sourcesOnline: hydratedData.length > 0 ? 5 : 0
         };
     }
 
     // Default polling behavior fetches types individually wrapped here for API consistency
-    const [earthquakes, wildfires, floods, droughts] = await Promise.allSettled([
+    const [earthquakes, wildfires, floods, droughts, foodSecurity] = await Promise.allSettled([
         fetchEarthquakes(),
         fetchWildfires(),
         fetchFloods(),
-        fetchDroughts()
+        fetchDroughts(),
+        fetchFoodSecurity()
     ]);
 
     return {
@@ -116,7 +126,8 @@ export async function fetchAllDisasters(startDate = null, endDate = null) {
         wildfires: wildfires.status === 'fulfilled' ? wildfires.value : [],
         floods: floods.status === 'fulfilled' ? floods.value : [],
         droughts: droughts.status === 'fulfilled' ? droughts.value : [],
+        foodSecurity: foodSecurity.status === 'fulfilled' ? foodSecurity.value : [],
         fetchedAt: new Date().toISOString(),
-        sourcesOnline: [earthquakes, wildfires, floods, droughts].filter(r => r.status === 'fulfilled').length
+        sourcesOnline: [earthquakes, wildfires, floods, droughts, foodSecurity].filter(r => r.status === 'fulfilled').length
     };
 }

@@ -1,0 +1,99 @@
+{
+  "app": {
+    "title": "GEWS - Küresel Erken Uyarı Sistemi",
+    "subtitle": "Birleşmiş Milletler Afet İzleme Platformu",
+    "loading": "Veriler Yükleniyor...",
+    "loadingSubtext": "Uydu verileri alınıyor",
+    "lastUpdated": "Son Güncelleme",
+    "refreshAll": "Tüm Verileri Güncelle",
+    "returnToGlobe": "Küreye Dön",
+    "settings": "Ayarlar",
+    "close": "Kapat",
+    "error": "Hata",
+    "retry": "Tekrar Dene",
+    "noData": "Veri bulunamadı",
+    "offline": "Çevrimdışı - Önbellek verileri gösteriliyor"
+  },
+  "disasters": {
+    "earthquake": "Depremler",
+    "wildfire": "Yangınlar",
+    "flood": "Seller",
+    "drought": "Kuraklık",
+    "all": "Tüm Afetler"
+  },
+  "severity": {
+    "critical": "Kritik",
+    "high": "Yüksek",
+    "moderate": "Orta",
+    "low": "Düşük",
+    "minimal": "Minimum"
+  },
+  "sidebar": {
+    "title": "Afet Katmanları",
+    "activeLayers": "Aktif Katmanlar",
+    "disasterToggles": "Afet Filtreleri",
+    "legend": "Yoğunluk Ölçeği",
+    "myLocation": "Konumum",
+    "locating": "Konum belirleniyor...",
+    "locationDenied": "Konum izni reddedildi"
+  },
+  "alerts": {
+    "title": "En Yakın Tehditler",
+    "noThreats": "Yakın tehdit algılanmadı",
+    "distance": "{distance} km uzaklıkta",
+    "magnitude": "Büyüklük",
+    "depth": "Derinlik",
+    "confidence": "Güvenilirlik",
+    "brightness": "Parlaklık",
+    "severity": "Şiddet",
+    "time": "Zaman",
+    "source": "Kaynak",
+    "viewOnMap": "Haritada Göster",
+    "newAlert": "Yeni Uyarı!",
+    "criticalAlert": "KRİTİK UYARI"
+  },
+  "stats": {
+    "activeEarthquakes": "Aktif Deprem",
+    "activeWildfires": "Aktif Yangın",
+    "activeFloods": "Aktif Sel",
+    "activeDroughts": "Kuraklık Bölgesi",
+    "totalEvents": "Toplam Olay",
+    "sourcesOnline": "Çevrimiçi Kaynak"
+  },
+  "settings": {
+    "title": "Ayarlar",
+    "display": "Görünüm",
+    "highContrast": "Yüksek Kontrast",
+    "safeMode": "Güvenli Mod (Düşük GPU)",
+    "safeModeDesc": "3D animasyonları durdurur, pil tasarrufu sağlar",
+    "notifications": "Bildirimler",
+    "enablePush": "Anlık Bildirimler",
+    "alertRadius": "Uyarı Yarıçapı",
+    "alertRadiusKm": "{radius} km",
+    "language": "Dil",
+    "accessibility": "Erişilebilirlik",
+    "colorblindMode": "Renk Körü Modu",
+    "colorblindDesc": "Renk yerine desen ve ikonlar kullanılır"
+  },
+  "map": {
+    "zoomIn": "Yakınlaştır",
+    "zoomOut": "Uzaklaştır",
+    "clusterCount": "{count} olay",
+    "viewDetails": "Detayları Gör"
+  },
+  "detail": {
+    "title": "Olay Detayı",
+    "location": "Konum",
+    "coordinates": "Koordinatlar",
+    "reportedAt": "Bildirim Zamanı",
+    "updatedAt": "Güncelleme Zamanı",
+    "dataSource": "Veri Kaynağı",
+    "shareEvent": "Paylaş"
+  },
+  "time": {
+    "justNow": "Az önce",
+    "minutesAgo": "{count} dakika önce",
+    "hoursAgo": "{count} saat önce",
+    "daysAgo": "{count} gün önce"
+  }
+}

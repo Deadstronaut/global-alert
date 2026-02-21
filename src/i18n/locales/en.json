@@ -1,0 +1,99 @@
+{
+  "app": {
+    "title": "GEWS - Global Early Warning System",
+    "subtitle": "United Nations Disaster Monitoring Platform",
+    "loading": "Loading Data...",
+    "loadingSubtext": "Fetching satellite data",
+    "lastUpdated": "Last Updated",
+    "refreshAll": "Refresh All Data",
+    "returnToGlobe": "Return to Globe",
+    "settings": "Settings",
+    "close": "Close",
+    "error": "Error",
+    "retry": "Retry",
+    "noData": "No data found",
+    "offline": "Offline - Showing cached data"
+  },
+  "disasters": {
+    "earthquake": "Earthquakes",
+    "wildfire": "Wildfires",
+    "flood": "Floods",
+    "drought": "Droughts",
+    "all": "All Disasters"
+  },
+  "severity": {
+    "critical": "Critical",
+    "high": "High",
+    "moderate": "Moderate",
+    "low": "Low",
+    "minimal": "Minimal"
+  },
+  "sidebar": {
+    "title": "Disaster Layers",
+    "activeLayers": "Active Layers",
+    "disasterToggles": "Disaster Filters",
+    "legend": "Intensity Scale",
+    "myLocation": "My Location",
+    "locating": "Locating...",
+    "locationDenied": "Location permission denied"
+  },
+  "alerts": {
+    "title": "Nearest Threats",
+    "noThreats": "No nearby threats detected",
+    "distance": "{distance} km away",
+    "magnitude": "Magnitude",
+    "depth": "Depth",
+    "confidence": "Confidence",
+    "brightness": "Brightness",
+    "severity": "Severity",
+    "time": "Time",
+    "source": "Source",
+    "viewOnMap": "View on Map",
+    "newAlert": "New Alert!",
+    "criticalAlert": "CRITICAL ALERT"
+  },
+  "stats": {
+    "activeEarthquakes": "Active Earthquakes",
+    "activeWildfires": "Active Wildfires",
+    "activeFloods": "Active Floods",
+    "activeDroughts": "Drought Zones",
+    "totalEvents": "Total Events",
+    "sourcesOnline": "Sources Online"
+  },
+  "settings": {
+    "title": "Settings",
+    "display": "Display",
+    "highContrast": "High Contrast",
+    "safeMode": "Safe Mode (Low GPU)",
+    "safeModeDesc": "Stops 3D animations, saves battery",
+    "notifications": "Notifications",
+    "enablePush": "Push Notifications",
+    "alertRadius": "Alert Radius",
+    "alertRadiusKm": "{radius} km",
+    "language": "Language",
+    "accessibility": "Accessibility",
+    "colorblindMode": "Colorblind Mode",
+    "colorblindDesc": "Uses patterns and icons instead of colors"
+  },
+  "map": {
+    "zoomIn": "Zoom In",
+    "zoomOut": "Zoom Out",
+    "clusterCount": "{count} events",
+    "viewDetails": "View Details"
+  },
+  "detail": {
+    "title": "Event Details",
+    "location": "Location",
+    "coordinates": "Coordinates",
+    "reportedAt": "Reported At",
+    "updatedAt": "Updated At",
+    "dataSource": "Data Source",
+    "shareEvent": "Share"
+  },
+  "time": {
+    "justNow": "Just now",
+    "minutesAgo": "{count} minutes ago",
+    "hoursAgo": "{count} hours ago",
+    "daysAgo": "{count} days ago"
+  }
+}

@@ -1,0 +1,152 @@
+import {defineStore} from 'pinia';
+import {ref, computed} from 'vue';
+import {fetchAllDisasters, fetchEarthquakes, fetchWildfires, fetchFloods, fetchDroughts} from '@/services/api/disasterService.js';
+import {cacheEvents, loadAllCachedData} from '@/services/offlineCache.js';
+import {POLLING_INTERVALS} from '@/services/api/config.js';
+
+export const useDisasterStore = defineStore('disaster', () => {
+    // State
+    const earthquakes = ref([]);
+    const wildfires = ref([]);
+    const floods = ref([]);
+    const droughts = ref([]);
+    const activeLayers = ref(new Set(['earthquake', 'wildfire', 'flood', 'drought']));
+    const isLoading = ref(false);
+    const lastUpdated = ref(null);
+    const sourcesOnline = ref(0);
+    const errors = ref([]);
+
+    // Polling timers
+    const pollingTimers = ref({});
+
+    // Computed
+    const allEvents = computed(() => {
+        const events = [];
+        if (activeLayers.value.has('earthquake')) events.push(...earthquakes.value);
+        if (activeLayers.value.has('wildfire')) events.push(...wildfires.value);
+        if (activeLayers.value.has('flood')) events.push(...floods.value);
+        if (activeLayers.value.has('drought')) events.push(...droughts.value);
+        return events;
+    });
+
+    const totalCount = computed(() => ({
+        earthquake: earthquakes.value.length,
+        wildfire: wildfires.value.length,
+        flood: floods.value.length,
+        drought: droughts.value.length,
+        total: earthquakes.value.length + wildfires.value.length + floods.value.length + droughts.value.length
+    }));
+
+    const criticalEvents = computed(() =>
+        allEvents.value.filter(e => e.severity === 'critical' || e.severity === 'high')
+    );
+
+    // Actions
+    async function fetchAll() {
+        isLoading.value = true;
+        errors.value = [];
+
+        try {
+            const data = await fetchAllDisasters();
+            earthquakes.value = data.earthquakes;
+            wildfires.value = data.wildfires;
+            floods.value = data.floods;
+            droughts.value = data.droughts;
+            sourcesOnline.value = data.sourcesOnline;
+            lastUpdated.value = data.fetchedAt;
+
+            // Cache for offline use
+            cacheEvents('earthquake', data.earthquakes);
+            cacheEvents('wildfire', data.wildfires);
+            cacheEvents('flood', data.floods);
+            cacheEvents('drought', data.droughts);
+        } catch (error) {
+            errors.value.push(error.message);
+            console.error('[GEWS] Fetch all failed:', error);
+        } finally {
+            isLoading.value = false;
+        }
+    }
+
+    async function fetchByType(type) {
+        try {
+            const fetchers = {
+                earthquake: fetchEarthquakes,
+                wildfire: fetchWildfires,
+                flood: fetchFloods,
+                drought: fetchDroughts
+            };
+
+            const fetcher = fetchers[type];
+            if (!fetcher) return;
+
+            const data = await fetcher();
+            const storeMap = {earthquake: earthquakes, wildfire: wildfires, flood: floods, drought: droughts};
+            storeMap[type].value = data;
+            cacheEvents(type, data);
+            lastUpdated.value = new Date().toISOString();
+        } catch (error) {
+            console.error(`[GEWS] Fetch ${type} failed:`, error);
+        }
+    }
+
+    function toggleLayer(type) {
+        if (activeLayers.value.has(type)) {
+            activeLayers.value.delete(type);
+        } else {
+            activeLayers.value.add(type);
+        }
+        // Force reactivity
+        activeLayers.value = new Set(activeLayers.value);
+    }
+
+    function isLayerActive(type) {
+        return activeLayers.value.has(type);
+    }
+
+    function loadFromCache() {
+        const cached = loadAllCachedData();
+        if (cached.earthquakes.length) earthquakes.value = cached.earthquakes;
+        if (cached.wildfires.length) wildfires.value = cached.wildfires;
+        if (cached.floods.length) floods.value = cached.floods;
+        if (cached.droughts.length) droughts.value = cached.droughts;
+    }
+
+    function startPolling() {
+        // Earthquake: every 1 minute
+        pollingTimers.value.earthquake = setInterval(() => fetchByType('earthquake'), POLLING_INTERVALS.earthquake);
+        // Wildfire: every 15 minutes
+        pollingTimers.value.wildfire = setInterval(() => fetchByType('wildfire'), POLLING_INTERVALS.wildfire);
+        // Flood: every 5 minutes
+        pollingTimers.value.flood = setInterval(() => fetchByType('flood'), POLLING_INTERVALS.flood);
+        // Drought: every 1 hour
+        pollingTimers.value.drought = setInterval(() => fetchByType('drought'), POLLING_INTERVALS.drought);
+    }
+
+    function stopPolling() {
+        Object.values(pollingTimers.value).forEach(timer => clearInterval(timer));
+        pollingTimers.value = {};
+    }
+
+    return {
+        earthquakes,
+        wildfires,
+        floods,
+        droughts,
+        activeLayers,
+        isLoading,
+        lastUpdated,
+        sourcesOnline,
+        errors,
+        allEvents,
+        totalCount,
+        criticalEvents,
+        fetchAll,
+        fetchByType,
+        toggleLayer,
+        isLayerActive,
+        loadFromCache,
+        startPolling,
+        stopPolling
+    };
+});

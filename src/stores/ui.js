@@ -3,7 +3,7 @@ import {ref, watch} from 'vue';
 
 export const useUIStore = defineStore('ui', () => {
     // View state
-    const viewMode = ref('map'); // 'globe' | 'map'
+    const viewMode = ref('globe'); // 'globe' | 'map'
     const transitionState = ref('idle'); // 'idle' | 'transitioning' | 'complete'
     const selectedRegion = ref(null); // { lat, lng, zoom }
     const selectedDisaster = ref(null); // DisasterEvent or null

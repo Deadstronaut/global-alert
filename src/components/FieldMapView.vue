@@ -19,46 +19,12 @@ let map = null
 let mapLoaded = false
 let markerObjects = []
 let userMarkerObj = null
-const isSatellite = ref(false)
-const currentZoom = ref(3)
-
-const ESRI_SATELLITE_STYLE = {
-  version: 8,
-  sources: {
-    'esri-satellite': {
-      type: 'raster',
-      tiles: [
-        'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
-      ],
-      tileSize: 256,
-      attribution: 'Esri, Maxar, Earthstar Geographics',
-    },
-  },
-  layers: [{ id: 'esri-satellite-layer', type: 'raster', source: 'esri-satellite' }],
-}
 
 function getBaseStyle() {
-  if (isSatellite.value) return ESRI_SATELLITE_STYLE
   if (uiStore.highContrast || uiStore.darkMode) {
     return 'https://tiles.openfreemap.org/styles/dark'
   }
   return 'https://tiles.openfreemap.org/styles/liberty'
-}
-
-function toggleSatellite() {
-  isSatellite.value = !isSatellite.value
-  if (!map) return
-  map.setMaxZoom(isSatellite.value ? 17.5 : 20)
-  mapLoaded = false
-  map.setStyle(getBaseStyle())
-  map.once('style.load', () => {
-    mapLoaded = true
-    addSourcesAndLayers()
-    updateMarkers()
-    updateHeatmap()
-    updateHexbins()
-    updateUserMarker()
-  })
 }
 
 function addSourcesAndLayers() {
@@ -107,18 +73,12 @@ function addSourcesAndLayers() {
         'interpolate',
         ['linear'],
         ['heatmap-density'],
-        0,
-        'rgba(0,0,0,0)',
-        0.2,
-        '#90a4ae',
-        0.4,
-        '#00e676',
-        0.6,
-        '#ffd600',
-        0.8,
-        '#ff9100',
-        1.0,
-        '#ff1744',
+        0, 'rgba(0,0,0,0)',
+        0.2, '#90a4ae',
+        0.4, '#00e676',
+        0.6, '#ffd600',
+        0.8, '#ff9100',
+        1.0, '#ff1744',
       ],
       'heatmap-opacity': 0.8,
     },
@@ -135,7 +95,7 @@ function initMap() {
     center: [30, 20],
     zoom: 3,
     minZoom: 1.55,
-    maxZoom: 20,
+    maxZoom: 19,
     attributionControl: false,
   })
 
@@ -143,10 +103,6 @@ function initMap() {
 
   map.on('error', (e) => {
     console.error('[MapLibre] Error:', e.error)
-  })
-
-  map.on('zoom', () => {
-    currentZoom.value = Math.round(map.getZoom() * 10) / 10
   })
 
   map.on('load', () => {
@@ -162,23 +118,17 @@ function initMap() {
       const props = e.features[0].properties
       new maplibregl.Popup()
         .setLngLat(e.lngLat)
-        .setHTML(
-          `
+        .setHTML(`
           <div class="disaster-popup">
             <h4>${props.count} ${t('alerts.events')}</h4>
             <p>${t('alerts.severity')}: ${String(props.maxSeverity).toUpperCase()}</p>
           </div>
-        `,
-        )
+        `)
         .addTo(map)
     })
 
-    map.on('mouseenter', 'hex-fill', () => {
-      map.getCanvas().style.cursor = 'pointer'
-    })
-    map.on('mouseleave', 'hex-fill', () => {
-      map.getCanvas().style.cursor = ''
-    })
+    map.on('mouseenter', 'hex-fill', () => { map.getCanvas().style.cursor = 'pointer' })
+    map.on('mouseleave', 'hex-fill', () => { map.getCanvas().style.cursor = '' })
   })
 }
 
@@ -266,9 +216,9 @@ function updateHexbins() {
   })
 
   const features = Object.entries(cells).map(([h3Index, data]) => {
-    const boundary = cellToBoundary(h3Index) // [[lat, lng], ...]
+    const boundary = cellToBoundary(h3Index)
     const ring = boundary.map(([lat, lng]) => [lng, lat])
-    ring.push(ring[0]) // close ring
+    ring.push(ring[0])
     return {
       type: 'Feature',
       geometry: { type: 'Polygon', coordinates: [ring] },
@@ -397,19 +347,13 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="map-view-wrapper">
-    <div ref="mapContainer" class="map-leaflet"></div>
-    <div class="zoom-indicator">x {{ currentZoom }}</div>
-    <div class="layer-switcher" @click="toggleSatellite">
-      <div class="layer-preview" :class="isSatellite ? 'preview-street' : 'preview-satellite'">
-        <span class="layer-label">{{ isSatellite ? 'Harita' : 'Uydu' }}</span>
-      </div>
-    </div>
+  <div class="field-map-wrapper">
+    <div ref="mapContainer" class="field-map-ol"></div>
   </div>
 </template>
 
 <style scoped>
-.map-view-wrapper {
+.field-map-wrapper {
   width: 100%;
   height: 100vh;
   position: relative;
@@ -417,208 +361,8 @@ onBeforeUnmount(() => {
   isolation: isolate;
 }
 
-.map-leaflet {
+.field-map-ol {
   width: 100%;
   height: 100vh;
-}
-
-.zoom-indicator {
-  position: absolute;
-  top: 10px;
-  right: 10px;
-  z-index: 10;
-  background: rgba(0, 0, 0, 0.55);
-  color: white;
-  font-size: 12px;
-  font-weight: 600;
-  padding: 4px 10px;
-  border-radius: 6px;
-  backdrop-filter: blur(4px);
-  pointer-events: none;
-  font-family: 'Inter', monospace;
-}
-
-.layer-switcher {
-  position: absolute;
-  bottom: 96px;
-  right: 10px;
-  z-index: 10;
-  cursor: pointer;
-  border-radius: 8px;
-  overflow: hidden;
-  border: 2px solid white;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.45);
-  width: 64px;
-  height: 64px;
-}
-
-.layer-preview {
-  width: 100%;
-  height: 100%;
-  background-size: cover;
-  background-position: center;
-  display: flex;
-  align-items: flex-end;
-  justify-content: center;
-  padding-bottom: 4px;
-}
-
-.preview-satellite {
-  background-image: url('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/3/3/4');
-}
-
-.preview-street {
-  background: linear-gradient(135deg, #b8d4e8 0%, #d4e8b8 40%, #e8e8d4 70%, #c8d8e8 100%);
-}
-
-.layer-label {
-  font-size: 10px;
-  font-weight: 700;
-  color: white;
-  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8);
-  letter-spacing: 0.3px;
-}
-</style>
-
-<style>
-/* MapLibre popup styles */
-.maplibregl-popup-content {
-  background: #2b2f38 !important;
-  color: #ffffff !important;
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  border-radius: 8px;
-  padding: 12px;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
-}
-
-.maplibregl-popup-tip {
-  border-top-color: #2b2f38 !important;
-  border-bottom-color: #2b2f38 !important;
-}
-
-.maplibregl-popup-close-button {
-  color: #ffffff !important;
-  font-size: 16px;
-}
-
-.maplibregl-popup-close-button:hover {
-  background: rgba(255, 255, 255, 0.1);
-  color: #ffffff !important;
-}
-
-.maplibregl-ctrl-group {
-  background: #2b2f38 !important;
-  border: 1px solid rgba(255, 255, 255, 0.15) !important;
-}
-
-.maplibregl-ctrl-group button {
-  color: #ffffff !important;
-}
-
-.maplibregl-ctrl-group button:hover {
-  background: rgba(255, 255, 255, 0.1) !important;
-}
-
-.maplibregl-ctrl-group button + button {
-  border-top: 1px solid rgba(255, 255, 255, 0.15) !important;
-}
-
-.disaster-marker {
-  background: none !important;
-  border: none !important;
-}
-
-.marker-dot {
-  width: 20px;
-  height: 20px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  position: relative;
-}
-
-.marker-icon {
-  font-size: 10px;
-}
-
-.marker-pulse .marker-dot::after {
-  content: '';
-  position: absolute;
-  width: 28px;
-  height: 28px;
-  border-radius: 50%;
-  border: 2px solid currentColor;
-  animation: marker-pulse-ring 2s ease-out infinite;
-}
-
-@keyframes marker-pulse-ring {
-  0% {
-    transform: scale(1);
-    opacity: 1;
-  }
-  100% {
-    transform: scale(2.5);
-    opacity: 0;
-  }
-}
-
-.disaster-popup {
-  font-family: 'Inter', sans-serif;
-  color: #ffffff;
-  min-width: 200px;
-}
-
-.disaster-popup h4 {
-  font-size: 0.85rem;
-  font-weight: 600;
-  margin-bottom: 6px;
-  color: #ffffff;
-}
-
-.disaster-popup p {
-  font-size: 0.75rem;
-  color: rgba(255, 255, 255, 0.9);
-  margin-bottom: 8px;
-  line-height: 1.4;
-}
-
-.popup-meta {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  font-size: 0.7rem;
-  color: rgba(255, 255, 255, 0.82);
-}
-
-html[data-theme='light'] .maplibregl-popup-content {
-  background: #f4f7ff !important;
-  color: #111a2c !important;
-  border: 1px solid rgba(17, 26, 44, 0.2);
-}
-
-html[data-theme='light'] .maplibregl-popup-tip {
-  border-top-color: #f4f7ff !important;
-  border-bottom-color: #f4f7ff !important;
-}
-
-html[data-theme='light'] .maplibregl-popup-close-button {
-  color: #111a2c !important;
-}
-
-html[data-theme='light'] .disaster-popup {
-  color: #111a2c;
-}
-
-html[data-theme='light'] .disaster-popup h4 {
-  color: #111a2c;
-}
-
-html[data-theme='light'] .disaster-popup p {
-  color: #243655;
-}
-
-html[data-theme='light'] .popup-meta {
-  color: #32496f;
 }
 </style>

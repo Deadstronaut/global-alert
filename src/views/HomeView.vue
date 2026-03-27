@@ -104,6 +104,28 @@ onMounted(() => {
   position: relative;
 }
 
+.globe-container {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+}
+
+.globe-container.transitioning-out {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.map-container {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  display: none;
+}
+
+.map-container.active {
+  display: block;
+}
+
 .mobile-menu-btn {
   position: fixed;
   bottom: var(--space-lg);

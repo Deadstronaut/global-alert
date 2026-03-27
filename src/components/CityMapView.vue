@@ -19,46 +19,12 @@ let map = null
 let mapLoaded = false
 let markerObjects = []
 let userMarkerObj = null
-const isSatellite = ref(false)
-const currentZoom = ref(3)
-
-const ESRI_SATELLITE_STYLE = {
-  version: 8,
-  sources: {
-    'esri-satellite': {
-      type: 'raster',
-      tiles: [
-        'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
-      ],
-      tileSize: 256,
-      attribution: 'Esri, Maxar, Earthstar Geographics',
-    },
-  },
-  layers: [{ id: 'esri-satellite-layer', type: 'raster', source: 'esri-satellite' }],
-}
 
 function getBaseStyle() {
-  if (isSatellite.value) return ESRI_SATELLITE_STYLE
   if (uiStore.highContrast || uiStore.darkMode) {
     return 'https://tiles.openfreemap.org/styles/dark'
   }
   return 'https://tiles.openfreemap.org/styles/liberty'
-}
-
-function toggleSatellite() {
-  isSatellite.value = !isSatellite.value
-  if (!map) return
-  map.setMaxZoom(isSatellite.value ? 17.5 : 20)
-  mapLoaded = false
-  map.setStyle(getBaseStyle())
-  map.once('style.load', () => {
-    mapLoaded = true
-    addSourcesAndLayers()
-    updateMarkers()
-    updateHeatmap()
-    updateHexbins()
-    updateUserMarker()
-  })
 }
 
 function addSourcesAndLayers() {
@@ -143,10 +109,6 @@ function initMap() {
 
   map.on('error', (e) => {
     console.error('[MapLibre] Error:', e.error)
-  })
-
-  map.on('zoom', () => {
-    currentZoom.value = Math.round(map.getZoom() * 10) / 10
   })
 
   map.on('load', () => {
@@ -399,12 +361,6 @@ onBeforeUnmount(() => {
 <template>
   <div class="map-view-wrapper">
     <div ref="mapContainer" class="map-leaflet"></div>
-    <div class="zoom-indicator">x {{ currentZoom }}</div>
-    <div class="layer-switcher" @click="toggleSatellite">
-      <div class="layer-preview" :class="isSatellite ? 'preview-street' : 'preview-satellite'">
-        <span class="layer-label">{{ isSatellite ? 'Harita' : 'Uydu' }}</span>
-      </div>
-    </div>
   </div>
 </template>
 
@@ -420,63 +376,6 @@ onBeforeUnmount(() => {
 .map-leaflet {
   width: 100%;
   height: 100vh;
-}
-
-.zoom-indicator {
-  position: absolute;
-  top: 10px;
-  right: 10px;
-  z-index: 10;
-  background: rgba(0, 0, 0, 0.55);
-  color: white;
-  font-size: 12px;
-  font-weight: 600;
-  padding: 4px 10px;
-  border-radius: 6px;
-  backdrop-filter: blur(4px);
-  pointer-events: none;
-  font-family: 'Inter', monospace;
-}
-
-.layer-switcher {
-  position: absolute;
-  bottom: 96px;
-  right: 10px;
-  z-index: 10;
-  cursor: pointer;
-  border-radius: 8px;
-  overflow: hidden;
-  border: 2px solid white;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.45);
-  width: 64px;
-  height: 64px;
-}
-
-.layer-preview {
-  width: 100%;
-  height: 100%;
-  background-size: cover;
-  background-position: center;
-  display: flex;
-  align-items: flex-end;
-  justify-content: center;
-  padding-bottom: 4px;
-}
-
-.preview-satellite {
-  background-image: url('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/3/3/4');
-}
-
-.preview-street {
-  background: linear-gradient(135deg, #b8d4e8 0%, #d4e8b8 40%, #e8e8d4 70%, #c8d8e8 100%);
-}
-
-.layer-label {
-  font-size: 10px;
-  font-weight: 700;
-  color: white;
-  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8);
-  letter-spacing: 0.3px;
 }
 </style>
 

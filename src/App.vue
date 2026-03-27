@@ -1,3 +1,14 @@
+<template>
+  <!-- Space Background -->
+  <div class="space-background"></div>
+
+  <!-- Loading Screen -->
+  <LoadingScreen :visible="isLoading" />
+
+  <!-- Main App -->
+  <RouterView v-if="!isLoading" />
+</template>
+
 <script setup>
 import { ref, onMounted } from 'vue'
 import { RouterView } from 'vue-router'
@@ -12,17 +23,6 @@ onMounted(() => {
   }, 2500)
 })
 </script>
-
-<template>
-  <!-- Space Background -->
-  <div class="space-background"></div>
-
-  <!-- Loading Screen -->
-  <LoadingScreen :visible="isLoading" />
-
-  <!-- Main App -->
-  <RouterView v-if="!isLoading" />
-</template>
 
 <style scoped>
 /* App-level styles handled by main.css */

@@ -48,7 +48,7 @@ function getBaseStyle() {
 function toggleSatellite() {
   isSatellite.value = !isSatellite.value
   if (!map) return
-  map.setMaxZoom(isSatellite.value ? 17.5 : 20)
+  map.setMaxZoom(isSatellite.value ? 17.4 : 20)
   mapLoaded = false
   map.setStyle(getBaseStyle())
   map.once('style.load', () => {
@@ -58,6 +58,47 @@ function toggleSatellite() {
     updateHeatmap()
     updateHexbins()
     updateUserMarker()
+  })
+}
+
+function addTerrain() {
+  if (map.getSource('terrain-dem')) return
+  map.addSource('terrain-dem', {
+    type: 'raster-dem',
+    tiles: ['https://tiles.stadiamaps.com/data/terrarium/{z}/{x}/{y}.png'],
+    tileSize: 256,
+    maxzoom: 12,
+    encoding: 'terrarium',
+  })
+  map.setTerrain({ source: 'terrain-dem', exaggeration: 1.2 })
+}
+
+function addBuildings3D() {
+  if (isSatellite.value) return
+  if (map.getSource('ofm-buildings')) return
+  map.addSource('ofm-buildings', {
+    type: 'vector',
+    url: 'https://tiles.openfreemap.org/planet',
+  })
+  map.addLayer({
+    id: 'buildings-3d',
+    type: 'fill-extrusion',
+    source: 'ofm-buildings',
+    'source-layer': 'building',
+    minzoom: 15,
+    paint: {
+      'fill-extrusion-color': ['interpolate', ['linear'], ['get', 'render_height'],
+        0, '#c8d0da',
+        200, '#a0b8d0',
+        400, '#80a0c0',
+      ],
+      'fill-extrusion-height': ['interpolate', ['linear'], ['zoom'],
+        15, 0,
+        16, ['get', 'render_height'],
+      ],
+      'fill-extrusion-base': ['get', 'render_min_height'],
+      'fill-extrusion-opacity': 0.85,
+    },
   })
 }
 
@@ -124,6 +165,9 @@ function addSourcesAndLayers() {
     },
     layout: { visibility: 'none' },
   })
+
+  addTerrain()
+  addBuildings3D()
 }
 
 function initMap() {

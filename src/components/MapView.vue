@@ -5,7 +5,9 @@ import { useUIStore } from '@/stores/ui.js'
 import { useGeolocationStore } from '@/stores/geolocation.js'
 import { useI18n } from 'vue-i18n'
 import { getSeverityHex } from '@/services/adapters/DisasterEvent.js'
-import { latLngToCell, cellToBoundary } from 'h3-js'
+import { latLngToCell, cellToBoundary, gridDisk, polygonToCells, cellToParent } from 'h3-js'
+import { feature } from 'topojson-client'
+import landTopo from 'world-atlas/land-110m.json'
 import maplibregl from 'maplibre-gl'
 import 'maplibre-gl/dist/maplibre-gl.css'
 
@@ -24,6 +26,108 @@ const styleCache = {}
 // 0 = Açık (liberty), 1 = Koyu (dark), 2 = Uydu
 const mapStyleIndex = ref(0)
 const currentZoom = ref(3)
+
+// ── Hex heatmap helpers ──────────────────────────────────────────────────────
+
+/** Returns true if a polygon ring crosses the antimeridian — causes MapLibre artifact lines. */
+function crossesAntimeridian(ring) {
+  for (let i = 0; i < ring.length - 1; i++) {
+    if (Math.abs(ring[i][0] - ring[i + 1][0]) > 180) return true
+  }
+  return false
+}
+
+// ── Land cell sets (computed once) ───────────────────────────────────────────
+let landCellsRes3 = null   // Set of H3 res3 cells covering land
+let worldHexBgCache = null // GeoJSON FeatureCollection for bg grid
+
+/** Build Set of all H3 res3 cells that cover land using world-atlas TopoJSON. */
+function getLandCells() {
+  if (landCellsRes3) return landCellsRes3
+  landCellsRes3 = new Set()
+  const landGeo = feature(landTopo, landTopo.objects.land)
+  for (const f of landGeo.features) {
+    const geom = f.geometry
+    // MultiPolygon: iterate each sub-polygon separately (polygonToCells only accepts Polygon)
+    const polygonList = geom.type === 'MultiPolygon'
+      ? geom.coordinates.map(coords => ({ type: 'Polygon', coordinates: coords }))
+      : [{ type: 'Polygon', coordinates: geom.coordinates }]
+    for (const poly of polygonList) {
+      try {
+        // containmentMode 2 = overlapping: include cells that partially overlap land (better coastal coverage)
+        const cells = polygonToCells(poly, 3, 2)
+        for (const c of cells) landCellsRes3.add(c)
+      } catch (err) {
+        console.warn('[Hex] polygonToCells error, skipping polygon:', err?.message ?? err)
+      }
+    }
+  }
+  console.log(`[Hex] Land cell set built: ${landCellsRes3.size} res3 cells`)
+  return landCellsRes3
+}
+
+/**
+ * Returns true if an H3 res4 cell is approximately on land.
+ * Uses the parent res3 cell as a fast approximation.
+ */
+function isOnLand(cellRes4) {
+  return getLandCells().has(cellToParent(cellRes4, 3))
+}
+
+/**
+ * Build background hex grid — only land cells at res3.
+ * Uses polygonToCells so oceans are never included.
+ */
+function buildWorldHexGrid() {
+  if (worldHexBgCache) return worldHexBgCache
+  const landCells = getLandCells()
+  const features = []
+  for (const cell of landCells) {
+    const boundary = cellToBoundary(cell)
+    const ring = boundary.map(([lat, lng]) => [lng, lat])
+    ring.push(ring[0])
+    if (crossesAntimeridian(ring)) continue
+    features.push({ type: 'Feature', geometry: { type: 'Polygon', coordinates: [ring] }, properties: {} })
+  }
+  worldHexBgCache = { type: 'FeatureCollection', features }
+  return worldHexBgCache
+}
+
+/**
+ * Interpolate between two RGB arrays by t ∈ [0,1]
+ */
+function lerpRgb(a, b, t) {
+  return [
+    Math.round(a[0] + (b[0] - a[0]) * t),
+    Math.round(a[1] + (b[1] - a[1]) * t),
+    Math.round(a[2] + (b[2] - a[2]) * t),
+  ]
+}
+
+/**
+ * Map intensity (0–1) to a hex color string using heatmap gradient.
+ */
+function intensityToHex(intensity) {
+  const stops = [
+    [0.0, [144, 164, 174]],  // gray-blue (minimal)
+    [0.3, [0, 230, 118]],    // green
+    [0.55, [255, 214, 0]],   // yellow
+    [0.75, [255, 145, 0]],   // orange
+    [1.0, [255, 23, 68]],    // red (critical)
+  ]
+  for (let i = 0; i < stops.length - 1; i++) {
+    const [t0, c0] = stops[i]
+    const [t1, c1] = stops[i + 1]
+    if (intensity <= t1) {
+      const t = (intensity - t0) / (t1 - t0)
+      const [r, g, b] = lerpRgb(c0, c1, t)
+      return `#${r.toString(16).padStart(2,'0')}${g.toString(16).padStart(2,'0')}${b.toString(16).padStart(2,'0')}`
+    }
+  }
+  return '#ff1744'
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 
 const MAP_STYLES = [
   { label: 'Koyu', url: 'https://tiles.openfreemap.org/styles/dark', preview: 'preview-dark' },
@@ -80,7 +184,33 @@ function addBuildings3D() {
   } catch { /* source may not exist in satellite mode */ }
 }
 
+/**
+ * Returns the id of the first symbol (label) layer in the current style,
+ * so we can insert hex/heat layers underneath country names.
+ */
+function firstSymbolLayerId() {
+  const layers = map.getStyle()?.layers ?? []
+  return layers.find((l) => l.type === 'symbol')?.id
+}
+
+/** In dark mode, boost all label text to near-white so they're readable over hex fills. */
+function brightenDarkLabels() {
+  if (mapStyleIndex.value !== 0) return  // only dark style (index 0)
+  const layers = map.getStyle()?.layers ?? []
+  for (const layer of layers) {
+    if (layer.type !== 'symbol') continue
+    try {
+      map.setPaintProperty(layer.id, 'text-color', '#e8ecf0')
+      map.setPaintProperty(layer.id, 'text-halo-color', 'rgba(0,0,0,0.6)')
+      map.setPaintProperty(layer.id, 'text-halo-width', 1.2)
+    } catch { /* layer may not support these properties */ }
+  }
+}
+
 function addSourcesAndLayers() {
+  // beforeId = first label layer → our layers render below labels
+  const before = firstSymbolLayerId()
+
   map.addSource('disaster-heat', {
     type: 'geojson',
     data: { type: 'FeatureCollection', features: [] },
@@ -91,16 +221,35 @@ function addSourcesAndLayers() {
     data: { type: 'FeatureCollection', features: [] },
   })
 
+  map.addSource('hex-world-bg', {
+    type: 'geojson',
+    data: { type: 'FeatureCollection', features: [] },
+  })
+
+  // Background world grid — faint strokes only, adapts to map style
+  const isLight = mapStyleIndex.value === 2
+  map.addLayer({
+    id: 'hex-bg-stroke',
+    type: 'line',
+    source: 'hex-world-bg',
+    paint: {
+      'line-color': isLight ? 'rgba(30,30,30,0.18)' : 'rgba(255,255,255,0.18)',
+      'line-width': 0.5,
+    },
+    layout: { visibility: 'none' },
+  }, before)
+
+  // Disaster heatmap fill — below labels
   map.addLayer({
     id: 'hex-fill',
     type: 'fill',
     source: 'disaster-hex',
     paint: {
       'fill-color': ['get', 'color'],
-      'fill-opacity': 0.6,
+      'fill-opacity': ['get', 'opacity'],
     },
     layout: { visibility: 'none' },
-  })
+  }, before)
 
   map.addLayer({
     id: 'hex-stroke',
@@ -108,11 +257,11 @@ function addSourcesAndLayers() {
     source: 'disaster-hex',
     paint: {
       'line-color': ['get', 'color'],
-      'line-width': 1.5,
-      'line-opacity': 0.9,
+      'line-width': 1,
+      'line-opacity': 0.7,
     },
     layout: { visibility: 'none' },
-  })
+  }, before)
 
   map.addLayer({
     id: 'heat-layer',
@@ -142,7 +291,7 @@ function addSourcesAndLayers() {
       'heatmap-opacity': 0.8,
     },
     layout: { visibility: 'none' },
-  })
+  }, before)
 
   addBuildings3D()
 }
@@ -173,6 +322,7 @@ function initMap() {
   map.on('load', () => {
     mapLoaded = true
     addSourcesAndLayers()
+    brightenDarkLabels()
     updateMarkers()
     updateHeatmap()
     updateHexbins()
@@ -186,8 +336,8 @@ function initMap() {
         .setHTML(
           `
           <div class="disaster-popup">
-            <h4>${props.count} ${t('alerts.events')}</h4>
-            <p>${t('alerts.severity')}: ${String(props.maxSeverity).toUpperCase()}</p>
+            <h4>${t('alerts.severity')}: ${String(props.maxSeverity).toUpperCase()}</h4>
+            <p>Yoğunluk: ${Math.round((props.intensity ?? 0) * 100)}%</p>
           </div>
         `,
         )
@@ -268,37 +418,66 @@ function updateHexbins() {
   if (!map || !mapLoaded) return
 
   const showHex = uiStore.showHexbins
-  map.setLayoutProperty('hex-fill', 'visibility', showHex ? 'visible' : 'none')
-  map.setLayoutProperty('hex-stroke', 'visibility', showHex ? 'visible' : 'none')
+  const vis = showHex ? 'visible' : 'none'
+  map.setLayoutProperty('hex-fill', 'visibility', vis)
+  map.setLayoutProperty('hex-stroke', 'visibility', vis)
+  map.setLayoutProperty('hex-bg-stroke', 'visibility', vis)
 
   if (!showHex) return
 
-  const events = disasterStore.allEvents
-  const cells = {}
-  const severities = ['minimal', 'low', 'moderate', 'high', 'critical']
+  // ── 1. Background grid — only land cells at res3, built once ────────────
+  if (!worldHexBgCache) {
+    // Build off the hot path so UI doesn't freeze
+    setTimeout(() => {
+      if (!map) return
+      map.getSource('hex-world-bg')?.setData(buildWorldHexGrid())
+    }, 0)
+  } else {
+    map.getSource('hex-world-bg')?.setData(worldHexBgCache)
+  }
 
-  events.forEach((e) => {
-    const h3Index = latLngToCell(e.lat, e.lng, 4)
-    if (!cells[h3Index]) cells[h3Index] = { maxSeverity: e.severity, count: 0 }
-    if (severities.indexOf(e.severity) > severities.indexOf(cells[h3Index].maxSeverity)) {
-      cells[h3Index].maxSeverity = e.severity
+  // ── 2. Build intensity map with spreading (gridDisk) ─────────────────────
+  // Land cell set must be ready — build it (blocks briefly once) then re-run
+  if (!landCellsRes3) {
+    setTimeout(() => { getLandCells(); updateHexbins() }, 0)
+    return
+  }
+
+  const HEX_RES = 4
+  const severityWeight = { critical: 1.0, high: 0.75, moderate: 0.5, low: 0.25, minimal: 0.1 }
+  const intensityMap = {}
+
+  for (const e of disasterStore.allEvents) {
+    const center = latLngToCell(e.lat, e.lng, HEX_RES)
+    const weight = severityWeight[e.severity] ?? 0.1
+
+    // Ring 0 = full weight, ring 1 = 50%, ring 2 = 20%
+    const decay = [1.0, 0.5, 0.2]
+    for (let ring = 0; ring <= 2; ring++) {
+      const inner = ring > 0 ? new Set(gridDisk(center, ring - 1)) : null
+      for (const neighbor of gridDisk(center, ring).filter(c => !inner || !inner.has(c))) {
+        intensityMap[neighbor] = Math.min(1.0, (intensityMap[neighbor] ?? 0) + weight * decay[ring])
+      }
     }
-    cells[h3Index].count++
-  })
+  }
 
-  const features = Object.entries(cells).map(([h3Index, data]) => {
-    const boundary = cellToBoundary(h3Index) // [[lat, lng], ...]
+  // ── 3. Build GeoJSON features for colored cells ───────────────────────────
+  const features = Object.entries(intensityMap).flatMap(([h3Index, intensity]) => {
+    const boundary = cellToBoundary(h3Index)
     const ring = boundary.map(([lat, lng]) => [lng, lat])
-    ring.push(ring[0]) // close ring
-    return {
+    ring.push(ring[0])
+    if (crossesAntimeridian(ring)) return []  // skip antimeridian artifact cells
+    return [{
       type: 'Feature',
       geometry: { type: 'Polygon', coordinates: [ring] },
       properties: {
-        color: getSeverityHex(data.maxSeverity),
-        maxSeverity: data.maxSeverity,
-        count: data.count,
+        color: intensityToHex(intensity),
+        opacity: Math.min(0.55, 0.12 + intensity * 0.43),
+        intensity,
+        count: 1,
+        maxSeverity: intensity >= 0.75 ? 'critical' : intensity >= 0.5 ? 'high' : intensity >= 0.3 ? 'moderate' : 'low',
       },
-    }
+    }]
   })
 
   map.getSource('disaster-hex').setData({ type: 'FeatureCollection', features })
@@ -358,22 +537,23 @@ async function applyBaseStyle() {
 
   map.setStyle(style)
 
-  // Fallback: if style.load never fires (e.g. inline style objects), restore after 4s
-  const fallbackTimer = setTimeout(() => {
+  function onStyleReady() {
     if (version !== styleLoadVersion || mapLoaded) return
-    console.warn('[MapView] style.load timeout — restoring mapLoaded')
-    mapLoaded = true
-  }, 4000)
-
-  map.once('style.load', () => {
-    clearTimeout(fallbackTimer)
-    if (version !== styleLoadVersion) return
     mapLoaded = true
     addSourcesAndLayers()
+    brightenDarkLabels()
     updateMarkers()
     updateHeatmap()
     updateHexbins()
     updateUserMarker()
+  }
+
+  // Fallback: inline style objects (e.g. satellite) may not fire style.load
+  const fallbackTimer = setTimeout(onStyleReady, 800)
+
+  map.once('style.load', () => {
+    clearTimeout(fallbackTimer)
+    onStyleReady()
   })
 }
 
@@ -399,7 +579,7 @@ watch(
 )
 
 watch(
-  () => [uiStore.showHeatmap, uiStore.showHexbins],
+  () => uiStore.mapMode,
   () => {
     updateMarkers()
     updateHeatmap()
@@ -418,7 +598,24 @@ watch(
 // Dark/light mode UI değişikliği harita stilini ETKİLEMEZ
 // Harita stili sadece layer switcher butonuyla değişir
 
+// ── Keyboard shortcuts: 1=Normal 2=Hexagon 3=Heatmap ────────────────────────
+const MODES = ['normal', 'hexagon', 'heatmap']
+
+function handleMapModeKey(e) {
+  // Ignore when user is typing in an input/textarea
+  if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return
+  if (e.key === '1') uiStore.mapMode = 'normal'
+  else if (e.key === '2') uiStore.mapMode = 'hexagon'
+  else if (e.key === '3') uiStore.mapMode = 'heatmap'
+  else if (e.key === 'Tab') {
+    e.preventDefault()
+    const idx = MODES.indexOf(uiStore.mapMode)
+    uiStore.mapMode = MODES[(idx + 1) % MODES.length]
+  }
+}
+
 onMounted(() => {
+  window.addEventListener('keydown', handleMapModeKey)
   requestAnimationFrame(function tryInit() {
     if (!mapContainer.value) return
     const { offsetWidth, offsetHeight } = mapContainer.value
@@ -431,6 +628,7 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
+  window.removeEventListener('keydown', handleMapModeKey)
   clearMarkers()
   if (userMarkerObj) {
     userMarkerObj.remove()

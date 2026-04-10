@@ -659,12 +659,26 @@ watch([rangeStartDate, rangeEndDate], ([start, end]) => {
             🔄 {{ t('app.refreshAll') }}
           </button>
 
-          <button
-            class="btn btn-ghost sidebar-action-btn"
-            @click="uiStore.showHeatmap = !uiStore.showHeatmap"
-          >
-            🔥 {{ uiStore.showHeatmap ? 'Heatmap: ON' : 'Heatmap: OFF' }}
-          </button>
+          <div class="map-mode-selector">
+            <button
+              class="mode-btn"
+              :class="{ active: uiStore.mapMode === 'normal' }"
+              @click="uiStore.mapMode = 'normal'"
+              title="Normal (1)"
+            >📍 Normal<span class="mode-key">1</span></button>
+            <button
+              class="mode-btn"
+              :class="{ active: uiStore.mapMode === 'hexagon' }"
+              @click="uiStore.mapMode = 'hexagon'"
+              title="Hexagon (2)"
+            >⬡ Hex<span class="mode-key">2</span></button>
+            <button
+              class="mode-btn"
+              :class="{ active: uiStore.mapMode === 'heatmap' }"
+              @click="uiStore.mapMode = 'heatmap'"
+              title="Heatmap (3)"
+            >🔥 Heat<span class="mode-key">3</span></button>
+          </div>
 
           <button class="btn btn-ghost sidebar-action-btn" @click="uiStore.toggleSettings()">
             ⚙️ {{ t('app.settings') }}
@@ -1150,6 +1164,74 @@ watch([rangeStartDate, rangeEndDate], ([start, end]) => {
   width: 100%;
   justify-content: center;
   font-size: 0.8rem;
+}
+
+.map-mode-selector {
+  display: flex;
+  width: 100%;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.mode-btn {
+  flex: 1;
+  padding: 7px 4px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  background: transparent;
+  border: none;
+  border-right: 1px solid rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.5);
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+  white-space: nowrap;
+}
+
+.mode-btn:last-child {
+  border-right: none;
+}
+
+.mode-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.mode-btn.active {
+  background: rgba(99, 179, 237, 0.2);
+  color: #63b3ed;
+}
+
+.mode-key {
+  display: inline-block;
+  margin-left: 4px;
+  font-size: 0.6rem;
+  font-weight: 700;
+  opacity: 0.45;
+  background: rgba(255,255,255,0.1);
+  border-radius: 3px;
+  padding: 0 3px;
+  line-height: 1.4;
+  vertical-align: middle;
+}
+
+html[data-theme='light'] .map-mode-selector {
+  border-color: rgba(0, 0, 0, 0.12);
+}
+
+html[data-theme='light'] .mode-btn {
+  color: rgba(0, 0, 0, 0.45);
+  border-right-color: rgba(0, 0, 0, 0.08);
+}
+
+html[data-theme='light'] .mode-btn:hover {
+  background: rgba(0, 0, 0, 0.05);
+  color: rgba(0, 0, 0, 0.8);
+}
+
+html[data-theme='light'] .mode-btn.active {
+  background: rgba(49, 130, 206, 0.12);
+  color: #3182ce;
 }
 
 .quick-switches {

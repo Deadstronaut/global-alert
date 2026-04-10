@@ -1,5 +1,5 @@
 import {defineStore} from 'pinia';
-import {ref, watch} from 'vue';
+import {ref, computed, watch} from 'vue';
 
 export const useUIStore = defineStore('ui', () => {
     // View state
@@ -24,9 +24,11 @@ export const useUIStore = defineStore('ui', () => {
     const safeMode = ref(false);
     const colorblindMode = ref(false);
 
-    // Heatmap / Hexbin visualization toggle
-    const showHeatmap = ref(false);
-    const showHexbins = ref(false);
+    // Map visualization mode: 'normal' | 'hexagon' | 'heatmap'
+    const mapMode = ref('normal');
+    // Computed aliases kept for backward compat with MapView watches
+    const showHeatmap = computed(() => mapMode.value === 'heatmap');
+    const showHexbins = computed(() => mapMode.value === 'hexagon');
 
     function applyThemeAttrs() {
         const theme = highContrast.value ? 'high-contrast' : (darkMode.value ? 'dark' : 'light');
@@ -42,14 +44,6 @@ export const useUIStore = defineStore('ui', () => {
 
     watch(colorblindMode, (val) => {
         document.documentElement.setAttribute('data-colorblind', val ? 'true' : 'false');
-    });
-
-    watch(showHexbins, (val) => {
-        if (val) showHeatmap.value = false;
-    });
-
-    watch(showHeatmap, (val) => {
-        if (val) showHexbins.value = false;
     });
 
     // Actions
@@ -112,6 +106,7 @@ export const useUIStore = defineStore('ui', () => {
         highContrast,
         safeMode,
         colorblindMode,
+        mapMode,
         showHeatmap,
         showHexbins,
         transitionToMap,

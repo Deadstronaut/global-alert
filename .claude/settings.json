@@ -3,7 +3,12 @@
     "allow": [
       "WebFetch(domain:fpma.fao.org)",
       "WebFetch(domain:fews.net)",
-      "WebFetch(domain:data.humdata.org)"
+      "WebFetch(domain:data.humdata.org)",
+      "Bash(npm install:*)",
+      "Bash(node -e \"import\\('world-atlas/land-110m.json', {assert:{type:'json'}}\\).then\\(m=>console.log\\('OK keys:', Object.keys\\(m.default\\)\\)\\)\")",
+      "Bash(node -e \"const t = require\\('./node_modules/world-atlas/land-110m.json'\\); console.log\\('objects:', Object.keys\\(t.objects\\)\\); console.log\\('type:', t.type\\)\")",
+      "Bash(node -e ':*)",
+      "Bash(npm run:*)"
     ]
   }
 }

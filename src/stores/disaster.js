@@ -1,40 +1,42 @@
 /**
- * Disaster Store - WebSocket tabanlı gerçek zamanlı veri yönetimi
- * Polling tamamen kaldırıldı, GEWS Aggregator WebSocket kullanılıyor
+ * Disaster Store - WebSocket + Supabase hybrid data management
+ * Live events via WebSocket (GEWS Aggregator)
+ * Historical data on startup via Supabase views
  */
 
-import { defineStore } from 'pinia';
-import { ref, computed } from 'vue';
-import { wsClient } from '@/services/websocket/wsClient.js';
-import { cacheEvents, loadAllCachedData } from '@/services/offlineCache.js';
+import {defineStore} from 'pinia';
+import {ref, computed} from 'vue';
+import {wsClient} from '@/services/websocket/wsClient.js';
+import {cacheEvents, loadAllCachedData} from '@/services/offlineCache.js';
+import {fetchAllDisasters, fetchDisasterCounts} from '@/services/supabaseService.js';
 
 // Afet tipine göre maksimum tutulacak olay sayısı (bellek yönetimi)
 const MAX_EVENTS = {
-  earthquake:    500,
-  wildfire:      300,
-  flood:         300,
-  drought:       200,
+  earthquake: 500,
+  wildfire: 300,
+  flood: 300,
+  drought: 200,
   food_security: 200,
-  tsunami:       100,
-  cyclone:       100,
-  volcano:       100,
-  epidemic:      100,
-  disaster:      200,
+  tsunami: 100,
+  cyclone: 100,
+  volcano: 100,
+  epidemic: 100,
+  disaster: 200,
 };
 
 export const useDisasterStore = defineStore('disaster', () => {
   // ─────────────────────────────────────────
   // State
   // ─────────────────────────────────────────
-  const earthquakes    = ref([]);
-  const wildfires      = ref([]);
-  const floods         = ref([]);
-  const droughts       = ref([]);
-  const foodSecurity   = ref([]);
-  const tsunamis       = ref([]);
-  const cyclones       = ref([]);
-  const volcanoes      = ref([]);
-  const epidemics      = ref([]);
+  const earthquakes = ref([]);
+  const wildfires = ref([]);
+  const floods = ref([]);
+  const droughts = ref([]);
+  const foodSecurity = ref([]);
+  const tsunamis = ref([]);
+  const cyclones = ref([]);
+  const volcanoes = ref([]);
+  const epidemics = ref([]);
   const otherDisasters = ref([]);
 
   const activeLayers = ref(new Set([
@@ -43,17 +45,17 @@ export const useDisasterStore = defineStore('disaster', () => {
   ]));
   const activeSeverities = ref(new Set(['critical', 'high', 'moderate', 'low', 'minimal']));
 
-  const isConnected       = ref(false);
-  const isLoading         = ref(true);
-  const lastUpdated       = ref(null);
-  const startDate         = ref(null);
-  const endDate           = ref(null);
+  const isConnected = ref(false);
+  const isLoading = ref(true);
+  const lastUpdated = ref(null);
+  const startDate = ref(null);
+  const endDate = ref(null);
   const selectedTimeRange = ref(24); // saat
-  const sourcesStatus     = ref({});  // { EMSC: true, USGS: true, ... }
-  const errors            = ref([]);
+  const sourcesStatus = ref({});  // { EMSC: true, USGS: true, ... }
+  const errors = ref([]);
 
   const minMagnitude = ref(0);    // 0–9
-  const maxDepth     = ref(null); // null = TÜMÜ, sayı = km
+  const maxDepth = ref(null); // null = TÜMÜ, sayı = km
 
   // Erken uyarılar
   const earlyWarnings = ref([]);   // Son 10 erken uyarı
@@ -63,16 +65,16 @@ export const useDisasterStore = defineStore('disaster', () => {
   // Tip → ref eşlemesi
   // ─────────────────────────────────────────
   const storeMap = computed(() => ({
-    earthquake:    earthquakes,
-    wildfire:      wildfires,
-    flood:         floods,
-    drought:       droughts,
+    earthquake: earthquakes,
+    wildfire: wildfires,
+    flood: floods,
+    drought: droughts,
     food_security: foodSecurity,
-    tsunami:       tsunamis,
-    cyclone:       cyclones,
-    volcano:       volcanoes,
-    epidemic:      epidemics,
-    disaster:      otherDisasters,
+    tsunami: tsunamis,
+    cyclone: cyclones,
+    volcano: volcanoes,
+    epidemic: epidemics,
+    disaster: otherDisasters,
   }));
 
   // ─────────────────────────────────────────
@@ -95,7 +97,7 @@ export const useDisasterStore = defineStore('disaster', () => {
     // Zaman filtresi
     if (startDate.value || endDate.value) {
       const from = startDate.value ? new Date(startDate.value).getTime() : 0;
-      const to   = endDate.value   ? new Date(endDate.value).getTime()   : Infinity;
+      const to = endDate.value ? new Date(endDate.value).getTime() : Infinity;
       return filtered.filter(e => {
         const t = new Date(e.time).getTime();
         return t >= from && t <= to;
@@ -107,15 +109,15 @@ export const useDisasterStore = defineStore('disaster', () => {
   });
 
   const totalCount = computed(() => ({
-    earthquake:    earthquakes.value.length,
-    wildfire:      wildfires.value.length,
-    flood:         floods.value.length,
-    drought:       droughts.value.length,
+    earthquake: earthquakes.value.length,
+    wildfire: wildfires.value.length,
+    flood: floods.value.length,
+    drought: droughts.value.length,
     food_security: foodSecurity.value.length,
-    tsunami:       tsunamis.value.length,
-    cyclone:       cyclones.value.length,
-    volcano:       volcanoes.value.length,
-    total:         allEvents.value.length,
+    tsunami: tsunamis.value.length,
+    cyclone: cyclones.value.length,
+    volcano: volcanoes.value.length,
+    total: allEvents.value.length,
   }));
 
   const criticalEvents = computed(() =>
@@ -140,8 +142,11 @@ export const useDisasterStore = defineStore('disaster', () => {
     // Duplicate ID kontrolü
     if (arr.some(e => e.id === event.id)) return;
 
-    // Başa ekle (en yeni önce), max sınırını koru
-    store.value = [event, ...arr].slice(0, MAX_EVENTS[event.type] || 200);
+    // Başa ekle, tarihe göre sırala (en yeni en üstte), max sınırını koru
+    const updatedArr = [event, ...arr].sort((a, b) => {
+      return new Date(b.time).getTime() - new Date(a.time).getTime();
+    });
+    store.value = updatedArr.slice(0, MAX_EVENTS[event.type] || 200);
     lastUpdated.value = new Date().toISOString();
 
     if (event.type === 'earthquake') {
@@ -187,10 +192,40 @@ export const useDisasterStore = defineStore('disaster', () => {
   }
 
   // ─────────────────────────────────────────
+  // Supabase counts (for badge display)
+  // ─────────────────────────────────────────
+  const supabaseCounts = ref({});
+  const supabaseLoading = ref(false);
+
+  /**
+   * Load all historical events from Supabase views on startup.
+   * Runs in parallel with WebSocket connection.
+   */
+  async function loadFromSupabase() {
+    supabaseLoading.value = true;
+    try {
+      // Load counts first (fast, HEAD request)
+      const counts = await fetchDisasterCounts();
+      supabaseCounts.value = counts;
+
+      // Then load all events (paginated)
+      const events = await fetchAllDisasters();
+      if (events.length > 0) {
+        loadBatch(events);
+      }
+    } catch (err) {
+      console.warn('[DisasterStore] Supabase initial load failed:', err.message);
+    } finally {
+      supabaseLoading.value = false;
+    }
+  }
+
+  // ─────────────────────────────────────────
   // WebSocket
   // ─────────────────────────────────────────
   function startWebSocket() {
     loadFromCache();
+    loadFromSupabase(); // Load historical data from Supabase in parallel
 
     wsClient.on('connected', () => {
       isConnected.value = true;
@@ -231,7 +266,11 @@ export const useDisasterStore = defineStore('disaster', () => {
   // ─────────────────────────────────────────
   function toggleLayer(type) {
     const s = new Set(activeLayers.value);
-    s.has(type) ? s.delete(type) : s.add(type);
+    if (s.has(type)) {
+      s.delete(type);
+    } else {
+      s.add(type);
+    }
     activeLayers.value = s;
   }
 
@@ -241,7 +280,11 @@ export const useDisasterStore = defineStore('disaster', () => {
 
   function toggleSeverity(severity) {
     const s = new Set(activeSeverities.value);
-    s.has(severity) ? s.delete(severity) : s.add(severity);
+    if (s.has(severity)) {
+      s.delete(severity);
+    } else {
+      s.add(severity);
+    }
     activeSeverities.value = s;
   }
 
@@ -251,16 +294,16 @@ export const useDisasterStore = defineStore('disaster', () => {
 
   function loadFromCache() {
     const cached = loadAllCachedData();
-    if (cached.earthquakes?.length)  earthquakes.value  = cached.earthquakes;
-    if (cached.wildfires?.length)    wildfires.value    = cached.wildfires;
-    if (cached.floods?.length)       floods.value       = cached.floods;
-    if (cached.droughts?.length)     droughts.value     = cached.droughts;
+    if (cached.earthquakes?.length) earthquakes.value = cached.earthquakes;
+    if (cached.wildfires?.length) wildfires.value = cached.wildfires;
+    if (cached.floods?.length) floods.value = cached.floods;
+    if (cached.droughts?.length) droughts.value = cached.droughts;
     if (cached.foodSecurity?.length) foodSecurity.value = cached.foodSecurity;
   }
 
   // Geriye uyumluluk - eski polling imzaları
-  function startPolling() { startWebSocket(); }
-  function stopPolling()  { stopWebSocket(); }
+  function startPolling() {startWebSocket();}
+  function stopPolling() {stopWebSocket();}
 
   // ─────────────────────────────────────────
   return {
@@ -272,13 +315,15 @@ export const useDisasterStore = defineStore('disaster', () => {
     sourcesStatus, errors,
     minMagnitude, maxDepth,
     earlyWarnings, activeWarning,
+    supabaseCounts, supabaseLoading,
     allEvents, totalCount, criticalEvents, sourcesOnline,
     addEvent, loadBatch, addEarlyWarning,
     startWebSocket, stopWebSocket,
     startPolling, stopPolling,
     toggleLayer, isLayerActive,
     toggleSeverity, isSeverityActive,
-    loadFromCache,
-    refreshAll: () => wsClient.send({ type: 'refresh' }),
+    loadFromCache, loadFromSupabase,
+    refreshAll: () => wsClient.send({type: 'refresh'}),
   };
 });
+

@@ -1,6 +1,6 @@
 /**
  * FEWS NET - Famine Early Warning Systems Network (USAID)
- * API: https://fdw.fews.net/api/ipcpackage/
+ * API: https://fdw.fews.net/api/ipcphase/
  * Kapsam: Gıda güvensizliği, IPC fazları - GLOBAL (Afrika, Orta Doğu, Asya)
  * Kayıt gerektirmez, açık API
  */
@@ -9,7 +9,7 @@ import axios from 'axios';
 import { normalize } from '../processors/normalizer.js';
 import { reportStatus } from '../output/healthTracker.js';
 
-const API_URL = 'https://fdw.fews.net/api/ipcpackage/';
+const API_URL = 'https://fdw.fews.net/api/ipcphase/';
 const POLL_INTERVAL = 6 * 60 * 60 * 1000; // 6 saat (veri günlük güncellenir)
 
 let _poll = null;
@@ -41,15 +41,20 @@ export function startFEWSNET(onEvent) {
     try {
       const res = await axios.get(API_URL, {
         params: {
-          page_size: 50,
-          ordering: '-created',
-          format: 'json',
+          fields: 'simple',
+          scenario: 'CS',
         },
         timeout: 20000,
         headers: { 'User-Agent': 'GlobalAlert/1.0' },
       });
 
-      const results = res.data?.results || res.data || [];
+      const results = Array.isArray(res.data?.results)
+        ? res.data.results
+        : Array.isArray(res.data?.value)
+          ? res.data.value
+          : Array.isArray(res.data)
+            ? res.data
+            : [];
       let count = 0;
 
       for (const pkg of results) {
@@ -79,11 +84,11 @@ export function startFEWSNET(onEvent) {
 }
 
 function normalizeFEWSNET(pkg, id) {
-  const country = pkg.country || pkg.country_code || '';
+  const country = pkg.country_code || pkg.country || '';
   const coords = COUNTRY_CENTROIDS[country] || [0, 0];
-  const ipcPhase = pkg.max_ipc_phase || pkg.overall_phase || 2;
-  const period = pkg.ipc_period || pkg.created || new Date().toISOString();
-  const countryName = pkg.country_name || country;
+  const ipcPhase = Number(pkg.phase || pkg.max_ipc_phase || pkg.overall_phase || 2);
+  const period = pkg.start_date || pkg.date || pkg.ipc_period || pkg.created || new Date().toISOString();
+  const countryName = pkg.country || pkg.country_name || country;
 
   return normalize({
     id,

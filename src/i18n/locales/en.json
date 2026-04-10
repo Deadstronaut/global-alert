@@ -1,7 +1,7 @@
 {
   "app": {
-    "title": "GEWS - Global Early Warning System",
-    "subtitle": "United Nations Disaster Monitoring Platform",
+    "title": "Multi-Hazard Early Warning Systems (MHEWS)",
+    "subtitle": "Multi-Hazard Early Warning Systems (MHEWS)",
     "loading": "Loading Data...",
     "loadingSubtext": "Fetching satellite data",
     "lastUpdated": "Last Updated",
@@ -15,11 +15,15 @@
     "offline": "Offline - Showing cached data"
   },
   "disasters": {
-    "earthquake": "Earthquakes",
-    "wildfire": "Wildfires",
-    "flood": "Floods",
-    "drought": "Droughts",
+    "earthquake": "Earthquake",
+    "wildfire": "Wildfire",
+    "flood": "Flood",
+    "drought": "Drought",
     "food_security": "Food Security",
+    "tsunami": "Tsunami",
+    "cyclone": "Cyclone",
+    "volcano": "Volcano",
+    "epidemic": "Epidemic",
     "all": "All Disasters"
   },
   "severity": {

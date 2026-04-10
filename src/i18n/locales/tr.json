@@ -1,7 +1,7 @@
 {
   "app": {
-    "title": "GEWS - Küresel Erken Uyarı Sistemi",
-    "subtitle": "Birleşmiş Milletler Afet İzleme Platformu",
+    "title": "Multi-Hazard Early Warning Systems (MHEWS)",
+    "subtitle": "Multi-Hazard Early Warning Systems (MHEWS)",
     "loading": "Veriler Yükleniyor...",
     "loadingSubtext": "Uydu verileri alınıyor",
     "lastUpdated": "Son Güncelleme",
@@ -15,11 +15,15 @@
     "offline": "Çevrimdışı - Önbellek verileri gösteriliyor"
   },
   "disasters": {
-    "earthquake": "Depremler",
-    "wildfire": "Yangınlar",
-    "flood": "Seller",
+    "earthquake": "Deprem",
+    "wildfire": "Yangın",
+    "flood": "Sel",
     "drought": "Kuraklık",
     "food_security": "Gıda Güvenliği",
+    "tsunami": "Tsunami",
+    "cyclone": "Kasırga",
+    "volcano": "Volkan",
+    "epidemic": "Salgın",
     "all": "Tüm Afetler"
   },
   "severity": {

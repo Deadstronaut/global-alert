@@ -27,7 +27,59 @@ const disasterTypes = [
   { key: 'flood', icon: '🌊', cssClass: 'btn-flood', labelKey: 'stats.activeFloods' },
   { key: 'drought', icon: '🔴', cssClass: 'btn-drought', labelKey: 'stats.activeDroughts' },
   { key: 'food_security', icon: '🌾', cssClass: 'btn-food', labelKey: 'stats.activeFoodSecurity' },
+  { key: 'tsunami', icon: '🌊🌊', cssClass: 'btn-tsunami', labelKey: 'disasters.tsunami' },
+  { key: 'cyclone', icon: '🌀', cssClass: 'btn-cyclone', labelKey: 'disasters.cyclone' },
+  { key: 'volcano', icon: '🌋', cssClass: 'btn-volcano', labelKey: 'disasters.volcano' },
+  { key: 'epidemic', icon: '🦠', cssClass: 'btn-epidemic', labelKey: 'disasters.epidemic' },
 ]
+
+// Accordion open state (set of open type keys)
+const openAccordions = ref(new Set())
+const openSections = ref({
+  disasterFilters: true,
+  severityLegend: true,
+  magnitudeDepth: true,
+  timeRange: false,
+  actions: true,
+})
+
+function toggleAccordion(key) {
+  const s = new Set(openAccordions.value)
+  if (s.has(key)) {
+    s.delete(key)
+  } else {
+    s.add(key)
+  }
+  openAccordions.value = s
+}
+
+function toggleSection(key) {
+  openSections.value[key] = !openSections.value[key]
+}
+
+// Severity breakdown per disaster type (for accordion detail)
+const severityBreakdown = computed(() => {
+  const result = {}
+  const storeRefs = {
+    earthquake: disasterStore.earthquakes,
+    wildfire: disasterStore.wildfires,
+    flood: disasterStore.floods,
+    drought: disasterStore.droughts,
+    food_security: disasterStore.foodSecurity,
+    tsunami: disasterStore.tsunamis,
+    cyclone: disasterStore.cyclones,
+    volcano: disasterStore.volcanoes,
+    epidemic: disasterStore.epidemics,
+  }
+  for (const [type, events] of Object.entries(storeRefs)) {
+    const counts = { critical: 0, high: 0, moderate: 0, low: 0, minimal: 0, total: events.length }
+    for (const e of events) {
+      if (counts[e.severity] !== undefined) counts[e.severity]++
+    }
+    result[type] = counts
+  }
+  return result
+})
 
 const severityLevels = ['critical', 'high', 'moderate', 'low', 'minimal']
 const timeRanges = ['10 Dakika', '30 Dakika', '2 Saat', '6 Saat', '12 Saat', '24 Saat']
@@ -162,7 +214,7 @@ watch([rangeStartDate, rangeEndDate], ([start, end]) => {
       <div class="sidebar-brand">
         <span class="brand-icon">🌍</span>
         <div class="brand-text" v-if="!isCollapsed">
-          <h1 class="brand-title">GEWS</h1>
+          <h1 class="brand-title">MHEWS</h1>
           <p class="brand-subtitle">{{ t('app.subtitle') }}</p>
         </div>
       </div>
@@ -175,32 +227,75 @@ watch([rangeStartDate, rangeEndDate], ([start, end]) => {
       </button>
     </div>
 
-    <!-- Disaster Toggles -->
+    <!-- Disaster Accordion -->
     <div class="sidebar-section" v-if="!isCollapsed">
-      <h2 class="section-title">{{ t('sidebar.disasterToggles') }}</h2>
+      <button class="section-toggle" @click="toggleSection('disasterFilters')">
+        <span class="section-title">{{ t('sidebar.disasterToggles') }}</span>
+        <span class="section-arrow" :class="{ open: openSections.disasterFilters }">›</span>
+      </button>
 
-      <div class="disaster-toggles">
-        <button
-          v-for="dtype in disasterTypes"
-          :key="dtype.key"
-          class="btn disaster-toggle"
-          :class="[dtype.cssClass, { active: disasterStore.isLayerActive(dtype.key) }]"
-          @click="disasterStore.toggleLayer(dtype.key)"
-        >
-          <span class="toggle-icon">{{ dtype.icon }}</span>
-          <span class="toggle-label">{{ t(dtype.labelKey) }}</span>
-          <span
-            class="badge"
-            :class="{
-              'badge-critical': disasterStore.totalCount[dtype.key] > 50,
-              'badge-warning': disasterStore.totalCount[dtype.key] > 10,
-              'badge-info': disasterStore.totalCount[dtype.key] <= 10,
-            }"
-          >
-            {{ disasterStore.totalCount[dtype.key] }}
-          </span>
-        </button>
-      </div>
+      <Transition name="section-accordion">
+        <div v-if="openSections.disasterFilters">
+          <div class="disaster-accordion">
+            <div
+              v-for="dtype in disasterTypes"
+              :key="dtype.key"
+              class="accordion-item"
+              :class="{ 'accordion-active-layer': disasterStore.isLayerActive(dtype.key) }"
+            >
+              <!-- Accordion Header -->
+              <div class="accordion-header" @click="toggleAccordion(dtype.key)">
+                <span class="accordion-arrow" :class="{ open: openAccordions.has(dtype.key) }">›</span>
+                <span class="toggle-icon">{{ dtype.icon }}</span>
+                <span class="toggle-label">
+                  {{ t(dtype.labelKey).replace('Active ', '').replace('Aktif ', '') }}
+                </span>
+                <span
+                  class="badge"
+                  :class="{
+                    'badge-critical': disasterStore.totalCount[dtype.key] > 50,
+                    'badge-warning': disasterStore.totalCount[dtype.key] > 10,
+                    'badge-info': disasterStore.totalCount[dtype.key] <= 10,
+                  }"
+                >
+                  {{ disasterStore.totalCount[dtype.key] ?? 0 }}
+                </span>
+                <span
+                  class="layer-toggle-dot"
+                  :class="{ on: disasterStore.isLayerActive(dtype.key) }"
+                  @click.stop="disasterStore.toggleLayer(dtype.key)"
+                  :title="disasterStore.isLayerActive(dtype.key) ? 'Katmanı Gizle' : 'Katmanı Göster'"
+                ></span>
+              </div>
+
+              <Transition name="accordion">
+                <div class="accordion-body" v-if="openAccordions.has(dtype.key)">
+                  <div class="severity-row" v-if="severityBreakdown[dtype.key]">
+                    <span class="sev-chip critical" v-if="severityBreakdown[dtype.key].critical > 0">
+                      ● {{ severityBreakdown[dtype.key].critical }} Kritik
+                    </span>
+                    <span class="sev-chip high" v-if="severityBreakdown[dtype.key].high > 0">
+                      ● {{ severityBreakdown[dtype.key].high }} Yüksek
+                    </span>
+                    <span class="sev-chip moderate" v-if="severityBreakdown[dtype.key].moderate > 0">
+                      ● {{ severityBreakdown[dtype.key].moderate }} Orta
+                    </span>
+                    <span class="sev-chip low" v-if="severityBreakdown[dtype.key].low > 0">
+                      ● {{ severityBreakdown[dtype.key].low }} Düşük
+                    </span>
+                    <span class="sev-chip none" v-if="severityBreakdown[dtype.key].total === 0">
+                      Henüz veri yok
+                    </span>
+                  </div>
+                  <div class="accordion-loading" v-if="disasterStore.supabaseLoading">
+                    <span class="loading-pulse">⏳ Yükleniyor…</span>
+                  </div>
+                </div>
+              </Transition>
+            </div>
+          </div>
+        </div>
+      </Transition>
     </div>
 
     <!-- Collapsed icons only -->
@@ -323,220 +418,259 @@ watch([rangeStartDate, rangeEndDate], ([start, end]) => {
 
     <!-- Severity Legend -->
     <div class="sidebar-section" v-if="!isCollapsed">
-      <h2 class="section-title">{{ t('sidebar.legend') }}</h2>
-      <div class="legend">
-        <button
-          v-for="severity in severityLevels"
-          :key="severity"
-          class="legend-item legend-filter-btn"
-          :class="{ inactive: !disasterStore.isSeverityActive(severity) }"
-          @click="disasterStore.toggleSeverity(severity)"
-        >
-          <span class="severity-dot" :class="severity"></span>
-          <span>{{ t(`severity.${severity}`) }}</span>
-        </button>
-      </div>
+      <button class="section-toggle" @click="toggleSection('severityLegend')">
+        <span class="section-title">{{ t('sidebar.legend') }}</span>
+        <span class="section-arrow" :class="{ open: openSections.severityLegend }">›</span>
+      </button>
+      <Transition name="section-accordion">
+        <div v-if="openSections.severityLegend" class="legend">
+          <button
+            v-for="severity in severityLevels"
+            :key="severity"
+            class="legend-item legend-filter-btn"
+            :class="{ inactive: !disasterStore.isSeverityActive(severity) }"
+            @click="disasterStore.toggleSeverity(severity)"
+          >
+            <span class="severity-dot" :class="severity"></span>
+            <span>{{ t(`severity.${severity}`) }}</span>
+          </button>
+        </div>
+      </Transition>
     </div>
 
     <!-- Magnitude & Depth Filters -->
     <div class="sidebar-section filter-sliders" v-if="!isCollapsed">
-      <div class="filter-row">
-        <div class="filter-label">
-          <span>BÜYÜKLÜK</span>
-          <span class="filter-val accent">{{ disasterStore.minMagnitude > 0 ? `M${disasterStore.minMagnitude}+` : '0+' }}</span>
-        </div>
-        <input
-          type="range"
-          min="0" max="9" step="0.5"
-          :value="disasterStore.minMagnitude"
-          @input="disasterStore.minMagnitude = Number($event.target.value)"
-          class="filter-range"
-        />
-        <div class="filter-ends"><span>0</span><span>9</span></div>
-      </div>
+      <button class="section-toggle" @click="toggleSection('magnitudeDepth')">
+        <span class="section-title">Filtreler</span>
+        <span class="section-arrow" :class="{ open: openSections.magnitudeDepth }">›</span>
+      </button>
+      <Transition name="section-accordion">
+        <div v-if="openSections.magnitudeDepth">
+          <div class="filter-row">
+            <div class="filter-label">
+              <span>BÜYÜKLÜK</span>
+              <span class="filter-val accent">{{
+                disasterStore.minMagnitude > 0 ? `M${disasterStore.minMagnitude}+` : '0+'
+              }}</span>
+            </div>
+            <input
+              type="range"
+              min="0"
+              max="9"
+              step="0.5"
+              :value="disasterStore.minMagnitude"
+              @input="disasterStore.minMagnitude = Number($event.target.value)"
+              class="filter-range"
+            />
+            <div class="filter-ends"><span>0</span><span>9</span></div>
+          </div>
 
-      <div class="filter-row">
-        <div class="filter-label">
-          <span>DERİNLİK</span>
-          <span class="filter-val accent">{{ disasterStore.maxDepth === null ? 'TÜMÜ' : `≤${disasterStore.maxDepth} km` }}</span>
+          <div class="filter-row">
+            <div class="filter-label">
+              <span>DERİNLİK</span>
+              <span class="filter-val accent">{{
+                disasterStore.maxDepth === null ? 'TÜMÜ' : `≤${disasterStore.maxDepth} km`
+              }}</span>
+            </div>
+            <input
+              type="range"
+              min="0"
+              max="700"
+              step="25"
+              :value="disasterStore.maxDepth === null ? 700 : disasterStore.maxDepth"
+              @input="
+                disasterStore.maxDepth =
+                  Number($event.target.value) >= 700 ? null : Number($event.target.value)
+              "
+              class="filter-range"
+            />
+            <div class="filter-ends"><span>0 km</span><span>25+ km</span></div>
+          </div>
         </div>
-        <input
-          type="range"
-          min="0" max="700" step="25"
-          :value="disasterStore.maxDepth === null ? 700 : disasterStore.maxDepth"
-          @input="disasterStore.maxDepth = Number($event.target.value) >= 700 ? null : Number($event.target.value)"
-          class="filter-range"
-        />
-        <div class="filter-ends"><span>0 km</span><span>25+ km</span></div>
-      </div>
+      </Transition>
     </div>
 
     <!-- Time Range -->
     <div class="sidebar-section" v-if="!isCollapsed">
-      <h2 class="section-title">Zaman Aralığı</h2>
-      <div class="time-range-list">
-        <button
-          v-for="range in timeRanges"
-          :key="range"
-          class="time-range-btn"
-          :class="{ active: selectedTimeRange === range }"
-          @click="selectTimeRange(range)"
-        >
-          {{ range }}
-        </button>
-      </div>
+      <button class="section-toggle" @click="toggleSection('timeRange')">
+        <span class="section-title">Zaman Aralığı</span>
+        <span class="section-arrow" :class="{ open: openSections.timeRange }">›</span>
+      </button>
+      <Transition name="section-accordion">
+        <div v-if="openSections.timeRange">
+          <div class="time-range-list">
+            <button
+              v-for="range in timeRanges"
+              :key="range"
+              class="time-range-btn"
+              :class="{ active: selectedTimeRange === range }"
+              @click="selectTimeRange(range)"
+            >
+              {{ range }}
+            </button>
+          </div>
 
-      <div class="date-filter-card">
-        <div class="date-filters">
-          <label class="date-label">
-            <span>Takvim (Tek Gün / Aralık)</span>
-            <input
-              type="date"
-              class="date-input"
-              :value="calendarPickValue"
-              @change="handleSingleCalendarPick"
-            />
-          </label>
-          <span class="date-hint">
-            1 seçim: tek gün. 2 seçim: aralık. Sonraki seçim yeni aralık başlatır.
-          </span>
-          <span class="date-range-preview">{{ selectedRangeLabel }}</span>
+          <div class="date-filter-card">
+            <div class="date-filters">
+              <label class="date-label">
+                <span>Takvim (Tek Gün / Aralık)</span>
+                <input
+                  type="date"
+                  class="date-input"
+                  :value="calendarPickValue"
+                  @change="handleSingleCalendarPick"
+                />
+              </label>
+              <span class="date-hint">
+                1 seçim: tek gün. 2 seçim: aralık. Sonraki seçim yeni aralık başlatır.
+              </span>
+              <span class="date-range-preview">{{ selectedRangeLabel }}</span>
+            </div>
+          </div>
         </div>
-      </div>
+      </Transition>
     </div>
 
     <!-- Actions -->
     <div class="sidebar-actions" v-if="!isCollapsed">
-      <div class="quick-switches">
-        <label class="switch-3d-cyan">
-          <input
-            type="checkbox"
-            class="switch-input"
-            :checked="isGlobeMode"
-            @change="handleViewModeSwitch"
-            aria-label="Toggle 3D Globe Mode"
-          />
-          <div class="switch-track">
-            <span class="track-text text-3d">View 3D</span>
-            <span class="track-text text-2d">View 2D</span>
-            <div class="switch-knob">
-              <div class="cube">
-                <div class="face front"></div>
-                <div class="face back"></div>
-                <div class="face right"></div>
-                <div class="face left"></div>
-                <div class="face top"></div>
-                <div class="face bottom"></div>
+      <button class="section-toggle" @click="toggleSection('actions')">
+        <span class="section-title">Seçenekler</span>
+        <span class="section-arrow" :class="{ open: openSections.actions }">›</span>
+      </button>
+      <Transition name="section-accordion">
+        <div v-if="openSections.actions">
+          <div class="quick-switches">
+            <label class="switch-3d-cyan">
+              <input
+                type="checkbox"
+                class="switch-input"
+                :checked="isGlobeMode"
+                @change="handleViewModeSwitch"
+                aria-label="Toggle 3D Globe Mode"
+              />
+              <div class="switch-track">
+                <span class="track-text text-3d">View 3D</span>
+                <span class="track-text text-2d">View 2D</span>
+                <div class="switch-knob">
+                  <div class="cube">
+                    <div class="face front"></div>
+                    <div class="face back"></div>
+                    <div class="face right"></div>
+                    <div class="face left"></div>
+                    <div class="face top"></div>
+                    <div class="face bottom"></div>
+                  </div>
+                </div>
               </div>
+            </label>
+
+            <div class="theme-switch-wrap">
+              <span class="theme-mode-label">{{ isDarkMode ? 'Dark Mode' : 'Light Mode' }}</span>
+              <label class="theme-switch" for="theme-input">
+                <input
+                  id="theme-input"
+                  type="checkbox"
+                  :checked="isDarkMode"
+                  @change="handleThemeSwitch"
+                  aria-label="Toggle Dark Mode"
+                />
+                <div class="theme-slider round">
+                  <div class="sun-moon">
+                    <svg id="moon-dot-1" class="moon-dot" viewBox="0 0 100 100">
+                      <circle cx="50" cy="50" r="50"></circle>
+                    </svg>
+                    <svg id="moon-dot-2" class="moon-dot" viewBox="0 0 100 100">
+                      <circle cx="50" cy="50" r="50"></circle>
+                    </svg>
+                    <svg id="moon-dot-3" class="moon-dot" viewBox="0 0 100 100">
+                      <circle cx="50" cy="50" r="50"></circle>
+                    </svg>
+                    <svg id="light-ray-1" class="light-ray" viewBox="0 0 100 100">
+                      <circle cx="50" cy="50" r="50"></circle>
+                    </svg>
+                    <svg id="light-ray-2" class="light-ray" viewBox="0 0 100 100">
+                      <circle cx="50" cy="50" r="50"></circle>
+                    </svg>
+                    <svg id="light-ray-3" class="light-ray" viewBox="0 0 100 100">
+                      <circle cx="50" cy="50" r="50"></circle>
+                    </svg>
+                    <svg id="cloud-1" class="cloud-dark" viewBox="0 0 100 100">
+                      <circle cx="50" cy="50" r="50"></circle>
+                    </svg>
+                    <svg id="cloud-2" class="cloud-dark" viewBox="0 0 100 100">
+                      <circle cx="50" cy="50" r="50"></circle>
+                    </svg>
+                    <svg id="cloud-3" class="cloud-dark" viewBox="0 0 100 100">
+                      <circle cx="50" cy="50" r="50"></circle>
+                    </svg>
+                    <svg id="cloud-4" class="cloud-light" viewBox="0 0 100 100">
+                      <circle cx="50" cy="50" r="50"></circle>
+                    </svg>
+                    <svg id="cloud-5" class="cloud-light" viewBox="0 0 100 100">
+                      <circle cx="50" cy="50" r="50"></circle>
+                    </svg>
+                    <svg id="cloud-6" class="cloud-light" viewBox="0 0 100 100">
+                      <circle cx="50" cy="50" r="50"></circle>
+                    </svg>
+                  </div>
+                  <div class="stars">
+                    <svg id="star-1" class="star" viewBox="0 0 20 20">
+                      <path
+                        d="M 0 10 C 10 10,10 10 ,0 10 C 10 10 , 10 10 , 10 20 C 10 10 , 10 10 , 20 10 C 10 10 , 10 10 , 10 0 C 10 10,10 10 ,0 10 Z"
+                      ></path>
+                    </svg>
+                    <svg id="star-2" class="star" viewBox="0 0 20 20">
+                      <path
+                        d="M 0 10 C 10 10,10 10 ,0 10 C 10 10 , 10 10 , 10 20 C 10 10 , 10 10 , 20 10 C 10 10 , 10 10 , 10 0 C 10 10,10 10 ,0 10 Z"
+                      ></path>
+                    </svg>
+                    <svg id="star-3" class="star" viewBox="0 0 20 20">
+                      <path
+                        d="M 0 10 C 10 10,10 10 ,0 10 C 10 10 , 10 10 , 10 20 C 10 10 , 10 10 , 20 10 C 10 10 , 10 10 , 10 0 C 10 10,10 10 ,0 10 Z"
+                      ></path>
+                    </svg>
+                    <svg id="star-4" class="star" viewBox="0 0 20 20">
+                      <path
+                        d="M 0 10 C 10 10,10 10 ,0 10 C 10 10 , 10 10 , 10 20 C 10 10 , 10 10 , 20 10 C 10 10 , 10 10 , 10 0 C 10 10,10 10 ,0 10 Z"
+                      ></path>
+                    </svg>
+                  </div>
+                </div>
+              </label>
             </div>
           </div>
-        </label>
 
-        <div class="theme-switch-wrap">
-          <span class="theme-mode-label">{{ isDarkMode ? 'Dark Mode' : 'Light Mode' }}</span>
-          <label class="theme-switch" for="theme-input">
-            <input
-              id="theme-input"
-              type="checkbox"
-              :checked="isDarkMode"
-              @change="handleThemeSwitch"
-              aria-label="Toggle Dark Mode"
-            />
-            <div class="theme-slider round">
-              <div class="sun-moon">
-                <svg id="moon-dot-1" class="moon-dot" viewBox="0 0 100 100">
-                  <circle cx="50" cy="50" r="50"></circle>
-                </svg>
-                <svg id="moon-dot-2" class="moon-dot" viewBox="0 0 100 100">
-                  <circle cx="50" cy="50" r="50"></circle>
-                </svg>
-                <svg id="moon-dot-3" class="moon-dot" viewBox="0 0 100 100">
-                  <circle cx="50" cy="50" r="50"></circle>
-                </svg>
-                <svg id="light-ray-1" class="light-ray" viewBox="0 0 100 100">
-                  <circle cx="50" cy="50" r="50"></circle>
-                </svg>
-                <svg id="light-ray-2" class="light-ray" viewBox="0 0 100 100">
-                  <circle cx="50" cy="50" r="50"></circle>
-                </svg>
-                <svg id="light-ray-3" class="light-ray" viewBox="0 0 100 100">
-                  <circle cx="50" cy="50" r="50"></circle>
-                </svg>
-                <svg id="cloud-1" class="cloud-dark" viewBox="0 0 100 100">
-                  <circle cx="50" cy="50" r="50"></circle>
-                </svg>
-                <svg id="cloud-2" class="cloud-dark" viewBox="0 0 100 100">
-                  <circle cx="50" cy="50" r="50"></circle>
-                </svg>
-                <svg id="cloud-3" class="cloud-dark" viewBox="0 0 100 100">
-                  <circle cx="50" cy="50" r="50"></circle>
-                </svg>
-                <svg id="cloud-4" class="cloud-light" viewBox="0 0 100 100">
-                  <circle cx="50" cy="50" r="50"></circle>
-                </svg>
-                <svg id="cloud-5" class="cloud-light" viewBox="0 0 100 100">
-                  <circle cx="50" cy="50" r="50"></circle>
-                </svg>
-                <svg id="cloud-6" class="cloud-light" viewBox="0 0 100 100">
-                  <circle cx="50" cy="50" r="50"></circle>
-                </svg>
-              </div>
-              <div class="stars">
-                <svg id="star-1" class="star" viewBox="0 0 20 20">
-                  <path
-                    d="M 0 10 C 10 10,10 10 ,0 10 C 10 10 , 10 10 , 10 20 C 10 10 , 10 10 , 20 10 C 10 10 , 10 10 , 10 0 C 10 10,10 10 ,0 10 Z"
-                  ></path>
-                </svg>
-                <svg id="star-2" class="star" viewBox="0 0 20 20">
-                  <path
-                    d="M 0 10 C 10 10,10 10 ,0 10 C 10 10 , 10 10 , 10 20 C 10 10 , 10 10 , 20 10 C 10 10 , 10 10 , 10 0 C 10 10,10 10 ,0 10 Z"
-                  ></path>
-                </svg>
-                <svg id="star-3" class="star" viewBox="0 0 20 20">
-                  <path
-                    d="M 0 10 C 10 10,10 10 ,0 10 C 10 10 , 10 10 , 10 20 C 10 10 , 10 10 , 20 10 C 10 10 , 10 10 , 10 0 C 10 10,10 10 ,0 10 Z"
-                  ></path>
-                </svg>
-                <svg id="star-4" class="star" viewBox="0 0 20 20">
-                  <path
-                    d="M 0 10 C 10 10,10 10 ,0 10 C 10 10 , 10 10 , 10 20 C 10 10 , 10 10 , 20 10 C 10 10 , 10 10 , 10 0 C 10 10,10 10 ,0 10 Z"
-                  ></path>
-                </svg>
-              </div>
-            </div>
-          </label>
+          <button class="btn btn-primary sidebar-action-btn" @click="handleLocate">
+            📍
+            {{
+              geoStore.isTracking
+                ? t('sidebar.locating')
+                : geoStore.hasLocation
+                  ? t('sidebar.locationDetected')
+                  : t('sidebar.myLocation')
+            }}
+          </button>
+
+          <button
+            class="btn btn-ghost sidebar-action-btn"
+            @click="disasterStore.refreshAll()"
+            :disabled="disasterStore.isLoading"
+          >
+            🔄 {{ t('app.refreshAll') }}
+          </button>
+
+          <button
+            class="btn btn-ghost sidebar-action-btn"
+            @click="uiStore.showHeatmap = !uiStore.showHeatmap"
+          >
+            🔥 {{ uiStore.showHeatmap ? 'Heatmap: ON' : 'Heatmap: OFF' }}
+          </button>
+
+          <button class="btn btn-ghost sidebar-action-btn" @click="uiStore.toggleSettings()">
+            ⚙️ {{ t('app.settings') }}
+          </button>
         </div>
-      </div>
-
-      <button class="btn btn-primary sidebar-action-btn" @click="handleLocate">
-        📍
-        {{
-          geoStore.isTracking
-            ? t('sidebar.locating')
-            : geoStore.hasLocation
-              ? t('sidebar.locationDetected')
-              : t('sidebar.myLocation')
-        }}
-      </button>
-
-      <button
-        class="btn btn-ghost sidebar-action-btn"
-        @click="disasterStore.refreshAll()"
-        :disabled="disasterStore.isLoading"
-      >
-        🔄 {{ t('app.refreshAll') }}
-      </button>
-
-      <button
-        class="btn btn-ghost sidebar-action-btn"
-        @click="uiStore.showHeatmap = !uiStore.showHeatmap"
-      >
-        🔥 {{ uiStore.showHeatmap ? 'Heatmap: ON' : 'Heatmap: OFF' }}
-      </button>
-
-      <button class="btn btn-ghost sidebar-action-btn" @click="uiStore.toggleSettings()">
-        ⚙️ {{ t('app.settings') }}
-      </button>
+      </Transition>
     </div>
 
     <!-- Last Updated -->
@@ -650,6 +784,31 @@ watch([rangeStartDate, rangeEndDate], ([start, end]) => {
   color: var(--color-text-muted);
 }
 
+.section-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-sm);
+  padding: 0;
+  border: none;
+  background: transparent;
+  width: 100%;
+  cursor: pointer;
+  text-align: left;
+}
+
+.section-arrow {
+  font-size: 1rem;
+  color: var(--color-text-muted);
+  transition: transform 0.22s ease;
+  flex-shrink: 0;
+  line-height: 1;
+}
+
+.section-arrow.open {
+  transform: rotate(90deg);
+}
+
 .disaster-toggles {
   display: flex;
   flex-direction: column;
@@ -747,6 +906,8 @@ watch([rangeStartDate, rangeEndDate], ([start, end]) => {
 .severity-dot {
   width: 10px;
   height: 10px;
+  display: inline-block;
+  flex-shrink: 0;
   border-radius: 50%;
   box-shadow: 0 0 8px currentColor;
 }
@@ -1528,5 +1689,167 @@ html[data-theme='light'] .footer-sources {
   .legend {
     grid-template-columns: repeat(2, 1fr);
   }
+}
+
+/* ─── Disaster Accordion ─── */
+.disaster-accordion {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.accordion-item {
+  border-radius: var(--radius-sm);
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid transparent;
+  overflow: hidden;
+  transition:
+    border-color 0.2s ease,
+    background 0.2s ease;
+}
+
+.accordion-item.accordion-active-layer {
+  border-color: rgba(77, 163, 255, 0.22);
+  background: rgba(77, 163, 255, 0.05);
+}
+
+.accordion-header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: 9px 10px;
+  cursor: pointer;
+  user-select: none;
+  transition: background 0.15s ease;
+}
+
+.accordion-header:hover {
+  background: rgba(255, 255, 255, 0.07);
+}
+
+.accordion-arrow {
+  font-size: 1rem;
+  color: var(--color-text-muted);
+  transition: transform 0.22s ease;
+  flex-shrink: 0;
+  line-height: 1;
+}
+
+.accordion-arrow.open {
+  transform: rotate(90deg);
+}
+
+.accordion-body {
+  padding: 6px 12px 10px 36px;
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.severity-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.sev-chip {
+  font-size: 0.7rem;
+  padding: 2px 8px;
+  border-radius: 20px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.sev-chip.critical {
+  background: rgba(255, 60, 60, 0.18);
+  color: var(--color-critical);
+}
+
+.sev-chip.high {
+  background: rgba(255, 140, 0, 0.18);
+  color: var(--color-high);
+}
+
+.sev-chip.moderate {
+  background: rgba(255, 210, 60, 0.18);
+  color: var(--color-moderate);
+}
+
+.sev-chip.low {
+  background: rgba(100, 200, 100, 0.18);
+  color: var(--color-low);
+}
+
+.sev-chip.none {
+  background: rgba(255, 255, 255, 0.07);
+  color: var(--color-text-muted);
+}
+
+.layer-toggle-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.2);
+  flex-shrink: 0;
+  cursor: pointer;
+  transition:
+    background 0.2s ease,
+    box-shadow 0.2s ease;
+  margin-left: auto;
+}
+
+.layer-toggle-dot.on {
+  background: var(--color-info, #4da3ff);
+  box-shadow: 0 0 6px rgba(77, 163, 255, 0.6);
+}
+
+.accordion-loading {
+  margin-top: 6px;
+  font-size: 0.7rem;
+  color: var(--color-text-muted);
+}
+
+.loading-pulse {
+  animation: pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.4;
+  }
+}
+
+/* Accordion transition */
+.accordion-enter-active,
+.accordion-leave-active {
+  transition:
+    max-height 0.25s ease,
+    opacity 0.2s ease;
+  max-height: 200px;
+  overflow: hidden;
+}
+
+.accordion-enter-from,
+.accordion-leave-to {
+  max-height: 0;
+  opacity: 0;
+}
+
+.section-accordion-enter-active,
+.section-accordion-leave-active {
+  transition:
+    max-height 0.25s ease,
+    opacity 0.2s ease;
+  max-height: 480px;
+  overflow: hidden;
+}
+
+.section-accordion-enter-from,
+.section-accordion-leave-to {
+  max-height: 0;
+  opacity: 0;
 }
 </style>

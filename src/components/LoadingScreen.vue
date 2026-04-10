@@ -99,7 +99,7 @@ defineProps({
           </div>
         </div>
 
-        <h1 class="loading-title">EWS</h1>
+        <h1 class="loading-title">MHEWS</h1>
         <p class="loading-subtext">{{ t('app.loadingSubtext') }}</p>
         <!-- <p class="loading-status">{{ t('app.loading') }}</p> -->
       </div>

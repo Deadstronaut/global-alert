@@ -1,6 +1,6 @@
 /**
  * WHO - World Health Organization Disease Outbreak News
- * RSS: https://www.who.int/feeds/entity/don/lang/en/rss.xml
+ * API: https://www.who.int/api/emergencies/diseaseoutbreaknews
  * Kapsam: Salgın hastalıklar, outbreak uyarıları - GLOBAL
  */
 
@@ -8,7 +8,7 @@ import axios from 'axios';
 import { normalize } from '../processors/normalizer.js';
 import { reportStatus } from '../output/healthTracker.js';
 
-const FEED_URL = 'https://www.who.int/feeds/entity/don/lang/en/rss.xml';
+const FEED_URL = 'https://www.who.int/api/emergencies/diseaseoutbreaknews';
 const POLL_INTERVAL = 30 * 60 * 1000; // 30 dakika
 
 // Ülke adı → yaklaşık koordinat (WHO RSS'de koordinat yok)
@@ -53,15 +53,22 @@ export function startWHO(onEvent) {
   async function poll() {
     try {
       const res = await axios.get(FEED_URL, {
+        params: {
+          sf_provider: 'dynamicProvider372',
+          sf_culture: 'en',
+          $orderby: 'PublicationDateAndTime desc',
+          $expand: 'EmergencyEvent',
+          $select: 'Title,TitleSuffix,OverrideTitle,UseOverrideTitle,regionscountries,ItemDefaultUrl,FormattedDate,PublicationDateAndTime',
+        },
         timeout: 15000,
-        responseType: 'text',
+        responseType: 'json',
         headers: { 'User-Agent': 'GlobalAlert/1.0 (disaster monitoring)' },
       });
 
-      const items = parseWHORSS(res.data);
+      const items = Array.isArray(res.data?.value) ? res.data.value : [];
       let count = 0;
       for (const item of items) {
-        const id = `who-${item.guid}`;
+        const id = `who-${item.ItemDefaultUrl || item.Title || item.PublicationDateAndTime}`;
         if (seen.has(id)) continue;
         seen.add(id);
         const event = normalizeWHO(item, id);
@@ -85,31 +92,9 @@ export function startWHO(onEvent) {
   };
 }
 
-function parseWHORSS(xml) {
-  const items = [];
-  const itemRe = /<item>([\s\S]*?)<\/item>/g;
-  let m;
-  while ((m = itemRe.exec(xml)) !== null) {
-    const block = m[1];
-    items.push({
-      title: extractTag(block, 'title'),
-      link: extractTag(block, 'link'),
-      pubDate: extractTag(block, 'pubDate'),
-      description: extractTag(block, 'description'),
-      guid: extractTag(block, 'guid'),
-    });
-  }
-  return items;
-}
-
-function extractTag(str, tag) {
-  const m = str.match(new RegExp(`<${tag}[^>]*><!\\[CDATA\\[([\\s\\S]*?)\\]\\]><\\/${tag}>|<${tag}[^>]*>([\\s\\S]*?)<\\/${tag}>`));
-  return m ? (m[1] || m[2])?.trim() : '';
-}
-
 function normalizeWHO(item, id) {
-  const title = item.title || 'Disease Outbreak';
-  const desc = (item.description || '').replace(/<[^>]+>/g, '').trim();
+  const title = (item.UseOverrideTitle ? item.OverrideTitle : item.Title) || item.Title || 'Disease Outbreak';
+  const desc = `${item.FormattedDate || ''}`.trim();
 
   // Ülke koordinatı bul
   let lat = 0, lng = 0, country = '';
@@ -128,10 +113,12 @@ function normalizeWHO(item, id) {
     magnitude: 1,
     depth: 0,
     title: title.slice(0, 200),
-    description: desc.slice(0, 500) || title,
-    time: item.pubDate ? new Date(item.pubDate).toISOString() : new Date().toISOString(),
+    description: (desc || title).slice(0, 500),
+    time: item.PublicationDateAndTime ? new Date(item.PublicationDateAndTime).toISOString() : new Date().toISOString(),
     source: 'WHO',
-    sourceUrl: item.link || 'https://www.who.int/emergencies/disease-outbreak-news',
+    sourceUrl: item.ItemDefaultUrl
+      ? `https://www.who.int${item.ItemDefaultUrl}`
+      : 'https://www.who.int/emergencies/disease-outbreak-news',
     extra: { country },
   });
 }

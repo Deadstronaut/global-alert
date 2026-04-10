@@ -5,12 +5,12 @@
  */
 
 import axios from 'axios';
-import { load } from 'cheerio';
-import { normalize } from '../processors/normalizer.js';
-import { reportStatus } from '../output/healthTracker.js';
+import {load} from 'cheerio';
+import {normalize} from '../processors/normalizer.js';
+import {reportStatus} from '../output/healthTracker.js';
 
 let _poll = null;
-export function triggerPollKandilli() { return _poll?.(); }
+export function triggerPollKandilli() {return _poll?.();}
 
 const URL = 'http://www.koeri.boun.edu.tr/scripts/lst0.asp';
 const POLL_INTERVAL = 20 * 1000; // 20 saniye
@@ -24,7 +24,7 @@ export function startKandilli(onEvent) {
     try {
       const res = await axios.get(URL, {
         timeout: 15000,
-        headers: { 'Accept-Charset': 'windows-1254' },
+        headers: {'Accept-Charset': 'windows-1254'},
         responseType: 'arraybuffer',
       });
 
@@ -49,7 +49,7 @@ export function startKandilli(onEvent) {
 
   _poll = poll;
   poll();
-  timer = setInterval(() => { if (running) poll(); }, POLL_INTERVAL);
+  timer = setInterval(() => {if (running) poll();}, POLL_INTERVAL);
   console.log('[Kandilli] ✅ Polling started (20s)');
 
   return () => {
@@ -74,7 +74,7 @@ function parseKandilli(html) {
 
     const [, date, time, lat, lng, depth, md, ml, ms, loc] = m;
     const mag = Math.max(parseFloat(md), parseFloat(ml), parseFloat(ms));
-    const isoTime = `${date.replace(/\./g, '-')}T${time}Z`;
+    const isoTime = `${date.replace(/\./g, '-')}T${time}`;
     const id = `kandilli-${date}-${time}-${lat}-${lng}`;
 
     events.push(normalize({
@@ -89,7 +89,7 @@ function parseKandilli(html) {
       time: isoTime,
       source: 'Kandilli',
       sourceUrl: 'http://www.koeri.boun.edu.tr/scripts/lst0.asp',
-      extra: { depth: parseFloat(depth), md: parseFloat(md), ml: parseFloat(ml), ms: parseFloat(ms), location: loc.trim() }
+      extra: {depth: parseFloat(depth), md: parseFloat(md), ml: parseFloat(ml), ms: parseFloat(ms), location: loc.trim()}
     }));
   }
 

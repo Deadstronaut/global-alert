@@ -1,7 +1,7 @@
 {
   "app": {
-    "title": "GEWS - Глобальная система раннего предупреждения",
-    "subtitle": "Платформа мониторинга стихийных бедствий ООН",
+    "title": "Multi-Hazard Early Warning Systems (MHEWS)",
+    "subtitle": "Multi-Hazard Early Warning Systems (MHEWS)",
     "loading": "Загрузка данных...",
     "loadingSubtext": "Получение спутниковых данных",
     "lastUpdated": "Последнее обновление",

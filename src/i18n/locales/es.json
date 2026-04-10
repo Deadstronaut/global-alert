@@ -1,7 +1,7 @@
 {
   "app": {
-    "title": "GEWS - Sistema Global de Alerta Temprana",
-    "subtitle": "Plataforma de Monitoreo de Desastres de las Naciones Unidas",
+    "title": "Multi-Hazard Early Warning Systems (MHEWS)",
+    "subtitle": "Multi-Hazard Early Warning Systems (MHEWS)",
     "loading": "Cargando datos...",
     "loadingSubtext": "Obteniendo datos satelitales",
     "lastUpdated": "Última actualización",

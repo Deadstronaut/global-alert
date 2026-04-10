@@ -1,7 +1,7 @@
 {
   "app": {
-    "title": "GEWS - Système mondial d'alerte précoce",
-    "subtitle": "Plateforme de surveillance des catastrophes des Nations Unies",
+    "title": "Multi-Hazard Early Warning Systems (MHEWS)",
+    "subtitle": "Multi-Hazard Early Warning Systems (MHEWS)",
     "loading": "Chargement des données...",
     "loadingSubtext": "Récupération des données satellites",
     "lastUpdated": "Dernière mise à jour",

@@ -9,33 +9,33 @@
 
 import 'dotenv/config';
 
-import { connectEMSC }     from './sources/emsc.js';
-import { startUSGS }       from './sources/usgs.js';
-import { startAFAD }       from './sources/afad.js';
-import { startKandilli }   from './sources/kandilli.js';
-import { startGEOFON }     from './sources/geofon.js';
-import { startGDACS }      from './sources/gdacs.js';
-import { startNASAFirms }  from './sources/nasaFirms.js';
-import { startPTWC }       from './sources/ptwc.js';
-import { startWHO }        from './sources/who.js';
-import { startFEWSNET }    from './sources/fewsnet.js';
+import {connectEMSC} from './sources/emsc.js';
+import {startUSGS} from './sources/usgs.js';
+import {startAFAD} from './sources/afad.js';
+import {startKandilli} from './sources/kandilli.js';
+import {startGEOFON} from './sources/geofon.js';
+import {startGDACS} from './sources/gdacs.js';
+import {startNASAFirms} from './sources/nasaFirms.js';
+import {startPTWC} from './sources/ptwc.js';
+import {startWHO} from './sources/who.js';
+import {startFEWSNET} from './sources/fewsnet.js';
 
-import { triggerPollUSGS }      from './sources/usgs.js';
-import { triggerPollAFAD }      from './sources/afad.js';
-import { triggerPollKandilli }  from './sources/kandilli.js';
-import { triggerPollGEOFON }    from './sources/geofon.js';
-import { triggerPollGDACS }     from './sources/gdacs.js';
-import { triggerPollPTWC }      from './sources/ptwc.js';
-import { triggerPollNASAFirms } from './sources/nasaFirms.js';
-import { triggerPollWHO }       from './sources/who.js';
-import { triggerPollFEWSNET }   from './sources/fewsnet.js';
+import {triggerPollUSGS} from './sources/usgs.js';
+import {triggerPollAFAD} from './sources/afad.js';
+import {triggerPollKandilli} from './sources/kandilli.js';
+import {triggerPollGEOFON} from './sources/geofon.js';
+import {triggerPollGDACS} from './sources/gdacs.js';
+import {triggerPollPTWC} from './sources/ptwc.js';
+import {triggerPollNASAFirms} from './sources/nasaFirms.js';
+import {triggerPollWHO} from './sources/who.js';
+import {triggerPollFEWSNET} from './sources/fewsnet.js';
 
-import { Deduplicator }    from './processors/deduplicator.js';
-import { calculateEarlyWarning } from './processors/pwave.js';
+import {Deduplicator} from './processors/deduplicator.js';
+import {calculateEarlyWarning} from './processors/pwave.js';
 
-import { GEWSWebSocketServer } from './output/wsServer.js';
-import { initSupabase, queueWrite, writeEarlyWarning } from './output/supabaseWriter.js';
-import { onHealthChange } from './output/healthTracker.js';
+import {GEWSWebSocketServer} from './output/wsServer.js';
+import {initSupabase, queueWrite, writeEarlyWarning} from './output/supabaseWriter.js';
+import {onHealthChange} from './output/healthTracker.js';
 
 // ─────────────────────────────────────────────
 // Init
@@ -43,9 +43,17 @@ import { onHealthChange } from './output/healthTracker.js';
 const wsServer = new GEWSWebSocketServer();
 wsServer.start();
 
+// Yeni bağlanan istemcilere bellekteki tüm güncel olayları topluca gönder
+wsServer.onClientConnected = (ws) => {
+  if (typeof deduplicator !== 'undefined' && deduplicator.store) {
+    const events = Array.from(deduplicator.store.values());
+    wsServer.send(ws, {type: 'batch', data: events, source: 'init'});
+  }
+};
+
 // Kaynak sağlığı değişince broadcast et
 onHealthChange((health) => {
-  wsServer.broadcast({ type: 'sources_status', data: health });
+  wsServer.broadcast({type: 'sources_status', data: health});
 });
 
 const deduplicator = new Deduplicator();

@@ -10,8 +10,8 @@
  *   { type: 'sources_status', data: { [source]: boolean }       }
  */
 
-import { WebSocketServer } from 'ws';
-import { sourceHealth } from './healthTracker.js';
+import {WebSocketServer} from 'ws';
+import {sourceHealth} from './healthTracker.js';
 
 // VITE_WS_URL=ws://localhost:8765 → port'u parse et, yoksa WS_PORT
 const _wsUrl = process.env.VITE_WS_URL || '';
@@ -23,10 +23,11 @@ export class GEWSWebSocketServer {
     this.clients = new Set();
     this.sourcesStatus = {};
     this.onRefresh = null;
+    this.onClientConnected = null;
   }
 
   start() {
-    this.wss = new WebSocketServer({ port: PORT });
+    this.wss = new WebSocketServer({port: PORT});
     console.log(`[WSServer] ✅ WebSocket server listening on ws://localhost:${PORT}`);
 
     this.wss.on('connection', (ws, req) => {
@@ -35,17 +36,17 @@ export class GEWSWebSocketServer {
       console.log(`[WSServer] Client connected (${ip}) — total: ${this.clients.size}`);
 
       // Kaynak sağlığını yeni bağlanan client'a gönder
-      this.send(ws, { type: 'sources_status', data: sourceHealth });
+      this.send(ws, {type: 'sources_status', data: sourceHealth});
 
       ws.on('message', (raw) => {
         try {
           const msg = JSON.parse(raw.toString());
-          if (msg.type === 'ping') this.send(ws, { type: 'pong' });
+          if (msg.type === 'ping') this.send(ws, {type: 'pong'});
           if (msg.type === 'refresh') {
             this.onRefresh?.();
-            this.send(ws, { type: 'refresh_ack' });
+            this.send(ws, {type: 'refresh_ack'});
           }
-        } catch { /* ignore */ }
+        } catch { /* ignore */}
       });
 
       ws.on('close', () => {
@@ -61,7 +62,7 @@ export class GEWSWebSocketServer {
 
     // Keepalive ping
     setInterval(() => {
-      this.broadcast({ type: 'ping' });
+      this.broadcast({type: 'ping'});
     }, 30000);
   }
 
@@ -69,14 +70,14 @@ export class GEWSWebSocketServer {
    * Tek bir disaster event yayınla
    */
   broadcastEvent(event) {
-    this.broadcast({ type: 'event', data: event });
+    this.broadcast({type: 'event', data: event});
   }
 
   /**
    * Erken uyarı yayınla
    */
   broadcastEarlyWarning(warning) {
-    this.broadcast({ type: 'early_warning', data: warning });
+    this.broadcast({type: 'early_warning', data: warning});
     console.log(`[WSServer] 🚨 Early warning broadcast: ${warning.earthquake.magnitude}M → ${warning.affectedCities.length} cities`);
   }
 
@@ -85,7 +86,7 @@ export class GEWSWebSocketServer {
    */
   broadcastBatch(events, source = 'init') {
     if (events.length === 0) return;
-    this.broadcast({ type: 'batch', data: events, source });
+    this.broadcast({type: 'batch', data: events, source});
   }
 
   /**
@@ -93,7 +94,7 @@ export class GEWSWebSocketServer {
    */
   updateSourceStatus(source, online) {
     this.sourcesStatus[source] = online;
-    this.broadcast({ type: 'sources_status', data: this.sourcesStatus });
+    this.broadcast({type: 'sources_status', data: this.sourcesStatus});
   }
 
   /**
@@ -103,7 +104,7 @@ export class GEWSWebSocketServer {
     const json = JSON.stringify(msg);
     for (const ws of this.clients) {
       if (ws.readyState === 1 /* OPEN */) {
-        ws.send(json, (err) => { if (err) this.clients.delete(ws); });
+        ws.send(json, (err) => {if (err) this.clients.delete(ws);});
       }
     }
   }

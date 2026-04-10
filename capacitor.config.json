@@ -1,6 +1,6 @@
 {
   "appId": "com.gews.app",
-  "appName": "GEWS - Erken Uyarı",
+  "appName": "MHEWS",
   "webDir": "dist",
   "server": {
     "androidScheme": "https"

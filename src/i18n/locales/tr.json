@@ -1,7 +1,7 @@
 {
   "app": {
-    "title": "Multi-Hazard Early Warning Systems (MHEWS)",
-    "subtitle": "Multi-Hazard Early Warning Systems (MHEWS)",
+    "title": "Multi-Hazard Early Warning Systems",
+    "subtitle": "Multi-Hazard Early Warning Systems",
     "loading": "Veriler Yükleniyor...",
     "loadingSubtext": "Uydu verileri alınıyor",
     "lastUpdated": "Son Güncelleme",

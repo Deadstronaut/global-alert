@@ -1,7 +1,7 @@
 {
   "app": {
-    "title": "Multi-Hazard Early Warning Systems (MHEWS)",
-    "subtitle": "Multi-Hazard Early Warning Systems (MHEWS)",
+    "title": "Multi-Hazard Early Warning Systems",
+    "subtitle": "Multi-Hazard Early Warning Systems",
     "loading": "Chargement des données...",
     "loadingSubtext": "Récupération des données satellites",
     "lastUpdated": "Dernière mise à jour",

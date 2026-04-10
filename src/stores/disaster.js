@@ -117,6 +117,7 @@ export const useDisasterStore = defineStore('disaster', () => {
     tsunami: tsunamis.value.length,
     cyclone: cyclones.value.length,
     volcano: volcanoes.value.length,
+    epidemic: epidemics.value.length,
     total: allEvents.value.length,
   }));
 
@@ -326,4 +327,3 @@ export const useDisasterStore = defineStore('disaster', () => {
     refreshAll: () => wsClient.send({type: 'refresh'}),
   };
 });
-

@@ -99,7 +99,8 @@ defineProps({
           </div>
         </div>
 
-        <h1 class="loading-title">MHEWS</h1>
+        <h1 class="loading-title-1">Multi-Hazard Early Warning Systems</h1>
+        <h2 class="loading-title-2">MHEWS</h2>
         <p class="loading-subtext">{{ t('app.loadingSubtext') }}</p>
         <!-- <p class="loading-status">{{ t('app.loading') }}</p> -->
       </div>
@@ -363,10 +364,18 @@ defineProps({
   animation: twinkling 2s infinite;
 }
 
-.loading-title {
-  margin-top: 22px;
+.loading-title-1 {
+  margin-top: 2em;
   font-size: 2.2rem;
   font-weight: 900;
+  letter-spacing: 0.2em;
+  color: #f4fbff;
+  text-shadow: 0 0 30px rgba(61, 226, 255, 0.45);
+}
+.loading-title-2 {
+  margin-top: 1em;
+  font-size: 2.2rem;
+  font-weight: 700;
   letter-spacing: 0.2em;
   color: #f4fbff;
   text-shadow: 0 0 30px rgba(61, 226, 255, 0.45);

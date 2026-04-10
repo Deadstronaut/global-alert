@@ -509,6 +509,38 @@ onBeforeUnmount(() => {
   font-family: 'Inter', monospace;
 }
 
+:deep(.maplibregl-ctrl-bottom-right) {
+  right: 10px;
+  bottom: 12px;
+}
+
+:deep(.maplibregl-ctrl-group) {
+  background: rgba(20, 24, 33, 0.88);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.28);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
+:deep(.maplibregl-ctrl-group button) {
+  color: #ffffff;
+  background: transparent;
+}
+
+:deep(.maplibregl-ctrl-group button:hover) {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+:deep(.maplibregl-ctrl-group button span) {
+  color: #ffffff;
+}
+
+:deep(.maplibregl-ctrl-zoom-in .maplibregl-ctrl-icon),
+:deep(.maplibregl-ctrl-zoom-out .maplibregl-ctrl-icon) {
+  filter: brightness(0) invert(1);
+  opacity: 1;
+}
+
 .layer-switcher {
   position: absolute;
   bottom: 96px;

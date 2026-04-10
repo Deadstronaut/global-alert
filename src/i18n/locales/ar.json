@@ -1,7 +1,7 @@
 {
   "app": {
-    "title": "Multi-Hazard Early Warning Systems (MHEWS)",
-    "subtitle": "Multi-Hazard Early Warning Systems (MHEWS)",
+    "title": "Multi-Hazard Early Warning Systems",
+    "subtitle": "Multi-Hazard Early Warning Systems",
     "loading": "جاري تحميل البيانات...",
     "loadingSubtext": "جاري جلب بيانات الأقمار الصناعية",
     "lastUpdated": "آخر تحديث",

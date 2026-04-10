@@ -1,0 +1,21 @@
+{
+  "name": "global-alert-aggregator",
+  "version": "1.0.0",
+  "description": "Real-time disaster data aggregator with WebSocket broadcast",
+  "type": "module",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "node --watch src/index.js"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.97.0",
+    "axios": "^1.7.0",
+    "cheerio": "^1.0.0",
+    "dotenv": "^16.4.0",
+    "ws": "^8.18.0"
+  },
+  "engines": {
+    "node": ">=22.0.0"
+  }
+}

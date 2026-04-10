@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted, onBeforeUnmount, watch } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
 import { useDisasterStore } from '@/stores/disaster.js'
 import { useUIStore } from '@/stores/ui.js'
 import { useGeolocationStore } from '@/stores/geolocation.js'
@@ -17,10 +17,19 @@ const geoStore = useGeolocationStore()
 const mapContainer = ref(null)
 let map = null
 let mapLoaded = false
+let styleLoadVersion = 0
 let markerObjects = []
 let userMarkerObj = null
-const isSatellite = ref(false)
+const styleCache = {}
+// 0 = Açık (liberty), 1 = Koyu (dark), 2 = Uydu
+const mapStyleIndex = ref(0)
 const currentZoom = ref(3)
+
+const MAP_STYLES = [
+  { label: 'Koyu', url: 'https://tiles.openfreemap.org/styles/dark', preview: 'preview-dark' },
+  { label: 'Uydu', url: null, preview: 'preview-satellite' },
+  { label: 'Açık', url: 'https://tiles.openfreemap.org/styles/liberty', preview: 'preview-street' },
+]
 
 const ESRI_SATELLITE_STYLE = {
   version: 8,
@@ -37,69 +46,38 @@ const ESRI_SATELLITE_STYLE = {
   layers: [{ id: 'esri-satellite-layer', type: 'raster', source: 'esri-satellite' }],
 }
 
+const isSatellite = computed(() => mapStyleIndex.value === 1)
+
 function getBaseStyle() {
-  if (isSatellite.value) return ESRI_SATELLITE_STYLE
-  if (uiStore.highContrast || uiStore.darkMode) {
-    return 'https://tiles.openfreemap.org/styles/dark'
-  }
-  return 'https://tiles.openfreemap.org/styles/liberty'
+  const s = MAP_STYLES[mapStyleIndex.value]
+  return s.url ?? ESRI_SATELLITE_STYLE
 }
 
-function toggleSatellite() {
-  isSatellite.value = !isSatellite.value
+function cycleMapStyle() {
+  mapStyleIndex.value = (mapStyleIndex.value + 1) % MAP_STYLES.length
   if (!map) return
   map.setMaxZoom(isSatellite.value ? 17.4 : 20)
-  mapLoaded = false
-  map.setStyle(getBaseStyle())
-  map.once('style.load', () => {
-    mapLoaded = true
-    addSourcesAndLayers()
-    updateMarkers()
-    updateHeatmap()
-    updateHexbins()
-    updateUserMarker()
-  })
-}
-
-function addTerrain() {
-  if (map.getSource('terrain-dem')) return
-  map.addSource('terrain-dem', {
-    type: 'raster-dem',
-    tiles: ['https://tiles.stadiamaps.com/data/terrarium/{z}/{x}/{y}.png'],
-    tileSize: 256,
-    maxzoom: 12,
-    encoding: 'terrarium',
-  })
-  map.setTerrain({ source: 'terrain-dem', exaggeration: 1.2 })
+  applyBaseStyle()
 }
 
 function addBuildings3D() {
   if (isSatellite.value) return
-  if (map.getSource('ofm-buildings')) return
-  map.addSource('ofm-buildings', {
-    type: 'vector',
-    url: 'https://tiles.openfreemap.org/planet',
-  })
-  map.addLayer({
-    id: 'buildings-3d',
-    type: 'fill-extrusion',
-    source: 'ofm-buildings',
-    'source-layer': 'building',
-    minzoom: 15,
-    paint: {
-      'fill-extrusion-color': ['interpolate', ['linear'], ['get', 'render_height'],
-        0, '#c8d0da',
-        200, '#a0b8d0',
-        400, '#80a0c0',
-      ],
-      'fill-extrusion-height': ['interpolate', ['linear'], ['zoom'],
-        15, 0,
-        16, ['get', 'render_height'],
-      ],
-      'fill-extrusion-base': ['get', 'render_min_height'],
-      'fill-extrusion-opacity': 0.85,
-    },
-  })
+  if (map.getLayer('buildings-3d')) return
+  try {
+    map.addLayer({
+      id: 'buildings-3d',
+      type: 'fill-extrusion',
+      source: 'openmaptiles',
+      'source-layer': 'building',
+      minzoom: 15,
+      paint: {
+        'fill-extrusion-color': '#c8d0da',
+        'fill-extrusion-height': ['interpolate', ['linear'], ['zoom'], 15, 0, 16, ['coalesce', ['get', 'render_height'], ['get', 'height'], 5]],
+        'fill-extrusion-base': ['coalesce', ['get', 'render_min_height'], ['get', 'min_height'], 0],
+        'fill-extrusion-opacity': 0.8,
+      },
+    })
+  } catch { /* source may not exist in satellite mode */ }
 }
 
 function addSourcesAndLayers() {
@@ -166,7 +144,6 @@ function addSourcesAndLayers() {
     layout: { visibility: 'none' },
   })
 
-  addTerrain()
   addBuildings3D()
 }
 
@@ -354,11 +331,43 @@ function updateUserMarker() {
   }
 }
 
-function applyBaseStyle() {
-  if (!map || !mapLoaded) return
+async function resolveStyle() {
+  const s = MAP_STYLES[mapStyleIndex.value]
+  if (!s.url) return ESRI_SATELLITE_STYLE
+  if (styleCache[s.url]) return styleCache[s.url]
+  const res = await fetch(s.url)
+  const json = await res.json()
+  styleCache[s.url] = json
+  return json
+}
+
+async function applyBaseStyle() {
+  if (!map) return
   mapLoaded = false
-  map.setStyle(getBaseStyle())
+  const version = ++styleLoadVersion
+
+  let style
+  try {
+    style = await resolveStyle()
+  } catch (e) {
+    console.warn('[MapView] Failed to fetch style:', e)
+    mapLoaded = true
+    return
+  }
+  if (version !== styleLoadVersion) return // superseded while fetching
+
+  map.setStyle(style)
+
+  // Fallback: if style.load never fires (e.g. inline style objects), restore after 4s
+  const fallbackTimer = setTimeout(() => {
+    if (version !== styleLoadVersion || mapLoaded) return
+    console.warn('[MapView] style.load timeout — restoring mapLoaded')
+    mapLoaded = true
+  }, 4000)
+
   map.once('style.load', () => {
+    clearTimeout(fallbackTimer)
+    if (version !== styleLoadVersion) return
     mapLoaded = true
     addSourcesAndLayers()
     updateMarkers()
@@ -387,7 +396,6 @@ watch(
     updateHeatmap()
     updateHexbins()
   },
-  { deep: true },
 )
 
 watch(
@@ -407,12 +415,8 @@ watch(
   { deep: true },
 )
 
-watch(
-  () => [uiStore.darkMode, uiStore.highContrast],
-  () => {
-    applyBaseStyle()
-  },
-)
+// Dark/light mode UI değişikliği harita stilini ETKİLEMEZ
+// Harita stili sadece layer switcher butonuyla değişir
 
 onMounted(() => {
   requestAnimationFrame(function tryInit() {
@@ -444,9 +448,32 @@ onBeforeUnmount(() => {
   <div class="map-view-wrapper">
     <div ref="mapContainer" class="map-leaflet"></div>
     <div class="zoom-indicator">x {{ currentZoom }}</div>
-    <div class="layer-switcher" @click="toggleSatellite">
-      <div class="layer-preview" :class="isSatellite ? 'preview-street' : 'preview-satellite'">
-        <span class="layer-label">{{ isSatellite ? 'Harita' : 'Uydu' }}</span>
+
+    <!-- Heatmap legend -->
+    <div v-if="uiStore.showHeatmap" class="map-legend" :class="{ 'legend-sidebar-collapsed': uiStore.sidebarCollapsed }">
+      <div class="legend-title">Yoğunluk</div>
+      <div class="legend-gradient heat-gradient"></div>
+      <div class="legend-labels">
+        <span>Düşük</span>
+        <span>Yüksek</span>
+      </div>
+    </div>
+
+    <!-- Hexbin / marker severity legend -->
+    <div v-else-if="uiStore.showHexbins || (!uiStore.showHeatmap && !uiStore.showHexbins)" class="map-legend" :class="{ 'legend-sidebar-collapsed': uiStore.sidebarCollapsed }">
+      <div class="legend-title">Şiddet</div>
+      <div class="legend-severity-rows">
+        <div class="sev-row"><span class="sev-dot" style="background:#4ade80"></span><span>Minimal</span></div>
+        <div class="sev-row"><span class="sev-dot" style="background:#fbbf24"></span><span>Düşük</span></div>
+        <div class="sev-row"><span class="sev-dot" style="background:#f97316"></span><span>Orta</span></div>
+        <div class="sev-row"><span class="sev-dot" style="background:#ef4444"></span><span>Yüksek</span></div>
+        <div class="sev-row"><span class="sev-dot" style="background:#7c3aed"></span><span>Kritik</span></div>
+      </div>
+    </div>
+
+    <div class="layer-switcher" @click="cycleMapStyle">
+      <div class="layer-preview" :class="MAP_STYLES[(mapStyleIndex + 1) % MAP_STYLES.length].preview">
+        <span class="layer-label">{{ MAP_STYLES[(mapStyleIndex + 1) % MAP_STYLES.length].label }}</span>
       </div>
     </div>
   </div>
@@ -515,12 +542,84 @@ onBeforeUnmount(() => {
   background: linear-gradient(135deg, #b8d4e8 0%, #d4e8b8 40%, #e8e8d4 70%, #c8d8e8 100%);
 }
 
+.preview-dark {
+  background: linear-gradient(135deg, #1a2030 0%, #252d3a 50%, #1e2535 100%);
+}
+
 .layer-label {
   font-size: 10px;
   font-weight: 700;
   color: white;
   text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8);
   letter-spacing: 0.3px;
+}
+
+/* ── Map Legend ── */
+.map-legend {
+  position: fixed;
+  bottom: 32px;
+  left: calc(var(--sidebar-width, 280px) + 12px);
+  transition: left 0.35s ease;
+  z-index: 10;
+  background: rgba(20, 24, 33, 0.82);
+  backdrop-filter: blur(6px);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+  padding: 8px 10px;
+  min-width: 110px;
+  pointer-events: none;
+}
+
+.map-legend.legend-sidebar-collapsed {
+  left: calc(var(--sidebar-collapsed, 56px) + 12px);
+}
+
+.legend-title {
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: rgba(255, 255, 255, 0.55);
+  margin-bottom: 6px;
+}
+
+.legend-gradient {
+  width: 100%;
+  height: 10px;
+  border-radius: 4px;
+  margin-bottom: 4px;
+}
+
+.heat-gradient {
+  background: linear-gradient(to right, #90a4ae, #00e676, #ffd600, #ff9100, #ff1744);
+}
+
+.legend-labels {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.6rem;
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.legend-severity-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.sev-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.72rem;
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.sev-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  flex-shrink: 0;
 }
 </style>
 

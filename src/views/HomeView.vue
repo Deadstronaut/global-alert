@@ -54,14 +54,8 @@ watch(
 )
 
 onMounted(() => {
-  // Load cached data first for instant display
-  disasterStore.loadFromCache()
-
-  // Then fetch fresh data
-  disasterStore.fetchAll()
-
-  // Start polling
-  disasterStore.startPolling()
+  // WebSocket bağlantısını başlat (cache yükleme dahil)
+  disasterStore.startWebSocket()
 })
 </script>
 

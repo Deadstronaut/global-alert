@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "WebFetch(domain:promedmail.org)",
+      "WebFetch(domain:www.reliefweb.int)",
+      "WebFetch(domain:www.fao.org)",
+      "WebFetch(domain:epi.ph)",
+      "WebFetch(domain:reliefweb.int)",
+      "WebFetch(domain:hungermapdata.org)"
+    ]
+  }
+}

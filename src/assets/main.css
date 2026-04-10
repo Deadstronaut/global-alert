@@ -27,6 +27,9 @@
   --z-stats: 92;
   --z-alerts: 94;
   --z-loading: 999;
+  --sidebar-width: 280px;
+  --sidebar-collapsed: 56px;
+  --space-xs: 4px;
 }
 
 /* Global User Pin Styles (Shared between 2D Map and 3D Globe) */

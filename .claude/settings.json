@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "WebFetch(domain:fpma.fao.org)",
+      "WebFetch(domain:fews.net)",
+      "WebFetch(domain:data.humdata.org)"
+    ]
+  }
+}

@@ -1,204 +1,284 @@
-import {defineStore} from 'pinia';
-import {ref, computed} from 'vue';
-import {fetchAllDisasters, fetchEarthquakes, fetchWildfires, fetchFloods, fetchDroughts, fetchFoodSecurity} from '@/services/api/disasterService.js';
-import {cacheEvents, loadAllCachedData} from '@/services/offlineCache.js';
-import {POLLING_INTERVALS} from '@/services/api/config.js';
+/**
+ * Disaster Store - WebSocket tabanlı gerçek zamanlı veri yönetimi
+ * Polling tamamen kaldırıldı, GEWS Aggregator WebSocket kullanılıyor
+ */
+
+import { defineStore } from 'pinia';
+import { ref, computed } from 'vue';
+import { wsClient } from '@/services/websocket/wsClient.js';
+import { cacheEvents, loadAllCachedData } from '@/services/offlineCache.js';
+
+// Afet tipine göre maksimum tutulacak olay sayısı (bellek yönetimi)
+const MAX_EVENTS = {
+  earthquake:    500,
+  wildfire:      300,
+  flood:         300,
+  drought:       200,
+  food_security: 200,
+  tsunami:       100,
+  cyclone:       100,
+  volcano:       100,
+  epidemic:      100,
+  disaster:      200,
+};
 
 export const useDisasterStore = defineStore('disaster', () => {
-    // State
-    const earthquakes = ref([]);
-    const wildfires = ref([]);
-    const floods = ref([]);
-    const droughts = ref([]);
-    const foodSecurity = ref([]);
-    const activeLayers = ref(new Set(['earthquake', 'wildfire', 'flood', 'drought', 'food_security']));
-    const activeSeverities = ref(new Set(['critical', 'high', 'moderate', 'low', 'minimal']));
-    const isLoading = ref(false);
-    const lastUpdated = ref(null);
-    const startDate = ref(null);
-    const endDate = ref(null);
-    const sourcesOnline = ref(0);
-    const errors = ref([]);
-    const selectedTimeRange = ref(24); // Default 24 hours
+  // ─────────────────────────────────────────
+  // State
+  // ─────────────────────────────────────────
+  const earthquakes    = ref([]);
+  const wildfires      = ref([]);
+  const floods         = ref([]);
+  const droughts       = ref([]);
+  const foodSecurity   = ref([]);
+  const tsunamis       = ref([]);
+  const cyclones       = ref([]);
+  const volcanoes      = ref([]);
+  const epidemics      = ref([]);
+  const otherDisasters = ref([]);
 
-    // Polling timers
-    const pollingTimers = ref({});
+  const activeLayers = ref(new Set([
+    'earthquake', 'wildfire', 'flood', 'drought',
+    'food_security', 'tsunami', 'cyclone', 'volcano'
+  ]));
+  const activeSeverities = ref(new Set(['critical', 'high', 'moderate', 'low', 'minimal']));
 
-    // Computed
-    const allEvents = computed(() => {
-        const events = [];
-        if (activeLayers.value.has('earthquake')) events.push(...earthquakes.value);
-        if (activeLayers.value.has('wildfire')) events.push(...wildfires.value);
-        if (activeLayers.value.has('flood')) events.push(...floods.value);
-        if (activeLayers.value.has('drought')) events.push(...droughts.value);
-        if (activeLayers.value.has('food_security')) events.push(...foodSecurity.value);
+  const isConnected       = ref(false);
+  const isLoading         = ref(true);
+  const lastUpdated       = ref(null);
+  const startDate         = ref(null);
+  const endDate           = ref(null);
+  const selectedTimeRange = ref(24); // saat
+  const sourcesStatus     = ref({});  // { EMSC: true, USGS: true, ... }
+  const errors            = ref([]);
 
-        // Filter by Severity
-        let filtered = events.filter(e => activeSeverities.value.has(e.severity));
+  const minMagnitude = ref(0);    // 0–9
+  const maxDepth     = ref(null); // null = TÜMÜ, sayı = km
 
-        // Filter by Time
-        if (startDate.value || endDate.value) {
-            // Calendar Mode: Use explicit range
-            const startStr = startDate.value ? new Date(startDate.value).getTime() : 0;
-            const endStr = endDate.value ? new Date(endDate.value).getTime() : Infinity;
+  // Erken uyarılar
+  const earlyWarnings = ref([]);   // Son 10 erken uyarı
+  const activeWarning = ref(null); // Şu an gösterilen uyarı
 
-            return filtered.filter(e => {
-                const et = new Date(e.time).getTime();
-                return et >= startStr && et <= endStr;
-            });
-        } else {
-            // Quick Range Mode: From now backwards
-            const now = new Date();
-            const cutoff = new Date(now.getTime() - selectedTimeRange.value * 60 * 60 * 1000);
-            return filtered.filter(e => new Date(e.time).getTime() >= cutoff.getTime());
-        }
+  // ─────────────────────────────────────────
+  // Tip → ref eşlemesi
+  // ─────────────────────────────────────────
+  const storeMap = computed(() => ({
+    earthquake:    earthquakes,
+    wildfire:      wildfires,
+    flood:         floods,
+    drought:       droughts,
+    food_security: foodSecurity,
+    tsunami:       tsunamis,
+    cyclone:       cyclones,
+    volcano:       volcanoes,
+    epidemic:      epidemics,
+    disaster:      otherDisasters,
+  }));
+
+  // ─────────────────────────────────────────
+  // Computed
+  // ─────────────────────────────────────────
+  const allEvents = computed(() => {
+    const events = [];
+    for (const type of activeLayers.value) {
+      const store = storeMap.value[type];
+      if (store) events.push(...store.value);
+    }
+
+    let filtered = events.filter(e => {
+      if (!activeSeverities.value.has(e.severity)) return false;
+      if (minMagnitude.value > 0 && (e.magnitude == null || e.magnitude < minMagnitude.value)) return false;
+      if (maxDepth.value !== null && e.depth != null && e.depth > maxDepth.value) return false;
+      return true;
     });
 
-    const totalCount = computed(() => ({
-        earthquake: earthquakes.value.length,
-        wildfire: wildfires.value.length,
-        flood: floods.value.length,
-        drought: droughts.value.length,
-        foodSecurity: foodSecurity.value.length,
-        total: earthquakes.value.length + wildfires.value.length + floods.value.length + droughts.value.length + foodSecurity.value.length
-    }));
-
-    const criticalEvents = computed(() =>
-        allEvents.value.filter(e => e.severity === 'critical' || e.severity === 'high')
-    );
-
-    // Actions
-    async function fetchAll() {
-        isLoading.value = true;
-        errors.value = [];
-
-        try {
-            const data = await fetchAllDisasters(startDate.value, endDate.value);
-            earthquakes.value = data.earthquakes;
-            wildfires.value = data.wildfires;
-            floods.value = data.floods;
-            droughts.value = data.droughts;
-            foodSecurity.value = data.foodSecurity;
-            sourcesOnline.value = data.sourcesOnline;
-            lastUpdated.value = data.fetchedAt;
-
-            // Cache for offline use
-            cacheEvents('earthquake', data.earthquakes);
-            cacheEvents('wildfire', data.wildfires);
-            cacheEvents('flood', data.floods);
-            cacheEvents('drought', data.droughts);
-            cacheEvents('food_security', data.foodSecurity);
-        } catch (error) {
-            errors.value.push(error.message);
-            console.error('[GEWS] Fetch all failed:', error);
-        } finally {
-            isLoading.value = false;
-        }
+    // Zaman filtresi
+    if (startDate.value || endDate.value) {
+      const from = startDate.value ? new Date(startDate.value).getTime() : 0;
+      const to   = endDate.value   ? new Date(endDate.value).getTime()   : Infinity;
+      return filtered.filter(e => {
+        const t = new Date(e.time).getTime();
+        return t >= from && t <= to;
+      });
     }
 
-    async function fetchByType(type) {
-        try {
-            const fetchers = {
-                earthquake: fetchEarthquakes,
-                wildfire: fetchWildfires,
-                flood: fetchFloods,
-                drought: fetchDroughts,
-                food_security: fetchFoodSecurity
-            };
+    const cutoff = Date.now() - selectedTimeRange.value * 60 * 60 * 1000;
+    return filtered.filter(e => new Date(e.time).getTime() >= cutoff);
+  });
 
-            const fetcher = fetchers[type];
-            if (!fetcher) return;
+  const totalCount = computed(() => ({
+    earthquake:    earthquakes.value.length,
+    wildfire:      wildfires.value.length,
+    flood:         floods.value.length,
+    drought:       droughts.value.length,
+    food_security: foodSecurity.value.length,
+    tsunami:       tsunamis.value.length,
+    cyclone:       cyclones.value.length,
+    volcano:       volcanoes.value.length,
+    total:         allEvents.value.length,
+  }));
 
-            const data = await fetcher();
-            const storeMap = {earthquake: earthquakes, wildfire: wildfires, flood: floods, drought: droughts, food_security: foodSecurity};
-            storeMap[type].value = data;
-            cacheEvents(type, data);
-            lastUpdated.value = new Date().toISOString();
-        } catch (error) {
-            console.error(`[GEWS] Fetch ${type} failed:`, error);
-        }
+  const criticalEvents = computed(() =>
+    allEvents.value.filter(e => e.severity === 'critical' || e.severity === 'high')
+  );
+
+  const sourcesOnline = computed(() =>
+    Object.values(sourcesStatus.value).filter(Boolean).length
+  );
+
+  // ─────────────────────────────────────────
+  // Actions
+  // ─────────────────────────────────────────
+
+  /**
+   * Gelen single event'i store'a ekle
+   */
+  function addEvent(event) {
+    const store = storeMap.value[event.type] || otherDisasters;
+    const arr = store.value;
+
+    // Duplicate ID kontrolü
+    if (arr.some(e => e.id === event.id)) return;
+
+    // Başa ekle (en yeni önce), max sınırını koru
+    store.value = [event, ...arr].slice(0, MAX_EVENTS[event.type] || 200);
+    lastUpdated.value = new Date().toISOString();
+
+    if (event.type === 'earthquake') {
+      cacheEvents('earthquake', earthquakes.value.slice(0, 50));
+    }
+  }
+
+  /**
+   * Toplu batch yükle (ilk bağlantıda)
+   */
+  function loadBatch(events) {
+    const groups = {};
+    for (const e of events) {
+      if (!groups[e.type]) groups[e.type] = [];
+      groups[e.type].push(e);
     }
 
-    function toggleLayer(type) {
-        if (activeLayers.value.has(type)) {
-            activeLayers.value.delete(type);
-        } else {
-            activeLayers.value.add(type);
-        }
-        // Force reactivity
-        activeLayers.value = new Set(activeLayers.value);
+    for (const [type, typeEvents] of Object.entries(groups)) {
+      const store = storeMap.value[type] || otherDisasters;
+      const existingIds = new Set(store.value.map(e => e.id));
+      const newOnes = typeEvents.filter(e => !existingIds.has(e.id));
+      store.value = [...newOnes, ...store.value]
+        .sort((a, b) => new Date(b.time) - new Date(a.time))
+        .slice(0, MAX_EVENTS[type] || 200);
     }
 
-    function isLayerActive(type) {
-        return activeLayers.value.has(type);
-    }
+    isLoading.value = false;
+    lastUpdated.value = new Date().toISOString();
+  }
 
-    function toggleSeverity(severity) {
-        if (activeSeverities.value.has(severity)) {
-            activeSeverities.value.delete(severity);
-        } else {
-            activeSeverities.value.add(severity);
-        }
-        activeSeverities.value = new Set(activeSeverities.value);
-    }
+  /**
+   * Erken uyarı ekle ve 60s sonra kapat
+   */
+  function addEarlyWarning(warning) {
+    earlyWarnings.value = [warning, ...earlyWarnings.value].slice(0, 10);
+    activeWarning.value = warning;
 
-    function isSeverityActive(severity) {
-        return activeSeverities.value.has(severity);
-    }
+    setTimeout(() => {
+      if (activeWarning.value?.eventId === warning.eventId) {
+        activeWarning.value = null;
+      }
+    }, 60 * 1000);
+  }
 
-    function loadFromCache() {
-        const cached = loadAllCachedData();
-        if (cached.earthquakes.length) earthquakes.value = cached.earthquakes;
-        if (cached.wildfires.length) wildfires.value = cached.wildfires;
-        if (cached.floods.length) floods.value = cached.floods;
-        if (cached.droughts.length) droughts.value = cached.droughts;
-        if (cached.foodSecurity && cached.foodSecurity.length) foodSecurity.value = cached.foodSecurity;
-    }
+  // ─────────────────────────────────────────
+  // WebSocket
+  // ─────────────────────────────────────────
+  function startWebSocket() {
+    loadFromCache();
 
-    function startPolling() {
-        // Earthquake: every 1 minute
-        pollingTimers.value.earthquake = setInterval(() => fetchByType('earthquake'), POLLING_INTERVALS.earthquake);
-        // Wildfire: every 15 minutes
-        pollingTimers.value.wildfire = setInterval(() => fetchByType('wildfire'), POLLING_INTERVALS.wildfire);
-        // Flood: every 5 minutes
-        pollingTimers.value.flood = setInterval(() => fetchByType('flood'), POLLING_INTERVALS.flood);
-        // Drought: every 1 hour
-        pollingTimers.value.drought = setInterval(() => fetchByType('drought'), POLLING_INTERVALS.drought);
-        // Food Security: every 1 hour
-        pollingTimers.value.food_security = setInterval(() => fetchByType('food_security'), POLLING_INTERVALS.food_security);
-    }
+    wsClient.on('connected', () => {
+      isConnected.value = true;
+      isLoading.value = false;
+      errors.value = [];
+    });
 
-    function stopPolling() {
-        Object.values(pollingTimers.value).forEach(timer => clearInterval(timer));
-        pollingTimers.value = {};
-    }
+    wsClient.on('disconnected', () => {
+      isConnected.value = false;
+    });
 
-    return {
-        earthquakes,
-        wildfires,
-        floods,
-        droughts,
-        foodSecurity,
-        activeLayers,
-        activeSeverities,
-        isLoading,
-        lastUpdated,
-        startDate,
-        endDate,
-        selectedTimeRange,
-        sourcesOnline,
-        errors,
-        allEvents,
-        totalCount,
-        criticalEvents,
-        fetchAll,
-        fetchByType,
-        toggleLayer,
-        isLayerActive,
-        toggleSeverity,
-        isSeverityActive,
-        loadFromCache,
-        startPolling,
-        stopPolling
-    };
+    wsClient.on('event', (event) => {
+      addEvent(event);
+    });
+
+    wsClient.on('batch', (events) => {
+      loadBatch(events);
+    });
+
+    wsClient.on('early_warning', (warning) => {
+      addEarlyWarning(warning);
+    });
+
+    wsClient.on('sources_status', (status) => {
+      sourcesStatus.value = status;
+    });
+
+    wsClient.connect();
+  }
+
+  function stopWebSocket() {
+    wsClient.disconnect();
+    isConnected.value = false;
+  }
+
+  // ─────────────────────────────────────────
+  // Filtreler
+  // ─────────────────────────────────────────
+  function toggleLayer(type) {
+    const s = new Set(activeLayers.value);
+    s.has(type) ? s.delete(type) : s.add(type);
+    activeLayers.value = s;
+  }
+
+  function isLayerActive(type) {
+    return activeLayers.value.has(type);
+  }
+
+  function toggleSeverity(severity) {
+    const s = new Set(activeSeverities.value);
+    s.has(severity) ? s.delete(severity) : s.add(severity);
+    activeSeverities.value = s;
+  }
+
+  function isSeverityActive(severity) {
+    return activeSeverities.value.has(severity);
+  }
+
+  function loadFromCache() {
+    const cached = loadAllCachedData();
+    if (cached.earthquakes?.length)  earthquakes.value  = cached.earthquakes;
+    if (cached.wildfires?.length)    wildfires.value    = cached.wildfires;
+    if (cached.floods?.length)       floods.value       = cached.floods;
+    if (cached.droughts?.length)     droughts.value     = cached.droughts;
+    if (cached.foodSecurity?.length) foodSecurity.value = cached.foodSecurity;
+  }
+
+  // Geriye uyumluluk - eski polling imzaları
+  function startPolling() { startWebSocket(); }
+  function stopPolling()  { stopWebSocket(); }
+
+  // ─────────────────────────────────────────
+  return {
+    earthquakes, wildfires, floods, droughts, foodSecurity,
+    tsunamis, cyclones, volcanoes, epidemics, otherDisasters,
+    activeLayers, activeSeverities,
+    isConnected, isLoading, lastUpdated,
+    startDate, endDate, selectedTimeRange,
+    sourcesStatus, errors,
+    minMagnitude, maxDepth,
+    earlyWarnings, activeWarning,
+    allEvents, totalCount, criticalEvents, sourcesOnline,
+    addEvent, loadBatch, addEarlyWarning,
+    startWebSocket, stopWebSocket,
+    startPolling, stopPolling,
+    toggleLayer, isLayerActive,
+    toggleSeverity, isSeverityActive,
+    loadFromCache,
+    refreshAll: () => wsClient.send({ type: 'refresh' }),
+  };
 });

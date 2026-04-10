@@ -60,10 +60,10 @@ function handleThemeSwitch(event) {
 }
 
 function getSourceStatusClass(count) {
-  if (count >= 5) return 'source-level-4'
-  if (count === 4) return 'source-level-3'
-  if (count === 3) return 'source-level-2'
-  if (count === 2 || count === 1) return 'source-level-1'
+  if (count >= 8) return 'source-level-4'
+  if (count >= 6) return 'source-level-3'
+  if (count >= 4) return 'source-level-2'
+  if (count >= 1) return 'source-level-1'
   return 'source-level-0'
 }
 
@@ -90,7 +90,7 @@ function selectTimeRange(rangeLabel) {
   // Reset store to default "poll" mode without specific day boundaries
   disasterStore.startDate = null
   disasterStore.endDate = null
-  disasterStore.fetchAll()
+  disasterStore.refreshAll()
 }
 
 function handleSingleCalendarPick(event) {
@@ -145,7 +145,7 @@ watch([rangeStartDate, rangeEndDate], ([start, end]) => {
   disasterStore.endDate = endDateObj.toISOString()
 
   // Auto-fetch using the new date boundaries
-  disasterStore.fetchAll()
+  disasterStore.refreshAll()
 })
 </script>
 
@@ -298,7 +298,7 @@ watch([rangeStartDate, rangeEndDate], ([start, end]) => {
       </button>
       <button
         class="btn-icon collapsed-action"
-        @click="disasterStore.fetchAll()"
+        @click="disasterStore.refreshAll()"
         :disabled="disasterStore.isLoading"
         :title="t('app.refreshAll')"
       >
@@ -317,7 +317,7 @@ watch([rangeStartDate, rangeEndDate], ([start, end]) => {
         :class="getSourceStatusClass(disasterStore.sourcesOnline)"
         v-if="disasterStore.lastUpdated"
       >
-        {{ disasterStore.sourcesOnline }}/5
+        {{ disasterStore.sourcesOnline }}/10
       </div>
     </div>
 
@@ -335,6 +335,39 @@ watch([rangeStartDate, rangeEndDate], ([start, end]) => {
           <span class="severity-dot" :class="severity"></span>
           <span>{{ t(`severity.${severity}`) }}</span>
         </button>
+      </div>
+    </div>
+
+    <!-- Magnitude & Depth Filters -->
+    <div class="sidebar-section filter-sliders" v-if="!isCollapsed">
+      <div class="filter-row">
+        <div class="filter-label">
+          <span>BÜYÜKLÜK</span>
+          <span class="filter-val accent">{{ disasterStore.minMagnitude > 0 ? `M${disasterStore.minMagnitude}+` : '0+' }}</span>
+        </div>
+        <input
+          type="range"
+          min="0" max="9" step="0.5"
+          :value="disasterStore.minMagnitude"
+          @input="disasterStore.minMagnitude = Number($event.target.value)"
+          class="filter-range"
+        />
+        <div class="filter-ends"><span>0</span><span>9</span></div>
+      </div>
+
+      <div class="filter-row">
+        <div class="filter-label">
+          <span>DERİNLİK</span>
+          <span class="filter-val accent">{{ disasterStore.maxDepth === null ? 'TÜMÜ' : `≤${disasterStore.maxDepth} km` }}</span>
+        </div>
+        <input
+          type="range"
+          min="0" max="700" step="25"
+          :value="disasterStore.maxDepth === null ? 700 : disasterStore.maxDepth"
+          @input="disasterStore.maxDepth = Number($event.target.value) >= 700 ? null : Number($event.target.value)"
+          class="filter-range"
+        />
+        <div class="filter-ends"><span>0 km</span><span>25+ km</span></div>
       </div>
     </div>
 
@@ -488,7 +521,7 @@ watch([rangeStartDate, rangeEndDate], ([start, end]) => {
 
       <button
         class="btn btn-ghost sidebar-action-btn"
-        @click="disasterStore.fetchAll()"
+        @click="disasterStore.refreshAll()"
         :disabled="disasterStore.isLoading"
       >
         🔄 {{ t('app.refreshAll') }}
@@ -513,7 +546,7 @@ watch([rangeStartDate, rangeEndDate], ([start, end]) => {
         {{ new Date(disasterStore.lastUpdated).toLocaleTimeString('tr-TR') }}
       </span>
       <span class="footer-sources" :class="getSourceStatusClass(disasterStore.sourcesOnline)">
-        {{ disasterStore.sourcesOnline }}/5 {{ t('stats.sourcesOnline') }}
+        {{ disasterStore.sourcesOnline }}/10 {{ t('stats.sourcesOnline') }}
       </span>
     </div>
   </aside>
@@ -741,6 +774,50 @@ watch([rangeStartDate, rangeEndDate], ([start, end]) => {
 .severity-dot.minimal {
   background: var(--color-minimal);
   color: var(--color-minimal);
+}
+
+.filter-sliders {
+  gap: 12px;
+}
+
+.filter-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.filter-label {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--color-text-muted);
+}
+
+.filter-val {
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-size: 0.75rem;
+}
+
+.filter-val.accent {
+  color: var(--color-accent);
+}
+
+.filter-range {
+  width: 100%;
+  accent-color: var(--color-accent);
+  cursor: pointer;
+}
+
+.filter-ends {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.6rem;
+  color: var(--color-text-muted);
 }
 
 .time-range-list {

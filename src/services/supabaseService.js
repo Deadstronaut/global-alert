@@ -4,6 +4,7 @@
  */
 
 import {createClient} from '@supabase/supabase-js';
+import {createDisasterEvent} from './adapters/DisasterEvent.js';
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
@@ -84,14 +85,17 @@ export async function fetchAllDisasters() {
     const results = await Promise.allSettled(
         Object.entries(VIEW_MAP).map(async ([viewName, type]) => {
             const rows = await fetchAllFromView(viewName);
-            return rows.map((row) => ({
-                ...row,
-                type,
-                // Normalize field names to match WebSocket event format
-                sourceUrl: row.source_url ?? row.sourceUrl,
-                receivedAt: row.received_at ?? row.receivedAt,
-                extra: typeof row.extra === 'string' ? JSON.parse(row.extra || '{}') : (row.extra ?? {}),
-            }));
+            return rows.map((row) => {
+                const normalized = {
+                    ...row,
+                    type,
+                    // Normalize field names to match WebSocket event format
+                    sourceUrl: row.source_url ?? row.sourceUrl,
+                    receivedAt: row.received_at ?? row.receivedAt,
+                    extra: typeof row.extra === 'string' ? JSON.parse(row.extra || '{}') : (row.extra ?? {}),
+                };
+                return createDisasterEvent(normalized);
+            });
         }),
     );
 

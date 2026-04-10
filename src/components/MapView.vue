@@ -4,7 +4,7 @@ import { useDisasterStore } from '@/stores/disaster.js'
 import { useUIStore } from '@/stores/ui.js'
 import { useGeolocationStore } from '@/stores/geolocation.js'
 import { useI18n } from 'vue-i18n'
-import { getSeverityHex } from '@/services/adapters/DisasterEvent.js'
+import { getSeverityHex, getDisasterIcon } from '@/services/adapters/DisasterEvent.js'
 import { latLngToCell, cellToBoundary, gridDisk, polygonToCells, cellToParent } from 'h3-js'
 import { feature } from 'topojson-client'
 import landTopo from 'world-atlas/land-110m.json'
@@ -27,6 +27,30 @@ const styleCache = {}
 const mapStyleIndex = ref(0)
 const currentZoom = ref(3)
 
+const currentHexRes = computed(() => {
+  const z = currentZoom.value
+  if (z < 3.5) return 2
+  if (z < 5.5) return 3
+  if (z < 7.5) return 4
+  if (z < 9.5) return 5
+  if (z < 11.5) return 6
+  return 7
+})
+
+watch(currentHexRes, () => {
+  if (mapLoaded) updateHexbins()
+})
+
+watch(
+  () => currentZoom.value,
+  (newZoom, oldZoom) => {
+    // Only re-run marker update if crossing the threshold (8)
+    if ((oldZoom < 8 && newZoom >= 8) || (oldZoom >= 8 && newZoom < 8)) {
+      updateMarkers()
+    }
+  },
+)
+
 // ── Hex heatmap helpers ──────────────────────────────────────────────────────
 
 /** Returns true if a polygon ring crosses the antimeridian — causes MapLibre artifact lines. */
@@ -38,7 +62,7 @@ function crossesAntimeridian(ring) {
 }
 
 // ── Land cell sets (computed once) ───────────────────────────────────────────
-let landCellsRes3 = null   // Set of H3 res3 cells covering land
+let landCellsRes3 = null // Set of H3 res3 cells covering land
 let worldHexBgCache = null // GeoJSON FeatureCollection for bg grid
 
 /** Build Set of all H3 res3 cells that cover land using world-atlas TopoJSON. */
@@ -49,9 +73,10 @@ function getLandCells() {
   for (const f of landGeo.features) {
     const geom = f.geometry
     // MultiPolygon: iterate each sub-polygon separately (polygonToCells only accepts Polygon)
-    const polygonList = geom.type === 'MultiPolygon'
-      ? geom.coordinates.map(coords => ({ type: 'Polygon', coordinates: coords }))
-      : [{ type: 'Polygon', coordinates: geom.coordinates }]
+    const polygonList =
+      geom.type === 'MultiPolygon'
+        ? geom.coordinates.map((coords) => ({ type: 'Polygon', coordinates: coords }))
+        : [{ type: 'Polygon', coordinates: geom.coordinates }]
     for (const poly of polygonList) {
       try {
         // containmentMode 2 = overlapping: include cells that partially overlap land (better coastal coverage)
@@ -87,7 +112,11 @@ function buildWorldHexGrid() {
     const ring = boundary.map(([lat, lng]) => [lng, lat])
     ring.push(ring[0])
     if (crossesAntimeridian(ring)) continue
-    features.push({ type: 'Feature', geometry: { type: 'Polygon', coordinates: [ring] }, properties: {} })
+    features.push({
+      type: 'Feature',
+      geometry: { type: 'Polygon', coordinates: [ring] },
+      properties: {},
+    })
   }
   worldHexBgCache = { type: 'FeatureCollection', features }
   return worldHexBgCache
@@ -109,11 +138,11 @@ function lerpRgb(a, b, t) {
  */
 function intensityToHex(intensity) {
   const stops = [
-    [0.0, [144, 164, 174]],  // gray-blue (minimal)
-    [0.3, [0, 230, 118]],    // green
-    [0.55, [255, 214, 0]],   // yellow
-    [0.75, [255, 145, 0]],   // orange
-    [1.0, [255, 23, 68]],    // red (critical)
+    [0.0, [144, 164, 174]], // gray-blue (minimal)
+    [0.3, [0, 230, 118]], // green
+    [0.55, [255, 214, 0]], // yellow
+    [0.75, [255, 145, 0]], // orange
+    [1.0, [255, 23, 68]], // red (critical)
   ]
   for (let i = 0; i < stops.length - 1; i++) {
     const [t0, c0] = stops[i]
@@ -121,7 +150,7 @@ function intensityToHex(intensity) {
     if (intensity <= t1) {
       const t = (intensity - t0) / (t1 - t0)
       const [r, g, b] = lerpRgb(c0, c1, t)
-      return `#${r.toString(16).padStart(2,'0')}${g.toString(16).padStart(2,'0')}${b.toString(16).padStart(2,'0')}`
+      return `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`
     }
   }
   return '#ff1744'
@@ -176,12 +205,22 @@ function addBuildings3D() {
       minzoom: 15,
       paint: {
         'fill-extrusion-color': '#c8d0da',
-        'fill-extrusion-height': ['interpolate', ['linear'], ['zoom'], 15, 0, 16, ['coalesce', ['get', 'render_height'], ['get', 'height'], 5]],
+        'fill-extrusion-height': [
+          'interpolate',
+          ['linear'],
+          ['zoom'],
+          15,
+          0,
+          16,
+          ['coalesce', ['get', 'render_height'], ['get', 'height'], 5],
+        ],
         'fill-extrusion-base': ['coalesce', ['get', 'render_min_height'], ['get', 'min_height'], 0],
         'fill-extrusion-opacity': 0.8,
       },
     })
-  } catch { /* source may not exist in satellite mode */ }
+  } catch {
+    /* source may not exist in satellite mode */
+  }
 }
 
 /**
@@ -195,7 +234,7 @@ function firstSymbolLayerId() {
 
 /** In dark mode, boost all label text to near-white so they're readable over hex fills. */
 function brightenDarkLabels() {
-  if (mapStyleIndex.value !== 0) return  // only dark style (index 0)
+  if (mapStyleIndex.value !== 0) return // only dark style (index 0)
   const layers = map.getStyle()?.layers ?? []
   for (const layer of layers) {
     if (layer.type !== 'symbol') continue
@@ -203,7 +242,9 @@ function brightenDarkLabels() {
       map.setPaintProperty(layer.id, 'text-color', '#e8ecf0')
       map.setPaintProperty(layer.id, 'text-halo-color', 'rgba(0,0,0,0.6)')
       map.setPaintProperty(layer.id, 'text-halo-width', 1.2)
-    } catch { /* layer may not support these properties */ }
+    } catch {
+      /* layer may not support these properties */
+    }
   }
 }
 
@@ -228,70 +269,83 @@ function addSourcesAndLayers() {
 
   // Background world grid — faint strokes only, adapts to map style
   const isLight = mapStyleIndex.value === 2
-  map.addLayer({
-    id: 'hex-bg-stroke',
-    type: 'line',
-    source: 'hex-world-bg',
-    paint: {
-      'line-color': isLight ? 'rgba(30,30,30,0.18)' : 'rgba(255,255,255,0.18)',
-      'line-width': 0.5,
+  map.addLayer(
+    {
+      id: 'hex-bg-stroke',
+      type: 'line',
+      source: 'hex-world-bg',
+      paint: {
+        'line-color': isLight ? 'rgba(30,30,30,0.18)' : 'rgba(255,255,255,0.18)',
+        'line-width': 0.5,
+        'line-opacity': ['interpolate', ['linear'], ['zoom'], 3.5, 1.0, 5.5, 0.0],
+      },
+      layout: { visibility: 'none' },
     },
-    layout: { visibility: 'none' },
-  }, before)
+    before,
+  )
 
   // Disaster heatmap fill — below labels
-  map.addLayer({
-    id: 'hex-fill',
-    type: 'fill',
-    source: 'disaster-hex',
-    paint: {
-      'fill-color': ['get', 'color'],
-      'fill-opacity': ['get', 'opacity'],
+  map.addLayer(
+    {
+      id: 'hex-fill',
+      type: 'fill',
+      source: 'disaster-hex',
+      paint: {
+        'fill-color': ['get', 'color'],
+        'fill-opacity': ['get', 'opacity'],
+      },
+      layout: { visibility: 'none' },
     },
-    layout: { visibility: 'none' },
-  }, before)
+    before,
+  )
 
-  map.addLayer({
-    id: 'hex-stroke',
-    type: 'line',
-    source: 'disaster-hex',
-    paint: {
-      'line-color': ['get', 'color'],
-      'line-width': 1,
-      'line-opacity': 0.7,
+  map.addLayer(
+    {
+      id: 'hex-stroke',
+      type: 'line',
+      source: 'disaster-hex',
+      paint: {
+        'line-color': ['get', 'color'],
+        'line-width': 1,
+        'line-opacity': 0.7,
+      },
+      layout: { visibility: 'none' },
     },
-    layout: { visibility: 'none' },
-  }, before)
+    before,
+  )
 
-  map.addLayer({
-    id: 'heat-layer',
-    type: 'heatmap',
-    source: 'disaster-heat',
-    paint: {
-      'heatmap-weight': ['get', 'weight'],
-      'heatmap-radius': 50,
-      'heatmap-intensity': 1,
-      'heatmap-color': [
-        'interpolate',
-        ['linear'],
-        ['heatmap-density'],
-        0,
-        'rgba(0,0,0,0)',
-        0.2,
-        '#90a4ae',
-        0.4,
-        '#00e676',
-        0.6,
-        '#ffd600',
-        0.8,
-        '#ff9100',
-        1.0,
-        '#ff1744',
-      ],
-      'heatmap-opacity': 0.8,
+  map.addLayer(
+    {
+      id: 'heat-layer',
+      type: 'heatmap',
+      source: 'disaster-heat',
+      paint: {
+        'heatmap-weight': ['get', 'weight'],
+        'heatmap-radius': ['interpolate', ['linear'], ['zoom'], 0, 15, 9, 60],
+        'heatmap-intensity': ['interpolate', ['linear'], ['zoom'], 0, 1, 9, 3],
+        'heatmap-color': [
+          'interpolate',
+          ['linear'],
+          ['heatmap-density'],
+          0,
+          'rgba(0,0,0,0)',
+          0.2,
+          '#90a4ae',
+          0.4,
+          '#00e676',
+          0.6,
+          '#ffd600',
+          0.8,
+          '#ff9100',
+          1.0,
+          '#ff1744',
+        ],
+        'heatmap-opacity': 0.8,
+      },
+      layout: { visibility: 'none' },
     },
-    layout: { visibility: 'none' },
-  }, before)
+    before,
+  )
 
   addBuildings3D()
 }
@@ -362,7 +416,9 @@ function updateMarkers() {
   if (!map || !mapLoaded) return
   clearMarkers()
 
-  if (uiStore.showHeatmap || uiStore.showHexbins) return
+  // Hide markers if aggregated views are on AND we are zoomed out.
+  // Show them if zoomed in (>= 8) for detail view.
+  if ((uiStore.showHeatmap || uiStore.showHexbins) && currentZoom.value < 8) return
 
   disasterStore.allEvents.forEach((event) => {
     const color = getSeverityHex(event.severity)
@@ -372,7 +428,7 @@ function updateMarkers() {
     el.className = `disaster-marker${isPulse ? ' marker-pulse' : ''}`
     el.innerHTML = `
       <div class="marker-dot" style="background:${color};box-shadow:0 0 10px ${color};">
-        <span class="marker-icon">${event.icon}</span>
+        <span class="marker-icon">${event.icon || getDisasterIcon(event.type)}</span>
       </div>
     `
 
@@ -439,11 +495,14 @@ function updateHexbins() {
   // ── 2. Build intensity map with spreading (gridDisk) ─────────────────────
   // Land cell set must be ready — build it (blocks briefly once) then re-run
   if (!landCellsRes3) {
-    setTimeout(() => { getLandCells(); updateHexbins() }, 0)
+    setTimeout(() => {
+      getLandCells()
+      updateHexbins()
+    }, 0)
     return
   }
 
-  const HEX_RES = 4
+  const HEX_RES = currentHexRes.value
   const severityWeight = { critical: 1.0, high: 0.75, moderate: 0.5, low: 0.25, minimal: 0.1 }
   const intensityMap = {}
 
@@ -455,7 +514,7 @@ function updateHexbins() {
     const decay = [1.0, 0.5, 0.2]
     for (let ring = 0; ring <= 2; ring++) {
       const inner = ring > 0 ? new Set(gridDisk(center, ring - 1)) : null
-      for (const neighbor of gridDisk(center, ring).filter(c => !inner || !inner.has(c))) {
+      for (const neighbor of gridDisk(center, ring).filter((c) => !inner || !inner.has(c))) {
         intensityMap[neighbor] = Math.min(1.0, (intensityMap[neighbor] ?? 0) + weight * decay[ring])
       }
     }
@@ -466,18 +525,27 @@ function updateHexbins() {
     const boundary = cellToBoundary(h3Index)
     const ring = boundary.map(([lat, lng]) => [lng, lat])
     ring.push(ring[0])
-    if (crossesAntimeridian(ring)) return []  // skip antimeridian artifact cells
-    return [{
-      type: 'Feature',
-      geometry: { type: 'Polygon', coordinates: [ring] },
-      properties: {
-        color: intensityToHex(intensity),
-        opacity: Math.min(0.55, 0.12 + intensity * 0.43),
-        intensity,
-        count: 1,
-        maxSeverity: intensity >= 0.75 ? 'critical' : intensity >= 0.5 ? 'high' : intensity >= 0.3 ? 'moderate' : 'low',
+    if (crossesAntimeridian(ring)) return [] // skip antimeridian artifact cells
+    return [
+      {
+        type: 'Feature',
+        geometry: { type: 'Polygon', coordinates: [ring] },
+        properties: {
+          color: intensityToHex(intensity),
+          opacity: Math.min(0.55, 0.12 + intensity * 0.43),
+          intensity,
+          count: 1,
+          maxSeverity:
+            intensity >= 0.75
+              ? 'critical'
+              : intensity >= 0.5
+                ? 'high'
+                : intensity >= 0.3
+                  ? 'moderate'
+                  : 'low',
+        },
       },
-    }]
+    ]
   })
 
   map.getSource('disaster-hex').setData({ type: 'FeatureCollection', features })
@@ -648,7 +716,11 @@ onBeforeUnmount(() => {
     <div class="zoom-indicator">x {{ currentZoom }}</div>
 
     <!-- Heatmap legend -->
-    <div v-if="uiStore.showHeatmap" class="map-legend" :class="{ 'legend-sidebar-collapsed': uiStore.sidebarCollapsed }">
+    <div
+      v-if="uiStore.showHeatmap"
+      class="map-legend"
+      :class="{ 'legend-sidebar-collapsed': uiStore.sidebarCollapsed }"
+    >
       <div class="legend-title">Yoğunluk</div>
       <div class="legend-gradient heat-gradient"></div>
       <div class="legend-labels">
@@ -658,20 +730,39 @@ onBeforeUnmount(() => {
     </div>
 
     <!-- Hexbin / marker severity legend -->
-    <div v-else-if="uiStore.showHexbins || (!uiStore.showHeatmap && !uiStore.showHexbins)" class="map-legend" :class="{ 'legend-sidebar-collapsed': uiStore.sidebarCollapsed }">
+    <div
+      v-else-if="uiStore.showHexbins || (!uiStore.showHeatmap && !uiStore.showHexbins)"
+      class="map-legend"
+      :class="{ 'legend-sidebar-collapsed': uiStore.sidebarCollapsed }"
+    >
       <div class="legend-title">Şiddet</div>
       <div class="legend-severity-rows">
-        <div class="sev-row"><span class="sev-dot" style="background:#4ade80"></span><span>Minimal</span></div>
-        <div class="sev-row"><span class="sev-dot" style="background:#fbbf24"></span><span>Düşük</span></div>
-        <div class="sev-row"><span class="sev-dot" style="background:#f97316"></span><span>Orta</span></div>
-        <div class="sev-row"><span class="sev-dot" style="background:#ef4444"></span><span>Yüksek</span></div>
-        <div class="sev-row"><span class="sev-dot" style="background:#7c3aed"></span><span>Kritik</span></div>
+        <div class="sev-row">
+          <span class="sev-dot" style="background: #4ade80"></span><span>Minimal</span>
+        </div>
+        <div class="sev-row">
+          <span class="sev-dot" style="background: #fbbf24"></span><span>Düşük</span>
+        </div>
+        <div class="sev-row">
+          <span class="sev-dot" style="background: #f97316"></span><span>Orta</span>
+        </div>
+        <div class="sev-row">
+          <span class="sev-dot" style="background: #ef4444"></span><span>Yüksek</span>
+        </div>
+        <div class="sev-row">
+          <span class="sev-dot" style="background: #7c3aed"></span><span>Kritik</span>
+        </div>
       </div>
     </div>
 
     <div class="layer-switcher" @click="cycleMapStyle">
-      <div class="layer-preview" :class="MAP_STYLES[(mapStyleIndex + 1) % MAP_STYLES.length].preview">
-        <span class="layer-label">{{ MAP_STYLES[(mapStyleIndex + 1) % MAP_STYLES.length].label }}</span>
+      <div
+        class="layer-preview"
+        :class="MAP_STYLES[(mapStyleIndex + 1) % MAP_STYLES.length].preview"
+      >
+        <span class="layer-label">{{
+          MAP_STYLES[(mapStyleIndex + 1) % MAP_STYLES.length].label
+        }}</span>
       </div>
     </div>
   </div>

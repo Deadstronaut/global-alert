@@ -2,6 +2,7 @@
  * Offline Cache Service
  * Persists last disaster events to localStorage for offline access.
  */
+import {createDisasterEvent} from './adapters/DisasterEvent.js';
 
 const CACHE_PREFIX = 'gews_cache_';
 const MAX_EVENTS_PER_TYPE = 50;
@@ -34,7 +35,7 @@ export function loadCachedEvents(type) {
         if (!raw) return {events: [], cachedAt: null};
         const data = JSON.parse(raw);
         return {
-            events: data.events || [],
+            events: (data.events || []).map(e => createDisasterEvent(e)),
             cachedAt: data.cachedAt || null
         };
     } catch (error) {

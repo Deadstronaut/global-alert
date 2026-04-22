@@ -1,6 +1,7 @@
 /**
- * Supabase Service - Frontend Supabase client and data fetching from views
- * Date-based filtering is handled on the frontend; views return all records.
+ * Supabase Service
+ * - İlk yükleme: son 24 saat, tip başına limitli
+ * - Canlı güncellemeler: Realtime INSERT subscription
  */
 
 import {createClient} from '@supabase/supabase-js';
@@ -11,134 +12,118 @@ const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
 let _client = null;
 
-function getClient() {
+export function getClient() {
     if (!_client) {
         if (!supabaseUrl || !supabaseKey) {
-            console.warn('[SupabaseService] Missing VITE_SUPABASE_URL or VITE_SUPABASE_ANON_KEY');
+            console.warn('[Supabase] VITE_SUPABASE_URL veya VITE_SUPABASE_ANON_KEY eksik');
             return null;
         }
         _client = createClient(supabaseUrl, supabaseKey);
+        console.log('[Supabase] ✅ Client initialized');
     }
     return _client;
 }
 
-// View name → disaster event type mapping
-const VIEW_MAP = {
-    earthquake_view: 'earthquake',
-    wildfire_view: 'wildfire',
-    flood_view: 'flood',
-    drought_view: 'drought',
-    food_security_view: 'food_security',
-    tsunami_view: 'tsunami',
-    cyclone_view: 'cyclone',
-    volcano_view: 'volcano',
-    epidemic_view: 'epidemic',
+// Tablo adı → disaster event type
+const TABLE_MAP = {
+    earthquake:    'earthquake',
+    wildfire:      'wildfire',
+    flood:         'flood',
+    drought:       'drought',
+    food_security: 'food_security',
+    tsunami:       'tsunami',
+    cyclone:       'cyclone',
+    volcano:       'volcano',
+    epidemic:      'epidemic',
 };
 
-/**
- * Fetch data from a single view. Supabase REST API returns max 1000 rows per
- * request by default; we use `range` headers to paginate all rows.
- * @param {string} viewName
- * @param {number} [pageSize=1000]
- * @returns {Promise<Array>}
- */
-async function fetchAllFromView(viewName, pageSize = 1000) {
-    const client = getClient();
-    if (!client) return [];
+// Tip başına fetch limiti
+const FETCH_LIMIT = {
+    earthquake:    500,
+    wildfire:      300,
+    flood:         200,
+    drought:       150,
+    food_security: 150,
+    tsunami:       100,
+    cyclone:       100,
+    volcano:       100,
+    epidemic:      100,
+};
 
-    let all = [];
-    let from = 0;
-
-    while (true) {
-        const {data, error} = await client
-            .from(viewName)
-            .select('*')
-            .range(from, from + pageSize - 1);
-
-        if (error) {
-            console.warn(`[SupabaseService] Error fetching ${viewName}:`, error.message);
-            break;
-        }
-
-        if (!data || data.length === 0) break;
-
-        all = all.concat(data);
-
-        // If returned rows are less than page size, we've reached the end
-        if (data.length < pageSize) break;
-
-        from += pageSize;
-    }
-
-    return all;
+function rowToEvent(row, type) {
+    return createDisasterEvent({
+        ...row,
+        type,
+        sourceUrl:  row.source_url  ?? row.sourceUrl  ?? '',
+        receivedAt: row.received_at ?? row.receivedAt ?? new Date().toISOString(),
+        extra: typeof row.extra === 'string'
+            ? JSON.parse(row.extra || '{}')
+            : (row.extra ?? {}),
+    });
 }
 
 /**
- * Fetch all disaster events from all views in parallel.
- * Returns a flat array of events with `type` field set.
- * @returns {Promise<Array>}
+ * Son `hours` saatin verilerini tüm tablolardan paralel çeker.
  */
-export async function fetchAllDisasters() {
+export async function fetchRecentDisasters(hours = 24) {
     const client = getClient();
     if (!client) return [];
 
-    const results = await Promise.allSettled(
-        Object.entries(VIEW_MAP).map(async ([viewName, type]) => {
-            const rows = await fetchAllFromView(viewName);
-            return rows.map((row) => {
-                const normalized = {
-                    ...row,
-                    type,
-                    // Normalize field names to match WebSocket event format
-                    sourceUrl: row.source_url ?? row.sourceUrl,
-                    receivedAt: row.received_at ?? row.receivedAt,
-                    extra: typeof row.extra === 'string' ? JSON.parse(row.extra || '{}') : (row.extra ?? {}),
-                };
-                return createDisasterEvent(normalized);
-            });
-        }),
-    );
-
-    const events = [];
-    for (const result of results) {
-        if (result.status === 'fulfilled') {
-            events.push(...result.value);
-        }
-    }
-
-    return events;
-}
-
-/**
- * Fetch row counts per disaster type (for badge display).
- * Uses COUNT aggregation via views.
- * @returns {Promise<Record<string, number>>}
- */
-export async function fetchDisasterCounts() {
-    const client = getClient();
-    if (!client) return {};
-
-    const counts = {};
+    const since = new Date(Date.now() - hours * 60 * 60 * 1000).toISOString();
 
     const results = await Promise.allSettled(
-        Object.entries(VIEW_MAP).map(async ([viewName, type]) => {
-            const {count, error} = await client
-                .from(viewName)
-                .select('*', {count: 'exact', head: true});
+        Object.entries(TABLE_MAP).map(async ([table, type]) => {
+            const {data, error} = await client
+                .from(table)
+                .select('id,type,lat,lng,severity,magnitude,depth,title,description,time,source,source_url,extra,received_at')
+                .gte('time', since)
+                .order('time', {ascending: false})
+                .limit(FETCH_LIMIT[table] ?? 200);
 
             if (error) {
-                console.warn(`[SupabaseService] Count error (${viewName}):`, error.message);
-                return {type, count: 0};
+                console.warn(`[Supabase] ${table} fetch error:`, error.message);
+                return [];
             }
-            return {type, count: count ?? 0};
+            return (data ?? []).map(row => rowToEvent(row, type));
         }),
     );
 
-    for (const result of results) {
-        if (result.status === 'fulfilled') {
-            counts[result.value.type] = result.value.count;
-        }
-    }
+    return results
+        .filter(r => r.status === 'fulfilled')
+        .flatMap(r => r.value);
+}
 
-    return counts;
+/**
+ * Tüm tablolara Realtime INSERT subscription kurar.
+ * @param {Function} onEvent - (DisasterEvent) => void
+ * @returns {Function} unsubscribe()
+ */
+export function subscribeRealtime(onEvent) {
+    const client = getClient();
+    if (!client) return () => {};
+
+    const channels = Object.entries(TABLE_MAP).map(([table, type]) => {
+        return client
+            .channel(`realtime:${table}`)
+            .on(
+                'postgres_changes',
+                {event: 'INSERT', schema: 'public', table},
+                (payload) => {
+                    try {
+                        const event = rowToEvent(payload.new, type);
+                        onEvent(event);
+                    } catch (err) {
+                        console.warn(`[Realtime] ${table} parse error:`, err.message);
+                    }
+                },
+            )
+            .subscribe();
+    });
+
+    console.log(`[Realtime] ✅ Subscribed to ${channels.length} tables`);
+
+    return () => {
+        channels.forEach(ch => client.removeChannel(ch));
+        console.log('[Realtime] Unsubscribed');
+    };
 }

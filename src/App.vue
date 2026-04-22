@@ -10,17 +10,18 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { computed, onMounted } from 'vue'
 import { RouterView } from 'vue-router'
 import LoadingScreen from '@/components/LoadingScreen.vue'
+import { useDisasterStore } from '@/stores/disaster.js'
 
-const isLoading = ref(true)
+const disasterStore = useDisasterStore()
+
+// Loading: sadece store gerçekten yükleniyor ve cache yoksa göster
+const isLoading = computed(() => disasterStore.isLoading)
 
 onMounted(() => {
-  // Show loading screen for minimum 2.5 seconds for data to load
-  setTimeout(() => {
-    isLoading.value = false
-  }, 2500)
+  disasterStore.startWebSocket()
 })
 </script>
 

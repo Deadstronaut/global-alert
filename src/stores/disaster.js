@@ -6,9 +6,8 @@
 
 import {defineStore} from 'pinia';
 import {ref, computed} from 'vue';
-import {wsClient} from '@/services/websocket/wsClient.js';
-import {cacheEvents, loadAllCachedData} from '@/services/offlineCache.js';
-import {fetchAllDisasters, fetchDisasterCounts} from '@/services/supabaseService.js';
+import {fetchRecentDisasters, subscribeRealtime} from '@/services/supabaseService.js';
+import {readAllFromCache, writeToCache, getLastFetchAt, setLastFetchAt} from '@/services/idbCache.js';
 
 // Afet tipine göre maksimum tutulacak olay sayısı (bellek yönetimi)
 const MAX_EVENTS = {
@@ -108,18 +107,25 @@ export const useDisasterStore = defineStore('disaster', () => {
     return filtered.filter(e => new Date(e.time).getTime() >= cutoff);
   });
 
-  const totalCount = computed(() => ({
-    earthquake: earthquakes.value.length,
-    wildfire: wildfires.value.length,
-    flood: floods.value.length,
-    drought: droughts.value.length,
-    food_security: foodSecurity.value.length,
-    tsunami: tsunamis.value.length,
-    cyclone: cyclones.value.length,
-    volcano: volcanoes.value.length,
-    epidemic: epidemics.value.length,
-    total: allEvents.value.length,
-  }));
+  const totalCount = computed(() => {
+    const counts = {};
+    const from = startDate.value ? new Date(startDate.value).getTime() : 0;
+    const to = endDate.value ? new Date(endDate.value).getTime() : Infinity;
+    const cutoff = Date.now() - selectedTimeRange.value * 60 * 60 * 1000;
+    const useDateRange = startDate.value || endDate.value;
+
+    for (const [key, store] of Object.entries(storeMap.value)) {
+      if (key === 'disaster') continue;
+
+      counts[key] = store.value.filter(e => {
+        const t = new Date(e.time).getTime();
+        return useDateRange ? (t >= from && t <= to) : (t >= cutoff);
+      }).length;
+    }
+
+    counts.total = allEvents.value.length;
+    return counts;
+  });
 
   const criticalEvents = computed(() =>
     allEvents.value.filter(e => e.severity === 'critical' || e.severity === 'high')
@@ -151,7 +157,7 @@ export const useDisasterStore = defineStore('disaster', () => {
     lastUpdated.value = new Date().toISOString();
 
     if (event.type === 'earthquake') {
-      cacheEvents('earthquake', earthquakes.value.slice(0, 50));
+      writeToCache('earthquake', earthquakes.value.slice(0, 50));
     }
   }
 
@@ -193,72 +199,91 @@ export const useDisasterStore = defineStore('disaster', () => {
   }
 
   // ─────────────────────────────────────────
+  // Auto Toggle Empty Layers
+  // ─────────────────────────────────────────
+  function autoToggleEmptyLayers() {
+    const s = new Set();
+    const counts = totalCount.value;
+
+    for (const [key, count] of Object.entries(counts)) {
+      if (key !== 'total' && count > 0) {
+        s.add(key);
+      }
+    }
+
+    activeLayers.value = s;
+  }
+
+  // ─────────────────────────────────────────
   // Supabase counts (for badge display)
   // ─────────────────────────────────────────
   const supabaseCounts = ref({});
   const supabaseLoading = ref(false);
+  let _realtimeUnsub = null;
 
-  /**
-   * Load all historical events from Supabase views on startup.
-   * Runs in parallel with WebSocket connection.
-   */
-  async function loadFromSupabase() {
+  async function loadFromSupabase(forceFullFetch = false) {
     supabaseLoading.value = true;
     try {
-      // Load counts first (fast, HEAD request)
-      const counts = await fetchDisasterCounts();
-      supabaseCounts.value = counts;
+      let hoursAgo = selectedTimeRange.value;
 
-      // Then load all events (paginated)
-      const events = await fetchAllDisasters();
+      if (!forceFullFetch) {
+        const lastAt = await getLastFetchAt('_all');
+        if (lastAt) {
+          const deltaHours = (Date.now() - new Date(lastAt).getTime()) / 3_600_000 + 0.1;
+          hoursAgo = Math.min(selectedTimeRange.value, deltaHours);
+        }
+      }
+
+      const events = await fetchRecentDisasters(hoursAgo);
       if (events.length > 0) {
         loadBatch(events);
+        // Tipe göre grupla ve IDB'ye yaz
+        const groups = {};
+        for (const e of events) {
+          if (!groups[e.type]) groups[e.type] = [];
+          groups[e.type].push(e);
+        }
+        for (const [type, typeEvents] of Object.entries(groups)) {
+          writeToCache(type, typeEvents);
+        }
+        console.log(`[Supabase] ${events.length} yeni event (son ${hoursAgo.toFixed(1)}h)`);
       }
+      await setLastFetchAt('_all', new Date().toISOString());
     } catch (err) {
-      console.warn('[DisasterStore] Supabase initial load failed:', err.message);
+      console.warn('[Store] Supabase load failed:', err.message);
     } finally {
       supabaseLoading.value = false;
+      autoToggleEmptyLayers();
     }
   }
 
-  // ─────────────────────────────────────────
-  // WebSocket
-  // ─────────────────────────────────────────
-  function startWebSocket() {
-    loadFromCache();
-    loadFromSupabase(); // Load historical data from Supabase in parallel
-
-    wsClient.on('connected', () => {
-      isConnected.value = true;
-      isLoading.value = false;
-      errors.value = [];
-    });
-
-    wsClient.on('disconnected', () => {
-      isConnected.value = false;
-    });
-
-    wsClient.on('event', (event) => {
+  function startRealtime() {
+    if (_realtimeUnsub) return;
+    _realtimeUnsub = subscribeRealtime((event) => {
       addEvent(event);
+      writeToCache(event.type, [event]);
     });
+    isConnected.value = true;
+  }
 
-    wsClient.on('batch', (events) => {
-      loadBatch(events);
-    });
+  // ─────────────────────────────────────────
+  // Başlatma
+  // ─────────────────────────────────────────
+  async function startWebSocket() {
+    // 1. IDB'den anında yükle (loading screen kalkar)
+    const hadCache = await loadFromCache();
+    if (!hadCache) isLoading.value = true;
 
-    wsClient.on('early_warning', (warning) => {
-      addEarlyWarning(warning);
-    });
+    // 2. Arka planda Supabase delta fetch
+    loadFromSupabase().finally(() => {isLoading.value = false;});
 
-    wsClient.on('sources_status', (status) => {
-      sourcesStatus.value = status;
-    });
-
-    wsClient.connect();
+    // 3. Realtime subscription
+    startRealtime();
   }
 
   function stopWebSocket() {
-    wsClient.disconnect();
+    _realtimeUnsub?.();
+    _realtimeUnsub = null;
     isConnected.value = false;
   }
 
@@ -293,13 +318,25 @@ export const useDisasterStore = defineStore('disaster', () => {
     return activeSeverities.value.has(severity);
   }
 
-  function loadFromCache() {
-    const cached = loadAllCachedData();
-    if (cached.earthquakes?.length) earthquakes.value = cached.earthquakes;
-    if (cached.wildfires?.length) wildfires.value = cached.wildfires;
-    if (cached.floods?.length) floods.value = cached.floods;
-    if (cached.droughts?.length) droughts.value = cached.droughts;
-    if (cached.foodSecurity?.length) foodSecurity.value = cached.foodSecurity;
+  async function loadFromCache() {
+    try {
+      const cached = await readAllFromCache();
+      let total = 0;
+      for (const [type, events] of Object.entries(cached)) {
+        if (!events.length) continue;
+        const store = storeMap.value[type];
+        if (store) {store.value = events; total += events.length;}
+      }
+      if (total > 0) {
+        isLoading.value = false;
+        lastUpdated.value = new Date().toISOString();
+        console.log(`[Cache] IDB'den ${total} event yüklendi`);
+      }
+      return total > 0;
+    } catch (err) {
+      console.warn('[Cache] IDB okuma hatası:', err.message);
+      return false;
+    }
   }
 
   // Geriye uyumluluk - eski polling imzaları
@@ -324,6 +361,6 @@ export const useDisasterStore = defineStore('disaster', () => {
     toggleLayer, isLayerActive,
     toggleSeverity, isSeverityActive,
     loadFromCache, loadFromSupabase,
-    refreshAll: () => wsClient.send({type: 'refresh'}),
+    refreshAll: (force = true) => loadFromSupabase(force),
   };
 });

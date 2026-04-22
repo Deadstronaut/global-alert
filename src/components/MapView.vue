@@ -5,7 +5,8 @@ import { useUIStore } from '@/stores/ui.js'
 import { useGeolocationStore } from '@/stores/geolocation.js'
 import { useI18n } from 'vue-i18n'
 import { getSeverityHex, getDisasterIcon } from '@/services/adapters/DisasterEvent.js'
-import { latLngToCell, cellToBoundary, gridDisk, polygonToCells, cellToParent } from 'h3-js'
+import { cellToBoundary, polygonToCells } from 'h3-js'
+import HexWorker from '@/workers/hexWorker.js?worker'
 import { feature } from 'topojson-client'
 import landTopo from 'world-atlas/land-110m.json'
 import maplibregl from 'maplibre-gl'
@@ -23,6 +24,8 @@ let styleLoadVersion = 0
 let markerObjects = []
 let userMarkerObj = null
 const styleCache = {}
+let hexWorker = null
+let hexWorkerBusy = false
 // 0 = Açık (liberty), 1 = Koyu (dark), 2 = Uydu
 const mapStyleIndex = ref(0)
 const currentZoom = ref(3)
@@ -92,14 +95,6 @@ function getLandCells() {
 }
 
 /**
- * Returns true if an H3 res4 cell is approximately on land.
- * Uses the parent res3 cell as a fast approximation.
- */
-function isOnLand(cellRes4) {
-  return getLandCells().has(cellToParent(cellRes4, 3))
-}
-
-/**
  * Build background hex grid — only land cells at res3.
  * Uses polygonToCells so oceans are never included.
  */
@@ -120,40 +115,6 @@ function buildWorldHexGrid() {
   }
   worldHexBgCache = { type: 'FeatureCollection', features }
   return worldHexBgCache
-}
-
-/**
- * Interpolate between two RGB arrays by t ∈ [0,1]
- */
-function lerpRgb(a, b, t) {
-  return [
-    Math.round(a[0] + (b[0] - a[0]) * t),
-    Math.round(a[1] + (b[1] - a[1]) * t),
-    Math.round(a[2] + (b[2] - a[2]) * t),
-  ]
-}
-
-/**
- * Map intensity (0–1) to a hex color string using heatmap gradient.
- */
-function intensityToHex(intensity) {
-  const stops = [
-    [0.0, [144, 164, 174]], // gray-blue (minimal)
-    [0.3, [0, 230, 118]], // green
-    [0.55, [255, 214, 0]], // yellow
-    [0.75, [255, 145, 0]], // orange
-    [1.0, [255, 23, 68]], // red (critical)
-  ]
-  for (let i = 0; i < stops.length - 1; i++) {
-    const [t0, c0] = stops[i]
-    const [t1, c1] = stops[i + 1]
-    if (intensity <= t1) {
-      const t = (intensity - t0) / (t1 - t0)
-      const [r, g, b] = lerpRgb(c0, c1, t)
-      return `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`
-    }
-  }
-  return '#ff1744'
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -481,74 +442,38 @@ function updateHexbins() {
 
   if (!showHex) return
 
-  // ── 1. Background grid — only land cells at res3, built once ────────────
+  // ── 1. Background grid ────────────────────────────────────────────────────
   if (!worldHexBgCache) {
-    // Build off the hot path so UI doesn't freeze
-    setTimeout(() => {
-      if (!map) return
-      map.getSource('hex-world-bg')?.setData(buildWorldHexGrid())
-    }, 0)
+    setTimeout(() => { if (map) map.getSource('hex-world-bg')?.setData(buildWorldHexGrid()) }, 0)
   } else {
     map.getSource('hex-world-bg')?.setData(worldHexBgCache)
   }
 
-  // ── 2. Build intensity map with spreading (gridDisk) ─────────────────────
-  // Land cell set must be ready — build it (blocks briefly once) then re-run
-  if (!landCellsRes3) {
-    setTimeout(() => {
-      getLandCells()
-      updateHexbins()
-    }, 0)
-    return
-  }
+  // ── 2. Worker busy → skip (sonraki debounce çalışacak) ───────────────────
+  if (hexWorkerBusy) return
 
-  const HEX_RES = currentHexRes.value
-  const severityWeight = { critical: 1.0, high: 0.75, moderate: 0.5, low: 0.25, minimal: 0.1 }
-  const intensityMap = {}
-
-  for (const e of disasterStore.allEvents) {
-    const center = latLngToCell(e.lat, e.lng, HEX_RES)
-    const weight = severityWeight[e.severity] ?? 0.1
-
-    // Ring 0 = full weight, ring 1 = 50%, ring 2 = 20%
-    const decay = [1.0, 0.5, 0.2]
-    for (let ring = 0; ring <= 2; ring++) {
-      const inner = ring > 0 ? new Set(gridDisk(center, ring - 1)) : null
-      for (const neighbor of gridDisk(center, ring).filter((c) => !inner || !inner.has(c))) {
-        intensityMap[neighbor] = Math.min(1.0, (intensityMap[neighbor] ?? 0) + weight * decay[ring])
+  // ── 3. Worker yoksa yarat ─────────────────────────────────────────────────
+  if (!hexWorker) {
+    hexWorker = new HexWorker()
+    hexWorker.onmessage = ({ data }) => {
+      hexWorkerBusy = false
+      if (map && mapLoaded) {
+        map.getSource('disaster-hex')?.setData({
+          type: 'FeatureCollection',
+          features: data.features,
+        })
       }
     }
   }
 
-  // ── 3. Build GeoJSON features for colored cells ───────────────────────────
-  const features = Object.entries(intensityMap).flatMap(([h3Index, intensity]) => {
-    const boundary = cellToBoundary(h3Index)
-    const ring = boundary.map(([lat, lng]) => [lng, lat])
-    ring.push(ring[0])
-    if (crossesAntimeridian(ring)) return [] // skip antimeridian artifact cells
-    return [
-      {
-        type: 'Feature',
-        geometry: { type: 'Polygon', coordinates: [ring] },
-        properties: {
-          color: intensityToHex(intensity),
-          opacity: Math.min(0.55, 0.12 + intensity * 0.43),
-          intensity,
-          count: 1,
-          maxSeverity:
-            intensity >= 0.75
-              ? 'critical'
-              : intensity >= 0.5
-                ? 'high'
-                : intensity >= 0.3
-                  ? 'moderate'
-                  : 'low',
-        },
-      },
-    ]
+  // ── 4. Hesabı worker'a gönder ─────────────────────────────────────────────
+  hexWorkerBusy = true
+  hexWorker.postMessage({
+    events: disasterStore.allEvents.map(e => ({
+      lat: e.lat, lng: e.lng, severity: e.severity,
+    })),
+    resolution: currentHexRes.value,
   })
-
-  map.getSource('disaster-hex').setData({ type: 'FeatureCollection', features })
 }
 
 function updateUserMarker() {
@@ -637,12 +562,16 @@ watch(
   },
 )
 
+let _mapUpdateTimer = null
 watch(
   () => disasterStore.allEvents,
   () => {
-    updateMarkers()
-    updateHeatmap()
-    updateHexbins()
+    clearTimeout(_mapUpdateTimer)
+    _mapUpdateTimer = setTimeout(() => {
+      updateMarkers()
+      updateHeatmap()
+      updateHexbins()
+    }, 400)
   },
 )
 

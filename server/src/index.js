@@ -1,85 +1,64 @@
 /**
- * GEWS Aggregator - Global Early Warning System
- * Tüm kaynakları bağlar, normalize eder, WebSocket ile yayınlar
+ * GEWS Aggregator — Docker Container #1
+ * ──────────────────────────────────────
+ * Tüm kaynaklardan veri çeker → deduplicate eder → Supabase DB'ye yazar.
+ * Frontend ile DOĞRUDAN iletişim YOK — frontend Supabase Realtime üzerinden okur.
  *
  * Başlatmak için:
  *   cd server && npm install && npm start
- *   veya: node --watch src/index.js (geliştirme)
+ *   veya: node --watch src/index.js  (geliştirme)
  */
 
 import 'dotenv/config';
+import http from 'http';
 
-import {connectEMSC} from './sources/emsc.js';
-import {startUSGS} from './sources/usgs.js';
-import {startAFAD} from './sources/afad.js';
-import {startKandilli} from './sources/kandilli.js';
-import {startGEOFON} from './sources/geofon.js';
-import {startGDACS} from './sources/gdacs.js';
-import {startNASAFirms} from './sources/nasaFirms.js';
-import {startPTWC} from './sources/ptwc.js';
-import {startWHO} from './sources/who.js';
-import {startFEWSNET} from './sources/fewsnet.js';
+// ── Kaynaklar ────────────────────────────────────────────────────────────────
+import { connectEMSC }     from './sources/emsc.js';
+import { startUSGS }       from './sources/usgs.js';
+import { startAFAD }       from './sources/afad.js';
+import { startKandilli }   from './sources/kandilli.js';
+import { startGEOFON }     from './sources/geofon.js';
+import { startGDACS }      from './sources/gdacs.js';
+import { startNASAFirms }  from './sources/nasaFirms.js';
+import { startPTWC }       from './sources/ptwc.js';
+import { startWHO }        from './sources/who.js';
+import { startFEWSNET }    from './sources/fewsnet.js';
+import { startGDACSRSS, startPTWCRSS } from './sources/rss.js';
+import { startIoTSource }  from './sources/iot.js';
 
-import {triggerPollUSGS} from './sources/usgs.js';
-import {triggerPollAFAD} from './sources/afad.js';
-import {triggerPollKandilli} from './sources/kandilli.js';
-import {triggerPollGEOFON} from './sources/geofon.js';
-import {triggerPollGDACS} from './sources/gdacs.js';
-import {triggerPollPTWC} from './sources/ptwc.js';
-import {triggerPollNASAFirms} from './sources/nasaFirms.js';
-import {triggerPollWHO} from './sources/who.js';
-import {triggerPollFEWSNET} from './sources/fewsnet.js';
+// ── İşlemciler ───────────────────────────────────────────────────────────────
+import { Deduplicator }        from './processors/deduplicator.js';
+import { calculateEarlyWarning } from './processors/pwave.js';
+import { runPreflight }          from './processors/preflight.js';
 
-import {Deduplicator} from './processors/deduplicator.js';
-import {calculateEarlyWarning} from './processors/pwave.js';
+// ── Çıktı ────────────────────────────────────────────────────────────────────
+import { initSupabase, queueWrite, writeEarlyWarning } from './output/supabaseWriter.js';
+import { sourceHealth } from './output/healthTracker.js';
 
-import {GEWSWebSocketServer} from './output/wsServer.js';
-import {initSupabase, queueWrite, writeEarlyWarning} from './output/supabaseWriter.js';
-import {onHealthChange} from './output/healthTracker.js';
-
-// ─────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
 // Init
-// ─────────────────────────────────────────────
-const wsServer = new GEWSWebSocketServer();
-wsServer.start();
-
-// Yeni bağlanan istemcilere bellekteki tüm güncel olayları topluca gönder
-wsServer.onClientConnected = (ws) => {
-  if (typeof deduplicator !== 'undefined' && deduplicator.store) {
-    const events = Array.from(deduplicator.store.values());
-    wsServer.send(ws, {type: 'batch', data: events, source: 'init'});
-  }
-};
-
-// Kaynak sağlığı değişince broadcast et
-onHealthChange((health) => {
-  wsServer.broadcast({type: 'sources_status', data: health});
-});
-
+// ─────────────────────────────────────────────────────────────────────────────
 const deduplicator = new Deduplicator();
-initSupabase();
+const dbReady = initSupabase();
 
-// ─────────────────────────────────────────────
-// Ana olay işleyicisi - tüm kaynaklar buraya gelir
-// ─────────────────────────────────────────────
+// Preflight: tüm kaynak URL'lerini başlamadan önce kontrol et
+await runPreflight();
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Ana olay işleyicisi — tüm kaynaklar buraya gelir
+// ─────────────────────────────────────────────────────────────────────────────
 function handleEvent(event) {
-  // Duplicate kontrolü
   if (deduplicator.isDuplicate(event)) return;
   deduplicator.add(event);
 
-  // WebSocket yayını
-  wsServer.broadcastEvent(event);
-
-  // DB yazma kuyruğu
+  // DB yazma kuyruğu (Supabase upsert)
   queueWrite(event);
 
-  // Deprem erken uyarısı
-  if (event.type === 'earthquake' && (event.magnitude || 0) >= 4.0) {
+  // Deprem erken uyarısı (M4.0+)
+  if (event.type === 'earthquake' && (event.magnitude ?? 0) >= 4.0) {
     const warning = calculateEarlyWarning(event);
     if (warning && warning.affectedCities.length > 0) {
-      wsServer.broadcastEarlyWarning(warning);
       writeEarlyWarning(warning);
-
       console.log(
         `[P-Wave] 🚨 M${event.magnitude} @ ${event.source} → ` +
         `${warning.affectedCities[0].city} (${warning.affectedCities[0].distanceKm}km, ` +
@@ -88,83 +67,138 @@ function handleEvent(event) {
     }
   }
 
-  console.log(`[+] ${event.source.padEnd(12)} ${event.type.padEnd(14)} M${event.magnitude ?? '-'} ${event.title.slice(0, 60)}`);
+  console.log(
+    `[+] ${event.source.padEnd(12)} ${event.type.padEnd(14)} ` +
+    `M${event.magnitude ?? '-'} ${event.title.slice(0, 60)}`
+  );
 }
 
-// ─────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
 // Kaynak başlatma
-// ─────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
 const stoppers = [];
 
-// 🌍 Sismik - WebSocket
+// 🌍 Sismik — WebSocket (gerçek zamanlı)
 stoppers.push(connectEMSC(handleEvent));
 
-// 🌍 Sismik - REST polling
+// 🌍 Sismik — REST polling
 stoppers.push(startUSGS(handleEvent));
 stoppers.push(startAFAD(handleEvent));
 stoppers.push(startKandilli(handleEvent));
 stoppers.push(startGEOFON(handleEvent));
 
-// 🌊 Çoklu afet - REST polling
+// 🌊 Çoklu afet — REST polling
 stoppers.push(startGDACS(handleEvent));
 stoppers.push(startPTWC(handleEvent));
-// ReliefWeb devre dışı - kayıt sistemi kapalı (403)
 
-// 🔥 Yangın - API key gerekli
-stoppers.push(startNASAFirms(handleEvent, process.env.NASA_FIRMS_KEY || process.env.VITE_NASA_FIRMS_KEY));
+// 🌊 Tsunami — RSS (PTWC yedek)
+stoppers.push(startPTWCRSS(handleEvent));
 
-// 🌾 Gıda güvensizliği - FEWS NET aktif, FAO devre dışı (ReliefWeb 403)
-stoppers.push(startFEWSNET(handleEvent));
+// 🌋 GDACS — RSS (CC + EQ + FL + VO + TC + DR)
+stoppers.push(startGDACSRSS(handleEvent));
 
-// 🦠 Salgın hastalıklar
-stoppers.push(startWHO(handleEvent));
-
-// ─────────────────────────────────────────────
-// Refresh all sources (manual trigger)
-// ─────────────────────────────────────────────
-function pollAll() {
-  console.log('[GEWS] 🔄 Manual refresh triggered');
-  triggerPollUSGS?.();
-  triggerPollAFAD?.();
-  triggerPollKandilli?.();
-  triggerPollGEOFON?.();
-  triggerPollGDACS?.();
-  triggerPollReliefWeb?.();
-  triggerPollPTWC?.();
-  triggerPollNASAFirms?.();
-  triggerPollWHO?.();
-  triggerPollFEWSNET?.();
+// 🔥 Yangın — NASA FIRMS (API key gerekli)
+if (process.env.NASA_FIRMS_KEY) {
+  stoppers.push(startNASAFirms(handleEvent, process.env.NASA_FIRMS_KEY));
+} else {
+  console.warn('[GEWS] NASA_FIRMS_KEY eksik, wildfire kaynağı devre dışı');
 }
 
-wsServer.onRefresh = pollAll;
+// 🌾 Gıda güvensizliği — FEWS NET
+stoppers.push(startFEWSNET(handleEvent));
 
-// ─────────────────────────────────────────────
+// 🦠 Salgın — WHO
+stoppers.push(startWHO(handleEvent));
+
+// 📡 Ek IoT kaynakları (opsiyonel — .env ile aktif)
+// Örnek: SENSOR_URL tanımlıysa OGC SensorThings endpoint'i dinle
+if (process.env.SENSOR_URL) {
+  stoppers.push(startIoTSource(handleEvent, {
+    name:      process.env.SENSOR_NAME || 'Custom Sensor',
+    url:       process.env.SENSOR_URL,
+    type:      process.env.SENSOR_TYPE || 'earthquake',
+    intervalMs: parseInt(process.env.SENSOR_INTERVAL_MS || '60000'),
+    headers:   process.env.SENSOR_KEY ? { 'X-API-Key': process.env.SENSOR_KEY } : {},
+    apiFormat: process.env.SENSOR_FORMAT || 'array',
+  }));
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// HTTP Health / Status endpoint (Dockerfile HEALTHCHECK & ops monitoring)
+// ─────────────────────────────────────────────────────────────────────────────
+const HTTP_PORT = parseInt(process.env.HTTP_PORT || '8765');
+
+const CORS_HEADERS = {
+  'Access-Control-Allow-Origin':  '*',
+  'Access-Control-Allow-Methods': 'GET, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type',
+  'Content-Type': 'application/json',
+};
+
+const httpServer = http.createServer((req, res) => {
+  if (req.method === 'OPTIONS') {
+    res.writeHead(204, CORS_HEADERS);
+    return res.end();
+  }
+
+  if (req.method !== 'GET') {
+    res.writeHead(405, CORS_HEADERS);
+    return res.end();
+  }
+
+  if (req.url === '/health') {
+    res.writeHead(200, CORS_HEADERS);
+    return res.end(JSON.stringify({ status: 'ok', db: dbReady }));
+  }
+
+  if (req.url === '/status') {
+    res.writeHead(200, CORS_HEADERS);
+    return res.end(JSON.stringify({
+      status:    'ok',
+      db:        dbReady,
+      storeSize: deduplicator.store.size,
+      sources:   sourceHealth,
+      uptime:    Math.floor(process.uptime()),
+    }));
+  }
+
+  res.writeHead(404, CORS_HEADERS);
+  res.end();
+});
+
+httpServer.listen(HTTP_PORT, () => {
+  console.log(`[HTTP] ✅ Health endpoint: http://localhost:${HTTP_PORT}/health`);
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Stats log (her 5 dakikada bir)
-// ─────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
 setInterval(() => {
-  console.log(`[Stats] Clients: ${wsServer.clientCount} | Store: ${deduplicator.store.size} events`);
+  const online = Object.values(sourceHealth).filter(Boolean).length;
+  const total  = Object.keys(sourceHealth).length;
+  console.log(`[Stats] Sources: ${online}/${total} online | Store: ${deduplicator.store.size} events`);
 }, 5 * 60 * 1000);
 
-// ─────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
 // Graceful shutdown
-// ─────────────────────────────────────────────
-process.on('SIGINT', () => {
+// ─────────────────────────────────────────────────────────────────────────────
+function shutdown() {
   console.log('\n[GEWS] Shutting down...');
   stoppers.forEach(stop => stop?.());
+  httpServer.close();
   process.exit(0);
-});
+}
 
-process.on('SIGTERM', () => {
-  stoppers.forEach(stop => stop?.());
-  process.exit(0);
-});
+process.on('SIGINT',  shutdown);
+process.on('SIGTERM', shutdown);
 
+// ─────────────────────────────────────────────────────────────────────────────
 console.log('');
-console.log('╔══════════════════════════════════════╗');
-console.log('║  GEWS Aggregator - Starting up...    ║');
-console.log('║  Sources: EMSC·USGS·AFAD·Kandilli   ║');
-console.log('║           GEOFON·GDACS·NASA·PTWC    ║');
-console.log('║           GDACS·NASA·PTWC·WHO       ║');
-console.log('║           FAO·FEWSNET               ║');
-console.log('╚══════════════════════════════════════╝');
+console.log('╔══════════════════════════════════════════╗');
+console.log('║  GEWS Aggregator — DB-only mode          ║');
+console.log('║  Sources: EMSC·USGS·AFAD·Kandilli        ║');
+console.log('║           GEOFON·GDACS·PTWC·NASA         ║');
+console.log('║           WHO·FEWSNET·RSS·IoT            ║');
+console.log('║  Output:  Supabase DB (no WS clients)    ║');
+console.log('╚══════════════════════════════════════════╝');
 console.log('');

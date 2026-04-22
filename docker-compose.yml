@@ -1,0 +1,125 @@
+# MHEWS — Docker Compose
+# Profile A (Cloud):  Supabase cloud + sadece aggregator container
+# Profile B (VPS):    Supabase self-hosted + aggregator
+#
+# Kullanım:
+#   Profile A (cloud): docker compose --profile cloud up -d
+#   Profile B (VPS):   docker compose --profile self-hosted up -d
+
+services:
+
+  # ── GEWS Real-time Aggregator ──────────────────────────────────────────────
+  aggregator:
+    build:
+      context: ./server
+      dockerfile: Dockerfile
+    container_name: mhews-aggregator
+    restart: unless-stopped
+    ports:
+      - "8765:8765"
+    env_file:
+      - ./server/.env
+    environment:
+      - NODE_ENV=production
+    networks:
+      - mhews
+    profiles: ["cloud", "self-hosted"]
+    depends_on:
+      db:
+        condition: service_healthy
+        required: false   # not required in cloud profile
+
+  # ── Vue Frontend (static build) ────────────────────────────────────────────
+  frontend:
+    image: nginx:alpine
+    container_name: mhews-frontend
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./dist:/usr/share/nginx/html:ro
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./ssl:/etc/ssl/mhews:ro        # mount your certs here
+    networks:
+      - mhews
+    profiles: ["cloud", "self-hosted"]
+
+  # ── Supabase Self-Hosted (Profile B only) ──────────────────────────────────
+  # Uses official supabase/supabase stack.
+  # For full self-hosted setup: https://github.com/supabase/supabase/tree/master/docker
+
+  db:
+    image: supabase/postgres:15.8.1.020
+    container_name: mhews-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: postgres
+    volumes:
+      - db-data:/var/lib/postgresql/data
+      - ./supabase/migrations:/docker-entrypoint-initdb.d:ro
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - mhews
+    profiles: ["self-hosted"]
+
+  realtime:
+    image: supabase/realtime:v2.34.47
+    container_name: mhews-realtime
+    restart: unless-stopped
+    environment:
+      PORT: 4000
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_USER: postgres
+      DB_PASSWORD: ${POSTGRES_PASSWORD}
+      DB_NAME: postgres
+      DB_AFTER_CONNECT_QUERY: 'SET search_path TO _realtime'
+      DB_ENC_KEY: ${REALTIME_SECRET_KEY}
+      JWT_SECRET: ${JWT_SECRET}
+      SECRET_KEY_BASE: ${SECRET_KEY_BASE}
+      SECURE_CHANNELS: "true"
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - mhews
+    profiles: ["self-hosted"]
+
+  kong:
+    image: kong:2.8.1
+    container_name: mhews-kong
+    restart: unless-stopped
+    environment:
+      KONG_DATABASE: "off"
+      KONG_DECLARATIVE_CONFIG: /home/kong/kong.yml
+      KONG_DNS_ORDER: LAST,A,CNAME
+      KONG_PLUGINS: request-transformer,cors,key-auth,acl,basic-auth
+      KONG_NGINX_PROXY_PROXY_BUFFER_SIZE: 160k
+      KONG_NGINX_PROXY_PROXY_BUFFERS: 64 160k
+      SUPABASE_ANON_KEY: ${ANON_KEY}
+      SUPABASE_SERVICE_KEY: ${SERVICE_ROLE_KEY}
+      DASHBOARD_USERNAME: ${DASHBOARD_USERNAME:-supabase}
+      DASHBOARD_PASSWORD: ${DASHBOARD_PASSWORD}
+    volumes:
+      - ./supabase/volumes/api/kong.yml:/home/kong/kong.yml:ro
+    ports:
+      - "8000:8000"   # Kong HTTP
+      - "8443:8443"   # Kong HTTPS
+    networks:
+      - mhews
+    profiles: ["self-hosted"]
+
+networks:
+  mhews:
+    driver: bridge
+
+volumes:
+  db-data:

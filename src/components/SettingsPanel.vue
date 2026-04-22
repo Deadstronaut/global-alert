@@ -1,14 +1,40 @@
 <script setup>
-import { computed } from 'vue'
+import { computed, ref, onMounted, onUnmounted } from 'vue'
 import { useUIStore } from '@/stores/ui.js'
 import { useGeolocationStore } from '@/stores/geolocation.js'
-import { useDisasterStore } from '@/stores/disaster.js'
 import { useI18n } from 'vue-i18n'
 
 const { t, locale } = useI18n()
 const uiStore = useUIStore()
 const geoStore = useGeolocationStore()
-const disasterStore = useDisasterStore()
+
+// ── Aggregator server health ──────────────────────────────────────────────────
+const SERVER_URL = import.meta.env.VITE_AGGREGATOR_URL || 'http://localhost:8765'
+
+const serverSources = ref({})
+
+async function checkServer() {
+  try {
+    const res = await fetch(`${SERVER_URL}/status`, {
+      signal: AbortSignal.timeout(4000),
+    })
+    if (res.ok) {
+      const data = await res.json()
+      serverSources.value = data.sources ?? {}
+    } else {
+      serverSources.value = {}
+    }
+  } catch {
+    serverSources.value = {}
+  }
+}
+
+let serverTimer = null
+onMounted(() => {
+  checkServer()
+  serverTimer = setInterval(checkServer, 30_000)
+})
+onUnmounted(() => clearInterval(serverTimer))
 
 function changeLanguage(lang) {
   locale.value = lang
@@ -38,11 +64,11 @@ function lastCheck(entry) {
 }
 
 const sources = computed(() => {
-  const s = disasterStore.sourcesStatus
+  const s = serverSources.value
   return [
     'EMSC', 'USGS', 'AFAD', 'Kandilli', 'GEOFON',
     'GDACS', 'PTWC', 'NASA FIRMS', 'FEWS NET', 'WHO'
-  ].map(name => ({ name, entry: s[name] }))
+  ].map(name => ({ name, entry: s[name] ?? null }))
 })
 </script>
 

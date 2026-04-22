@@ -82,8 +82,28 @@ const severityBreakdown = computed(() => {
 })
 
 const severityLevels = ['critical', 'high', 'moderate', 'low', 'minimal']
-const timeRanges = ['10 Dakika', '30 Dakika', '2 Saat', '6 Saat', '12 Saat', '24 Saat']
-const selectedTimeRange = ref('24 Saat')
+const timeRangeMap = {
+  '10 Dakika': 10 / 60,
+  '30 Dakika': 0.5,
+  '2 Saat': 2,
+  '6 Saat': 6,
+  '12 Saat': 12,
+  '24 Saat': 24,
+  '3 Gün': 24 * 3,
+  '7 Gün': 24 * 7,
+  '15 Gün': 24 * 15,
+  '30 Gün': 24 * 30,
+  '3 Ay': 24 * 30 * 3,
+  '6 Ay': 24 * 30 * 6,
+  '1 Yıl': 24 * 365,
+  '5 Yıl': 24 * 365 * 5,
+  '10 Yıl': 24 * 365 * 10,
+  '20 Yıl': 24 * 365 * 20,
+}
+
+const timeRanges = Object.keys(timeRangeMap)
+const selectedTimeRangeIndex = ref(5) // Index for '24 Saat'
+const selectedTimeRange = computed(() => timeRanges[selectedTimeRangeIndex.value])
 const today = new Date().toISOString().slice(0, 10)
 const rangeStartDate = ref(today)
 const rangeEndDate = ref('')
@@ -119,19 +139,13 @@ function getSourceStatusClass(count) {
   return 'source-level-0'
 }
 
-function selectTimeRange(rangeLabel) {
-  const map = {
-    '10 Dakika': 10 / 60,
-    '30 Dakika': 0.5,
-    '2 Saat': 2,
-    '6 Saat': 6,
-    '12 Saat': 12,
-    '24 Saat': 24,
-  }
+function handleTimeSliderInput(event) {
+  const index = parseInt(event.target.value, 10)
+  selectedTimeRangeIndex.value = index
+  const rangeLabel = timeRanges[index]
 
-  const hours = map[rangeLabel] || 24
+  const hours = timeRangeMap[rangeLabel] || 24
   disasterStore.selectedTimeRange = hours
-  selectedTimeRange.value = rangeLabel
 
   // Selecting a quick range should logically clear the custom calendar range
   // to avoid confusion, and reset back to "now" focused polling.
@@ -142,7 +156,7 @@ function selectTimeRange(rangeLabel) {
   // Reset store to default "poll" mode without specific day boundaries
   disasterStore.startDate = null
   disasterStore.endDate = null
-  disasterStore.refreshAll()
+  disasterStore.refreshAll(true)
 }
 
 function handleSingleCalendarPick(event) {
@@ -245,7 +259,9 @@ watch([rangeStartDate, rangeEndDate], ([start, end]) => {
             >
               <!-- Accordion Header -->
               <div class="accordion-header" @click="toggleAccordion(dtype.key)">
-                <span class="accordion-arrow" :class="{ open: openAccordions.has(dtype.key) }">›</span>
+                <span class="accordion-arrow" :class="{ open: openAccordions.has(dtype.key) }"
+                  >›</span
+                >
                 <span class="toggle-icon">{{ dtype.icon }}</span>
                 <span class="toggle-label">
                   {{ t(dtype.labelKey).replace('Active ', '').replace('Aktif ', '') }}
@@ -260,24 +276,34 @@ watch([rangeStartDate, rangeEndDate], ([start, end]) => {
                 >
                   {{ disasterStore.totalCount[dtype.key] ?? 0 }}
                 </span>
-                <span
-                  class="layer-toggle-dot"
-                  :class="{ on: disasterStore.isLayerActive(dtype.key) }"
-                  @click.stop="disasterStore.toggleLayer(dtype.key)"
-                  :title="disasterStore.isLayerActive(dtype.key) ? 'Katmanı Gizle' : 'Katmanı Göster'"
-                ></span>
+                <input
+                  type="checkbox"
+                  class="layer-toggle-checkbox"
+                  :checked="disasterStore.isLayerActive(dtype.key)"
+                  @click.stop
+                  @change="disasterStore.toggleLayer(dtype.key)"
+                  :title="
+                    disasterStore.isLayerActive(dtype.key) ? 'Katmanı Gizle' : 'Katmanı Göster'
+                  "
+                />
               </div>
 
               <Transition name="accordion">
                 <div class="accordion-body" v-if="openAccordions.has(dtype.key)">
                   <div class="severity-row" v-if="severityBreakdown[dtype.key]">
-                    <span class="sev-chip critical" v-if="severityBreakdown[dtype.key].critical > 0">
+                    <span
+                      class="sev-chip critical"
+                      v-if="severityBreakdown[dtype.key].critical > 0"
+                    >
                       ● {{ severityBreakdown[dtype.key].critical }} Kritik
                     </span>
                     <span class="sev-chip high" v-if="severityBreakdown[dtype.key].high > 0">
                       ● {{ severityBreakdown[dtype.key].high }} Yüksek
                     </span>
-                    <span class="sev-chip moderate" v-if="severityBreakdown[dtype.key].moderate > 0">
+                    <span
+                      class="sev-chip moderate"
+                      v-if="severityBreakdown[dtype.key].moderate > 0"
+                    >
                       ● {{ severityBreakdown[dtype.key].moderate }} Orta
                     </span>
                     <span class="sev-chip low" v-if="severityBreakdown[dtype.key].low > 0">
@@ -352,14 +378,18 @@ watch([rangeStartDate, rangeEndDate], ([start, end]) => {
 
       <!-- 3) Zaman aralığı -->
       <button
-        v-for="range in timeRanges"
-        :key="`mini-${range}`"
-        class="btn-icon collapsed-action time-mini"
-        :class="{ active: selectedTimeRange === range }"
-        @click="selectTimeRange(range)"
-        :title="range"
+        class="btn-icon collapsed-action time-mini active"
+        @click="uiStore.toggleSidebar()"
+        :title="selectedTimeRange"
       >
-        {{ range.replace(' Saat', 's').replace(' Dakika', 'd') }}
+        {{
+          selectedTimeRange
+            .replace(' Saat', 's')
+            .replace(' Dakika', 'd')
+            .replace(' Gün', 'g')
+            .replace(' Ay', 'a')
+            .replace(' Yıl', 'y')
+        }}
       </button>
       <button class="btn-icon collapsed-action calendar-mini" title="Takvim">📅</button>
 
@@ -486,6 +516,25 @@ watch([rangeStartDate, rangeEndDate], ([start, end]) => {
             />
             <div class="filter-ends"><span>0 km</span><span>25+ km</span></div>
           </div>
+
+          <div class="filter-row time-slider-row">
+            <div class="filter-label">
+              <span>SÜRE</span>
+              <span class="filter-val accent">{{ selectedTimeRange }}</span>
+            </div>
+            <input
+              type="range"
+              :min="0"
+              :max="timeRanges.length - 1"
+              :value="selectedTimeRangeIndex"
+              @input="handleTimeSliderInput"
+              class="filter-range"
+            />
+            <div class="filter-ends">
+              <span>{{ timeRanges[0] }}</span>
+              <span>{{ timeRanges[timeRanges.length - 1] }}</span>
+            </div>
+          </div>
         </div>
       </Transition>
     </div>
@@ -498,18 +547,6 @@ watch([rangeStartDate, rangeEndDate], ([start, end]) => {
       </button>
       <Transition name="section-accordion">
         <div v-if="openSections.timeRange">
-          <div class="time-range-list">
-            <button
-              v-for="range in timeRanges"
-              :key="range"
-              class="time-range-btn"
-              :class="{ active: selectedTimeRange === range }"
-              @click="selectTimeRange(range)"
-            >
-              {{ range }}
-            </button>
-          </div>
-
           <div class="date-filter-card">
             <div class="date-filters">
               <label class="date-label">
@@ -665,19 +702,25 @@ watch([rangeStartDate, rangeEndDate], ([start, end]) => {
               :class="{ active: uiStore.mapMode === 'normal' }"
               @click="uiStore.mapMode = 'normal'"
               title="Normal (1)"
-            >📍 Normal<span class="mode-key">1</span></button>
+            >
+              📍 Normal<span class="mode-key">1</span>
+            </button>
             <button
               class="mode-btn"
               :class="{ active: uiStore.mapMode === 'hexagon' }"
               @click="uiStore.mapMode = 'hexagon'"
               title="Hexagon (2)"
-            >⬡ Hex<span class="mode-key">2</span></button>
+            >
+              ⬡ Hex<span class="mode-key">2</span>
+            </button>
             <button
               class="mode-btn"
               :class="{ active: uiStore.mapMode === 'heatmap' }"
               @click="uiStore.mapMode = 'heatmap'"
               title="Heatmap (3)"
-            >🔥 Heat<span class="mode-key">3</span></button>
+            >
+              🔥 Heat<span class="mode-key">3</span>
+            </button>
           </div>
 
           <button class="btn btn-ghost sidebar-action-btn" @click="uiStore.toggleSettings()">
@@ -1184,7 +1227,9 @@ watch([rangeStartDate, rangeEndDate], ([start, end]) => {
   border-right: 1px solid rgba(255, 255, 255, 0.1);
   color: rgba(255, 255, 255, 0.5);
   cursor: pointer;
-  transition: background 0.15s, color 0.15s;
+  transition:
+    background 0.15s,
+    color 0.15s;
   white-space: nowrap;
 }
 
@@ -1208,7 +1253,7 @@ watch([rangeStartDate, rangeEndDate], ([start, end]) => {
   font-size: 0.6rem;
   font-weight: 700;
   opacity: 0.45;
-  background: rgba(255,255,255,0.1);
+  background: rgba(255, 255, 255, 0.1);
   border-radius: 3px;
   padding: 0 3px;
   line-height: 1.4;
@@ -1866,22 +1911,40 @@ html[data-theme='light'] .footer-sources {
   color: var(--color-text-muted);
 }
 
-.layer-toggle-dot {
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
+.layer-toggle-checkbox {
+  appearance: none;
+  width: 36px;
+  height: 20px;
   background: rgba(255, 255, 255, 0.2);
-  flex-shrink: 0;
+  border-radius: 10px;
+  position: relative;
   cursor: pointer;
-  transition:
-    background 0.2s ease,
-    box-shadow 0.2s ease;
+  outline: none;
   margin-left: auto;
+  flex-shrink: 0;
+  transition: all 0.3s ease;
 }
 
-.layer-toggle-dot.on {
+.layer-toggle-checkbox::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 16px;
+  height: 16px;
+  background: white;
+  border-radius: 50%;
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+}
+
+.layer-toggle-checkbox:checked {
   background: var(--color-info, #4da3ff);
   box-shadow: 0 0 6px rgba(77, 163, 255, 0.6);
+}
+
+.layer-toggle-checkbox:checked::after {
+  transform: translateX(16px);
 }
 
 .accordion-loading {

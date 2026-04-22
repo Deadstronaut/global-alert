@@ -1,7 +1,7 @@
 <script setup>
-import { onMounted, watch } from 'vue'
-import GlobeView from '@/components/GlobeView.vue'
-import MapView from '@/components/MapView.vue'
+import { watch, defineAsyncComponent } from 'vue'
+const GlobeView = defineAsyncComponent(() => import('@/components/GlobeView.vue'))
+const MapView = defineAsyncComponent(() => import('@/components/MapView.vue'))
 import SidebarPanel from '@/components/SidebarPanel.vue'
 import AlertPanel from '@/components/AlertPanel.vue'
 import StatsOverlay from '@/components/StatsOverlay.vue'
@@ -53,10 +53,7 @@ watch(
   { immediate: true },
 )
 
-onMounted(() => {
-  // WebSocket bağlantısını başlat (cache yükleme dahil)
-  disasterStore.startWebSocket()
-})
+// startWebSocket App.vue'da çağrılıyor
 </script>
 
 <template>

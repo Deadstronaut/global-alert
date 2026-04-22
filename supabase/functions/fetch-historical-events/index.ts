@@ -1,84 +1,71 @@
+/**
+ * Edge Function: fetch-historical-events
+ * Reads from DB views, returns paginated historical data to frontend.
+ * Auth: JWT required (verify_jwt = true in config.toml)
+ */
 import { corsHeaders } from '../shared/cors.ts'
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3'
+import { getServiceClient } from '../shared/upsert.ts'
+
+const VIEW_MAP: Record<string, string> = {
+  earthquake:    'earthquake_view',
+  wildfire:      'wildfire_view',
+  flood:         'flood_view',
+  drought:       'drought_view',
+  food_security: 'food_security_view',
+  tsunami:       'tsunami_view',
+  cyclone:       'cyclone_view',
+  volcano:       'volcano_view',
+  epidemic:      'epidemic_view',
+  all:           '',  // handled specially
+}
 
 Deno.serve(async (req) => {
-  if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders })
-  }
+  if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
 
   try {
-    let reqBody: any = {}
-    if (req.method === 'POST') {
-      try {
-        reqBody = await req.json()
-      } catch (e) {}
-    }
-    const { type = 'all', startDate, endDate } = reqBody
+    const body = await req.json().catch(() => ({}))
+    const type: string      = body.type ?? 'all'
+    const startDate: string = body.startDate ?? null
+    const endDate: string   = body.endDate ?? null
+    const limit: number     = Math.min(body.limit ?? 500, 1000)
 
-    const supabase = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
+    const supabase = getServiceClient()
+    const views = type === 'all'
+      ? Object.values(VIEW_MAP).filter(Boolean)
+      : [VIEW_MAP[type]].filter(Boolean)
+
+    if (views.length === 0) {
+      return new Response(JSON.stringify({ error: `Unknown type: ${type}` }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400,
+      })
+    }
+
+    const results = await Promise.allSettled(
+      views.map(async (view) => {
+        let q = supabase.from(view).select('*').order('time', { ascending: false }).limit(limit)
+        if (startDate) q = q.gte('time', startDate)
+        if (endDate)   q = q.lte('time', endDate)
+        const { data, error } = await q
+        if (error) throw new Error(`${view}: ${error.message}`)
+        return data ?? []
+      })
     )
 
-    let allData: any[] = []
-
-    const fetchFromTable = async (tableName: string) => {
-      let query = supabase
-        .from(tableName)
-        .select('id, title, description, lat, lng, severity, timestamp, source')
-        .order('timestamp', { ascending: false })
-        .limit(2000)
-      if (startDate) query = query.gte('timestamp', startDate)
-      if (endDate) query = query.lte('timestamp', endDate)
-      const { data, error } = await query
-      if (error) {
-        console.error(`Error querying ${tableName}:`, error)
-        return []
-      }
-      return data || []
+    const data: any[] = []
+    const errors: string[] = []
+    for (const r of results) {
+      if (r.status === 'fulfilled') data.push(...r.value)
+      else errors.push(r.reason?.message ?? String(r.reason))
     }
 
-    if (type === 'all') {
-      const [eq, wf, fl, dr] = await Promise.all([
-        fetchFromTable('earthquake_events'),
-        fetchFromTable('wildfire_events'),
-        fetchFromTable('flood_events'),
-        fetchFromTable('drought_events'),
-      ])
-      allData = [
-        ...eq.map((d) => ({ ...d, type: 'earthquake' })),
-        ...wf.map((d) => ({ ...d, type: 'wildfire' })),
-        ...fl.map((d) => ({ ...d, type: 'flood' })),
-        ...dr.map((d) => ({ ...d, type: 'drought' })),
-      ]
-    } else {
-      let tableName = ''
-      if (type === 'earthquake') tableName = 'earthquake_events'
-      if (type === 'wildfire') tableName = 'wildfire_events'
-      if (type === 'flood') tableName = 'flood_events'
-      if (type === 'drought') tableName = 'drought_events'
+    return new Response(JSON.stringify({
+      meta: { status: errors.length === 0 ? 'ok' : 'partial', count: data.length, errors },
+      data,
+    }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 })
 
-      if (tableName) {
-        const results = await fetchFromTable(tableName)
-        allData = results.map((d: any) => ({ ...d, type }))
-      }
-    }
-
-    return new Response(
-      JSON.stringify({
-        meta: { status: 'success', count: allData.length },
-        data: allData,
-      }),
-      {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        status: 200,
-      },
-    )
-  } catch (error) {
-    console.error('Fetch Historical Events Error:', error.message)
-    return new Response(JSON.stringify({ error: error.message }), {
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      status: 400,
+  } catch (err: any) {
+    return new Response(JSON.stringify({ error: err.message }), {
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500,
     })
   }
 })

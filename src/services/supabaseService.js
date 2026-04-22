@@ -11,8 +11,21 @@ export function getClient() {
     return supabase;
 }
 
-// Tablo adı → disaster event type
+// Fetch için view'lar (geçersiz koordinatlar filtrelenmiş)
 const TABLE_MAP = {
+    earthquake_view: 'earthquake',
+    wildfire_view: 'wildfire',
+    flood_view: 'flood',
+    drought_view: 'drought',
+    food_security_view: 'food_security',
+    tsunami_view: 'tsunami',
+    cyclone_view: 'cyclone',
+    volcano_view: 'volcano',
+    epidemic_view: 'epidemic',
+};
+
+// Realtime subscription için tablolar (view'lar realtime desteklemez)
+const REALTIME_TABLE_MAP = {
     earthquake: 'earthquake',
     wildfire: 'wildfire',
     flood: 'flood',
@@ -26,21 +39,36 @@ const TABLE_MAP = {
 
 // Tip başına fetch limiti
 const FETCH_LIMIT = {
-    earthquake: 30000,
-    wildfire: 10000,
-    flood: 10000,
-    drought: 10000,
-    food_security: 10000,
-    tsunami: 10000,
-    cyclone: 10000,
-    volcano: 10000,
-    epidemic: 10000,
+    earthquake_view: 30000,
+    wildfire_view: 10000,
+    flood_view: 10000,
+    drought_view: 10000,
+    food_security_view: 10000,
+    tsunami_view: 10000,
+    cyclone_view: 10000,
+    volcano_view: 10000,
+    epidemic_view: 10000,
 };
 
+function getEarthquakeSeverity(magnitude) {
+    if (magnitude >= 7.0) return 'critical';
+    if (magnitude >= 5.5) return 'high';
+    if (magnitude >= 4.0) return 'moderate';
+    if (magnitude >= 2.5) return 'low';
+    return 'minimal';
+}
+
 function rowToEvent(row, type) {
+    // Supabase'deki severity değeri yanlış olabilir; depremler için magnitude'dan yeniden hesapla
+    let severity = row.severity;
+    if (type === 'earthquake' && row.magnitude != null) {
+        severity = getEarthquakeSeverity(Number(row.magnitude));
+    }
+
     return createDisasterEvent({
         ...row,
         type,
+        severity,
         sourceUrl: row.source_url ?? row.sourceUrl ?? '',
         receivedAt: row.received_at ?? row.receivedAt ?? new Date().toISOString(),
         extra: typeof row.extra === 'string'
@@ -50,20 +78,42 @@ function rowToEvent(row, type) {
 }
 
 /**
- * Son `hours` saatin verilerini tüm tablolardan paralel çeker.
+ * `options` can be { hours: 24 } or { fromDate: '...', toDate: '...' }
  */
-export async function fetchRecentDisasters(hours = 24) {
+export async function fetchRecentDisasters(options = {}) {
     const client = getClient();
     if (!client) return [];
 
-    const since = new Date(Date.now() - hours * 60 * 60 * 1000).toISOString();
+    let fromDate = options.fromDate;
+    const toDate = options.toDate;
+
+    if (!fromDate) {
+        const hours = options.hours || 24;
+        fromDate = new Date(Date.now() - hours * 60 * 60 * 1000).toISOString();
+    }
+
+    // Uzun tarih aralıklarında (>30 gün) sadece önemli depremler (M5.5+) çek
+    const rangeHours = options.hours || 24;
+    const rangeDays = rangeHours / 24;
+    const minMagnitudeForRange = rangeDays > 365 ? 5.5 : rangeDays > 30 ? 4.0 : null;
 
     const results = await Promise.allSettled(
         Object.entries(TABLE_MAP).map(async ([table, type]) => {
-            const {data, error} = await client
+            let query = client
                 .from(table)
                 .select('id,type,lat,lng,severity,magnitude,depth,title,description,time,source,source_url,extra,received_at')
-                .gte('time', since)
+                .gte('time', fromDate);
+
+            if (toDate) {
+                query = query.lte('time', toDate);
+            }
+
+            // Depremler için uzun aralıkta magnitude filtresi uygula
+            if (type === 'earthquake' && minMagnitudeForRange !== null) {
+                query = query.gte('magnitude', minMagnitudeForRange);
+            }
+
+            const {data, error} = await query
                 .order('time', {ascending: false})
                 .limit(FETCH_LIMIT[table] ?? 200);
 
@@ -89,7 +139,7 @@ export function subscribeRealtime(onEvent) {
     const client = getClient();
     if (!client) return () => { };
 
-    const channels = Object.entries(TABLE_MAP).map(([table, type]) => {
+    const channels = Object.entries(REALTIME_TABLE_MAP).map(([table, type]) => {
         return client
             .channel(`realtime:${table}`)
             .on(

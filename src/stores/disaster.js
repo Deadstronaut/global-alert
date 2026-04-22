@@ -216,7 +216,9 @@ export const useDisasterStore = defineStore('disaster', () => {
     } else { // Shorter -> Show all
       activeSeverities.value = new Set(['critical', 'high', 'moderate', 'low', 'minimal']);
     }
-  }, {immediate: true});
+    // Tarih aralığı değişince her zaman full fetch yap
+    loadFromSupabase(true);
+  }, {immediate: false});
 
   // ─────────────────────────────────────────
   // Supabase counts (for badge display)
@@ -227,6 +229,19 @@ export const useDisasterStore = defineStore('disaster', () => {
 
   async function loadFromSupabase(forceFullFetch = false) {
     supabaseLoading.value = true;
+    if (forceFullFetch) {
+      // Tarih aralığı değişince eski veriyi temizle
+      earthquakes.value = [];
+      wildfires.value = [];
+      floods.value = [];
+      droughts.value = [];
+      foodSecurity.value = [];
+      tsunamis.value = [];
+      cyclones.value = [];
+      volcanoes.value = [];
+      epidemics.value = [];
+      otherDisasters.value = [];
+    }
     try {
       let hoursAgo = selectedTimeRange.value;
 
@@ -238,7 +253,13 @@ export const useDisasterStore = defineStore('disaster', () => {
         }
       }
 
-      const events = await fetchRecentDisasters(hoursAgo);
+      const fetchOptions = {
+        hours: hoursAgo,
+        fromDate: startDate.value ? new Date(startDate.value).toISOString() : null,
+        toDate: endDate.value ? new Date(new Date(endDate.value).setHours(23, 59, 59, 999)).toISOString() : null
+      };
+
+      const events = await fetchRecentDisasters(fetchOptions);
       if (events.length > 0) {
         loadBatch(events);
         // Tipe göre grupla ve IDB'ye yaz

@@ -161,9 +161,9 @@ function handleTimeSliderInput(event) {
   calendarPickValue.value = today
 
   // Reset store to default "poll" mode without specific day boundaries
+  // Not: watch([selectedTimeRange, startDate, endDate]) zaten loadFromSupabase(true) tetikliyor
   disasterStore.startDate = null
   disasterStore.endDate = null
-  disasterStore.refreshAll(true)
 }
 
 function getMonthParts(monthIndex) {

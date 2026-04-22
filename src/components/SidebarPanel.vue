@@ -1,5 +1,5 @@
 ﻿<script setup>
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useDisasterStore } from '@/stores/disaster.js'
 import { useUIStore } from '@/stores/ui.js'
 import { useGeolocationStore } from '@/stores/geolocation.js'
@@ -105,6 +105,13 @@ const timeRanges = Object.keys(timeRangeMap)
 const selectedTimeRangeIndex = ref(5) // Index for '24 Saat'
 const selectedTimeRange = computed(() => timeRanges[selectedTimeRangeIndex.value])
 const today = new Date().toISOString().slice(0, 10)
+const minRangeYear = 2000
+const minRangeMonthIndex = 0
+const currentDate = new Date()
+const maxRangeMonthIndex =
+  (currentDate.getFullYear() - minRangeYear) * 12 + currentDate.getMonth()
+const sliderStartMonth = ref(minRangeMonthIndex)
+const sliderEndMonth = ref(maxRangeMonthIndex)
 const rangeStartDate = ref(today)
 const rangeEndDate = ref('')
 const calendarPickValue = ref(today)
@@ -159,6 +166,59 @@ function handleTimeSliderInput(event) {
   disasterStore.refreshAll(true)
 }
 
+function getMonthParts(monthIndex) {
+  const year = minRangeYear + Math.floor(monthIndex / 12)
+  const month = (monthIndex % 12) + 1
+  return { year, month }
+}
+
+function formatMonthValue(monthIndex) {
+  const { year, month } = getMonthParts(monthIndex)
+  return `${year}-${String(month).padStart(2, '0')}`
+}
+
+function formatMonthLabel(monthIndex) {
+  const { year, month } = getMonthParts(monthIndex)
+  return `${String(month).padStart(2, '0')}.${year}`
+}
+
+function getMonthEndDate(monthIndex) {
+  const { year, month } = getMonthParts(monthIndex)
+  return new Date(year, month, 0).toISOString().slice(0, 10)
+}
+
+const historicalRangeLabel = computed(() => {
+  const start = Math.min(sliderStartMonth.value, sliderEndMonth.value)
+  const end = Math.max(sliderStartMonth.value, sliderEndMonth.value)
+  return `${formatMonthLabel(start)} - ${formatMonthLabel(end)}`
+})
+
+const historicalRangeStyle = computed(() => {
+  const start = Math.min(sliderStartMonth.value, sliderEndMonth.value)
+  const end = Math.max(sliderStartMonth.value, sliderEndMonth.value)
+  const startPercent = (start / maxRangeMonthIndex) * 100
+  const endPercent = (end / maxRangeMonthIndex) * 100
+  return {
+    left: `${startPercent}%`,
+    width: `${endPercent - startPercent}%`,
+  }
+})
+
+function handleHistoricalRangeInput(edge, value) {
+  const monthIndex = Number(value)
+  if (edge === 'start') {
+    sliderStartMonth.value = Math.min(monthIndex, sliderEndMonth.value)
+  } else {
+    sliderEndMonth.value = Math.max(monthIndex, sliderStartMonth.value)
+  }
+
+  const start = Math.min(sliderStartMonth.value, sliderEndMonth.value)
+  const end = Math.max(sliderStartMonth.value, sliderEndMonth.value)
+  rangeStartDate.value = `${formatMonthValue(start)}-01`
+  rangeEndDate.value = getMonthEndDate(end)
+  calendarPickValue.value = rangeStartDate.value
+}
+
 function handleSingleCalendarPick(event) {
   const picked = event.target.value
   if (!picked) return
@@ -180,7 +240,6 @@ function handleSingleCalendarPick(event) {
     rangeEndDate.value = picked
   }
   calendarPickValue.value = picked
-  selectedTimeRange.value = '' // Clear quick range label when using calendar
 }
 
 const selectedRangeLabel = computed(() => {
@@ -189,8 +248,6 @@ const selectedRangeLabel = computed(() => {
     return rangeStartDate.value
   return `${rangeStartDate.value} - ${rangeEndDate.value}`
 })
-
-import { watch } from 'vue'
 
 watch([rangeStartDate, rangeEndDate], ([start, end]) => {
   if (!start) return
@@ -533,6 +590,42 @@ watch([rangeStartDate, rangeEndDate], ([start, end]) => {
             <div class="filter-ends">
               <span>{{ timeRanges[0] }}</span>
               <span>{{ timeRanges[timeRanges.length - 1] }}</span>
+            </div>
+          </div>
+
+          <div class="filter-row historical-range-row">
+            <div class="filter-label">
+              <span>TARİH ARALIĞI</span>
+              <span class="filter-val accent">{{ historicalRangeLabel }}</span>
+            </div>
+            <div class="dual-range-control">
+              <div class="dual-range-track">
+                <span class="dual-range-fill" :style="historicalRangeStyle"></span>
+              </div>
+              <input
+                type="range"
+                :min="minRangeMonthIndex"
+                :max="maxRangeMonthIndex"
+                step="1"
+                :value="sliderStartMonth"
+                class="filter-range dual-range-input"
+                aria-label="Başlangıç ayı"
+                @input="handleHistoricalRangeInput('start', $event.target.value)"
+              />
+              <input
+                type="range"
+                :min="minRangeMonthIndex"
+                :max="maxRangeMonthIndex"
+                step="1"
+                :value="sliderEndMonth"
+                class="filter-range dual-range-input"
+                aria-label="Bitiş ayı"
+                @input="handleHistoricalRangeInput('end', $event.target.value)"
+              />
+            </div>
+            <div class="filter-ends">
+              <span>01.2000</span>
+              <span>{{ formatMonthLabel(maxRangeMonthIndex) }}</span>
             </div>
           </div>
         </div>
@@ -1029,6 +1122,74 @@ watch([rangeStartDate, rangeEndDate], ([start, end]) => {
   width: 100%;
   accent-color: var(--color-accent);
   cursor: pointer;
+}
+
+.historical-range-row {
+  gap: 6px;
+}
+
+.dual-range-control {
+  position: relative;
+  height: 28px;
+}
+
+.dual-range-track {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 11px;
+  height: 6px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.12);
+  overflow: hidden;
+}
+
+.dual-range-fill {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--color-accent), rgba(77, 163, 255, 0.45));
+}
+
+.dual-range-input {
+  position: absolute;
+  inset: 0;
+  height: 28px;
+  margin: 0;
+  pointer-events: none;
+  appearance: none;
+  background: transparent;
+  accent-color: var(--color-accent);
+}
+
+.dual-range-input::-webkit-slider-thumb {
+  pointer-events: auto;
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 2px solid var(--color-bg);
+  background: var(--color-accent);
+  box-shadow: 0 0 0 2px rgba(77, 163, 255, 0.22);
+}
+
+.dual-range-input::-moz-range-thumb {
+  pointer-events: auto;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 2px solid var(--color-bg);
+  background: var(--color-accent);
+  box-shadow: 0 0 0 2px rgba(77, 163, 255, 0.22);
+}
+
+.dual-range-input::-webkit-slider-runnable-track {
+  background: transparent;
+}
+
+.dual-range-input::-moz-range-track {
+  background: transparent;
 }
 
 .filter-ends {

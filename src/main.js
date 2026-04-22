@@ -8,6 +8,14 @@ import {NotificationService} from './services/notificationService.js';
 
 import './assets/main.css';
 
+// Yabancı kütüphanelerin (globe.gl) yol açtığı Three.js deprecation loglarını gizle
+const originalWarn = console.warn;
+console.warn = (...args) => {
+  if (typeof args[0] === 'string' && args[0].includes('Clock: This module has been deprecated')) {
+    return;
+  }
+  originalWarn(...args);
+};
 const app = createApp(App);
 
 const pinia = createPinia();

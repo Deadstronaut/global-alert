@@ -5,22 +5,22 @@
  */
 
 import {defineStore} from 'pinia';
-import {ref, computed} from 'vue';
+import {ref, computed, watch} from 'vue';
 import {fetchRecentDisasters, subscribeRealtime} from '@/services/supabaseService.js';
 import {readAllFromCache, writeToCache, getLastFetchAt, setLastFetchAt} from '@/services/idbCache.js';
 
 // Afet tipine göre maksimum tutulacak olay sayısı (bellek yönetimi)
 const MAX_EVENTS = {
-  earthquake: 500,
-  wildfire: 300,
-  flood: 300,
-  drought: 200,
-  food_security: 200,
-  tsunami: 100,
-  cyclone: 100,
-  volcano: 100,
-  epidemic: 100,
-  disaster: 200,
+  earthquake: 30000,
+  wildfire: 10000,
+  flood: 10000,
+  drought: 10000,
+  food_security: 10000,
+  tsunami: 10000,
+  cyclone: 10000,
+  volcano: 10000,
+  epidemic: 10000,
+  disaster: 10000,
 };
 
 export const useDisasterStore = defineStore('disaster', () => {
@@ -39,8 +39,7 @@ export const useDisasterStore = defineStore('disaster', () => {
   const otherDisasters = ref([]);
 
   const activeLayers = ref(new Set([
-    'earthquake', 'wildfire', 'flood', 'drought',
-    'food_security', 'tsunami', 'cyclone', 'volcano'
+    'earthquake'
   ]));
   const activeSeverities = ref(new Set(['critical', 'high', 'moderate', 'low', 'minimal']));
 
@@ -199,20 +198,25 @@ export const useDisasterStore = defineStore('disaster', () => {
   }
 
   // ─────────────────────────────────────────
-  // Auto Toggle Empty Layers
+  // Auto-Severity Adjust based on Time Range
   // ─────────────────────────────────────────
-  function autoToggleEmptyLayers() {
-    const s = new Set();
-    const counts = totalCount.value;
-
-    for (const [key, count] of Object.entries(counts)) {
-      if (key !== 'total' && count > 0) {
-        s.add(key);
-      }
+  const getRangeDays = () => {
+    if (startDate.value && endDate.value) {
+      return (new Date(endDate.value).getTime() - new Date(startDate.value).getTime()) / (1000 * 3600 * 24);
     }
+    return selectedTimeRange.value / 24;
+  };
 
-    activeLayers.value = s;
-  }
+  watch([selectedTimeRange, startDate, endDate], () => {
+    const days = getRangeDays();
+    if (days > 180) { // More than 6 months -> only Critical & High
+      activeSeverities.value = new Set(['critical', 'high']);
+    } else if (days > 30) { // More than 1 month -> Moderate too
+      activeSeverities.value = new Set(['critical', 'high', 'moderate']);
+    } else { // Shorter -> Show all
+      activeSeverities.value = new Set(['critical', 'high', 'moderate', 'low', 'minimal']);
+    }
+  }, {immediate: true});
 
   // ─────────────────────────────────────────
   // Supabase counts (for badge display)
@@ -253,7 +257,6 @@ export const useDisasterStore = defineStore('disaster', () => {
       console.warn('[Store] Supabase load failed:', err.message);
     } finally {
       supabaseLoading.value = false;
-      autoToggleEmptyLayers();
     }
   }
 

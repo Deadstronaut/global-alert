@@ -4,57 +4,44 @@
  * - Canlı güncellemeler: Realtime INSERT subscription
  */
 
-import {createClient} from '@supabase/supabase-js';
+import {supabase} from './api/config.js';
 import {createDisasterEvent} from './adapters/DisasterEvent.js';
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
-
-let _client = null;
-
 export function getClient() {
-    if (!_client) {
-        if (!supabaseUrl || !supabaseKey) {
-            console.warn('[Supabase] VITE_SUPABASE_URL veya VITE_SUPABASE_ANON_KEY eksik');
-            return null;
-        }
-        _client = createClient(supabaseUrl, supabaseKey);
-        console.log('[Supabase] ✅ Client initialized');
-    }
-    return _client;
+    return supabase;
 }
 
 // Tablo adı → disaster event type
 const TABLE_MAP = {
-    earthquake:    'earthquake',
-    wildfire:      'wildfire',
-    flood:         'flood',
-    drought:       'drought',
+    earthquake: 'earthquake',
+    wildfire: 'wildfire',
+    flood: 'flood',
+    drought: 'drought',
     food_security: 'food_security',
-    tsunami:       'tsunami',
-    cyclone:       'cyclone',
-    volcano:       'volcano',
-    epidemic:      'epidemic',
+    tsunami: 'tsunami',
+    cyclone: 'cyclone',
+    volcano: 'volcano',
+    epidemic: 'epidemic',
 };
 
 // Tip başına fetch limiti
 const FETCH_LIMIT = {
-    earthquake:    500,
-    wildfire:      300,
-    flood:         200,
-    drought:       150,
-    food_security: 150,
-    tsunami:       100,
-    cyclone:       100,
-    volcano:       100,
-    epidemic:      100,
+    earthquake: 30000,
+    wildfire: 10000,
+    flood: 10000,
+    drought: 10000,
+    food_security: 10000,
+    tsunami: 10000,
+    cyclone: 10000,
+    volcano: 10000,
+    epidemic: 10000,
 };
 
 function rowToEvent(row, type) {
     return createDisasterEvent({
         ...row,
         type,
-        sourceUrl:  row.source_url  ?? row.sourceUrl  ?? '',
+        sourceUrl: row.source_url ?? row.sourceUrl ?? '',
         receivedAt: row.received_at ?? row.receivedAt ?? new Date().toISOString(),
         extra: typeof row.extra === 'string'
             ? JSON.parse(row.extra || '{}')
@@ -100,7 +87,7 @@ export async function fetchRecentDisasters(hours = 24) {
  */
 export function subscribeRealtime(onEvent) {
     const client = getClient();
-    if (!client) return () => {};
+    if (!client) return () => { };
 
     const channels = Object.entries(TABLE_MAP).map(([table, type]) => {
         return client

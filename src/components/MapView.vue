@@ -50,7 +50,7 @@ function fixGeometry(geojson) {
       newRing.push([lng, lat])
       lastLng = lng
     }
-    
+
     // Ensure ring is closed and has minimal valid geometry
     if (newRing.length > 2) {
       const last = newRing[newRing.length - 1]
@@ -84,6 +84,7 @@ let userMarkerObj = null
 const styleCache = {}
 let hexWorker = null
 let hexWorkerBusy = false
+
 // 0 = Açık (liberty), 1 = Koyu (dark), 2 = Uydu
 const mapStyleIndex = ref(0)
 const currentZoom = ref(3)
@@ -846,7 +847,7 @@ function updateViewportGrid() {
   // Handle antimeridian bounds correctly for the worker
   let minLng = sw.lng
   let maxLng = ne.lng
-  
+
   // Wrap to -180, 180 range
   while (minLng < -180) minLng += 360
   while (minLng > 180) minLng -= 360

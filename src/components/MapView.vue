@@ -108,13 +108,14 @@ const _allCountryFeatures = [
 
 const currentHexRes = computed(() => {
   const z = currentZoom.value
-  if (z < 3.5) return 2
-  if (z < 5.5) return 3
-  if (z < 7.5) return 4
-  if (z < 9.5) return 5
-  if (z < 11.5) return 6
-  if (z < 13.5) return 7
-  if (z < 15.5) return 8
+  // More granular scaling: roughly every 1.5 zoom levels
+  if (z < 3) return 2
+  if (z < 4.5) return 3
+  if (z < 6) return 4
+  if (z < 7.5) return 5
+  if (z < 9) return 6
+  if (z < 10.5) return 7
+  if (z < 12) return 8
   return 9
 })
 
@@ -129,7 +130,7 @@ watch(currentHexRes, () => {
         hexWorker.postMessage({
           type: 'FILL_GRID',
           geometry: f.geometry,
-          resolution: currentHexRes.value,
+          resolution: 3,
         })
       }
     }
@@ -600,6 +601,12 @@ function selectCountry(f) {
   const source = f.layer?.source || f.source || 'world-countries'
   if (fid == null) return
 
+  // Prevent redundant work if clicking the same country (Fix selection)
+  if (selectedFeatureId === fid && selectedFeatureSource === source) return
+
+  // Automatically switch to Petek (Hexagon) mode for focused view
+  uiStore.mapMode = 'hexagon'
+
   // Get full feature geometry
   const fullFeature = _allCountryFeatures.find((cf) => cf.id === fid) ?? f
   const geom = fullFeature.geometry
@@ -630,18 +637,22 @@ function selectCountry(f) {
 
   if (bounds.isEmpty()) return
 
-  if (hasAntimeridian) {
-    const shiftedLons = lons.map((l) => (l < 0 ? l + 360 : l))
-    const sMin = Math.min(...shiftedLons)
-    const sMax = Math.max(...shiftedLons)
-    const centerLng = ((sMin + sMax) / 2) % 360
-    map.easeTo({
-      center: [centerLng > 180 ? centerLng - 360 : centerLng, bounds.getCenter().lat],
-      zoom: 3.5,
-      duration: 1500,
+  // Profesyonel Kamera Hesaplaması
+  const cameraOptions = map.cameraForBounds(bounds, {
+    padding: { top: 100, bottom: 100, left: 100, right: 100 },
+    maxZoom: 6
+  })
+
+  if (cameraOptions) {
+    map.flyTo({
+      ...cameraOptions,
+      duration: 3500,
+      curve: 2.0, // Dengeli bir kavis
+      speed: 0.5, // Daha akıcı bir hız
+      pitch: 15,  // Hafif 3D eğim (Peteklerin güzel görünmesi için)
+      bearing: -5, // Çok hafif bir dönüş efekti
+      essential: true
     })
-  } else {
-    map.fitBounds(bounds, { padding: 60, duration: 1500, essential: true })
   }
 
   // Reset previous selection
@@ -669,7 +680,7 @@ function selectCountry(f) {
     hexWorker.postMessage({
       type: 'FILL_GRID',
       geometry: geom,
-      resolution: Math.min(7, currentHexRes.value + 1),
+      resolution: 3,
     })
   }
 
@@ -839,6 +850,19 @@ function initMap() {
 function updateViewportGrid() {
   if (!map || !mapLoaded || !hexWorker) return
   if (uiStore.mapMode !== 'hexagon') return
+
+  // Eğer bir ülke seçiliyse, sadece ekranı değil tüm ülkeyi doldur
+  if (selectedFeatureId) {
+    const f = _allCountryFeatures.find((cf) => cf.id === selectedFeatureId)
+    if (f) {
+      hexWorker.postMessage({
+        type: 'FILL_GRID',
+        geometry: f.geometry,
+        resolution: 3, // Seçili ülkede hep 3 kalsın demiştik
+      })
+      // Dünya arka planını da (seyrekçe) güncelleyebiliriz ama ülke öncelikli
+    }
+  }
 
   const bounds = map.getBounds()
   const sw = bounds.getSouthWest()

@@ -10,12 +10,20 @@ function crossesAntimeridian(ring) {
   return false;
 }
 
-function intensityToHex(v) {
-  if (v >= 0.85) return '#ef4444';
-  if (v >= 0.65) return '#f97316';
-  if (v >= 0.45) return '#eab308';
-  if (v >= 0.25) return '#22c55e';
-  return '#3b82f6';
+const typeColors = {
+  earthquake: ['#3b82f6', '#6366f1', '#8b5cf6', '#d946ef', '#ec4899', '#f43f5e'], // Mavi -> Mor -> Pembe
+  wildfire: ['#fef3c7', '#fde68a', '#fbbf24', '#f59e0b', '#d97706', '#b91d12'],   // Sarı -> Turuncu -> Kırmızı
+  flood: ['#e0f2fe', '#bae6fd', '#7dd3fc', '#38bdf8', '#0ea5e9', '#0284c7'],    // Açık Mavi -> Koyu Mavi
+  cyclone: ['#f1f5f9', '#cbd5e1', '#94a3b8', '#64748b', '#475569', '#1e293b'],  // Gri -> Siyah (Fırtına)
+  tsunami: ['#ccfbf1', '#99f6e4', '#5eead4', '#2dd4bf', '#14b8a6', '#0f766e'],  // Turkuaz
+  volcano: ['#450a0a', '#7f1d1d', '#991b1b', '#b91c1c', '#dc2626', '#ef4444'],  // Çok Koyu Kırmızı
+  default: ['#3b82f6', '#22c55e', '#eab308', '#f97316', '#ef4444']              // Klasik skala
+};
+
+function intensityToHex(v, type = 'default') {
+  const palette = typeColors[type] || typeColors.default;
+  const idx = Math.min(palette.length - 1, Math.floor(v * palette.length));
+  return palette[idx];
 }
 
 let landCellsSet = null;
@@ -123,10 +131,13 @@ self.onmessage = ({data}) => {
       const h3Id = group.h3_id;
       const count = group.event_count || group.count || 1;
       const maxSev = group.max_severity || group.maxSeverity || 'minimal';
+      const pType = group.primaryType || 'default';
+      
       const weight = severityWeight[maxSev] || 0.1;
       const intensity = Math.min(1.0, (count / 5) * weight);
+      
       intensityMap[h3Id] = intensity;
-      groupMap.set(h3Id, {count, maxSeverity: maxSev});
+      groupMap.set(h3Id, {count, maxSeverity: maxSev, primaryType: pType});
     }
   } else if (events) {
     for (const e of events) {
@@ -158,7 +169,7 @@ self.onmessage = ({data}) => {
       geometry: {type: 'Polygon', coordinates: [ring]},
       properties: {
         h3_id: h3Index,
-        color: intensityToHex(intensity),
+        color: intensityToHex(intensity, meta ? meta.primaryType : 'default'),
         opacity: Math.min(0.55, 0.12 + intensity * 0.43),
         intensity,
         eventCount: meta ? meta.count : 1,

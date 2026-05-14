@@ -171,18 +171,30 @@ export const useDisasterStore = defineStore('disaster', () => {
         h3_id: event.h3_id,
         count: 0,
         maxSeverity: 'minimal',
+        primaryType: event.type,
+        typeCounts: {},
         events: []
       };
       
       existing.count++;
       existing.events.push(event);
       
+      // Track counts per type
+      existing.typeCounts[event.type] = (existing.typeCounts[event.type] || 0) + 1;
+      
       // Update max severity if this event is higher
       const severityOrder = ['minimal', 'low', 'moderate', 'high', 'critical'];
       const currentIdx = severityOrder.indexOf(existing.maxSeverity);
       const eventIdx = severityOrder.indexOf(event.severity);
+      
       if (eventIdx > currentIdx) {
         existing.maxSeverity = event.severity;
+        existing.primaryType = event.type; // Severity changes the primary type
+      } else if (eventIdx === currentIdx) {
+        // If same severity, more frequent type wins
+        if (existing.typeCounts[event.type] > (existing.typeCounts[existing.primaryType] || 0)) {
+          existing.primaryType = event.type;
+        }
       }
       
       map.set(event.h3_id, existing);

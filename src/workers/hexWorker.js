@@ -128,13 +128,17 @@ self.onmessage = ({data}) => {
 
   if (isAggregated && events) {
     for (const group of events) {
-      const h3Id = group.h3_id;
+      // Calculate H3 ID if missing but coordinates exist
+      const h3Id = group.h3_id || (group.lat != null && group.lng != null ? latLngToCell(group.lat, group.lng, resolution) : null);
+      if (!h3Id) continue;
+
       const count = group.event_count || group.count || 1;
       const maxSev = group.max_severity || group.maxSeverity || 'minimal';
       const pType = group.primaryType || 'default';
       
       const weight = severityWeight[maxSev] || 0.1;
-      const intensity = Math.min(1.0, (count / 5) * weight);
+      // Logarithmic scaling for count to handle dense historical data beautifully
+      const intensity = Math.min(1.0, weight * (1 + Math.log10(count)));
       
       intensityMap[h3Id] = intensity;
       groupMap.set(h3Id, {count, maxSeverity: maxSev, primaryType: pType});

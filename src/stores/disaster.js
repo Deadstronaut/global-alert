@@ -103,32 +103,97 @@ export const useDisasterStore = defineStore('disaster', () => {
   // Computed
   // ─────────────────────────────────────────
   const allEvents = computed(() => {
-    const events = [];
+    const rawEvents = [];
     for (const type of activeLayers.value) {
       const store = storeMap.value[type];
-      if (store) events.push(...store.value);
+      if (store) rawEvents.push(...store.value);
     }
 
-    let filtered = events.filter(e => {
+    // 1. Zaman aralığı sınırlarını hesapla
+    const useDateRange = !!(startDate.value || endDate.value);
+    const from = useDateRange ? new Date(startDate.value).getTime() : (Date.now() - selectedTimeRange.value * 3_600_000);
+    const to   = useDateRange ? (endDate.value ? new Date(endDate.value).getTime() : Infinity) : Infinity;
+
+    // 2. Temel filtre + zaman filtresi birlikte (dedup öncesi küçült)
+    const status = sourcesStatus.value;
+    const filtered = rawEvents.filter(e => {
       if (!activeSeverities.value.has(e.severity)) return false;
       if (minMagnitude.value > 0 && (e.magnitude == null || e.magnitude < minMagnitude.value)) return false;
       if (maxDepth.value !== null && e.depth != null && e.depth > maxDepth.value) return false;
-      return true;
+      if (status[(e.source || 'Unknown')] === false) return false;
+
+      const t = new Date(e.time || e.created_at).getTime();
+      if (isNaN(t)) return true;
+      return t >= from && t <= to;
     });
 
-    // Zaman filtresi
-    if (startDate.value || endDate.value) {
-      const from = startDate.value ? new Date(startDate.value).getTime() : 0;
-      const to = endDate.value ? new Date(endDate.value).getTime() : Infinity;
-      return filtered.filter(e => {
-        const t = new Date(e.time).getTime();
-        return t >= from && t <= to;
-      });
+    // 3. Dedup — büyük magnitude önce işlenir, küçük magnitude yakınındakine duplicate sayılır
+    //    (ters olursa: minimal önce giriyor, low onu duplicate sayıyor → low kayboluyor)
+    const WINDOW_MS = 20 * 60 * 1000;          // 20 dakika
+    const DISTANCE_SQ = 0.04;                   // 0.2° ≈ 22 km
+    const MAG_TOLERANCE = 0.8;                  // farklı kurum magnitude farkı toleransı
+
+    // Büyük magnitude önce; eşit magnitude ise erken zaman önce
+    filtered.sort((a, b) => {
+      const md = (b.magnitude || 0) - (a.magnitude || 0);
+      if (md !== 0) return md;
+      return (new Date(a.time || a.created_at).getTime() || 0) -
+             (new Date(b.time || b.created_at).getTime() || 0);
+    });
+
+    // Zaman bucket'ı → event listesi (hızlı arama için)
+    const timeIdx = new Map();
+    const addIdx = (ev, t) => {
+      const b = Math.floor(t / WINDOW_MS);
+      if (!timeIdx.has(b)) timeIdx.set(b, []);
+      timeIdx.get(b).push({ ev, t });
+    };
+
+    const deduped = [];
+    for (const event of filtered) {
+      const t = new Date(event.time || event.created_at).getTime();
+      if (isNaN(t)) { deduped.push(event); continue; }
+
+      const eLat = Number(event.lat || 0);
+      const eLng = Number(event.lng || 0);
+      const bucket = Math.floor(t / WINDOW_MS);
+      let isDuplicate = false;
+
+      outer:
+      for (const b of [bucket - 1, bucket, bucket + 1]) {
+        for (const { ev: ex, t: tEx } of (timeIdx.get(b) || [])) {
+          if (Math.abs(t - tEx) > WINDOW_MS) continue;
+          if (ex.type !== event.type) continue;
+          const dLat = Number(ex.lat || 0) - eLat;
+          const dLng = Number(ex.lng || 0) - eLng;
+          if (dLat * dLat + dLng * dLng > DISTANCE_SQ) continue;
+          if (event.type === 'earthquake' && ex.magnitude != null && event.magnitude != null) {
+            if (Math.abs(Number(ex.magnitude) - Number(event.magnitude)) > MAG_TOLERANCE) continue;
+          }
+          isDuplicate = true;
+          break outer;
+        }
+      }
+
+      if (!isDuplicate) {
+        deduped.push(event);
+        addIdx(event, t);
+      }
     }
 
-    const cutoff = Date.now() - selectedTimeRange.value * 60 * 60 * 1000;
-    return filtered.filter(e => new Date(e.time).getTime() >= cutoff);
+    return deduped;
   });
+
+  const toggleSource = (sourceName) => {
+    // Reaktiviteyi tetiklemek için yeni obje referansı oluşturuyoruz
+    const newStatus = { ...sourcesStatus.value };
+    if (newStatus[sourceName] === undefined) {
+      newStatus[sourceName] = false;
+    } else {
+      newStatus[sourceName] = !newStatus[sourceName];
+    }
+    sourcesStatus.value = newStatus;
+  };
 
   const totalCount = computed(() => {
     const counts = {};
@@ -165,10 +230,16 @@ export const useDisasterStore = defineStore('disaster', () => {
   const h3Events = computed(() => {
     const map = new Map();
     for (const event of allEvents.value) {
-      if (!event.h3_id) continue;
+      // If no h3_id and no coordinates, we can't map it
+      if (!event.h3_id && (event.lat == null || event.lng == null)) continue;
       
-      const existing = map.get(event.h3_id) || {
+      // Use existing h3_id or a temporary key for the worker to resolve
+      const key = event.h3_id || `pending:${event.lat},${event.lng}`;
+      
+      const existing = map.get(key) || {
         h3_id: event.h3_id,
+        lat: event.lat,
+        lng: event.lng,
         count: 0,
         maxSeverity: 'minimal',
         primaryType: event.type,
@@ -178,26 +249,22 @@ export const useDisasterStore = defineStore('disaster', () => {
       
       existing.count++;
       existing.events.push(event);
-      
-      // Track counts per type
       existing.typeCounts[event.type] = (existing.typeCounts[event.type] || 0) + 1;
       
-      // Update max severity if this event is higher
       const severityOrder = ['minimal', 'low', 'moderate', 'high', 'critical'];
       const currentIdx = severityOrder.indexOf(existing.maxSeverity);
       const eventIdx = severityOrder.indexOf(event.severity);
       
       if (eventIdx > currentIdx) {
         existing.maxSeverity = event.severity;
-        existing.primaryType = event.type; // Severity changes the primary type
+        existing.primaryType = event.type;
       } else if (eventIdx === currentIdx) {
-        // If same severity, more frequent type wins
         if (existing.typeCounts[event.type] > (existing.typeCounts[existing.primaryType] || 0)) {
           existing.primaryType = event.type;
         }
       }
       
-      map.set(event.h3_id, existing);
+      map.set(key, existing);
     }
     return Array.from(map.values());
   });
@@ -212,6 +279,11 @@ export const useDisasterStore = defineStore('disaster', () => {
   function addEvent(event) {
     const store = storeMap.value[event.type] || otherDisasters;
     const arr = store.value;
+
+    // Kaynağı takip et (varsayılan açık)
+    if (event.source && sourcesStatus.value[event.source] === undefined) {
+      sourcesStatus.value[event.source] = true;
+    }
 
     // Duplicate ID kontrolü
     if (arr.some(e => e.id === event.id)) return;
@@ -233,15 +305,25 @@ export const useDisasterStore = defineStore('disaster', () => {
    */
   function loadBatch(events) {
     const groups = {};
+    const newSources = { ...sourcesStatus.value };
+
     for (const e of events) {
       if (!groups[e.type]) groups[e.type] = [];
       groups[e.type].push(e);
+      if (e.source && newSources[e.source] === undefined) {
+        newSources[e.source] = true;
+      }
     }
 
+    // sourcesStatus'u bir kerede güncelle (tek reaktif tetik)
+    sourcesStatus.value = newSources;
+
+    const map = storeMap.value;
     for (const [type, typeEvents] of Object.entries(groups)) {
-      const store = storeMap.value[type] || otherDisasters;
+      const store = map[type] || otherDisasters;
       const existingIds = new Set(store.value.map(e => e.id));
       const newOnes = typeEvents.filter(e => !existingIds.has(e.id));
+      if (newOnes.length === 0) continue;
       store.value = [...newOnes, ...store.value]
         .sort((a, b) => new Date(b.time) - new Date(a.time))
         .slice(0, MAX_EVENTS[type] || 200);
@@ -250,6 +332,8 @@ export const useDisasterStore = defineStore('disaster', () => {
     isLoading.value = false;
     lastUpdated.value = new Date().toISOString();
   }
+
+
 
   /**
    * Erken uyarı ekle ve 60s sonra kapat
@@ -280,15 +364,14 @@ export const useDisasterStore = defineStore('disaster', () => {
     saveDatePrefs({selectedTimeRange: tr, startDate: sd, endDate: ed});
 
     const days = getRangeDays();
-    if (days > 180) { // More than 6 months -> only Critical & High
-      activeSeverities.value = new Set(['critical', 'high']);
-    } else if (days > 30) { // More than 1 month -> Moderate too
-      activeSeverities.value = new Set(['critical', 'high', 'moderate']);
-    } else { // Shorter -> Show all
-      activeSeverities.value = new Set(['critical', 'high', 'moderate', 'low', 'minimal']);
-    }
-    // Tarih aralığı değişince her zaman full fetch yap
+
+    // Always reload individual events so allEvents reflects the new date range
     loadFromSupabase(true);
+    if (days > 3) {
+      fetchAggregatedData();
+    } else {
+      aggregatedH3Data.value = [];
+    }
   }, {immediate: false});
 
   // ─────────────────────────────────────────
@@ -300,19 +383,8 @@ export const useDisasterStore = defineStore('disaster', () => {
 
   async function loadFromSupabase(forceFullFetch = false) {
     supabaseLoading.value = true;
-    if (forceFullFetch) {
-      // Tarih aralığı değişince eski veriyi temizle
-      earthquakes.value = [];
-      wildfires.value = [];
-      floods.value = [];
-      droughts.value = [];
-      foodSecurity.value = [];
-      tsunamis.value = [];
-      cyclones.value = [];
-      volcanoes.value = [];
-      epidemics.value = [];
-      otherDisasters.value = [];
-    }
+    // Verileri asla siliyoruz, sadece yenilerini ekliyoruz veya mevcutları güncelliyoruz.
+    // loadBatch zaten ID kontrolü yaptığı için mükerrer veri eklenmez.
     try {
       let hoursAgo = selectedTimeRange.value;
 
@@ -349,6 +421,7 @@ export const useDisasterStore = defineStore('disaster', () => {
       console.warn('[Store] Supabase load failed:', err.message);
     } finally {
       supabaseLoading.value = false;
+      isLoading.value = false;
     }
   }
 
@@ -369,10 +442,16 @@ export const useDisasterStore = defineStore('disaster', () => {
     const hadCache = await loadFromCache();
     if (!hadCache) isLoading.value = true;
 
-    // 2. Arka planda Supabase delta fetch
-    loadFromSupabase().finally(() => {isLoading.value = false;});
+    // 2. Safety: 8s sonra loading'i zorla kapat
+    const safetyTimer = setTimeout(() => { isLoading.value = false; }, 8000);
 
-    // 3. Realtime subscription
+    // 3. Arka planda Supabase delta fetch
+    loadFromSupabase().finally(() => {
+      clearTimeout(safetyTimer);
+      isLoading.value = false;
+    });
+
+    // 4. Realtime subscription
     startRealtime();
   }
 
@@ -470,6 +549,7 @@ export const useDisasterStore = defineStore('disaster', () => {
     startPolling, stopPolling,
     toggleLayer, isLayerActive,
     toggleSeverity, isSeverityActive,
+    toggleSource,
     loadFromCache, loadFromSupabase,
     fetchAggregatedData,
     refreshAll: (force = true) => {

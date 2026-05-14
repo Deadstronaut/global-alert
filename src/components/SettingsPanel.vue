@@ -3,10 +3,12 @@ import { computed, ref, onMounted, onUnmounted } from 'vue'
 import { useUIStore } from '@/stores/ui.js'
 import { useGeolocationStore } from '@/stores/geolocation.js'
 import { useI18n } from 'vue-i18n'
+import { useDisasterStore } from '@/stores/disaster.js'
 
 const { t, locale } = useI18n()
 const uiStore = useUIStore()
 const geoStore = useGeolocationStore()
+const disasterStore = useDisasterStore()
 
 // ── Aggregator server health ──────────────────────────────────────────────────
 const SERVER_URL = import.meta.env.VITE_AGGREGATOR_URL || 'http://localhost:8765'
@@ -64,20 +66,24 @@ function lastCheck(entry) {
 }
 
 const sources = computed(() => {
-  const s = serverSources.value
-  return [
-    'EMSC',
-    'USGS',
-    'AFAD',
-    'Kandilli',
-    'GEOFON',
-    'GDACS',
-    'PTWC',
-    'NASA FIRMS',
-    'FEWS NET',
-    'WHO',
-  ].map((name) => ({ name, entry: s[name] ?? null }))
-})
+  const s = serverSources.value;
+  const defaultList = ['EMSC', 'USGS', 'AFAD', 'Kandilli', 'GEOFON', 'GDACS', 'PTWC', 'NASA FIRMS', 'FEWS NET', 'WHO'];
+  
+  // disasterStore.sourcesStatus referansını alıyoruz
+  const status = disasterStore.sourcesStatus || {};
+  
+  const all = new Set([...defaultList, ...Object.keys(status)]);
+  
+  return Array.from(all).map((name) => ({ 
+    name, 
+    entry: s[name] ?? null,
+    active: status[name] !== false 
+  }));
+});
+
+const toggleSource = (sourceName) => {
+  disasterStore.toggleSource(sourceName);
+};
 </script>
 
 <template>
@@ -169,14 +175,16 @@ const sources = computed(() => {
       <div class="settings-section">
         <h4 class="settings-section-title">Veri Kaynakları</h4>
         <div class="source-list">
-          <div v-for="src in sources" :key="src.name" class="source-row">
-            <span class="source-dot" :style="{ background: statusColor(src.entry) }"></span>
-            <span class="source-name">{{ src.name }}</span>
-            <span class="source-code" :style="{ color: statusColor(src.entry) }">
-              {{ statusLabel(src.entry) }}
-            </span>
-            <span class="source-age">{{ lastCheck(src.entry) }}</span>
-          </div>
+            <button
+              v-for="source in sources"
+              :key="source.name"
+              class="source-row"
+              :class="{ 'source-inactive': !source.active }"
+              @click="toggleSource(source.name)"
+            >
+              <span class="source-dot" :style="{ background: source.active ? statusColor(source.entry) : '#4b5563' }"></span>
+              <span class="source-name">{{ source.name }}</span>
+            </button>
         </div>
       </div>
 
@@ -383,10 +391,28 @@ const sources = computed(() => {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 5px 6px;
-  border-radius: 6px;
+  padding: 8px 10px;
+  border-radius: 8px;
   background: rgba(255, 255, 255, 0.04);
   font-size: 0.78rem;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  user-select: none;
+}
+
+.source-row:hover {
+  background: rgba(255, 255, 255, 0.08);
+  transform: translateX(2px);
+}
+
+.source-inactive {
+  opacity: 0.35;
+  filter: grayscale(1);
+  background: transparent;
+}
+
+.source-inactive:hover {
+  opacity: 0.6;
 }
 
 .source-dot {
@@ -394,6 +420,7 @@ const sources = computed(() => {
   height: 8px;
   border-radius: 50%;
   flex-shrink: 0;
+  transition: background 0.3s ease;
 }
 
 .source-name {
@@ -406,6 +433,7 @@ const sources = computed(() => {
   font-family: var(--font-mono);
   font-size: 0.7rem;
   font-weight: 700;
+  transition: color 0.3s ease;
 }
 
 .source-age {
@@ -413,6 +441,7 @@ const sources = computed(() => {
   color: var(--color-text-muted);
   min-width: 44px;
   text-align: right;
+  margin-right: 4px;
 }
 
 /* Slide transition */

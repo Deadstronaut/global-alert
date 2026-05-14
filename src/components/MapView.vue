@@ -1148,7 +1148,7 @@ watch(
 
 let _mapUpdateTimer = null
 watch(
-  () => disasterStore.allEvents,
+  () => [disasterStore.allEvents, disasterStore.aggregatedH3Data],
   () => {
     clearTimeout(_mapUpdateTimer)
     _mapUpdateTimer = setTimeout(() => {
@@ -1566,18 +1566,19 @@ onBeforeUnmount(() => {
 
 .modern-popup-container .maplibregl-popup-close-button {
   color: #ffffff !important;
-  font-size: 18px;
-  top: 8px;
-  right: 8px;
-  width: 24px;
-  height: 24px;
-  border-radius: 50%;
+  font-size: 16px;
+  top: 4px;
+  right: 4px;
+  width: 20px;
+  height: 20px;
+  border-radius: 4px;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(0, 0, 0, 0.3);
+  background: rgba(0, 0, 0, 0.4);
   transition: all 0.2s;
   z-index: 100;
+  border: none;
 }
 
 .modern-popup-container .maplibregl-popup-close-button:hover {

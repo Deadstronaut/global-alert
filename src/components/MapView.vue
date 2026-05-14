@@ -8,9 +8,67 @@ import { getSeverityHex, getDisasterIcon } from '@/services/adapters/DisasterEve
 import { cellToBoundary, polygonToCells } from 'h3-js'
 import HexWorker from '@/workers/hexWorker.js?worker'
 import { feature } from 'topojson-client'
-import landTopo from 'world-atlas/land-110m.json'
+import landTopo from 'world-atlas/land-10m.json'
+import countriesTopo from 'world-atlas/countries-10m.json'
+import { CUSTOM_TERRITORIES } from '@/data/customTerritories.js'
+import { COUNTRY_NAMES } from '@/data/countryNames.js'
 import maplibregl from 'maplibre-gl'
 import 'maplibre-gl/dist/maplibre-gl.css'
+
+/**
+ * Fixes antimeridian wrapping and winding order for GeoJSON features.
+ * Prevents horizontal line artifacts (common in Russia/Fiji) and polygon gaps.
+ */
+function fixGeometry(geojson) {
+  if (!geojson) return geojson
+
+  const processFeature = (f) => {
+    if (!f.geometry) return f
+    const geom = f.geometry
+
+    if (geom.type === 'Polygon') {
+      geom.coordinates = geom.coordinates.map((ring) => fixRing(ring))
+    } else if (geom.type === 'MultiPolygon') {
+      geom.coordinates = geom.coordinates.map((poly) => poly.map((ring) => fixRing(ring)))
+    }
+    return f
+  }
+
+  const fixRing = (ring) => {
+    if (!ring || ring.length < 3) return ring
+    let lastLng = ring[0][0]
+    const newRing = [ring[0]]
+
+    for (let i = 1; i < ring.length; i++) {
+      let lng = ring[i][0]
+      const lat = ring[i][1]
+
+      // Detect wrap-around jumps (> 180 degrees)
+      if (lng - lastLng > 180) lng -= 360
+      else if (lng - lastLng < -180) lng += 360
+
+      newRing.push([lng, lat])
+      lastLng = lng
+    }
+    
+    // Ensure ring is closed and has minimal valid geometry
+    if (newRing.length > 2) {
+      const last = newRing[newRing.length - 1]
+      const first = newRing[0]
+      if (last[0] !== first[0] || last[1] !== first[1]) {
+        newRing.push([first[0], first[1]])
+      }
+    }
+    return newRing
+  }
+
+  if (geojson.type === 'FeatureCollection') {
+    return { ...geojson, features: geojson.features.map(processFeature) }
+  } else if (geojson.type === 'Feature') {
+    return processFeature(geojson)
+  }
+  return geojson
+}
 
 const { t } = useI18n()
 const disasterStore = useDisasterStore()
@@ -30,6 +88,23 @@ let hexWorkerBusy = false
 const mapStyleIndex = ref(0)
 const currentZoom = ref(3)
 
+// ── Country interaction state ────────────────────────────────────────────────
+let hoveredFeatureId = null
+let selectedFeatureId = null
+let hoveredFeatureSource = 'world-countries'
+let selectedFeatureSource = 'world-countries'
+const hoveredCountryName = ref(null)
+const selectedCountryName = ref(null)
+const _symbolFilterCache = new Map()
+// Pre-compute all country features once for geometry lookups
+const _allCountryFeatures = [
+  ...feature(countriesTopo, countriesTopo.objects.countries).features.map((f) => ({
+    ...f,
+    source: 'world-countries',
+  })),
+  ...CUSTOM_TERRITORIES.features.map((f) => ({ ...f, source: 'custom-territories' })),
+]
+
 const currentHexRes = computed(() => {
   const z = currentZoom.value
   if (z < 3.5) return 2
@@ -37,11 +112,27 @@ const currentHexRes = computed(() => {
   if (z < 7.5) return 4
   if (z < 9.5) return 5
   if (z < 11.5) return 6
-  return 7
+  if (z < 13.5) return 7
+  if (z < 15.5) return 8
+  return 9
 })
 
 watch(currentHexRes, () => {
-  if (mapLoaded) updateHexbins()
+  if (mapLoaded) {
+    updateHexbins()
+
+    // Refresh country hex grid if one is selected
+    if (selectedFeatureId) {
+      const f = _allCountryFeatures.find((cf) => cf.id === selectedFeatureId)
+      if (f && hexWorker) {
+        hexWorker.postMessage({
+          type: 'FILL_GRID',
+          geometry: f.geometry,
+          resolution: currentHexRes.value,
+        })
+      }
+    }
+  }
 })
 
 watch(
@@ -228,6 +319,21 @@ function addSourcesAndLayers() {
     data: { type: 'FeatureCollection', features: [] },
   })
 
+  map.addSource('country-hex-grid', {
+    type: 'geojson',
+    data: { type: 'FeatureCollection', features: [] },
+  })
+
+  map.addSource('world-countries', {
+    type: 'geojson',
+    data: fixGeometry(feature(countriesTopo, countriesTopo.objects.countries)),
+  })
+
+  map.addSource('custom-territories', {
+    type: 'geojson',
+    data: fixGeometry(CUSTOM_TERRITORIES),
+  })
+
   // Background world grid — faint strokes only, adapts to map style
   const isLight = mapStyleIndex.value === 2
   map.addLayer(
@@ -238,12 +344,139 @@ function addSourcesAndLayers() {
       paint: {
         'line-color': isLight ? 'rgba(30,30,30,0.18)' : 'rgba(255,255,255,0.18)',
         'line-width': 0.5,
-        'line-opacity': ['interpolate', ['linear'], ['zoom'], 3.5, 1.0, 5.5, 0.0],
+        'line-opacity': ['interpolate', ['linear'], ['zoom'], 3, 0.25, 12, 0.1],
       },
       layout: { visibility: 'none' },
     },
     before,
   )
+
+  // Country fills (invisible, for interaction — moved to top after all layers)
+  map.addLayer(
+    {
+      id: 'country-fills',
+      type: 'fill',
+      source: 'world-countries',
+      paint: {
+        'fill-color': 'rgba(255, 255, 255, 0)',
+      },
+    },
+    before,
+  )
+
+  // Hover fill — white highlight
+  map.addLayer(
+    {
+      id: 'countries-hover-fill',
+      type: 'fill',
+      source: 'world-countries',
+      paint: {
+        'fill-color': '#ffffff',
+        'fill-opacity': ['case', ['boolean', ['feature-state', 'hover'], false], 0.08, 0],
+      },
+    },
+    before,
+  )
+
+  // Selected country hex grid — faint structure
+  map.addLayer(
+    {
+      id: 'country-hex-fill',
+      type: 'fill',
+      source: 'country-hex-grid',
+      paint: {
+        'fill-color': '#4ade80',
+        'fill-opacity': 0.04,
+      },
+    },
+    before,
+  )
+  map.addLayer(
+    {
+      id: 'country-hex-stroke',
+      type: 'line',
+      source: 'country-hex-grid',
+      paint: {
+        'line-color': '#4ade80',
+        'line-width': 0.5,
+        'line-opacity': 0.15,
+      },
+    },
+    before,
+  )
+
+  // Selected country highlight
+  map.addLayer(
+    {
+      id: 'country-selected',
+      type: 'fill',
+      source: 'world-countries',
+      paint: {
+        'fill-color': '#4ade80',
+        'fill-opacity': ['case', ['boolean', ['feature-state', 'selected'], false], 0.18, 0],
+      },
+    },
+    before,
+  )
+
+  // Global country borders - green lines
+  map.addLayer(
+    {
+      id: 'country-borders',
+      type: 'line',
+      source: 'world-countries',
+      paint: {
+        'line-color': '#4ade80',
+        'line-width': 1.2,
+        'line-opacity': 0.4,
+      },
+    },
+    before,
+  )
+
+  // Custom territories interaction layers
+  map.addLayer(
+    {
+      id: 'custom-territories-fills',
+      type: 'fill',
+      source: 'custom-territories',
+      paint: { 'fill-color': 'rgba(255, 255, 255, 0)' },
+    },
+    before,
+  )
+  map.addLayer(
+    {
+      id: 'custom-hover-fill',
+      type: 'fill',
+      source: 'custom-territories',
+      paint: {
+        'fill-color': '#ffffff',
+        'fill-opacity': ['case', ['boolean', ['feature-state', 'hover'], false], 0.08, 0],
+      },
+    },
+    before,
+  )
+  map.addLayer(
+    {
+      id: 'custom-selected-fill',
+      type: 'fill',
+      source: 'custom-territories',
+      paint: {
+        'fill-color': '#4ade80',
+        'fill-opacity': ['case', ['boolean', ['feature-state', 'selected'], false], 0.18, 0],
+      },
+    },
+    before,
+  )
+  map.addLayer({
+    id: 'custom-dim',
+    type: 'fill',
+    source: 'custom-territories',
+    paint: {
+      'fill-color': '#000000',
+      'fill-opacity': ['case', ['boolean', ['feature-state', 'dimmed'], false], 0.55, 0],
+    },
+  })
 
   // Disaster heatmap fill — below labels
   map.addLayer(
@@ -308,7 +541,165 @@ function addSourcesAndLayers() {
     before,
   )
 
+  // Dim overlay for non-selected countries — no `before` so it renders above symbol layers
+  map.addLayer({
+    id: 'country-dim',
+    type: 'fill',
+    source: 'world-countries',
+    paint: {
+      'fill-color': '#000000',
+      'fill-opacity': ['case', ['boolean', ['feature-state', 'dimmed'], false], 0.55, 0],
+    },
+  })
+
+  // interaction layers must be at absolute top to capture all mouse/click events
+  map.moveLayer('country-fills')
+  map.moveLayer('custom-territories-fills')
+
   addBuildings3D()
+}
+
+// ── Country label filtering: show only selected country's labels ─────────────
+function setFocusMode(active, featureGeoJSON = null) {
+  if (!map || !mapLoaded) return
+  const layers = map.getStyle()?.layers ?? []
+  if (active && featureGeoJSON) {
+    _symbolFilterCache.clear()
+    for (const layer of layers) {
+      if (layer.type !== 'symbol') continue
+      try {
+        const orig = map.getFilter(layer.id)
+        _symbolFilterCache.set(layer.id, orig ?? null)
+        map.setFilter(
+          layer.id,
+          orig ? ['all', orig, ['within', featureGeoJSON]] : ['within', featureGeoJSON],
+        )
+      } catch {
+        /* */
+      }
+    }
+  } else {
+    for (const layer of layers) {
+      if (layer.type !== 'symbol') continue
+      try {
+        if (_symbolFilterCache.has(layer.id))
+          map.setFilter(layer.id, _symbolFilterCache.get(layer.id))
+      } catch {
+        /* */
+      }
+    }
+    _symbolFilterCache.clear()
+    brightenDarkLabels()
+  }
+}
+
+function selectCountry(f) {
+  if (!map || !mapLoaded) return
+  const fid = f.id
+  const source = f.layer?.source || f.source || 'world-countries'
+  if (fid == null) return
+
+  // Get full feature geometry
+  const fullFeature = _allCountryFeatures.find((cf) => cf.id === fid) ?? f
+  const geom = fullFeature.geometry
+  if (!geom) return
+
+  const bounds = new maplibregl.LngLatBounds()
+  let hasAntimeridian = false
+  const lons = []
+
+  const processCoords = (coords) => {
+    if (typeof coords[0] === 'number') {
+      lons.push(coords[0])
+      bounds.extend(coords)
+    } else {
+      coords.forEach(processCoords)
+    }
+  }
+  processCoords(geom.coordinates)
+
+  // Detect if country crosses the antimeridian (large gap in longitudes)
+  if (lons.length > 0) {
+    const min = Math.min(...lons)
+    const max = Math.max(...lons)
+    if (max - min > 180) {
+      hasAntimeridian = true
+    }
+  }
+
+  if (bounds.isEmpty()) return
+
+  if (hasAntimeridian) {
+    const shiftedLons = lons.map((l) => (l < 0 ? l + 360 : l))
+    const sMin = Math.min(...shiftedLons)
+    const sMax = Math.max(...shiftedLons)
+    const centerLng = ((sMin + sMax) / 2) % 360
+    map.easeTo({
+      center: [centerLng > 180 ? centerLng - 360 : centerLng, bounds.getCenter().lat],
+      zoom: 3.5,
+      duration: 1500,
+    })
+  } else {
+    map.fitBounds(bounds, { padding: 60, duration: 1500, essential: true })
+  }
+
+  // Reset previous selection
+  if (selectedFeatureId !== null) {
+    map.setFeatureState(
+      { source: selectedFeatureSource, id: selectedFeatureId },
+      { selected: false, dimmed: false },
+    )
+  }
+
+  selectedFeatureId = fid
+  selectedFeatureSource = source
+
+  if (source === 'custom-territories') {
+    selectedCountryName.value = f.properties?.name || f.id
+  } else {
+    const nameKey = String(fid).padStart(3, '0')
+    selectedCountryName.value = COUNTRY_NAMES[nameKey] ?? `#${fid}`
+  }
+
+  map.setFeatureState({ source, id: fid }, { selected: true, dimmed: false })
+
+  // ③ Generate Hex Grid for the selected country (High resolution for focus)
+  if (hexWorker) {
+    hexWorker.postMessage({
+      type: 'FILL_GRID',
+      geometry: geom,
+      resolution: Math.min(7, currentHexRes.value + 1),
+    })
+  }
+
+  // Dim everything else
+  _allCountryFeatures.forEach((cf) => {
+    if (cf.id !== fid) {
+      map.setFeatureState({ source: cf.source, id: cf.id }, { dimmed: true })
+    }
+  })
+
+  setFocusMode(true, fullFeature)
+}
+
+function clearCountrySelection() {
+  selectedCountryName.value = null
+  if (!map || !mapLoaded) return
+
+  // Clear country hex grid
+  map.getSource('country-hex-grid')?.setData({ type: 'FeatureCollection', features: [] })
+
+  if (selectedFeatureId !== null) {
+    map.setFeatureState(
+      { source: selectedFeatureSource, id: selectedFeatureId },
+      { selected: false },
+    )
+  }
+  selectedFeatureId = null
+  _allCountryFeatures.forEach((cf) => {
+    map.setFeatureState({ source: cf.source, id: cf.id }, { dimmed: false })
+  })
+  setFocusMode(false)
 }
 
 function initMap() {
@@ -318,10 +709,9 @@ function initMap() {
     container: mapContainer.value,
     style: getBaseStyle(),
     center: [30, 20],
-    zoom: 3,
-    minZoom: 1.55,
     maxZoom: 20,
     attributionControl: false,
+    doubleClickZoom: false, // Disable default so we can handle it for zoom-to-fit
   })
 
   map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'bottom-right')
@@ -346,13 +736,18 @@ function initMap() {
     map.on('click', 'hex-fill', (e) => {
       if (!e.features || !e.features.length) return
       const props = e.features[0].properties
+      const h3Id = props.h3_id
+      const count = props.eventCount || 1
+
       new maplibregl.Popup()
         .setLngLat(e.lngLat)
         .setHTML(
           `
           <div class="disaster-popup">
-            <h4>${t('alerts.severity')}: ${String(props.maxSeverity).toUpperCase()}</h4>
-            <p>Yoğunluk: ${Math.round((props.intensity ?? 0) * 100)}%</p>
+            <h4>H3: ${h3Id || 'Dinamik'}</h4>
+            <p><b>Şiddet:</b> ${String(props.maxSeverity).toUpperCase()}</p>
+            <p><b>Olay Sayısı:</b> ${count}</p>
+            <p><b>Yoğunluk:</b> ${Math.round((props.intensity ?? 0) * 100)}%</p>
           </div>
         `,
         )
@@ -365,6 +760,106 @@ function initMap() {
     map.on('mouseleave', 'hex-fill', () => {
       map.getCanvas().style.cursor = ''
     })
+
+    // ── Country hover tracking ──
+    const interactionLayers = ['country-fills', 'custom-territories-fills']
+
+    map.on('mousemove', interactionLayers, (e) => {
+      if (!e.features?.length) return
+      const f = e.features[0]
+      const source = f.source
+
+      if (
+        hoveredFeatureId !== null &&
+        (hoveredFeatureId !== f.id || hoveredFeatureSource !== source)
+      ) {
+        map.setFeatureState(
+          { source: hoveredFeatureSource, id: hoveredFeatureId },
+          { hover: false },
+        )
+      }
+
+      hoveredFeatureId = f.id
+      hoveredFeatureSource = source
+      map.setFeatureState({ source, id: f.id }, { hover: true })
+
+      if (source === 'custom-territories') {
+        hoveredCountryName.value = f.properties.name || f.id
+      } else {
+        hoveredCountryName.value = COUNTRY_NAMES[String(f.id).padStart(3, '0')] ?? null
+      }
+      map.getCanvas().style.cursor = 'pointer'
+    })
+
+    map.on('mouseleave', interactionLayers, () => {
+      if (hoveredFeatureId !== null) {
+        map.setFeatureState(
+          { source: hoveredFeatureSource, id: hoveredFeatureId },
+          { hover: false },
+        )
+      }
+      hoveredFeatureId = null
+      hoveredCountryName.value = null
+      map.getCanvas().style.cursor = ''
+    })
+
+    // ── Double-click: select country + zoom to fit ──
+    map.on('dblclick', interactionLayers, (e) => {
+      if (!e.features?.length) return
+      if (e.originalEvent) {
+        e.originalEvent.stopPropagation()
+        e.originalEvent.preventDefault()
+      }
+      selectCountry(e.features[0])
+    })
+
+    // Double-click on empty space → zoom in
+    map.on('dblclick', (e) => {
+      if (map.queryRenderedFeatures(e.point, { layers: interactionLayers }).length > 0) return
+      map.zoomIn()
+    })
+
+    // Click on empty space → clear selection
+    map.on('click', (e) => {
+      if (map.queryRenderedFeatures(e.point, { layers: interactionLayers }).length === 0) {
+        clearCountrySelection()
+      }
+    })
+
+    // Dynamic Viewport Grid update
+    map.on('moveend', () => {
+      if (uiStore.mapMode === 'hexagon') {
+        updateViewportGrid()
+      }
+    })
+  })
+}
+
+function updateViewportGrid() {
+  if (!map || !mapLoaded || !hexWorker) return
+  if (uiStore.mapMode !== 'hexagon') return
+
+  const bounds = map.getBounds()
+  const sw = bounds.getSouthWest()
+  const ne = bounds.getNorthEast()
+
+  // Handle antimeridian bounds correctly for the worker
+  let minLng = sw.lng
+  let maxLng = ne.lng
+  
+  // Wrap to -180, 180 range
+  while (minLng < -180) minLng += 360
+  while (minLng > 180) minLng -= 360
+  while (maxLng < -180) maxLng += 360
+  while (maxLng > 180) maxLng -= 360
+
+  hexWorker.postMessage({
+    type: 'FILL_VIEWPORT',
+    bounds: [
+      [minLng, sw.lat],
+      [maxLng, ne.lat],
+    ],
+    resolution: currentHexRes.value,
   })
 }
 
@@ -480,40 +975,53 @@ function updateHexbins() {
   if (!showHex) return
 
   // ── 1. Background grid ────────────────────────────────────────────────────
-  if (!worldHexBgCache) {
-    setTimeout(() => {
-      if (map) map.getSource('hex-world-bg')?.setData(buildWorldHexGrid())
-    }, 0)
-  } else {
-    map.getSource('hex-world-bg')?.setData(worldHexBgCache)
-  }
+  updateViewportGrid()
 
-  // ── 2. Worker busy → skip (sonraki debounce çalışacak) ───────────────────
+  // ── 2. Worker busy → skip
   if (hexWorkerBusy) return
 
-  // ── 3. Worker yoksa yarat ─────────────────────────────────────────────────
+  // ── 3. Create worker if needed
   if (!hexWorker) {
     hexWorker = new HexWorker()
     hexWorker.onmessage = ({ data }) => {
+      if (!map || !mapLoaded) return
+
       hexWorkerBusy = false
-      if (map && mapLoaded) {
+
+      if (data.type === 'FILL_GRID') {
+        map.getSource('country-hex-grid')?.setData({
+          type: 'FeatureCollection',
+          features: data.features,
+        })
+      } else if (data.type === 'FILL_VIEWPORT') {
+        map.getSource('hex-world-bg')?.setData({
+          type: 'FeatureCollection',
+          features: data.features,
+        })
+      } else {
         map.getSource('disaster-hex')?.setData({
           type: 'FeatureCollection',
           features: data.features,
         })
       }
     }
+
+    // Initialize land cells in worker
+    const landCells = Array.from(getLandCells())
+    hexWorker.postMessage({ type: 'INIT_LAND', landCells })
   }
 
-  // ── 4. Hesabı worker'a gönder ─────────────────────────────────────────────
+  // ── 4. Send to worker
   hexWorkerBusy = true
+
+  // Prioritize server-side aggregated data, fall back to client-side compute
+  const aggregatedData = disasterStore.aggregatedH3Data
+  const useAggregated = aggregatedData && aggregatedData.length > 0
+
   hexWorker.postMessage({
-    events: disasterStore.allEvents.map((e) => ({
-      lat: e.lat,
-      lng: e.lng,
-      severity: e.severity,
-    })),
+    events: useAggregated ? aggregatedData : disasterStore.h3Events,
     resolution: currentHexRes.value,
+    isAggregated: true, // Both h3Events and aggregatedH3Data are aggregated structures
   })
 }
 
@@ -574,8 +1082,18 @@ async function applyBaseStyle() {
   function onStyleReady() {
     if (version !== styleLoadVersion || mapLoaded) return
     mapLoaded = true
+    map.doubleClickZoom.disable()
     addSourcesAndLayers()
     brightenDarkLabels()
+    if (selectedFeatureId !== null) {
+      map.setFeatureState({ source: 'world-countries', id: selectedFeatureId }, { selected: true })
+      _allCountryFeatures.forEach((cf) => {
+        if (cf.id !== selectedFeatureId)
+          map.setFeatureState({ source: 'world-countries', id: cf.id }, { dimmed: true })
+      })
+      const selF = _allCountryFeatures.find((cf) => cf.id === selectedFeatureId)
+      if (selF) setFocusMode(true, selF)
+    }
     updateMarkers()
     updateHeatmap()
     updateHexbins()
@@ -735,6 +1253,19 @@ onBeforeUnmount(() => {
         }}</span>
       </div>
     </div>
+
+    <!-- Country hover tooltip -->
+    <Transition name="hover-label">
+      <div v-if="hoveredCountryName" class="country-hover-label">{{ hoveredCountryName }}</div>
+    </Transition>
+
+    <!-- Selected country badge -->
+    <Transition name="country-badge">
+      <div v-if="selectedCountryName" class="country-badge" @click="clearCountrySelection">
+        <span class="country-badge-name">{{ selectedCountryName }}</span>
+        <span class="country-badge-close">✕</span>
+      </div>
+    </Transition>
   </div>
 </template>
 
@@ -911,6 +1442,82 @@ onBeforeUnmount(() => {
   height: 9px;
   border-radius: 50%;
   flex-shrink: 0;
+}
+
+/* ── Country hover label ── */
+.country-hover-label {
+  position: absolute;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(20, 24, 33, 0.88);
+  color: #e8ecf0;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 5px 14px;
+  border-radius: 20px;
+  border: 1px solid rgba(74, 222, 128, 0.35);
+  pointer-events: none;
+  backdrop-filter: blur(6px);
+  white-space: nowrap;
+  z-index: 20;
+}
+
+.hover-label-enter-active,
+.hover-label-leave-active {
+  transition:
+    opacity 0.15s ease,
+    transform 0.15s ease;
+}
+.hover-label-enter-from,
+.hover-label-leave-to {
+  opacity: 0;
+  transform: translateX(-50%) translateY(6px);
+}
+
+/* ── Selected country badge ── */
+.country-badge {
+  position: absolute;
+  bottom: 56px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(20, 24, 33, 0.92);
+  border: 1px solid rgba(74, 222, 128, 0.6);
+  color: #4ade80;
+  font-size: 13px;
+  font-weight: 700;
+  padding: 6px 14px 6px 16px;
+  border-radius: 24px;
+  cursor: pointer;
+  backdrop-filter: blur(8px);
+  z-index: 20;
+  white-space: nowrap;
+  box-shadow: 0 0 12px rgba(74, 222, 128, 0.2);
+}
+
+.country-badge:hover {
+  background: rgba(74, 222, 128, 0.15);
+}
+
+.country-badge-close {
+  font-size: 10px;
+  opacity: 0.6;
+  margin-left: 2px;
+}
+
+.country-badge-enter-active,
+.country-badge-leave-active {
+  transition:
+    opacity 0.2s ease,
+    transform 0.2s ease;
+}
+.country-badge-enter-from,
+.country-badge-leave-to {
+  opacity: 0;
+  transform: translateX(-50%) translateY(8px);
 }
 </style>
 

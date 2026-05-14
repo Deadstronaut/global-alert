@@ -42,12 +42,12 @@ function changeLanguage(lang) {
 
 // Kaynak durumu rengi
 function statusColor(entry) {
-  if (!entry) return '#6b7280'     // gri - henüz bilgi yok
+  if (!entry) return '#6b7280' // gri - henüz bilgi yok
   const code = entry.code
-  if (code === 200) return '#22c55e'  // yeşil
-  if (code === 0)   return '#f59e0b'  // sarı - bağlantı yok (WS)
+  if (code === 200) return '#22c55e' // yeşil
+  if (code === 0) return '#f59e0b' // sarı - bağlantı yok (WS)
   if (code === 401 || code === 403) return '#f97316' // turuncu
-  return '#ef4444'                    // kırmızı - 400/404/500
+  return '#ef4444' // kırmızı - 400/404/500
 }
 
 function statusLabel(entry) {
@@ -66,9 +66,17 @@ function lastCheck(entry) {
 const sources = computed(() => {
   const s = serverSources.value
   return [
-    'EMSC', 'USGS', 'AFAD', 'Kandilli', 'GEOFON',
-    'GDACS', 'PTWC', 'NASA FIRMS', 'FEWS NET', 'WHO'
-  ].map(name => ({ name, entry: s[name] ?? null }))
+    'EMSC',
+    'USGS',
+    'AFAD',
+    'Kandilli',
+    'GEOFON',
+    'GDACS',
+    'PTWC',
+    'NASA FIRMS',
+    'FEWS NET',
+    'WHO',
+  ].map((name) => ({ name, entry: s[name] ?? null }))
 })
 </script>
 
@@ -78,6 +86,34 @@ const sources = computed(() => {
       <div class="settings-header">
         <h3>⚙️ {{ t('settings.title') }}</h3>
         <button class="btn-icon btn-ghost" @click="uiStore.toggleSettings()">✕</button>
+      </div>
+
+      <!-- Map View Mode -->
+      <div class="settings-section">
+        <h4 class="settings-section-title">Harita Görünüm Modu</h4>
+        <div class="map-mode-selector-settings">
+          <button 
+            class="mode-btn-settings" 
+            :class="{ active: uiStore.mapMode === 'normal' }"
+            @click="uiStore.mapMode = 'normal'"
+          >
+            📍 Durum
+          </button>
+          <button 
+            class="mode-btn-settings" 
+            :class="{ active: uiStore.mapMode === 'hexagon' }"
+            @click="uiStore.mapMode = 'hexagon'"
+          >
+            ⬡ Petek
+          </button>
+          <button 
+            class="mode-btn-settings" 
+            :class="{ active: uiStore.mapMode === 'heatmap' }"
+            @click="uiStore.mapMode = 'heatmap'"
+          >
+            🔥 Isı
+          </button>
+        </div>
       </div>
 
       <!-- Display -->
@@ -96,8 +132,8 @@ const sources = computed(() => {
           <span class="toggle-switch"></span>
         </label>
         <p class="settings-desc">{{ t('settings.safeModeDesc') }}</p>
-
       </div>
+
 
       <!-- Accessibility -->
       <div class="settings-section">
@@ -133,11 +169,7 @@ const sources = computed(() => {
       <div class="settings-section">
         <h4 class="settings-section-title">Veri Kaynakları</h4>
         <div class="source-list">
-          <div
-            v-for="src in sources"
-            :key="src.name"
-            class="source-row"
-          >
+          <div v-for="src in sources" :key="src.name" class="source-row">
             <span class="source-dot" :style="{ background: statusColor(src.entry) }"></span>
             <span class="source-name">{{ src.name }}</span>
             <span class="source-code" :style="{ color: statusColor(src.entry) }">
@@ -353,7 +385,7 @@ const sources = computed(() => {
   gap: 8px;
   padding: 5px 6px;
   border-radius: 6px;
-  background: rgba(255,255,255,0.04);
+  background: rgba(255, 255, 255, 0.04);
   font-size: 0.78rem;
 }
 
@@ -396,4 +428,36 @@ const sources = computed(() => {
   transform: translateX(100%);
   opacity: 0;
 }
+
+.map-mode-selector-settings {
+  display: flex;
+  gap: 8px;
+  width: 100%;
+}
+
+.mode-btn-settings {
+  flex: 1;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--glass-border);
+  color: var(--color-text-secondary);
+  padding: 8px 4px;
+  border-radius: 8px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.mode-btn-settings:hover {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+.mode-btn-settings.active {
+  background: rgba(77, 163, 255, 0.15);
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+  box-shadow: 0 0 12px rgba(77, 163, 255, 0.1);
+}
 </style>
+

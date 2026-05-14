@@ -6,8 +6,29 @@
 
 import {defineStore} from 'pinia';
 import {ref, computed, watch} from 'vue';
-import {fetchRecentDisasters, subscribeRealtime} from '@/services/supabaseService.js';
+import {fetchRecentDisasters, subscribeRealtime, fetchAggregatedDisasters} from '@/services/supabaseService.js';
 import {readAllFromCache, writeToCache, getLastFetchAt, setLastFetchAt} from '@/services/idbCache.js';
+
+// ─────────────────────────────────────────
+// localStorage helpers
+// ─────────────────────────────────────────
+const LS_KEY = 'ga_date_pref';
+
+function loadDatePrefs() {
+  try {
+    const raw = localStorage.getItem(LS_KEY);
+    if (!raw) return {};
+    return JSON.parse(raw);
+  } catch {
+    return {};
+  }
+}
+
+function saveDatePrefs(prefs) {
+  try {
+    localStorage.setItem(LS_KEY, JSON.stringify(prefs));
+  } catch { /* quota exceeded – ignore */}
+}
 
 // Afet tipine göre maksimum tutulacak olay sayısı (bellek yönetimi)
 const MAX_EVENTS = {
@@ -37,6 +58,7 @@ export const useDisasterStore = defineStore('disaster', () => {
   const volcanoes = ref([]);
   const epidemics = ref([]);
   const otherDisasters = ref([]);
+  const aggregatedH3Data = ref([]);
 
   const activeLayers = ref(new Set([
     'earthquake'
@@ -46,9 +68,11 @@ export const useDisasterStore = defineStore('disaster', () => {
   const isConnected = ref(false);
   const isLoading = ref(true);
   const lastUpdated = ref(null);
-  const startDate = ref(null);
-  const endDate = ref(null);
-  const selectedTimeRange = ref(24); // saat
+  // Restore from localStorage so date selection survives page refreshes
+  const _prefs = loadDatePrefs();
+  const startDate = ref(_prefs.startDate ?? null);
+  const endDate = ref(_prefs.endDate ?? null);
+  const selectedTimeRange = ref(_prefs.selectedTimeRange ?? 24); // saat
   const sourcesStatus = ref({});  // { EMSC: true, USGS: true, ... }
   const errors = ref([]);
 
@@ -134,6 +158,38 @@ export const useDisasterStore = defineStore('disaster', () => {
     Object.values(sourcesStatus.value).filter(Boolean).length
   );
 
+  /**
+   * Aggregates all active events by their h3_id
+   * Used for rendering the fixed hex grid / static mesh
+   */
+  const h3Events = computed(() => {
+    const map = new Map();
+    for (const event of allEvents.value) {
+      if (!event.h3_id) continue;
+      
+      const existing = map.get(event.h3_id) || {
+        h3_id: event.h3_id,
+        count: 0,
+        maxSeverity: 'minimal',
+        events: []
+      };
+      
+      existing.count++;
+      existing.events.push(event);
+      
+      // Update max severity if this event is higher
+      const severityOrder = ['minimal', 'low', 'moderate', 'high', 'critical'];
+      const currentIdx = severityOrder.indexOf(existing.maxSeverity);
+      const eventIdx = severityOrder.indexOf(event.severity);
+      if (eventIdx > currentIdx) {
+        existing.maxSeverity = event.severity;
+      }
+      
+      map.set(event.h3_id, existing);
+    }
+    return Array.from(map.values());
+  });
+
   // ─────────────────────────────────────────
   // Actions
   // ─────────────────────────────────────────
@@ -207,7 +263,10 @@ export const useDisasterStore = defineStore('disaster', () => {
     return selectedTimeRange.value / 24;
   };
 
-  watch([selectedTimeRange, startDate, endDate], () => {
+  // Persist date preferences to localStorage whenever they change
+  watch([selectedTimeRange, startDate, endDate], ([tr, sd, ed]) => {
+    saveDatePrefs({selectedTimeRange: tr, startDate: sd, endDate: ed});
+
     const days = getRangeDays();
     if (days > 180) { // More than 6 months -> only Critical & High
       activeSeverities.value = new Set(['critical', 'high']);
@@ -342,6 +401,20 @@ export const useDisasterStore = defineStore('disaster', () => {
     return activeSeverities.value.has(severity);
   }
 
+  async function fetchAggregatedData() {
+    try {
+      aggregatedH3Data.value = await fetchAggregatedDisasters({
+        hours: selectedTimeRange.value,
+        types: Array.from(activeLayers.value),
+        severities: Array.from(activeSeverities.value),
+        fromDate: startDate.value ? new Date(startDate.value).toISOString() : null,
+        toDate: endDate.value ? new Date(new Date(endDate.value).setHours(23, 59, 59, 999)).toISOString() : null
+      });
+    } catch (error) {
+      console.error('Failed to fetch aggregated data:', error);
+    }
+  }
+
   async function loadFromCache() {
     try {
       const cached = await readAllFromCache();
@@ -371,6 +444,7 @@ export const useDisasterStore = defineStore('disaster', () => {
   return {
     earthquakes, wildfires, floods, droughts, foodSecurity,
     tsunamis, cyclones, volcanoes, epidemics, otherDisasters,
+    aggregatedH3Data,
     activeLayers, activeSeverities,
     isConnected, isLoading, lastUpdated,
     startDate, endDate, selectedTimeRange,
@@ -378,13 +452,17 @@ export const useDisasterStore = defineStore('disaster', () => {
     minMagnitude, maxDepth,
     earlyWarnings, activeWarning,
     supabaseCounts, supabaseLoading,
-    allEvents, totalCount, criticalEvents, sourcesOnline,
+    allEvents, totalCount, criticalEvents, sourcesOnline, h3Events,
     addEvent, loadBatch, addEarlyWarning,
     startWebSocket, stopWebSocket,
     startPolling, stopPolling,
     toggleLayer, isLayerActive,
     toggleSeverity, isSeverityActive,
     loadFromCache, loadFromSupabase,
-    refreshAll: (force = true) => loadFromSupabase(force),
+    fetchAggregatedData,
+    refreshAll: (force = true) => {
+      loadFromSupabase(force);
+      fetchAggregatedData();
+    },
   };
 });

@@ -25,7 +25,7 @@ export const useUIStore = defineStore('ui', () => {
     const colorblindMode = ref(false);
 
     // Map visualization mode: 'normal' | 'hexagon' | 'heatmap'
-    const mapMode = ref('normal');
+    const mapMode = ref('hexagon');
     // Computed aliases kept for backward compat with MapView watches
     const showHeatmap = computed(() => mapMode.value === 'heatmap');
     const showHexbins = computed(() => mapMode.value === 'hexagon');

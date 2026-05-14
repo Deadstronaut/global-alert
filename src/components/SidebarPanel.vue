@@ -1,4 +1,4 @@
-﻿<script setup>
+<script setup>
 import { computed, ref, watch } from 'vue'
 import { useDisasterStore } from '@/stores/disaster.js'
 import { useUIStore } from '@/stores/ui.js'
@@ -458,7 +458,7 @@ watch([rangeStartDate, rangeEndDate], ([start, end]) => {
         :title="isGlobeMode ? 'View 2D' : 'View 3D'"
         @click="isGlobeMode ? uiStore.transitionToMap(20, 30, 3) : uiStore.transitionToGlobe()"
       >
-        {{ isGlobeMode ? '🗺️' : '🌍' }}
+        {{ isGlobeMode ? '🗺️' : '🌐' }}
       </button>
       <button
         class="btn-icon collapsed-action"
@@ -476,7 +476,7 @@ watch([rangeStartDate, rangeEndDate], ([start, end]) => {
         @click="handleLocate"
         :title="t('sidebar.myLocation')"
       >
-        📍
+        🎯
       </button>
       <button
         class="btn-icon collapsed-action"
@@ -486,6 +486,35 @@ watch([rangeStartDate, rangeEndDate], ([start, end]) => {
       >
         🔄
       </button>
+
+      <!-- Map Mode Options (Collapsed) -->
+      <button
+        class="btn-icon collapsed-action"
+        :class="{ active: uiStore.mapMode === 'normal' }"
+        @click="uiStore.mapMode = 'normal'"
+        title="Durum (Event)"
+      >
+        📍
+      </button>
+      <button
+        class="btn-icon collapsed-action"
+        :class="{ active: uiStore.mapMode === 'hexagon' }"
+        @click="uiStore.mapMode = 'hexagon'"
+        title="Petek (Hex)"
+      >
+        ⬡
+      </button>
+      <button
+        class="btn-icon collapsed-action"
+        :class="{ active: uiStore.mapMode === 'heatmap' }"
+        @click="uiStore.mapMode = 'heatmap'"
+        title="Isı (Heat)"
+      >
+        🔥
+      </button>
+
+      <div class="collapsed-divider"></div>
+
       <button
         class="btn-icon collapsed-action"
         @click="uiStore.toggleSettings()"
@@ -771,7 +800,7 @@ watch([rangeStartDate, rangeEndDate], ([start, end]) => {
           </div>
 
           <button class="btn btn-primary sidebar-action-btn" @click="handleLocate">
-            📍
+            🎯
             {{
               geoStore.isTracking
                 ? t('sidebar.locating')
@@ -794,25 +823,25 @@ watch([rangeStartDate, rangeEndDate], ([start, end]) => {
               class="mode-btn"
               :class="{ active: uiStore.mapMode === 'normal' }"
               @click="uiStore.mapMode = 'normal'"
-              title="Normal (1)"
+              title="Durum (1)"
             >
-              📍 Normal<span class="mode-key">1</span>
+              📍 Durum<span class="mode-key">1</span>
             </button>
             <button
               class="mode-btn"
               :class="{ active: uiStore.mapMode === 'hexagon' }"
               @click="uiStore.mapMode = 'hexagon'"
-              title="Hexagon (2)"
+              title="Petek (2)"
             >
-              ⬡ Hex<span class="mode-key">2</span>
+              ⬡ Petek<span class="mode-key">2</span>
             </button>
             <button
               class="mode-btn"
               :class="{ active: uiStore.mapMode === 'heatmap' }"
               @click="uiStore.mapMode = 'heatmap'"
-              title="Heatmap (3)"
+              title="Isı (3)"
             >
-              🔥 Heat<span class="mode-key">3</span>
+              🔥 Isı<span class="mode-key">3</span>
             </button>
           </div>
 

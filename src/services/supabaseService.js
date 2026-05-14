@@ -69,6 +69,7 @@ function rowToEvent(row, type) {
         ...row,
         type,
         severity,
+        h3_id: row.h3_id || null,
         sourceUrl: row.source_url ?? row.sourceUrl ?? '',
         receivedAt: row.received_at ?? row.receivedAt ?? new Date().toISOString(),
         extra: typeof row.extra === 'string'
@@ -101,7 +102,7 @@ export async function fetchRecentDisasters(options = {}) {
         Object.entries(TABLE_MAP).map(async ([table, type]) => {
             let query = client
                 .from(table)
-                .select('id,type,lat,lng,severity,magnitude,depth,title,description,time,source,source_url,extra,received_at')
+                .select('id,type,lat,lng,h3_id,severity,magnitude,depth,title,description,time,source,source_url,extra,received_at')
                 .gte('time', fromDate);
 
             if (toDate) {
@@ -164,3 +165,26 @@ export function subscribeRealtime(onEvent) {
         console.log('[Realtime] Unsubscribed');
     };
 }
+
+/**
+ * Fetch aggregated H3 hex data for performance
+ */
+export async function fetchAggregatedDisasters(options = {}) {
+  const { hours = 24, types = [], severities = [], fromDate = null, toDate = null } = options;
+  
+  const { data, error } = await supabase.rpc('get_aggregated_disasters', {
+    p_hours: hours,
+    p_types: types,
+    p_severities: severities,
+    p_from_date: fromDate,
+    p_to_date: toDate
+  });
+
+  if (error) {
+    console.error('[Supabase] Aggregation error:', error.message);
+    throw error;
+  }
+
+  return data || [];
+}
+

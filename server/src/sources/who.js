@@ -5,8 +5,8 @@
  */
 
 import axios from 'axios';
-import { normalize } from '../processors/normalizer.js';
-import { reportStatus } from '../output/healthTracker.js';
+import {normalize} from '../processors/normalizer.js';
+import {reportStatus} from '../output/healthTracker.js';
 
 const FEED_URL = 'https://www.who.int/api/emergencies/diseaseoutbreaknews';
 const POLL_INTERVAL = 30 * 60 * 1000; // 30 dakika
@@ -35,7 +35,7 @@ const COUNTRY_COORDS = {
   'Sierra Leone': [8.4606, -11.7799], 'Somalia': [5.1521, 46.1996],
   'South Sudan': [6.8770, 31.3070], 'Sudan': [12.8628, 30.2176],
   'Syria': [34.8021, 38.9968], 'Tanzania': [-6.3690, 34.8888],
-  'Thailand': [15.8700, 100.9925], 'Turkey': [38.9637, 35.2433],
+  'Thailand': [15.8700, 100.9925], 'Turkiye': [38.9637, 35.2433],
   'Uganda': [1.3733, 32.2903], 'Ukraine': [48.3794, 31.1656],
   'United States': [37.0902, -95.7129], 'Venezuela': [6.4238, -66.5897],
   'Vietnam': [14.0583, 108.2772], 'Yemen': [15.5527, 48.5164],
@@ -43,7 +43,7 @@ const COUNTRY_COORDS = {
 };
 
 let _poll = null;
-export function triggerPollWHO() { return _poll?.(); }
+export function triggerPollWHO() {return _poll?.();}
 
 export function startWHO(onEvent) {
   const seen = new Set();
@@ -62,7 +62,7 @@ export function startWHO(onEvent) {
         },
         timeout: 15000,
         responseType: 'json',
-        headers: { 'User-Agent': 'GlobalAlert/1.0 (disaster monitoring)' },
+        headers: {'User-Agent': 'GlobalAlert/1.0 (disaster monitoring)'},
       });
 
       const items = Array.isArray(res.data?.value) ? res.data.value : [];
@@ -72,7 +72,7 @@ export function startWHO(onEvent) {
         if (seen.has(id)) continue;
         seen.add(id);
         const event = normalizeWHO(item, id);
-        if (event) { onEvent(event); count++; }
+        if (event) {onEvent(event); count++;}
       }
       reportStatus('WHO', res.status, count);
     } catch (err) {
@@ -83,7 +83,7 @@ export function startWHO(onEvent) {
 
   _poll = poll;
   poll();
-  timer = setInterval(() => { if (running) poll(); }, POLL_INTERVAL);
+  timer = setInterval(() => {if (running) poll();}, POLL_INTERVAL);
   console.log('[WHO] ✅ Polling started (30 min)');
 
   return () => {
@@ -119,6 +119,6 @@ function normalizeWHO(item, id) {
     sourceUrl: item.ItemDefaultUrl
       ? `https://www.who.int${item.ItemDefaultUrl}`
       : 'https://www.who.int/emergencies/disease-outbreak-news',
-    extra: { country },
+    extra: {country},
   });
 }

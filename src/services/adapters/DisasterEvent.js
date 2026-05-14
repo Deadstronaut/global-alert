@@ -1,4 +1,4 @@
-﻿/**
+/**
  * DisasterEvent - Unified data model for all disaster types.
  * All API adapters normalize their data into this format.
  */
@@ -37,6 +37,7 @@ export function createDisasterEvent({
     type,
     lat,
     lng,
+    h3_id = null,
     severity = SEVERITY.LOW,
     magnitude = null,
     title = '',
@@ -52,6 +53,7 @@ export function createDisasterEvent({
         type,
         lat: Number(lat),
         lng: Number(lng),
+        h3_id,
         severity,
         magnitude: magnitude !== null ? Number(magnitude) : null,
         title,
@@ -155,4 +157,3 @@ export function deduplicateByProximity(events, radiusKm = 10) {
     }
     return result;
 }
-

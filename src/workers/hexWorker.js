@@ -47,7 +47,7 @@ self.onmessage = ({data}) => {
         // detail resolution for the country focus
         const cells = polygonToCells(polyCoords, resolution + 1, 2);
         for (const c of cells) allCells.add(c);
-      } catch (e) { /* ignore */ }
+      } catch { /* ignore */}
     }
 
     const gridFeatures = [];
@@ -70,13 +70,13 @@ self.onmessage = ({data}) => {
   // Mode 1.5: Fill the viewport grid (Universal background grid)
   if (type === 'FILL_VIEWPORT' && bounds) {
     const [[minLng, minLat], [maxLng, maxLat]] = bounds;
-    
+
     let viewportPolys = [];
     if (minLng > maxLng) {
       // Crosses antimeridian: split into two boxes
       viewportPolys = [
-        [[ [minLng, minLat], [180, minLat], [180, maxLat], [minLng, maxLat], [minLng, minLat] ]],
-        [[ [-180, minLat], [maxLng, minLat], [maxLng, maxLat], [-180, maxLat], [-180, minLat] ]]
+        [[[minLng, minLat], [180, minLat], [180, maxLat], [minLng, maxLat], [minLng, minLat]]],
+        [[[-180, minLat], [maxLng, minLat], [maxLng, maxLat], [-180, maxLat], [-180, minLat]]]
       ];
     } else {
       viewportPolys = [[
@@ -92,10 +92,10 @@ self.onmessage = ({data}) => {
     try {
       const res = Math.max(0, resolution - 1);
       for (const poly of (Array.isArray(viewportPolys[0][0][0]) ? viewportPolys : [viewportPolys])) {
-         const cells = polygonToCells(poly, res, 2);
-         for (const c of cells) allCells.add(c);
+        const cells = polygonToCells(poly, res, 2);
+        for (const c of cells) allCells.add(c);
       }
-    } catch (e) { /* ignore */ }
+    } catch (e) { /* ignore */}
 
     const gridFeatures = [];
     for (const h3Id of allCells) {
@@ -104,7 +104,7 @@ self.onmessage = ({data}) => {
         try {
           const parent = cellToParent(h3Id, 3);
           if (!landCellsSet.has(parent)) continue; // Skip ocean cells
-        } catch (e) { /* fallback */ }
+        } catch (e) { /* fallback */}
       }
 
       const boundary = cellToBoundary(h3Id);
@@ -118,7 +118,7 @@ self.onmessage = ({data}) => {
         properties: {h3_id: h3Id}
       });
     }
-    self.postMessage({type: 'FILL_VIEWPORT', features: gridFeatures});
+    self.postMessage({type: 'FILL_VIEWPORT', features: gridFeatures, res: resolution});
     return;
   }
 
@@ -135,11 +135,11 @@ self.onmessage = ({data}) => {
       const count = group.event_count || group.count || 1;
       const maxSev = group.max_severity || group.maxSeverity || 'minimal';
       const pType = group.primaryType || 'default';
-      
+
       const weight = severityWeight[maxSev] || 0.1;
       // Logarithmic scaling for count to handle dense historical data beautifully
       const intensity = Math.min(1.0, weight * (1 + Math.log10(count)));
-      
+
       intensityMap[h3Id] = intensity;
       groupMap.set(h3Id, {count, maxSeverity: maxSev, primaryType: pType});
     }

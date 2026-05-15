@@ -61,7 +61,8 @@ export const useDisasterStore = defineStore('disaster', () => {
   const aggregatedH3Data = ref([]);
 
   const activeLayers = ref(new Set([
-    'earthquake'
+    'earthquake', 'wildfire', 'flood', 'drought', 'food_security', 
+    'tsunami', 'cyclone', 'volcano', 'epidemic', 'disaster'
   ]));
   const activeSeverities = ref(new Set(['critical', 'high', 'moderate', 'low', 'minimal']));
 
@@ -114,10 +115,11 @@ export const useDisasterStore = defineStore('disaster', () => {
     const from = useDateRange ? new Date(startDate.value).getTime() : (Date.now() - selectedTimeRange.value * 3_600_000);
     const to   = useDateRange ? (endDate.value ? new Date(endDate.value).getTime() : Infinity) : Infinity;
 
-    // 2. Temel filtre + zaman filtresi birlikte (dedup öncesi küçült)
+    // 2. Temel filtre + zaman filtresi birlikte (severity HARİÇ — dedup sonrası uygulanır)
+    // Severity filtresini dedup'tan önce uygularsak, yüksek-severity olayları düşük-severity
+    // aynı lokasyondaki olayları "yutamaz" ve filtre sonuçları tutarsız olur.
     const status = sourcesStatus.value;
     const filtered = rawEvents.filter(e => {
-      if (!activeSeverities.value.has(e.severity)) return false;
       if (minMagnitude.value > 0 && (e.magnitude == null || e.magnitude < minMagnitude.value)) return false;
       if (maxDepth.value !== null && e.depth != null && e.depth > maxDepth.value) return false;
       if (status[(e.source || 'Unknown')] === false) return false;
@@ -127,16 +129,34 @@ export const useDisasterStore = defineStore('disaster', () => {
       return t >= from && t <= to;
     });
 
-    // 3. Dedup — büyük magnitude önce işlenir, küçük magnitude yakınındakine duplicate sayılır
-    //    (ters olursa: minimal önce giriyor, low onu duplicate sayıyor → low kayboluyor)
-    const WINDOW_MS = 20 * 60 * 1000;          // 20 dakika
-    const DISTANCE_SQ = 0.04;                   // 0.2° ≈ 22 km
-    const MAG_TOLERANCE = 0.8;                  // farklı kurum magnitude farkı toleransı
+    // 3. Dedup — larger magnitude first; if equal magnitude, prefer source priority
+    // Tight params: only remove events that are almost certainly the same physical earthquake
+    // (same location ±0.2°, same time ±20min, same magnitude ±0.3)
+    const WINDOW_MS = 20 * 60 * 1000;
+    const DISTANCE_SQ = 0.04;   // 0.2° ≈ 22 km
+    const MAG_TOLERANCE = 0.3;  // agencies typically agree within 0.2-0.3 for same event
 
-    // Büyük magnitude önce; eşit magnitude ise erken zaman önce
+    // Source Priority Map (higher number = higher priority)
+    const SOURCE_PRIORITY = {
+      'EMSC': 100,
+      'USGS': 90,
+      'Kandilli': 80,
+      'AFAD': 75,
+      'GEOFON': 60,
+      'GDACS': 50
+    };
+
     filtered.sort((a, b) => {
+      // 1. Magnitude priority
       const md = (b.magnitude || 0) - (a.magnitude || 0);
       if (md !== 0) return md;
+      
+      // 2. Source priority
+      const pa = SOURCE_PRIORITY[a.source] || 0;
+      const pb = SOURCE_PRIORITY[b.source] || 0;
+      if (pa !== pb) return pb - pa;
+
+      // 3. Time priority (earlier first)
       return (new Date(a.time || a.created_at).getTime() || 0) -
              (new Date(b.time || b.created_at).getTime() || 0);
     });
@@ -181,18 +201,20 @@ export const useDisasterStore = defineStore('disaster', () => {
       }
     }
 
-    return deduped;
+    // Severity filtresi dedup'tan SONRA uygulanır → filtre seçimi ne olursa olsun
+    // dedup seti tutarlı kalır, her severity grubunun olayları birbirinden bağımsız görünür.
+    return deduped.filter(e => activeSeverities.value.has(e.severity));
   });
 
   const toggleSource = (sourceName) => {
-    // Reaktiviteyi tetiklemek için yeni obje referansı oluşturuyoruz
-    const newStatus = { ...sourcesStatus.value };
-    if (newStatus[sourceName] === undefined) {
-      newStatus[sourceName] = false;
-    } else {
-      newStatus[sourceName] = !newStatus[sourceName];
-    }
-    sourcesStatus.value = newStatus;
+    // Force reactivity by creating a new object reference
+    const currentStatus = { ...sourcesStatus.value };
+    const isCurrentlyActive = currentStatus[sourceName] !== false;
+    
+    currentStatus[sourceName] = !isCurrentlyActive;
+    sourcesStatus.value = currentStatus;
+
+    console.log(`[Store] Source ${sourceName} toggled to: ${!isCurrentlyActive ? 'ACTIVE' : 'INACTIVE'}`);
   };
 
   const totalCount = computed(() => {

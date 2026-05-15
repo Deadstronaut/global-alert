@@ -5,7 +5,7 @@ import { useUIStore } from '@/stores/ui.js'
 import { useGeolocationStore } from '@/stores/geolocation.js'
 import { useI18n } from 'vue-i18n'
 import { getSeverityHex, getDisasterIcon } from '@/services/adapters/DisasterEvent.js'
-import { cellToBoundary, polygonToCells } from 'h3-js'
+import { polygonToCells, cellToParent, getResolution, latLngToCell } from 'h3-js'
 import HexWorker from '@/workers/hexWorker.js?worker'
 import { feature } from 'topojson-client'
 import landTopo from 'world-atlas/land-10m.json'
@@ -83,7 +83,28 @@ let markerObjects = []
 let userMarkerObj = null
 const styleCache = {}
 let hexWorker = null
-let hexWorkerBusy = false
+let interactionsSetUp = false
+
+// ── Static Mesh cache: resolution → Feature[] ────────────────────────────────
+const hexGridCache = new Map()
+
+// Resolution stored in DB via backfill (res 7)
+const DB_HEX_RES = 7
+
+const SEVERITY_COLOR = {
+  critical: '#7c3aed',
+  high: '#ef4444',
+  moderate: '#f97316',
+  low: '#fbbf24',
+  minimal: '#4ade80',
+}
+const SEVERITY_OPACITY = { critical: 0.72, high: 0.58, moderate: 0.42, low: 0.28, minimal: 0.18 }
+const SEV_ORDER = ['minimal', 'low', 'moderate', 'high', 'critical']
+
+// Country focus state
+let selectedCountryBounds = null  // LngLatBounds of selected country
+let countryHexRes = null          // resolution of country grid features
+let countryHexFeatures = null     // raw Feature[] from FILL_GRID (geometry only, for re-injection)
 
 // 0 = Açık (liberty), 1 = Koyu (dark), 2 = Uydu
 const mapStyleIndex = ref(0)
@@ -106,9 +127,8 @@ const _allCountryFeatures = [
   ...CUSTOM_TERRITORIES.features.map((f) => ({ ...f, source: 'custom-territories' })),
 ]
 
-const currentHexRes = computed(() => {
-  const z = currentZoom.value
-  // More granular scaling: roughly every 1.5 zoom levels
+// Each step = ~1.5 zoom levels = ~3× magnification → each hex splits into 7 children (H3 hierarchy)
+function hexResForZoom(z) {
   if (z < 3) return 2
   if (z < 4.5) return 3
   if (z < 6) return 4
@@ -117,22 +137,22 @@ const currentHexRes = computed(() => {
   if (z < 10.5) return 7
   if (z < 12) return 8
   return 9
-})
+}
+const currentHexRes = computed(() => hexResForZoom(currentZoom.value))
 
-watch(currentHexRes, () => {
-  if (mapLoaded) {
-    updateHexbins()
+watch(currentHexRes, (newRes) => {
+  if (!mapLoaded) return
+  // Clear cached grid for new resolution so worker recomputes
+  hexGridCache.delete(newRes)
+  updateHexbins()
 
-    // Refresh country hex grid if one is selected
-    if (selectedFeatureId) {
-      const f = _allCountryFeatures.find((cf) => cf.id === selectedFeatureId)
-      if (f && hexWorker) {
-        hexWorker.postMessage({
-          type: 'FILL_GRID',
-          geometry: f.geometry,
-          resolution: 3,
-        })
-      }
+  // Refresh country hex grid at new resolution if a country is selected
+  if (selectedFeatureId && hexWorker) {
+    const f = _allCountryFeatures.find((cf) => cf.id === selectedFeatureId)
+    if (f) {
+      const gridRes = Math.min(newRes, DB_HEX_RES - 1)
+      countryHexRes = gridRes + 1
+      hexWorker.postMessage({ type: 'FILL_GRID', geometry: f.geometry, resolution: gridRes })
     }
   }
 })
@@ -147,19 +167,104 @@ watch(
   },
 )
 
-// ── Hex heatmap helpers ──────────────────────────────────────────────────────
+// ── Static Mesh + Dynamic Signal helpers ─────────────────────────────────────
 
-/** Returns true if a polygon ring crosses the antimeridian — causes MapLibre artifact lines. */
-function crossesAntimeridian(ring) {
-  for (let i = 0; i < ring.length - 1; i++) {
-    if (Math.abs(ring[i][0] - ring[i + 1][0]) > 180) return true
+/**
+ * Build a signal map keyed at min(displayRes, DB_HEX_RES).
+ * Returns { sigMap, sigRes } where sigRes is the effective key resolution.
+ */
+function buildSignalMap(displayRes) {
+  const sigRes = Math.min(displayRes, DB_HEX_RES)
+  const sigMap = new Map()
+  for (const ev of disasterStore.h3Events) {
+    // Resolve h3_id: use stored value or compute from coordinates
+    let h3id = ev.h3_id
+    if (!h3id && ev.lat != null && ev.lng != null) {
+      try { h3id = latLngToCell(Number(ev.lat), Number(ev.lng), DB_HEX_RES) } catch { continue }
+    }
+    if (!h3id) continue
+
+    let key = h3id
+    try {
+      const evRes = getResolution(h3id)
+      if (evRes > sigRes) key = cellToParent(h3id, sigRes)
+      else if (evRes < sigRes) continue
+    } catch { continue }
+
+    const ex = sigMap.get(key)
+    if (!ex) {
+      sigMap.set(key, { count: ev.count || 1, maxSeverity: ev.maxSeverity || 'minimal' })
+    } else {
+      ex.count += ev.count || 1
+      if (SEV_ORDER.indexOf(ev.maxSeverity) > SEV_ORDER.indexOf(ex.maxSeverity))
+        ex.maxSeverity = ev.maxSeverity
+    }
   }
-  return false
+  return { sigMap, sigRes }
+}
+
+/** Inject event signal colors into the cached viewport grid → update disaster-hex source. */
+function applySignalToGrid() {
+  if (!map || !mapLoaded) return
+  const res = currentHexRes.value
+  const cached = hexGridCache.get(res)
+  if (!cached?.length) return
+
+  const { sigMap, sigRes } = buildSignalMap(res)
+
+  const features = []
+  for (const f of cached) {
+    let lookupId = f.properties.h3_id
+    if (res > sigRes) {
+      try { lookupId = cellToParent(f.properties.h3_id, sigRes) } catch { continue }
+    }
+    const sig = sigMap.get(lookupId)
+    if (!sig) continue
+    features.push({
+      ...f,
+      properties: {
+        ...f.properties,
+        color: SEVERITY_COLOR[sig.maxSeverity] || '#4ade80',
+        opacity: SEVERITY_OPACITY[sig.maxSeverity] || 0.18,
+        eventCount: sig.count,
+        maxSeverity: sig.maxSeverity,
+      },
+    })
+  }
+  map.getSource('disaster-hex')?.setData({ type: 'FeatureCollection', features })
+}
+
+/** Inject signal colors into country grid features and update country-hex-grid source. */
+function applySignalToCountryGrid(features) {
+  if (!map || !mapLoaded || countryHexRes == null) return
+  countryHexFeatures = features  // cache raw geometry for future re-injection
+
+  const { sigMap, sigRes } = buildSignalMap(countryHexRes)
+
+  const colored = features.map((f) => {
+    let lookupId = f.properties.h3_id
+    if (countryHexRes > sigRes) {
+      try { lookupId = cellToParent(f.properties.h3_id, sigRes) } catch { return f }
+    }
+    const sig = sigMap.get(lookupId)
+    if (!sig) return f
+    return {
+      ...f,
+      properties: {
+        ...f.properties,
+        color: SEVERITY_COLOR[sig.maxSeverity] || '#4ade80',
+        opacity: SEVERITY_OPACITY[sig.maxSeverity] || 0.04,
+        eventCount: sig.count,
+        maxSeverity: sig.maxSeverity,
+      },
+    }
+  })
+
+  map.getSource('country-hex-grid')?.setData({ type: 'FeatureCollection', features: colored })
 }
 
 // ── Land cell sets (computed once) ───────────────────────────────────────────
 let landCellsRes3 = null // Set of H3 res3 cells covering land
-let worldHexBgCache = null // GeoJSON FeatureCollection for bg grid
 
 /** Build Set of all H3 res3 cells that cover land using world-atlas TopoJSON. */
 function getLandCells() {
@@ -185,29 +290,6 @@ function getLandCells() {
   }
   console.log(`[Hex] Land cell set built: ${landCellsRes3.size} res3 cells`)
   return landCellsRes3
-}
-
-/**
- * Build background hex grid — only land cells at res3.
- * Uses polygonToCells so oceans are never included.
- */
-function buildWorldHexGrid() {
-  if (worldHexBgCache) return worldHexBgCache
-  const landCells = getLandCells()
-  const features = []
-  for (const cell of landCells) {
-    const boundary = cellToBoundary(cell)
-    const ring = boundary.map(([lat, lng]) => [lng, lat])
-    ring.push(ring[0])
-    if (crossesAntimeridian(ring)) continue
-    features.push({
-      type: 'Feature',
-      geometry: { type: 'Polygon', coordinates: [ring] },
-      properties: {},
-    })
-  }
-  worldHexBgCache = { type: 'FeatureCollection', features }
-  return worldHexBgCache
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -380,15 +462,15 @@ function addSourcesAndLayers() {
     before,
   )
 
-  // Selected country hex grid — faint structure
+  // Selected country hex grid — data-driven: shows signal colors when events exist
   map.addLayer(
     {
       id: 'country-hex-fill',
       type: 'fill',
       source: 'country-hex-grid',
       paint: {
-        'fill-color': '#4ade80',
-        'fill-opacity': 0.04,
+        'fill-color': ['coalesce', ['get', 'color'], '#4ade80'],
+        'fill-opacity': ['coalesce', ['get', 'opacity'], 0.04],
       },
     },
     before,
@@ -399,9 +481,9 @@ function addSourcesAndLayers() {
       type: 'line',
       source: 'country-hex-grid',
       paint: {
-        'line-color': '#4ade80',
-        'line-width': 0.5,
-        'line-opacity': 0.15,
+        'line-color': ['coalesce', ['get', 'color'], '#4ade80'],
+        'line-width': 0.6,
+        'line-opacity': 0.35,
       },
     },
     before,
@@ -595,30 +677,18 @@ function setFocusMode(active, featureGeoJSON = null) {
   }
 }
 
-function selectCountry(f) {
+function zoomToCountry(f) {
   if (!map || !mapLoaded) return
   const fid = f.id
-  const source = f.layer?.source || f.source || 'world-countries'
-  if (fid == null) return
-
-  // Prevent redundant work if clicking the same country (Fix selection)
-  if (selectedFeatureId === fid && selectedFeatureSource === source) return
-
-  // Automatically switch to Petek (Hexagon) mode for focused view
-  uiStore.mapMode = 'hexagon'
 
   // Get full feature geometry
-  const fullFeature = _allCountryFeatures.find((cf) => cf.id === fid) ?? f
+  const fullFeature = _allCountryFeatures.find((cf) => String(cf.id) === String(fid)) ?? f
   const geom = fullFeature.geometry
   if (!geom) return
 
   const bounds = new maplibregl.LngLatBounds()
-  let hasAntimeridian = false
-  const lons = []
-
   const processCoords = (coords) => {
     if (typeof coords[0] === 'number') {
-      lons.push(coords[0])
       bounds.extend(coords)
     } else {
       coords.forEach(processCoords)
@@ -626,36 +696,79 @@ function selectCountry(f) {
   }
   processCoords(geom.coordinates)
 
-  // Detect if country crosses the antimeridian (large gap in longitudes)
-  if (lons.length > 0) {
-    const min = Math.min(...lons)
-    const max = Math.max(...lons)
-    if (max - min > 180) {
-      hasAntimeridian = true
-    }
-  }
-
   if (bounds.isEmpty()) return
 
-  // Profesyonel Kamera Hesaplaması
+  // Always fly to bounds
   const cameraOptions = map.cameraForBounds(bounds, {
     padding: { top: 100, bottom: 100, left: 100, right: 100 },
-    maxZoom: 6
+    maxZoom: 6,
   })
 
   if (cameraOptions) {
     map.flyTo({
       ...cameraOptions,
       duration: 3500,
-      curve: 2.0, // Dengeli bir kavis
-      speed: 0.5, // Daha akıcı bir hız
-      pitch: 15,  // Hafif 3D eğim (Peteklerin güzel görünmesi için)
-      bearing: -5, // Çok hafif bir dönüş efekti
-      essential: true
+      curve: 2.0,
+      speed: 0.5,
+      pitch: 15,
+      bearing: -5,
+      essential: true,
+    })
+  }
+}
+
+function selectCountry(f) {
+  if (!map || !mapLoaded) return
+  const fid = f.id
+  const source = f.layer?.source || f.source || 'world-countries'
+  if (fid == null) return
+
+  const alreadySelected = selectedFeatureId === fid && selectedFeatureSource === source
+
+  // Get full feature geometry
+  const fullFeature = _allCountryFeatures.find((cf) => String(cf.id) === String(fid)) ?? f
+  const geom = fullFeature.geometry
+  if (!geom) {
+    console.warn('[Map] No geometry for feature:', fid)
+    return
+  }
+
+  const bounds = new maplibregl.LngLatBounds()
+  const processCoords = (coords) => {
+    if (typeof coords[0] === 'number') {
+      bounds.extend(coords)
+    } else {
+      coords.forEach(processCoords)
+    }
+  }
+  processCoords(geom.coordinates)
+
+  if (bounds.isEmpty()) return
+  selectedCountryBounds = bounds
+
+  // Always fly to bounds — allows re-centering on an already-selected country
+  const cameraOptions = map.cameraForBounds(bounds, {
+    padding: { top: 100, bottom: 100, left: 100, right: 100 },
+    maxZoom: 6,
+  })
+
+  if (cameraOptions) {
+    map.flyTo({
+      ...cameraOptions,
+      duration: 3500,
+      curve: 2.0,
+      speed: 0.5,
+      pitch: 15,
+      bearing: -5,
+      essential: true,
     })
   }
 
-  // Reset previous selection
+  // Visual state only needs updating when selecting a different country
+  if (alreadySelected) return
+
+  uiStore.mapMode = 'hexagon'
+
   if (selectedFeatureId !== null) {
     map.setFeatureState(
       { source: selectedFeatureSource, id: selectedFeatureId },
@@ -675,16 +788,17 @@ function selectCountry(f) {
 
   map.setFeatureState({ source, id: fid }, { selected: true, dimmed: false })
 
-  // ③ Generate Hex Grid for the selected country (High resolution for focus)
+  // Country hex grid at current display resolution (+1 for finer country detail, capped at DB res)
   if (hexWorker) {
+    const gridRes = Math.min(currentHexRes.value, DB_HEX_RES - 1)
+    countryHexRes = gridRes + 1  // worker FILL_GRID adds +1 internally
     hexWorker.postMessage({
       type: 'FILL_GRID',
       geometry: geom,
-      resolution: 3,
+      resolution: gridRes,
     })
   }
 
-  // Dim everything else
   _allCountryFeatures.forEach((cf) => {
     if (cf.id !== fid) {
       map.setFeatureState({ source: cf.source, id: cf.id }, { dimmed: true })
@@ -696,9 +810,11 @@ function selectCountry(f) {
 
 function clearCountrySelection() {
   selectedCountryName.value = null
+  selectedCountryBounds = null
+  countryHexRes = null
+  countryHexFeatures = null
   if (!map || !mapLoaded) return
 
-  // Clear country hex grid
   map.getSource('country-hex-grid')?.setData({ type: 'FeatureCollection', features: [] })
 
   if (selectedFeatureId !== null) {
@@ -712,6 +828,9 @@ function clearCountrySelection() {
     map.setFeatureState({ source: cf.source, id: cf.id }, { dimmed: false })
   })
   setFocusMode(false)
+
+  // Restore full heatmap
+  updateHeatmap()
 }
 
 function initMap() {
@@ -745,98 +864,7 @@ function initMap() {
     updateHexbins()
     updateUserMarker()
 
-    map.on('click', 'hex-fill', (e) => {
-      if (!e.features || !e.features.length) return
-      const props = e.features[0].properties
-      const h3Id = props.h3_id
-      const count = props.eventCount || 1
-
-      new maplibregl.Popup()
-        .setLngLat(e.lngLat)
-        .setHTML(
-          `
-          <div class="disaster-popup">
-            <h4>H3: ${h3Id || 'Dinamik'}</h4>
-            <p><b>Şiddet:</b> ${String(props.maxSeverity).toUpperCase()}</p>
-            <p><b>Olay Sayısı:</b> ${count}</p>
-            <p><b>Yoğunluk:</b> ${Math.round((props.intensity ?? 0) * 100)}%</p>
-          </div>
-        `,
-        )
-        .addTo(map)
-    })
-
-    map.on('mouseenter', 'hex-fill', () => {
-      map.getCanvas().style.cursor = 'pointer'
-    })
-    map.on('mouseleave', 'hex-fill', () => {
-      map.getCanvas().style.cursor = ''
-    })
-
-    // ── Country hover tracking ──
-    const interactionLayers = ['country-fills', 'custom-territories-fills']
-
-    map.on('mousemove', interactionLayers, (e) => {
-      if (!e.features?.length) return
-      const f = e.features[0]
-      const source = f.source
-
-      if (
-        hoveredFeatureId !== null &&
-        (hoveredFeatureId !== f.id || hoveredFeatureSource !== source)
-      ) {
-        map.setFeatureState(
-          { source: hoveredFeatureSource, id: hoveredFeatureId },
-          { hover: false },
-        )
-      }
-
-      hoveredFeatureId = f.id
-      hoveredFeatureSource = source
-      map.setFeatureState({ source, id: f.id }, { hover: true })
-
-      if (source === 'custom-territories') {
-        hoveredCountryName.value = f.properties.name || f.id
-      } else {
-        hoveredCountryName.value = COUNTRY_NAMES[String(f.id).padStart(3, '0')] ?? null
-      }
-      map.getCanvas().style.cursor = 'pointer'
-    })
-
-    map.on('mouseleave', interactionLayers, () => {
-      if (hoveredFeatureId !== null) {
-        map.setFeatureState(
-          { source: hoveredFeatureSource, id: hoveredFeatureId },
-          { hover: false },
-        )
-      }
-      hoveredFeatureId = null
-      hoveredCountryName.value = null
-      map.getCanvas().style.cursor = ''
-    })
-
-    // ── Double-click: select country + zoom to fit ──
-    map.on('dblclick', interactionLayers, (e) => {
-      if (!e.features?.length) return
-      if (e.originalEvent) {
-        e.originalEvent.stopPropagation()
-        e.originalEvent.preventDefault()
-      }
-      selectCountry(e.features[0])
-    })
-
-    // Double-click on empty space → zoom in
-    map.on('dblclick', (e) => {
-      if (map.queryRenderedFeatures(e.point, { layers: interactionLayers }).length > 0) return
-      map.zoomIn()
-    })
-
-    // Click on empty space → clear selection
-    map.on('click', (e) => {
-      if (map.queryRenderedFeatures(e.point, { layers: interactionLayers }).length === 0) {
-        clearCountrySelection()
-      }
-    })
+    setupMapInteractions()
 
     // Dynamic Viewport Grid update
     map.on('moveend', () => {
@@ -847,32 +875,161 @@ function initMap() {
   })
 }
 
+function setupMapInteractions() {
+  if (!map || interactionsSetUp) return
+  interactionsSetUp = true
+
+  const interactionLayers = ['country-fills', 'custom-territories-fills']
+
+  // ── Country hover tracking ──
+  map.on('mousemove', interactionLayers, (e) => {
+    if (!e.features?.length) return
+    const f = e.features[0]
+    const source = f.source
+
+    if (
+      hoveredFeatureId !== null &&
+      (hoveredFeatureId !== f.id || hoveredFeatureSource !== source)
+    ) {
+      map.setFeatureState({ source: hoveredFeatureSource, id: hoveredFeatureId }, { hover: false })
+    }
+
+    hoveredFeatureId = f.id
+    hoveredFeatureSource = source
+    map.setFeatureState({ source, id: f.id }, { hover: true })
+
+    if (source === 'custom-territories') {
+      hoveredCountryName.value = f.properties.name || f.id
+    } else {
+      hoveredCountryName.value = COUNTRY_NAMES[String(f.id).padStart(3, '0')] ?? null
+    }
+    map.getCanvas().style.cursor = 'default'
+  })
+
+  map.on('mouseleave', interactionLayers, () => {
+    if (hoveredFeatureId !== null) {
+      map.setFeatureState({ source: hoveredFeatureSource, id: hoveredFeatureId }, { hover: false })
+    }
+    hoveredFeatureId = null
+    hoveredCountryName.value = null
+    map.getCanvas().style.cursor = ''
+  })
+
+  // ── Single-click: select country + fit to viewport ──
+  map.on('click', (e) => {
+    // Don't trigger country select if clicking on an event hex popup target
+    const hexFeats = map.queryRenderedFeatures(e.point, { layers: ['hex-fill'] })
+    if (hexFeats.length > 0) return
+
+    const features = map.queryRenderedFeatures(e.point, { layers: interactionLayers })
+    if (features.length > 0) {
+      selectCountry(features[0])
+    } else {
+      clearCountrySelection()
+    }
+  })
+
+  // ── Double-click on country → zoom to fit, empty area → zoom in ──
+  map.on('dblclick', (e) => {
+    const features = map.queryRenderedFeatures(e.point, { layers: interactionLayers })
+    if (features.length > 0) {
+      e.preventDefault()
+      zoomToCountry(features[0])
+    } else {
+      map.zoomIn({ around: e.lngLat })
+    }
+  })
+
+  // Hex-fill click handling
+  map.on('click', 'hex-fill', (e) => {
+    if (!e.features || !e.features.length) return
+    const props = e.features[0].properties
+    const h3Id = props.h3_id
+    const count = props.eventCount || 1
+
+    // Parse topEvents if it exists
+    let eventsHtml = ''
+    if (props.topEvents) {
+      try {
+        const events = JSON.parse(props.topEvents)
+        eventsHtml = `
+          <div class="hex-events-list">
+            ${events
+              .map(
+                (ev) => `
+              <div class="hex-event-item">
+                <div class="hex-event-dot" style="background: ${getSeverityHex(ev.severity)}"></div>
+                <div class="hex-event-content">
+                  <div class="hex-event-title">${ev.title}</div>
+                  <div class="hex-event-meta-row">
+                    <span class="hex-event-time">${new Date(ev.time).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' })}</span>
+                    <span class="hex-event-details">
+                      ${ev.magnitude ? `M${Number(ev.magnitude).toFixed(1)}` : ''}
+                      ${ev.depth ? `• ${Math.round(ev.depth)}km` : ''}
+                      ${ev.source ? `• ${ev.source}` : ''}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            `,
+              )
+              .join('')}
+          </div>
+        `
+      } catch (err) {
+        console.error('Error parsing topEvents:', err)
+      }
+    }
+
+    const popupHtml = `
+      <div class="hex-popup" style="--severity-color: ${getSeverityHex(props.maxSeverity)}">
+        <div class="hex-popup-header">
+          <span class="hex-id">${h3Id}</span>
+          <span class="hex-count">${count} Olay</span>
+        </div>
+        ${eventsHtml}
+        <div class="hex-popup-footer">
+          <span>Yoğunluk: %${Math.round((props.intensity ?? 0) * 100)}</span>
+        </div>
+      </div>
+    `
+
+    new maplibregl.Popup({ className: 'hex-popup-container', offset: 10 })
+      .setLngLat(e.lngLat)
+      .setHTML(popupHtml)
+      .addTo(map)
+  })
+
+  map.on('mouseenter', 'hex-fill', () => {
+    map.getCanvas().style.cursor = 'default'
+  })
+  map.on('mouseleave', 'hex-fill', () => {
+    map.getCanvas().style.cursor = ''
+  })
+}
+
 function updateViewportGrid() {
   if (!map || !mapLoaded || !hexWorker) return
   if (uiStore.mapMode !== 'hexagon') return
 
-  // Eğer bir ülke seçiliyse, sadece ekranı değil tüm ülkeyi doldur
-  if (selectedFeatureId) {
-    const f = _allCountryFeatures.find((cf) => cf.id === selectedFeatureId)
-    if (f) {
-      hexWorker.postMessage({
-        type: 'FILL_GRID',
-        geometry: f.geometry,
-        resolution: 3, // Seçili ülkede hep 3 kalsın demiştik
-      })
-      // Dünya arka planını da (seyrekçe) güncelleyebiliriz ama ülke öncelikli
-    }
+  const res = currentHexRes.value
+
+  // Cache hit → reuse geometry, just re-inject signal
+  if (hexGridCache.has(res)) {
+    map.getSource('hex-world-bg')?.setData({
+      type: 'FeatureCollection',
+      features: hexGridCache.get(res),
+    })
+    applySignalToGrid()
+    return
   }
 
   const bounds = map.getBounds()
   const sw = bounds.getSouthWest()
   const ne = bounds.getNorthEast()
 
-  // Handle antimeridian bounds correctly for the worker
   let minLng = sw.lng
   let maxLng = ne.lng
-
-  // Wrap to -180, 180 range
   while (minLng < -180) minLng += 360
   while (minLng > 180) minLng -= 360
   while (maxLng < -180) maxLng += 360
@@ -880,11 +1037,8 @@ function updateViewportGrid() {
 
   hexWorker.postMessage({
     type: 'FILL_VIEWPORT',
-    bounds: [
-      [minLng, sw.lat],
-      [maxLng, ne.lat],
-    ],
-    resolution: currentHexRes.value,
+    bounds: [[minLng, sw.lat], [maxLng, ne.lat]],
+    resolution: res,
   })
 }
 
@@ -919,11 +1073,14 @@ function hexToRgba(hex, alpha) {
 
 function updateMarkers() {
   if (!map || !mapLoaded) return
-  clearMarkers()
 
-  // Hide markers if aggregated views are on AND we are zoomed out.
-  // Show them if zoomed in (>= 8) for detail view.
-  if ((uiStore.showHeatmap || uiStore.showHexbins) && currentZoom.value < 8) return
+  // In aggregated mode at low zoom: markers are hidden — only clear if some exist
+  if ((uiStore.showHeatmap || uiStore.showHexbins) && currentZoom.value < 8) {
+    if (markerObjects.length > 0) clearMarkers()
+    return
+  }
+
+  clearMarkers()
 
   disasterStore.allEvents.slice(0, 2500).forEach((event) => {
     const color = getSeverityHex(event.severity)
@@ -978,8 +1135,17 @@ function updateHeatmap() {
 
   if (!showHeat) return
 
+  let events = disasterStore.allEvents
+
+  // Filter to selected country's bounding box when focused
+  if (selectedFeatureId && selectedCountryBounds) {
+    events = events.filter(
+      (e) => e.lat != null && e.lng != null && selectedCountryBounds.contains([e.lng, e.lat]),
+    )
+  }
+
   const intensityMap = { critical: 1.0, high: 0.8, moderate: 0.6, low: 0.3, minimal: 0.1 }
-  const features = disasterStore.allEvents.map((e) => ({
+  const features = events.map((e) => ({
     type: 'Feature',
     geometry: { type: 'Point', coordinates: [e.lng, e.lat] },
     properties: { weight: intensityMap[e.severity] || 0.1 },
@@ -997,57 +1163,37 @@ function updateHexbins() {
   map.setLayoutProperty('hex-stroke', 'visibility', vis)
   map.setLayoutProperty('hex-bg-stroke', 'visibility', vis)
 
-  if (!showHex) return
+  if (!showHex) {
+    map.getSource('disaster-hex')?.setData({ type: 'FeatureCollection', features: [] })
+    return
+  }
 
-  // ── 1. Background grid ────────────────────────────────────────────────────
-  updateViewportGrid()
-
-  // ── 2. Worker busy → skip
-  if (hexWorkerBusy) return
-
-  // ── 3. Create worker if needed
+  // Create worker if not yet initialized
   if (!hexWorker) {
     hexWorker = new HexWorker()
     hexWorker.onmessage = ({ data }) => {
       if (!map || !mapLoaded) return
 
-      hexWorkerBusy = false
-
       if (data.type === 'FILL_GRID') {
-        map.getSource('country-hex-grid')?.setData({
-          type: 'FeatureCollection',
-          features: data.features,
-        })
+        // Country grid: apply signal colors then render
+        applySignalToCountryGrid(data.features)
       } else if (data.type === 'FILL_VIEWPORT') {
+        // Cache static mesh for this resolution
+        const res = data.res ?? currentHexRes.value
+        hexGridCache.set(res, data.features)
         map.getSource('hex-world-bg')?.setData({
           type: 'FeatureCollection',
           features: data.features,
         })
-      } else {
-        map.getSource('disaster-hex')?.setData({
-          type: 'FeatureCollection',
-          features: data.features,
-        })
+        // Inject signal onto the cached mesh
+        applySignalToGrid()
       }
     }
-
-    // Initialize land cells in worker
     const landCells = Array.from(getLandCells())
     hexWorker.postMessage({ type: 'INIT_LAND', landCells })
   }
 
-  // ── 4. Send to worker
-  hexWorkerBusy = true
-
-  // Prioritize server-side aggregated data, fall back to client-side compute
-  const aggregatedData = disasterStore.aggregatedH3Data
-  const useAggregated = aggregatedData && aggregatedData.length > 0
-
-  hexWorker.postMessage({
-    events: useAggregated ? aggregatedData : disasterStore.h3Events,
-    resolution: currentHexRes.value,
-    isAggregated: true, // Both h3Events and aggregatedH3Data are aggregated structures
-  })
+  updateViewportGrid()
 }
 
 function updateUserMarker() {
@@ -1090,6 +1236,7 @@ async function resolveStyle() {
 async function applyBaseStyle() {
   if (!map) return
   mapLoaded = false
+  interactionsSetUp = false
   const version = ++styleLoadVersion
 
   let style
@@ -1109,6 +1256,7 @@ async function applyBaseStyle() {
     mapLoaded = true
     map.doubleClickZoom.disable()
     addSourcesAndLayers()
+    setupMapInteractions()
     brightenDarkLabels()
     if (selectedFeatureId !== null) {
       map.setFeatureState({ source: 'world-countries', id: selectedFeatureId }, { selected: true })
@@ -1154,7 +1302,15 @@ watch(
     _mapUpdateTimer = setTimeout(() => {
       updateMarkers()
       updateHeatmap()
-      updateHexbins()
+      // Signal injection: re-inject colors without recomputing geometry
+      if (mapLoaded && uiStore.showHexbins) {
+        applySignalToGrid()
+        if (selectedFeatureId && countryHexFeatures?.length) {
+          applySignalToCountryGrid(countryHexFeatures)
+        }
+      } else {
+        updateHexbins()
+      }
     }, 400)
   },
 )
@@ -1165,6 +1321,8 @@ watch(
     updateMarkers()
     updateHeatmap()
     updateHexbins()
+    // When switching to heatmap on a focused country, filter immediately
+    if (uiStore.showHeatmap && selectedFeatureId) updateHeatmap()
   },
 )
 
@@ -1242,9 +1400,12 @@ onBeforeUnmount(() => {
       </div>
     </div>
 
-    <!-- Hexbin / marker severity legend -->
+    <!-- Hexbin / marker severity legend — only shown when sidebar legend is hidden -->
     <div
-      v-else-if="uiStore.showHexbins || (!uiStore.showHeatmap && !uiStore.showHexbins)"
+      v-else-if="
+        (uiStore.showHexbins || (!uiStore.showHeatmap && !uiStore.showHexbins)) &&
+        (uiStore.sidebarCollapsed || !uiStore.sidebarOpen)
+      "
       class="map-legend"
       :class="{ 'legend-sidebar-collapsed': uiStore.sidebarCollapsed }"
     >
@@ -1286,9 +1447,9 @@ onBeforeUnmount(() => {
 
     <!-- Selected country badge -->
     <Transition name="country-badge">
-      <div v-if="selectedCountryName" class="country-badge" @click="clearCountrySelection">
+      <div v-if="selectedCountryName" class="country-badge">
         <span class="country-badge-name">{{ selectedCountryName }}</span>
-        <span class="country-badge-close">✕</span>
+        <div class="country-badge-close" @click="clearCountrySelection" title="Temizle">✕</div>
       </div>
     </Transition>
   </div>
@@ -1503,34 +1664,67 @@ onBeforeUnmount(() => {
 /* ── Selected country badge ── */
 .country-badge {
   position: absolute;
-  bottom: 56px;
-  left: 50%;
-  transform: translateX(-50%);
+  top: 24px;
+  right: 24px;
+  background: var(--glass-bg);
+  backdrop-filter: blur(24px) saturate(180%);
+  -webkit-backdrop-filter: blur(24px) saturate(180%);
+  padding: 8px 14px 8px 18px;
+  border-radius: 100px;
+  border: 1px solid var(--glass-border);
+  box-shadow:
+    0 4px 6px -1px rgba(0, 0, 0, 0.1),
+    0 2px 4px -1px rgba(0, 0, 0, 0.06),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.05);
   display: flex;
   align-items: center;
-  gap: 8px;
-  background: rgba(20, 24, 33, 0.92);
-  border: 1px solid rgba(74, 222, 128, 0.6);
-  color: #4ade80;
-  font-size: 13px;
-  font-weight: 700;
-  padding: 6px 14px 6px 16px;
-  border-radius: 24px;
-  cursor: pointer;
-  backdrop-filter: blur(8px);
-  z-index: 20;
-  white-space: nowrap;
-  box-shadow: 0 0 12px rgba(74, 222, 128, 0.2);
+  gap: 12px;
+  z-index: 1000;
+  cursor: default;
+  animation: badgeIn 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+  pointer-events: auto;
 }
 
-.country-badge:hover {
-  background: rgba(74, 222, 128, 0.15);
+@keyframes badgeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-10px) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.country-badge-name {
+  font-family: var(--font-primary);
+  font-weight: 700;
+  font-size: 0.9rem;
+  color: #4ade80;
+  letter-spacing: -0.01em;
+  text-shadow: 0 0 12px rgba(74, 222, 128, 0.3);
 }
 
 .country-badge-close {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--color-text-secondary);
   font-size: 10px;
-  opacity: 0.6;
-  margin-left: 2px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  border: 1px solid transparent;
+}
+
+.country-badge-close:hover {
+  background: rgba(239, 68, 68, 0.2);
+  color: #ef4444;
+  border-color: rgba(239, 68, 68, 0.3);
+  transform: rotate(90deg);
 }
 
 .country-badge-enter-active,
@@ -1542,7 +1736,7 @@ onBeforeUnmount(() => {
 .country-badge-enter-from,
 .country-badge-leave-to {
   opacity: 0;
-  transform: translateX(-50%) translateY(8px);
+  transform: translateY(-8px);
 }
 </style>
 

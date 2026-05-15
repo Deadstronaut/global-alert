@@ -41,7 +41,7 @@ function parseXML(xml) {
 }
 
 function extractTag(xml, tag) {
-  const m = new RegExp(`<${tag}[^>]*><!\\[CDATA\\[([\\s\\S]*?)\\]\\]><\/${tag}>|<${tag}[^>]*>([^<]*)<\/${tag}>`, 'i').exec(xml);
+  const m = new RegExp(`<${tag}[^>]*><!\\[CDATA\\[([\\s\\S]*?)\\]\\]></${tag}>|<${tag}[^>]*>([^<]*)</${tag}>`, 'i').exec(xml);
   return m ? (m[1] ?? m[2] ?? '').trim() : null;
 }
 

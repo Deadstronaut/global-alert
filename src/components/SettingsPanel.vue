@@ -69,8 +69,8 @@ const sources = computed(() => {
   const s = serverSources.value;
   const defaultList = ['EMSC', 'USGS', 'AFAD', 'Kandilli', 'GEOFON', 'GDACS', 'PTWC', 'NASA FIRMS', 'FEWS NET', 'WHO'];
   
-  // disasterStore.sourcesStatus referansını alıyoruz
-  const status = disasterStore.sourcesStatus || {};
+  // Use reactive property from store
+  const status = disasterStore.sourcesStatus;
   
   const all = new Set([...defaultList, ...Object.keys(status)]);
   

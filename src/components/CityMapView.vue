@@ -661,3 +661,41 @@ html[data-theme='light'] .source-chip {
   color: #475569;
 }
 </style>
+  color: #111a2c;
+  box-shadow:
+    inset 0 0 24px var(--severity-rgba),
+    0 8px 32px rgba(0, 0, 0, 0.15);
+}
+
+html[data-theme='light'] .modern-popup-container .maplibregl-popup-close-button {
+  color: #111a2c !important;
+  background: rgba(0, 0, 0, 0.05);
+}
+
+html[data-theme='light'] .popup-title {
+  color: #111a2c;
+}
+
+html[data-theme='light'] .popup-desc,
+html[data-theme='light'] .popup-date {
+  color: #4a5568;
+}
+
+html[data-theme='light'] .popup-metrics {
+  background: rgba(0, 0, 0, 0.03);
+  color: #334155;
+}
+
+html[data-theme='light'] .popup-metrics span b {
+  color: #0f172a;
+}
+
+html[data-theme='light'] .popup-footer {
+  border-top: 1px solid rgba(0, 0, 0, 0.05);
+}
+
+html[data-theme='light'] .source-chip {
+  background: rgba(0, 0, 0, 0.05);
+  color: #475569;
+}
+</style>

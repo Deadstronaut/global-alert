@@ -102,9 +102,9 @@ const SEVERITY_OPACITY = { critical: 0.72, high: 0.58, moderate: 0.42, low: 0.28
 const SEV_ORDER = ['minimal', 'low', 'moderate', 'high', 'critical']
 
 // Country focus state
-let selectedCountryBounds = null  // LngLatBounds of selected country
-let countryHexRes = null          // resolution of country grid features
-let countryHexFeatures = null     // raw Feature[] from FILL_GRID (geometry only, for re-injection)
+let selectedCountryBounds = null // LngLatBounds of selected country
+let countryHexRes = null // resolution of country grid features
+let countryHexFeatures = null // raw Feature[] from FILL_GRID (geometry only, for re-injection)
 
 // 0 = Açık (liberty), 1 = Koyu (dark), 2 = Uydu
 const mapStyleIndex = ref(0)
@@ -180,7 +180,11 @@ function buildSignalMap(displayRes) {
     // Resolve h3_id: use stored value or compute from coordinates
     let h3id = ev.h3_id
     if (!h3id && ev.lat != null && ev.lng != null) {
-      try { h3id = latLngToCell(Number(ev.lat), Number(ev.lng), DB_HEX_RES) } catch { continue }
+      try {
+        h3id = latLngToCell(Number(ev.lat), Number(ev.lng), DB_HEX_RES)
+      } catch {
+        continue
+      }
     }
     if (!h3id) continue
 
@@ -189,7 +193,9 @@ function buildSignalMap(displayRes) {
       const evRes = getResolution(h3id)
       if (evRes > sigRes) key = cellToParent(h3id, sigRes)
       else if (evRes < sigRes) continue
-    } catch { continue }
+    } catch {
+      continue
+    }
 
     const ex = sigMap.get(key)
     if (!ex) {
@@ -216,7 +222,11 @@ function applySignalToGrid() {
   for (const f of cached) {
     let lookupId = f.properties.h3_id
     if (res > sigRes) {
-      try { lookupId = cellToParent(f.properties.h3_id, sigRes) } catch { continue }
+      try {
+        lookupId = cellToParent(f.properties.h3_id, sigRes)
+      } catch {
+        continue
+      }
     }
     const sig = sigMap.get(lookupId)
     if (!sig) continue
@@ -237,14 +247,18 @@ function applySignalToGrid() {
 /** Inject signal colors into country grid features and update country-hex-grid source. */
 function applySignalToCountryGrid(features) {
   if (!map || !mapLoaded || countryHexRes == null) return
-  countryHexFeatures = features  // cache raw geometry for future re-injection
+  countryHexFeatures = features // cache raw geometry for future re-injection
 
   const { sigMap, sigRes } = buildSignalMap(countryHexRes)
 
   const colored = features.map((f) => {
     let lookupId = f.properties.h3_id
     if (countryHexRes > sigRes) {
-      try { lookupId = cellToParent(f.properties.h3_id, sigRes) } catch { return f }
+      try {
+        lookupId = cellToParent(f.properties.h3_id, sigRes)
+      } catch {
+        return f
+      }
     }
     const sig = sigMap.get(lookupId)
     if (!sig) return f
@@ -746,24 +760,8 @@ function selectCountry(f) {
   if (bounds.isEmpty()) return
   selectedCountryBounds = bounds
 
-  // Always fly to bounds — allows re-centering on an already-selected country
-  const cameraOptions = map.cameraForBounds(bounds, {
-    padding: { top: 100, bottom: 100, left: 100, right: 100 },
-    maxZoom: 6,
-  })
-
-  if (cameraOptions) {
-    map.flyTo({
-      ...cameraOptions,
-      duration: 3500,
-      curve: 2.0,
-      speed: 0.5,
-      pitch: 15,
-      bearing: -5,
-      essential: true,
-    })
-  }
-
+  // We do not flyTo here anymore. Single click only selects the country and shows hexes.
+  // Double click handles the zoom/flyTo (in zoomToCountry).
   // Visual state only needs updating when selecting a different country
   if (alreadySelected) return
 
@@ -791,7 +789,7 @@ function selectCountry(f) {
   // Country hex grid at current display resolution (+1 for finer country detail, capped at DB res)
   if (hexWorker) {
     const gridRes = Math.min(currentHexRes.value, DB_HEX_RES - 1)
-    countryHexRes = gridRes + 1  // worker FILL_GRID adds +1 internally
+    countryHexRes = gridRes + 1 // worker FILL_GRID adds +1 internally
     hexWorker.postMessage({
       type: 'FILL_GRID',
       geometry: geom,
@@ -915,27 +913,37 @@ function setupMapInteractions() {
     map.getCanvas().style.cursor = ''
   })
 
-  // ── Single-click: select country + fit to viewport ──
-  map.on('click', (e) => {
+  // ── Single-click: select country ──
+  map.on('click', interactionLayers, (e) => {
     // Don't trigger country select if clicking on an event hex popup target
     const hexFeats = map.queryRenderedFeatures(e.point, { layers: ['hex-fill'] })
     if (hexFeats.length > 0) return
 
+    if (e.features.length > 0) {
+      selectCountry(e.features[0])
+    }
+  })
+
+  // ── Empty click: clear selection ──
+  map.on('click', (e) => {
     const features = map.queryRenderedFeatures(e.point, { layers: interactionLayers })
-    if (features.length > 0) {
-      selectCountry(features[0])
-    } else {
+    const hexFeats = map.queryRenderedFeatures(e.point, { layers: ['hex-fill'] })
+    if (features.length === 0 && hexFeats.length === 0) {
       clearCountrySelection()
     }
   })
 
   // ── Double-click on country → zoom to fit, empty area → zoom in ──
+  map.on('dblclick', interactionLayers, (e) => {
+    e.preventDefault()
+    if (e.features.length > 0) {
+      zoomToCountry(e.features[0])
+    }
+  })
+
   map.on('dblclick', (e) => {
     const features = map.queryRenderedFeatures(e.point, { layers: interactionLayers })
-    if (features.length > 0) {
-      e.preventDefault()
-      zoomToCountry(features[0])
-    } else {
+    if (features.length === 0) {
       map.zoomIn({ around: e.lngLat })
     }
   })
@@ -1037,7 +1045,10 @@ function updateViewportGrid() {
 
   hexWorker.postMessage({
     type: 'FILL_VIEWPORT',
-    bounds: [[minLng, sw.lat], [maxLng, ne.lat]],
+    bounds: [
+      [minLng, sw.lat],
+      [maxLng, ne.lat],
+    ],
     resolution: res,
   })
 }

@@ -1,13 +1,24 @@
 <script setup>
 import { computed, ref, watch } from 'vue'
+import { useRouter } from 'vue-router'
 import { useDisasterStore } from '@/stores/disaster.js'
 import { useUIStore } from '@/stores/ui.js'
 import { useGeolocationStore } from '@/stores/geolocation.js'
+import { useAuthStore } from '@/stores/auth.js'
 import { useI18n } from 'vue-i18n'
 
 const { t } = useI18n()
+const router = useRouter()
 const disasterStore = useDisasterStore()
 const uiStore = useUIStore()
+const authStore = useAuthStore()
+const isSuperAdmin = computed(() => authStore.isSuperAdmin)
+
+const activeCountryConfig = computed(() => uiStore.activeCountryConfig)
+
+function getFlagEmoji(code) {
+  return code.toUpperCase().split('').map(c => String.fromCodePoint(c.charCodeAt(0) + 127397)).join('')
+}
 const geoStore = useGeolocationStore()
 const isGlobeMode = computed(() => uiStore.viewMode === 'globe')
 const isDarkMode = computed(() => uiStore.darkMode)
@@ -296,6 +307,16 @@ watch([rangeStartDate, rangeEndDate], ([start, end]) => {
       >
         {{ isCollapsed ? '→' : '←' }}
       </button>
+    </div>
+
+    <!-- Country Context Banner -->
+    <div v-if="activeCountryConfig && !isCollapsed" class="country-banner">
+      <span class="country-banner-flag">{{ getFlagEmoji(activeCountryConfig.countryCode) }}</span>
+      <div class="country-banner-info">
+        <span class="country-banner-name">{{ activeCountryConfig.nameEn }}</span>
+        <span class="country-banner-label">Country Filter Active</span>
+      </div>
+      <button class="country-banner-clear" @click="router.push('/')" title="Back to global">✕</button>
     </div>
 
     <!-- Disaster Accordion -->
@@ -845,6 +866,18 @@ watch([rangeStartDate, rangeEndDate], ([start, end]) => {
             </button>
           </div>
 
+          <div class="nav-links">
+            <button class="btn btn-ghost sidebar-action-btn" @click="router.push('/alerts/cap')">
+              ⚠️ CAP Uyarılar
+            </button>
+            <button class="btn btn-ghost sidebar-action-btn" @click="router.push('/alerts/incidents')">
+              🚨 Olay Takip
+            </button>
+            <button v-if="isSuperAdmin" class="btn btn-ghost sidebar-action-btn" @click="router.push('/admin')">
+              🛡️ Yönetim
+            </button>
+          </div>
+
           <button class="btn btn-ghost sidebar-action-btn" @click="uiStore.toggleSettings()">
             ⚙️ {{ t('app.settings') }}
           </button>
@@ -900,6 +933,62 @@ watch([rangeStartDate, rangeEndDate], ([start, end]) => {
   justify-content: space-between;
   padding-bottom: var(--space-md);
   border-bottom: 1px solid var(--glass-border);
+}
+
+.country-banner {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: var(--space-sm) var(--space-md);
+  margin: var(--space-sm) 0;
+  background: rgba(74, 163, 255, 0.12);
+  border: 1px solid rgba(74, 163, 255, 0.3);
+  border-radius: var(--radius-md, 8px);
+}
+
+.country-banner-flag {
+  font-size: 1.4rem;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.country-banner-info {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+}
+
+.country-banner-name {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--color-text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.country-banner-label {
+  font-size: 0.65rem;
+  color: var(--color-accent, #4aa3ff);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.country-banner-clear {
+  background: none;
+  border: none;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  font-size: 0.75rem;
+  padding: 2px 4px;
+  border-radius: 4px;
+  flex-shrink: 0;
+  transition: color 0.15s;
+}
+
+.country-banner-clear:hover {
+  color: var(--color-text-primary);
 }
 
 .sidebar-brand {
@@ -1397,6 +1486,15 @@ watch([rangeStartDate, rangeEndDate], ([start, end]) => {
   width: 100%;
   justify-content: center;
   font-size: 0.8rem;
+}
+
+.nav-links {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-bottom: 4px;
+  border-bottom: 1px solid var(--glass-border);
+  margin-bottom: 4px;
 }
 
 .map-mode-selector {

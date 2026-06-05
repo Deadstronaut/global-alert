@@ -1,9 +1,11 @@
 <script setup>
 import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
+import { useRouter } from 'vue-router'
 import { useDisasterStore } from '@/stores/disaster.js'
 import { useUIStore } from '@/stores/ui.js'
 import { useGeolocationStore } from '@/stores/geolocation.js'
 import { useI18n } from 'vue-i18n'
+import { numericToAlpha2 } from '@/data/isoMapping.js'
 import { getSeverityHex, getDisasterIcon } from '@/services/adapters/DisasterEvent.js'
 import { polygonToCells, cellToParent, getResolution, latLngToCell } from 'h3-js'
 import HexWorker from '@/workers/hexWorker.js?worker'
@@ -71,6 +73,7 @@ function fixGeometry(geojson) {
 }
 
 const { t } = useI18n()
+const router = useRouter()
 const disasterStore = useDisasterStore()
 const uiStore = useUIStore()
 const geoStore = useGeolocationStore()
@@ -129,14 +132,10 @@ const _allCountryFeatures = [
 
 // Each step = ~1.5 zoom levels = ~3× magnification → each hex splits into 7 children (H3 hierarchy)
 function hexResForZoom(z) {
-  if (z < 3) return 2
-  if (z < 4.5) return 3
-  if (z < 6) return 4
-  if (z < 7.5) return 5
-  if (z < 9) return 6
-  if (z < 10.5) return 7
-  if (z < 12) return 8
-  return 9
+  if (z < 5)  return 3  // dünya / kıta
+  if (z < 7)  return 4  // ülke
+  if (z < 9)  return 5  // bölge
+  return 6              // zoom 9+ donuk (şehir seviyesi)
 }
 const currentHexRes = computed(() => hexResForZoom(currentZoom.value))
 
@@ -150,7 +149,7 @@ watch(currentHexRes, (newRes) => {
   if (selectedFeatureId && hexWorker) {
     const f = _allCountryFeatures.find((cf) => cf.id === selectedFeatureId)
     if (f) {
-      const gridRes = Math.min(newRes, DB_HEX_RES - 1)
+      const gridRes = Math.min(newRes, 6)
       countryHexRes = gridRes + 1
       hexWorker.postMessage({ type: 'FILL_GRID', geometry: f.geometry, resolution: gridRes })
     }
@@ -782,14 +781,15 @@ function selectCountry(f) {
   } else {
     const nameKey = String(fid).padStart(3, '0')
     selectedCountryName.value = COUNTRY_NAMES[nameKey] ?? `#${fid}`
+    const alpha2 = numericToAlpha2(fid)
+    if (alpha2) router.push(`/${alpha2}`)
   }
 
   map.setFeatureState({ source, id: fid }, { selected: true, dimmed: false })
 
-  // Country hex grid at current display resolution (+1 for finer country detail, capped at DB res)
   if (hexWorker) {
-    const gridRes = Math.min(currentHexRes.value, DB_HEX_RES - 1)
-    countryHexRes = gridRes + 1 // worker FILL_GRID adds +1 internally
+    const gridRes = Math.min(currentHexRes.value, 8)
+    countryHexRes = gridRes + 1
     hexWorker.postMessage({
       type: 'FILL_GRID',
       geometry: geom,
@@ -798,7 +798,7 @@ function selectCountry(f) {
   }
 
   _allCountryFeatures.forEach((cf) => {
-    if (cf.id !== fid) {
+    if (cf.id != null && cf.id !== fid) {
       map.setFeatureState({ source: cf.source, id: cf.id }, { dimmed: true })
     }
   })
@@ -811,6 +811,7 @@ function clearCountrySelection() {
   selectedCountryBounds = null
   countryHexRes = null
   countryHexFeatures = null
+  uiStore.mapMode = 'normal'
   if (!map || !mapLoaded) return
 
   map.getSource('country-hex-grid')?.setData({ type: 'FeatureCollection', features: [] })
@@ -823,12 +824,16 @@ function clearCountrySelection() {
   }
   selectedFeatureId = null
   _allCountryFeatures.forEach((cf) => {
-    map.setFeatureState({ source: cf.source, id: cf.id }, { dimmed: false })
+    if (cf.id != null) {
+      map.setFeatureState({ source: cf.source, id: cf.id }, { dimmed: false })
+    }
   })
   setFocusMode(false)
 
   // Restore full heatmap
   updateHeatmap()
+
+  router.push('/')
 }
 
 function initMap() {
@@ -841,6 +846,7 @@ function initMap() {
     maxZoom: 20,
     attributionControl: false,
     doubleClickZoom: false, // Disable default so we can handle it for zoom-to-fit
+    preserveDrawingBuffer: true, // PNG download için gerekli
   })
 
   map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'bottom-right')
@@ -849,8 +855,17 @@ function initMap() {
     console.error('[MapLibre] Error:', e.error)
   })
 
+  let _hexZoomTimer = null
   map.on('zoom', () => {
     currentZoom.value = Math.round(map.getZoom() * 10) / 10
+    // Debounced viewport hex refresh during scroll (150ms after last scroll tick)
+    if (uiStore.mapMode === 'hexagon') {
+      clearTimeout(_hexZoomTimer)
+      _hexZoomTimer = setTimeout(() => {
+        hexGridCache.delete(currentHexRes.value)
+        updateViewportGrid()
+      }, 150)
+    }
   })
 
   map.on('load', () => {
@@ -864,9 +879,11 @@ function initMap() {
 
     setupMapInteractions()
 
-    // Dynamic Viewport Grid update
+    // Viewport grid refresh after pan or zoom ends (clear cache so new bounds are used)
     map.on('moveend', () => {
       if (uiStore.mapMode === 'hexagon') {
+        clearTimeout(_hexZoomTimer)
+        hexGridCache.delete(currentHexRes.value)
         updateViewportGrid()
       }
     })
@@ -1298,6 +1315,19 @@ function flyToRegion(lat, lng, zoom) {
   map.flyTo({ center: [lng, lat], zoom, duration: 1500, essential: true })
 }
 
+function downloadMap() {
+  if (!map || !mapLoaded) return
+  map.getCanvas().toBlob((blob) => {
+    if (!blob) return
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `gews-map-${new Date().toISOString().slice(0,19).replace(/[:T]/g, '-')}.png`
+    a.click()
+    URL.revokeObjectURL(url)
+  })
+}
+
 watch(
   () => uiStore.selectedRegion,
   (region) => {
@@ -1440,6 +1470,8 @@ onBeforeUnmount(() => {
       </div>
     </div>
 
+    <button class="map-download-btn" @click="downloadMap" title="Haritayı PNG olarak indir">⬇</button>
+
     <div class="layer-switcher" @click="cycleMapStyle">
       <div
         class="layer-preview"
@@ -1526,6 +1558,29 @@ onBeforeUnmount(() => {
 :deep(.maplibregl-ctrl-zoom-out .maplibregl-ctrl-icon) {
   filter: brightness(0) invert(1);
   opacity: 1;
+}
+
+.map-download-btn {
+  position: absolute;
+  bottom: 160px;
+  right: 10px;
+  z-index: 10;
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: rgba(20, 24, 33, 0.88);
+  color: #fff;
+  font-size: 14px;
+  cursor: pointer;
+  backdrop-filter: blur(8px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s;
+}
+.map-download-btn:hover {
+  background: rgba(77, 163, 255, 0.3);
 }
 
 .layer-switcher {

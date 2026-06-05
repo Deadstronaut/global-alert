@@ -1,0 +1,1189 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GEWS — Global Early Warning System · Architecture Overview</title>
+<style>
+  :root {
+    --red:     #ef4444;
+    --orange:  #f97316;
+    --yellow:  #eab308;
+    --green:   #22c55e;
+    --blue:    #3b82f6;
+    --indigo:  #6366f1;
+    --purple:  #a855f7;
+    --cyan:    #06b6d4;
+    --bg:      #030712;
+    --bg2:     #0d1117;
+    --bg3:     #161b22;
+    --bg4:     #21262d;
+    --border:  #30363d;
+    --text:    #e6edf3;
+    --muted:   #8b949e;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    line-height: 1.6;
+    overflow-x: hidden;
+  }
+
+  /* ── HERO ────────────────────────────────────────────────────── */
+  .hero {
+    position: relative;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: 60px 24px;
+    overflow: hidden;
+  }
+
+  .hero-bg {
+    position: absolute;
+    inset: 0;
+    background:
+      radial-gradient(ellipse 80% 50% at 50% -10%, rgba(59,130,246,0.15) 0%, transparent 70%),
+      radial-gradient(ellipse 60% 40% at 80% 80%, rgba(239,68,68,0.08) 0%, transparent 60%),
+      radial-gradient(ellipse 50% 40% at 20% 90%, rgba(168,85,247,0.06) 0%, transparent 60%);
+  }
+
+  .hero-grid {
+    position: absolute;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(48,54,61,0.3) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(48,54,61,0.3) 1px, transparent 1px);
+    background-size: 60px 60px;
+    mask-image: radial-gradient(ellipse 90% 70% at 50% 50%, black, transparent);
+  }
+
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    background: rgba(59,130,246,0.1);
+    border: 1px solid rgba(59,130,246,0.3);
+    border-radius: 100px;
+    padding: 6px 16px;
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--blue);
+    margin-bottom: 28px;
+  }
+
+  .badge::before {
+    content: '';
+    width: 6px; height: 6px;
+    background: var(--blue);
+    border-radius: 50%;
+    animation: pulse-dot 2s ease-in-out infinite;
+  }
+
+  @keyframes pulse-dot {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.4; transform: scale(0.7); }
+  }
+
+  .hero h1 {
+    font-size: clamp(2.4rem, 6vw, 4.5rem);
+    font-weight: 800;
+    letter-spacing: -0.03em;
+    line-height: 1.1;
+    margin-bottom: 12px;
+  }
+
+  .hero h1 span {
+    background: linear-gradient(135deg, #60a5fa, #818cf8, #c084fc);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .hero-sub {
+    font-size: clamp(1rem, 2.5vw, 1.3rem);
+    color: var(--muted);
+    max-width: 640px;
+    margin-bottom: 48px;
+  }
+
+  .hero-stats {
+    display: flex;
+    gap: 48px;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+
+  .stat {
+    text-align: center;
+  }
+
+  .stat-num {
+    font-size: 2.2rem;
+    font-weight: 800;
+    background: linear-gradient(135deg, #60a5fa, #818cf8);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .stat-label {
+    font-size: 0.8rem;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin-top: 2px;
+  }
+
+  /* ── SECTIONS ────────────────────────────────────────────────── */
+  section {
+    padding: 80px 24px;
+    max-width: 1200px;
+    margin: 0 auto;
+  }
+
+  .section-label {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--blue);
+    margin-bottom: 12px;
+  }
+
+  .section-title {
+    font-size: clamp(1.6rem, 3.5vw, 2.4rem);
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    margin-bottom: 16px;
+  }
+
+  .section-desc {
+    color: var(--muted);
+    font-size: 1.05rem;
+    max-width: 640px;
+    margin-bottom: 48px;
+  }
+
+  /* ── FLOW DIAGRAM ────────────────────────────────────────────── */
+  .flow {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    align-items: center;
+  }
+
+  .flow-layer {
+    width: 100%;
+    border-radius: 16px;
+    border: 1px solid var(--border);
+    padding: 32px;
+    position: relative;
+    background: var(--bg2);
+  }
+
+  .flow-layer.layer-sources { border-color: rgba(168,85,247,0.4); background: rgba(168,85,247,0.04); }
+  .flow-layer.layer-aggregator { border-color: rgba(59,130,246,0.4); background: rgba(59,130,246,0.04); }
+  .flow-layer.layer-db { border-color: rgba(34,197,94,0.4); background: rgba(34,197,94,0.04); }
+  .flow-layer.layer-frontend { border-color: rgba(234,179,8,0.4); background: rgba(234,179,8,0.04); }
+
+  .flow-layer-title {
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    margin-bottom: 20px;
+  }
+
+  .layer-sources .flow-layer-title { color: var(--purple); }
+  .layer-aggregator .flow-layer-title { color: var(--blue); }
+  .layer-db .flow-layer-title { color: var(--green); }
+  .layer-frontend .flow-layer-title { color: var(--yellow); }
+
+  .flow-connector {
+    width: 2px;
+    height: 48px;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+
+  .flow-connector::before {
+    content: '';
+    width: 2px;
+    height: 100%;
+    background: linear-gradient(to bottom, var(--border), rgba(48,54,61,0));
+  }
+
+  .flow-connector-label {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    left: 16px;
+    font-size: 10px;
+    color: var(--muted);
+    white-space: nowrap;
+    background: var(--bg);
+    padding: 2px 8px;
+    border-radius: 100px;
+    border: 1px solid var(--border);
+  }
+
+  /* ── SOURCE GRID ─────────────────────────────────────────────── */
+  .source-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 10px;
+  }
+
+  .source-card {
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 12px 14px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 13px;
+    font-weight: 500;
+    transition: border-color 0.2s, background 0.2s;
+  }
+
+  .source-card:hover { border-color: rgba(168,85,247,0.5); background: rgba(168,85,247,0.06); }
+
+  .source-icon { font-size: 18px; flex-shrink: 0; }
+
+  .source-meta {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .source-name { font-weight: 600; font-size: 12px; }
+  .source-freq { font-size: 10px; color: var(--muted); }
+
+  /* ── PIPELINE STEPS ──────────────────────────────────────────── */
+  .pipeline {
+    display: flex;
+    gap: 0;
+    align-items: stretch;
+    overflow-x: auto;
+    padding-bottom: 8px;
+  }
+
+  .pipe-step {
+    flex: 1;
+    min-width: 140px;
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px 16px;
+    text-align: center;
+    position: relative;
+  }
+
+  .pipe-step + .pipe-step {
+    margin-left: 32px;
+  }
+
+  .pipe-step + .pipe-step::before {
+    content: '→';
+    position: absolute;
+    left: -24px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--muted);
+    font-size: 18px;
+  }
+
+  .pipe-step-icon { font-size: 28px; margin-bottom: 10px; }
+  .pipe-step-name { font-size: 13px; font-weight: 700; margin-bottom: 4px; }
+  .pipe-step-desc { font-size: 11px; color: var(--muted); line-height: 1.5; }
+
+  /* ── TABLES ──────────────────────────────────────────────────── */
+  .info-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 16px;
+    margin-bottom: 40px;
+  }
+
+  .info-card {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 24px;
+  }
+
+  .info-card-title {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 16px;
+  }
+
+  .kv-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .kv-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 13px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .kv-row:last-child { border-bottom: none; padding-bottom: 0; }
+
+  .kv-key { color: var(--muted); }
+
+  .kv-val {
+    font-weight: 600;
+    font-family: 'Cascadia Code', 'Fira Code', monospace;
+    font-size: 12px;
+  }
+
+  /* ── DB TABLE GRID ───────────────────────────────────────────── */
+  .db-tables {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 10px;
+  }
+
+  .db-table-card {
+    background: var(--bg3);
+    border: 1px solid rgba(34,197,94,0.2);
+    border-radius: 10px;
+    padding: 14px 16px;
+    font-size: 12px;
+  }
+
+  .db-table-name {
+    font-weight: 700;
+    font-family: monospace;
+    color: var(--green);
+    margin-bottom: 4px;
+    font-size: 13px;
+  }
+
+  .db-table-view {
+    font-size: 10px;
+    color: var(--muted);
+    margin-bottom: 6px;
+  }
+
+  .rt-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 10px;
+    color: var(--cyan);
+    font-weight: 600;
+  }
+
+  .rt-badge::before {
+    content: '';
+    width: 5px; height: 5px;
+    background: var(--cyan);
+    border-radius: 50%;
+    animation: pulse-dot 1.5s ease-in-out infinite;
+  }
+
+  /* ── COMPONENT GRID ──────────────────────────────────────────── */
+  .component-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 12px;
+  }
+
+  .component-card {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px;
+    transition: border-color 0.2s, transform 0.2s;
+  }
+
+  .component-card:hover { border-color: rgba(234,179,8,0.4); transform: translateY(-2px); }
+
+  .component-icon { font-size: 28px; margin-bottom: 10px; }
+  .component-name { font-size: 14px; font-weight: 700; margin-bottom: 6px; }
+  .component-desc { font-size: 12px; color: var(--muted); line-height: 1.5; }
+
+  /* ── DATA FLOW TIMELINE ──────────────────────────────────────── */
+  .timeline {
+    position: relative;
+    padding-left: 32px;
+    border-left: 2px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+  }
+
+  .timeline-item {
+    position: relative;
+    padding: 0 0 24px 24px;
+  }
+
+  .timeline-item::before {
+    content: '';
+    position: absolute;
+    left: -7px;
+    top: 6px;
+    width: 12px; height: 12px;
+    background: var(--bg);
+    border: 2px solid var(--blue);
+    border-radius: 50%;
+  }
+
+  .timeline-item.t-done::before { background: var(--blue); }
+
+  .timeline-time {
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--blue);
+    font-family: monospace;
+    margin-bottom: 4px;
+  }
+
+  .timeline-text {
+    font-size: 13px;
+    color: var(--text);
+  }
+
+  .timeline-sub {
+    font-size: 11px;
+    color: var(--muted);
+    margin-top: 2px;
+    font-family: monospace;
+  }
+
+  /* ── SEVERITY TABLE ──────────────────────────────────────────── */
+  .severity-grid {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+
+  .sev-card {
+    flex: 1;
+    min-width: 100px;
+    border-radius: 10px;
+    padding: 16px;
+    text-align: center;
+    border: 1px solid;
+  }
+
+  .sev-card.critical { background: rgba(239,68,68,0.1); border-color: rgba(239,68,68,0.3); }
+  .sev-card.high     { background: rgba(249,115,22,0.1); border-color: rgba(249,115,22,0.3); }
+  .sev-card.moderate { background: rgba(234,179,8,0.1); border-color: rgba(234,179,8,0.3); }
+  .sev-card.low      { background: rgba(34,197,94,0.1); border-color: rgba(34,197,94,0.3); }
+  .sev-card.minimal  { background: rgba(139,148,158,0.1); border-color: rgba(139,148,158,0.3); }
+
+  .sev-dot {
+    font-size: 24px;
+    margin-bottom: 6px;
+  }
+
+  .sev-label { font-size: 12px; font-weight: 700; text-transform: uppercase; margin-bottom: 4px; }
+  .sev-label.critical { color: #ef4444; }
+  .sev-label.high     { color: #f97316; }
+  .sev-label.moderate { color: #eab308; }
+  .sev-label.low      { color: #22c55e; }
+  .sev-label.minimal  { color: #8b949e; }
+  .sev-mag { font-size: 11px; color: var(--muted); }
+
+  /* ── ROADMAP ─────────────────────────────────────────────────── */
+  .roadmap {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 16px;
+  }
+
+  .roadmap-phase {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 24px;
+  }
+
+  .phase-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 16px;
+  }
+
+  .phase-dot {
+    width: 10px; height: 10px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+
+  .phase-dot.done   { background: var(--green); box-shadow: 0 0 8px rgba(34,197,94,0.5); }
+  .phase-dot.active { background: var(--blue); box-shadow: 0 0 8px rgba(59,130,246,0.5); animation: pulse-dot 2s infinite; }
+  .phase-dot.soon   { background: var(--orange); }
+  .phase-dot.later  { background: var(--muted); }
+
+  .phase-name { font-weight: 700; font-size: 14px; }
+  .phase-tag  { font-size: 10px; color: var(--muted); margin-left: auto; text-transform: uppercase; letter-spacing: 0.06em; }
+
+  .phase-items {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .phase-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    font-size: 12px;
+    color: var(--muted);
+  }
+
+  .phase-item.done-item { color: var(--text); }
+
+  .phase-item::before {
+    content: '○';
+    flex-shrink: 0;
+    margin-top: 1px;
+    font-size: 10px;
+  }
+
+  .phase-item.done-item::before { content: '✓'; color: var(--green); }
+
+  /* ── AUTH DIAGRAM ────────────────────────────────────────────── */
+  .auth-diagram {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 32px;
+  }
+
+  .auth-flow {
+    display: flex;
+    align-items: center;
+    gap: 0;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+
+  .auth-node {
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 16px 20px;
+    text-align: center;
+    min-width: 120px;
+  }
+
+  .auth-node-icon { font-size: 24px; margin-bottom: 6px; }
+  .auth-node-name { font-size: 12px; font-weight: 700; }
+  .auth-node-sub  { font-size: 10px; color: var(--muted); margin-top: 2px; }
+
+  .auth-arrow {
+    font-size: 20px;
+    color: var(--muted);
+    padding: 0 12px;
+    flex-shrink: 0;
+  }
+
+  /* ── DUAL TIMELINE ───────────────────────────────────────────── */
+  .dual-timeline-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 24px;
+    margin-bottom: 12px;
+  }
+
+  .path-header {
+    border-radius: 12px;
+    padding: 16px 20px;
+  }
+
+  .path-header.path-warning {
+    background: rgba(239,68,68,0.06);
+    border: 1px solid rgba(239,68,68,0.3);
+  }
+
+  .path-header.path-data {
+    background: rgba(59,130,246,0.06);
+    border: 1px solid rgba(59,130,246,0.3);
+  }
+
+  .path-label {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    margin-bottom: 6px;
+  }
+
+  .path-label.label-warning { color: #ef4444; }
+  .path-label.label-data    { color: #3b82f6; }
+
+  .path-sub {
+    font-size: 11px;
+    color: var(--muted);
+  }
+
+  .dual-timeline-cols {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 24px;
+  }
+
+  .timeline-time-warning { color: #ef4444; }
+
+  .footer-note {
+    font-size: 11px;
+    opacity: 0.5;
+  }
+
+  /* ── FOOTER ──────────────────────────────────────────────────── */
+  footer {
+    border-top: 1px solid var(--border);
+    padding: 40px 24px;
+    text-align: center;
+    color: var(--muted);
+    font-size: 13px;
+  }
+
+  footer strong { color: var(--text); }
+
+  /* ── DIVIDER ─────────────────────────────────────────────────── */
+  .section-divider {
+    width: 100%;
+    height: 1px;
+    background: linear-gradient(to right, transparent, var(--border), transparent);
+    margin: 0 auto;
+  }
+
+  /* ── RESPONSIVE ──────────────────────────────────────────────── */
+  @media (max-width: 640px) {
+    .pipeline { flex-direction: column; }
+    .pipe-step + .pipe-step { margin-left: 0; margin-top: 32px; }
+    .pipe-step + .pipe-step::before { content: '↓'; left: 50%; top: -24px; transform: translateX(-50%); }
+    .hero-stats { gap: 24px; }
+    .auth-flow { flex-direction: column; }
+    .auth-arrow { transform: rotate(90deg); }
+  }
+</style>
+</head>
+<body>
+
+<!-- ── HERO ─────────────────────────────────────────────────────────── -->
+<div class="hero">
+  <div class="hero-bg"></div>
+  <div class="hero-grid"></div>
+  <div class="badge">System Architecture Overview</div>
+  <h1>Global Early Warning System<br><span>GEWS · Architecture</span></h1>
+  <p class="hero-sub">
+    Real-time multi-hazard monitoring platform aggregating seismic, wildfire, flood,
+    drought, and epidemic data from 12+ international authoritative sources into a
+    unified situational awareness interface.
+  </p>
+  <div class="hero-stats">
+    <div class="stat">
+      <div class="stat-num">12+</div>
+      <div class="stat-label">Data Sources</div>
+    </div>
+    <div class="stat">
+      <div class="stat-num">9</div>
+      <div class="stat-label">Hazard Types</div>
+    </div>
+    <div class="stat">
+      <div class="stat-num">&lt;2s</div>
+      <div class="stat-label">DB Write Latency</div>
+    </div>
+    <div class="stat">
+      <div class="stat-num">7</div>
+      <div class="stat-label">Languages</div>
+    </div>
+    <div class="stat">
+      <div class="stat-num">24/7</div>
+      <div class="stat-label">Continuous</div>
+    </div>
+  </div>
+</div>
+
+<div class="section-divider"></div>
+
+<!-- ── SYSTEM FLOW ────────────────────────────────────────────────── -->
+<section>
+  <div class="section-label">Architecture</div>
+  <h2 class="section-title">End-to-End Data Flow</h2>
+  <p class="section-desc">
+    Four-layer architecture: external sources → aggregation container → cloud database → browser interface.
+    Data travels from raw API responses to rendered map points in under 3 seconds.
+  </p>
+
+  <div class="flow">
+    <!-- Layer 0 -->
+    <div class="flow-layer layer-sources">
+      <div class="flow-layer-title">Layer 0 — External Data Sources</div>
+      <div class="source-grid">
+        <div class="source-card"><span class="source-icon">🌍</span><div class="source-meta"><span class="source-name">EMSC</span><span class="source-freq">WebSocket · Real-time</span></div></div>
+        <div class="source-card"><span class="source-icon">🌍</span><div class="source-meta"><span class="source-name">USGS</span><span class="source-freq">REST · 60s</span></div></div>
+        <div class="source-card"><span class="source-icon">🌍</span><div class="source-meta"><span class="source-name">AFAD</span><span class="source-freq">REST · 60s</span></div></div>
+        <div class="source-card"><span class="source-icon">🌍</span><div class="source-meta"><span class="source-name">Kandilli</span><span class="source-freq">REST · 60s</span></div></div>
+        <div class="source-card"><span class="source-icon">🌍</span><div class="source-meta"><span class="source-name">GEOFON</span><span class="source-freq">REST · 60s</span></div></div>
+        <div class="source-card"><span class="source-icon">🌊</span><div class="source-meta"><span class="source-name">GDACS</span><span class="source-freq">REST+RSS · 5m</span></div></div>
+        <div class="source-card"><span class="source-icon">🌊</span><div class="source-meta"><span class="source-name">PTWC</span><span class="source-freq">REST+RSS · 5m</span></div></div>
+        <div class="source-card"><span class="source-icon">🔥</span><div class="source-meta"><span class="source-name">NASA FIRMS</span><span class="source-freq">REST · 15m</span></div></div>
+        <div class="source-card"><span class="source-icon">🦠</span><div class="source-meta"><span class="source-name">WHO</span><span class="source-freq">REST · 1h</span></div></div>
+        <div class="source-card"><span class="source-icon">🌾</span><div class="source-meta"><span class="source-name">FEWSNET</span><span class="source-freq">REST · 1h</span></div></div>
+        <div class="source-card"><span class="source-icon">🌊</span><div class="source-meta"><span class="source-name">GloFAS</span><span class="source-freq">REST · 5m</span></div></div>
+        <div class="source-card"><span class="source-icon">📡</span><div class="source-meta"><span class="source-name">IoT / Custom</span><span class="source-freq">Config · Variable</span></div></div>
+      </div>
+    </div>
+
+    <div class="flow-connector">
+      <span class="flow-connector-label">HTTP · WebSocket · RSS · GeoJSON</span>
+    </div>
+
+    <!-- Layer 1 -->
+    <div class="flow-layer layer-aggregator">
+      <div class="flow-layer-title">Layer 1 — GEWS Aggregator · Node.js 22 · Docker</div>
+      <div class="pipeline">
+        <div class="pipe-step">
+          <div class="pipe-step-icon">📥</div>
+          <div class="pipe-step-name">Sources</div>
+          <div class="pipe-step-desc">12 concurrent pollers &amp; listeners</div>
+        </div>
+        <div class="pipe-step">
+          <div class="pipe-step-icon">🔄</div>
+          <div class="pipe-step-name">Normalize</div>
+          <div class="pipe-step-desc">Unified schema: id, type, lat, lng, mag, severity, time</div>
+        </div>
+        <div class="pipe-step">
+          <div class="pipe-step-icon">🔍</div>
+          <div class="pipe-step-name">Deduplicate</div>
+          <div class="pipe-step-desc">Proximity + 5-min time window per hazard type</div>
+        </div>
+        <div class="pipe-step">
+          <div class="pipe-step-icon">⚡</div>
+          <div class="pipe-step-name">P-Wave Alert</div>
+          <div class="pipe-step-desc">M4.0+ → S-wave arrival per city within 500km</div>
+        </div>
+        <div class="pipe-step">
+          <div class="pipe-step-icon">💾</div>
+          <div class="pipe-step-name">Write Queue</div>
+          <div class="pipe-step-desc">Batched UPSERT every 2s, onConflict: id</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="flow-connector">
+      <span class="flow-connector-label">HTTPS UPSERT · service_role key · RLS bypass</span>
+    </div>
+
+    <!-- Layer 2 -->
+    <div class="flow-layer layer-db">
+      <div class="flow-layer-title">Layer 2 — Supabase · PostgreSQL 15 + Realtime</div>
+      <div class="db-tables">
+        <div class="db-table-card">
+          <div class="db-table-name">earthquake</div>
+          <div class="db-table-view">→ earthquake_view</div>
+          <div class="rt-badge">Realtime INSERT</div>
+        </div>
+        <div class="db-table-card">
+          <div class="db-table-name">wildfire</div>
+          <div class="db-table-view">→ wildfire_view</div>
+          <div class="rt-badge">Realtime INSERT</div>
+        </div>
+        <div class="db-table-card">
+          <div class="db-table-name">flood</div>
+          <div class="db-table-view">→ flood_view</div>
+          <div class="rt-badge">Realtime INSERT</div>
+        </div>
+        <div class="db-table-card">
+          <div class="db-table-name">drought</div>
+          <div class="db-table-view">→ drought_view</div>
+          <div class="rt-badge">Realtime INSERT</div>
+        </div>
+        <div class="db-table-card">
+          <div class="db-table-name">food_security</div>
+          <div class="db-table-view">→ food_security_view</div>
+          <div class="rt-badge">Realtime INSERT</div>
+        </div>
+        <div class="db-table-card">
+          <div class="db-table-name">tsunami</div>
+          <div class="db-table-view">→ tsunami_view</div>
+          <div class="rt-badge">Realtime INSERT</div>
+        </div>
+        <div class="db-table-card">
+          <div class="db-table-name">cyclone</div>
+          <div class="db-table-view">→ cyclone_view</div>
+          <div class="rt-badge">Realtime INSERT</div>
+        </div>
+        <div class="db-table-card">
+          <div class="db-table-name">volcano</div>
+          <div class="db-table-view">→ volcano_view</div>
+          <div class="rt-badge">Realtime INSERT</div>
+        </div>
+        <div class="db-table-card">
+          <div class="db-table-name">epidemic</div>
+          <div class="db-table-view">→ epidemic_view</div>
+          <div class="rt-badge">Realtime INSERT</div>
+        </div>
+        <div class="db-table-card">
+          <div class="db-table-name">early_warnings</div>
+          <div class="db-table-view">→ early_warnings_view</div>
+          <div class="rt-badge">Realtime INSERT</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="flow-connector">
+      <span class="flow-connector-label">REST API (initial load) + Realtime WebSocket (live stream)</span>
+    </div>
+
+    <!-- Layer 3 -->
+    <div class="flow-layer layer-frontend">
+      <div class="flow-layer-title">Layer 3 — Frontend · Vue 3 + Vite · Pinia</div>
+      <div class="component-grid">
+        <div class="component-card">
+          <div class="component-icon">🌐</div>
+          <div class="component-name">GlobeView</div>
+          <div class="component-desc">3D interactive globe via globe.gl (Three.js). Points, rings, heatmap, H3 hexbins, labels, user marker.</div>
+        </div>
+        <div class="component-card">
+          <div class="component-icon">🗺️</div>
+          <div class="component-name">MapView</div>
+          <div class="component-desc">2D Leaflet map with dark/light tiles, emoji markers, leaflet.heat, H3 canvas hexbins.</div>
+        </div>
+        <div class="component-card">
+          <div class="component-icon">⚠️</div>
+          <div class="component-name">AlertPanel</div>
+          <div class="component-desc">Nearby threat list sorted by distance. Up to 20 events within configurable radius (10–1000 km).</div>
+        </div>
+        <div class="component-card">
+          <div class="component-icon">🚨</div>
+          <div class="component-name">EmergencyPopup</div>
+          <div class="component-desc">Auto-opens when a critical or high severity event enters the user's alert radius.</div>
+        </div>
+        <div class="component-card">
+          <div class="component-icon">📊</div>
+          <div class="component-name">StatsOverlay</div>
+          <div class="component-desc">Live event counters per hazard type, updating reactively as Realtime events arrive.</div>
+        </div>
+        <div class="component-card">
+          <div class="component-icon">⚙️</div>
+          <div class="component-name">SettingsPanel</div>
+          <div class="component-desc">Dark/light mode, high contrast, colorblind palette, safe mode, language (7), alert radius.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="section-divider"></div>
+
+<!-- ── LIVE DATA TIMELINE ──────────────────────────────────────────── -->
+<section>
+  <div class="section-label">Data Flow</div>
+  <h2 class="section-title">Two Parallel Event Lifecycles</h2>
+  <p class="section-desc">
+    Early warnings (P-Wave alarms) bypass the write queue entirely — direct insert, sub-second delivery.
+    Regular event data uses a 2-second batch for DB efficiency. Two separate paths, two different priorities.
+  </p>
+
+  <div class="dual-timeline-grid">
+    <div class="path-header path-warning">
+      <div class="path-label label-warning">⚡ Early Warning Path (P-Wave Alarm)</div>
+      <div class="path-sub">Bypasses the 2s queue — direct await insert()</div>
+    </div>
+    <div class="path-header path-data">
+      <div class="path-label label-data">🗺 Map Data Path (All Events)</div>
+      <div class="path-sub">Batched every 2s for write efficiency</div>
+    </div>
+  </div>
+
+  <div class="dual-timeline-cols">
+    <div class="timeline">
+      <div class="timeline-item t-done">
+        <div class="timeline-time timeline-time-warning">t = 0 ms</div>
+        <div class="timeline-text">M4.0+ earthquake detected by aggregator</div>
+        <div class="timeline-sub">EMSC WebSocket or USGS/AFAD poll</div>
+      </div>
+      <div class="timeline-item t-done">
+        <div class="timeline-time timeline-time-warning">t = 0 ms</div>
+        <div class="timeline-text">P-Wave engine calculates S-wave arrival times</div>
+        <div class="timeline-sub">Cities within 500km, seconds until shaking</div>
+      </div>
+      <div class="timeline-item t-done">
+        <div class="timeline-time timeline-time-warning">t ≤ 100 ms</div>
+        <div class="timeline-text">writeEarlyWarning() → direct await insert()</div>
+        <div class="timeline-sub">No queue — immediate Supabase write</div>
+      </div>
+      <div class="timeline-item t-done">
+        <div class="timeline-time timeline-time-warning">t ≤ 200 ms</div>
+        <div class="timeline-text">Supabase Realtime broadcasts to all clients</div>
+      </div>
+      <div class="timeline-item t-done">
+        <div class="timeline-time timeline-time-warning">t ≤ 300–500 ms</div>
+        <div class="timeline-text">EmergencyPopup fires on frontend</div>
+        <div class="timeline-sub">User sees alarm with seconds-to-impact countdown</div>
+      </div>
+    </div>
+
+    <div class="timeline">
+      <div class="timeline-item t-done">
+        <div class="timeline-time">t = 0 ms</div>
+        <div class="timeline-text">Any disaster event arrives from source</div>
+        <div class="timeline-sub">normalize → deduplicate → queueWrite()</div>
+      </div>
+      <div class="timeline-item t-done">
+        <div class="timeline-time">t ≤ 2000 ms</div>
+        <div class="timeline-text">flushQueue() → batched UPSERT to DB</div>
+        <div class="timeline-sub">onConflict: id — idempotent, no duplicates</div>
+      </div>
+      <div class="timeline-item t-done">
+        <div class="timeline-time">t ≤ 2100 ms</div>
+        <div class="timeline-text">Supabase Realtime broadcasts INSERT</div>
+      </div>
+      <div class="timeline-item t-done">
+        <div class="timeline-time">t ≤ 2200 ms</div>
+        <div class="timeline-text">Frontend: rowToEvent() → store.addEvent()</div>
+      </div>
+      <div class="timeline-item t-done">
+        <div class="timeline-time">t ≤ 2300 ms</div>
+        <div class="timeline-text">Map point rendered on Globe &amp; Map</div>
+        <div class="timeline-sub">Acceptable for data visualization — not the alarm path</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="section-divider"></div>
+
+<!-- ── SEVERITY ────────────────────────────────────────────────────── -->
+<section>
+  <div class="section-label">Classification</div>
+  <h2 class="section-title">Severity Levels</h2>
+  <p class="section-desc">Earthquake magnitude mapping. Other hazard types follow equivalent intensity scales.</p>
+
+  <div class="severity-grid">
+    <div class="sev-card critical">
+      <div class="sev-dot">🔴</div>
+      <div class="sev-label critical">Critical</div>
+      <div class="sev-mag">M ≥ 7.0</div>
+    </div>
+    <div class="sev-card high">
+      <div class="sev-dot">🟠</div>
+      <div class="sev-label high">High</div>
+      <div class="sev-mag">M ≥ 5.5</div>
+    </div>
+    <div class="sev-card moderate">
+      <div class="sev-dot">🟡</div>
+      <div class="sev-label moderate">Moderate</div>
+      <div class="sev-mag">M ≥ 4.0</div>
+    </div>
+    <div class="sev-card low">
+      <div class="sev-dot">🟢</div>
+      <div class="sev-label low">Low</div>
+      <div class="sev-mag">M ≥ 2.5</div>
+    </div>
+    <div class="sev-card minimal">
+      <div class="sev-dot">⚪</div>
+      <div class="sev-label minimal">Minimal</div>
+      <div class="sev-mag">M &lt; 2.5</div>
+    </div>
+  </div>
+</section>
+
+<div class="section-divider"></div>
+
+<!-- ── TECH STACK ─────────────────────────────────────────────────── -->
+<section>
+  <div class="section-label">Technology</div>
+  <h2 class="section-title">Stack Overview</h2>
+
+  <div class="info-grid">
+    <div class="info-card">
+      <div class="info-card-title">Aggregator</div>
+      <div class="kv-list">
+        <div class="kv-row"><span class="kv-key">Runtime</span><span class="kv-val">Node.js 22 (ESM)</span></div>
+        <div class="kv-row"><span class="kv-key">Container</span><span class="kv-val">Docker · Compose</span></div>
+        <div class="kv-row"><span class="kv-key">DB Client</span><span class="kv-val">@supabase/supabase-js</span></div>
+        <div class="kv-row"><span class="kv-key">HTTP parsing</span><span class="kv-val">axios · cheerio</span></div>
+        <div class="kv-row"><span class="kv-key">Health check</span><span class="kv-val">:8765 /health · /status</span></div>
+      </div>
+    </div>
+    <div class="info-card">
+      <div class="info-card-title">Database</div>
+      <div class="kv-list">
+        <div class="kv-row"><span class="kv-key">Engine</span><span class="kv-val">PostgreSQL 15</span></div>
+        <div class="kv-row"><span class="kv-key">BaaS</span><span class="kv-val">Supabase Cloud</span></div>
+        <div class="kv-row"><span class="kv-key">Realtime</span><span class="kv-val">Supabase Realtime v2</span></div>
+        <div class="kv-row"><span class="kv-key">Security</span><span class="kv-val">Row Level Security</span></div>
+        <div class="kv-row"><span class="kv-key">Views</span><span class="kv-val">10 filtered views</span></div>
+      </div>
+    </div>
+    <div class="info-card">
+      <div class="info-card-title">Frontend</div>
+      <div class="kv-list">
+        <div class="kv-row"><span class="kv-key">Framework</span><span class="kv-val">Vue 3 · Composition API</span></div>
+        <div class="kv-row"><span class="kv-key">Build</span><span class="kv-val">Vite</span></div>
+        <div class="kv-row"><span class="kv-key">State</span><span class="kv-val">Pinia</span></div>
+        <div class="kv-row"><span class="kv-key">3D Globe</span><span class="kv-val">globe.gl · Three.js</span></div>
+        <div class="kv-row"><span class="kv-key">2D Map</span><span class="kv-val">Leaflet 1.9.4 · H3-js</span></div>
+      </div>
+    </div>
+    <div class="info-card">
+      <div class="info-card-title">Mobile &amp; i18n</div>
+      <div class="kv-list">
+        <div class="kv-row"><span class="kv-key">Mobile</span><span class="kv-val">Quasar + Cordova</span></div>
+        <div class="kv-row"><span class="kv-key">Platforms</span><span class="kv-val">iOS · Android</span></div>
+        <div class="kv-row"><span class="kv-key">i18n</span><span class="kv-val">vue-i18n · 7 locales</span></div>
+        <div class="kv-row"><span class="kv-key">Languages</span><span class="kv-val">6 UN official + Turkish</span></div>
+        <div class="kv-row"><span class="kv-key">Offline</span><span class="kv-val">IndexedDB cache</span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="section-divider"></div>
+
+<!-- ── PRODUCT ROADMAP ─────────────────────────────────────────────── -->
+<section>
+  <div class="section-label">Roadmap</div>
+  <h2 class="section-title">Development Phases</h2>
+  <p class="section-desc">
+    MVP data pipeline is live. Product phase adds authentication and institutional access control for government deployments.
+  </p>
+
+  <div class="roadmap">
+    <div class="roadmap-phase">
+      <div class="phase-header">
+        <div class="phase-dot done"></div>
+        <div class="phase-name">Data Pipeline</div>
+        <div class="phase-tag">Complete</div>
+      </div>
+      <div class="phase-items">
+        <div class="phase-item done-item">12+ source aggregator (Docker)</div>
+        <div class="phase-item done-item">Normalize · Deduplicate · P-Wave</div>
+        <div class="phase-item done-item">Supabase DB write (upsert queue)</div>
+        <div class="phase-item done-item">RLS policies · DB views</div>
+        <div class="phase-item done-item">Health &amp; status endpoint</div>
+      </div>
+    </div>
+
+    <div class="roadmap-phase">
+      <div class="phase-header">
+        <div class="phase-dot done"></div>
+        <div class="phase-name">Frontend MVP</div>
+        <div class="phase-tag">Complete</div>
+      </div>
+      <div class="phase-items">
+        <div class="phase-item done-item">3D Globe + 2D Map views</div>
+        <div class="phase-item done-item">Supabase Realtime subscription</div>
+        <div class="phase-item done-item">IndexedDB offline cache</div>
+        <div class="phase-item done-item">Alert panel + Emergency popup</div>
+        <div class="phase-item done-item">7-language i18n + Arabic RTL</div>
+      </div>
+    </div>
+
+    <div class="roadmap-phase">
+      <div class="phase-header">
+        <div class="phase-dot soon"></div>
+        <div class="phase-name">Product Launch</div>
+        <div class="phase-tag">Next</div>
+      </div>
+      <div class="phase-items">
+        <div class="phase-item">Supabase Auth (email / SSO)</div>
+        <div class="phase-item">RLS → authenticated-only access</div>
+        <div class="phase-item">iOS &amp; Android mobile build</div>
+        <div class="phase-item">Push notifications (FCM / APNS)</div>
+        <div class="phase-item">nginx.conf + production deploy</div>
+      </div>
+    </div>
+
+    <div class="roadmap-phase">
+      <div class="phase-header">
+        <div class="phase-dot later"></div>
+        <div class="phase-name">Enterprise</div>
+        <div class="phase-tag">Planned</div>
+      </div>
+      <div class="phase-items">
+        <div class="phase-item">SAML 2.0 / LDAP SSO (government AD)</div>
+        <div class="phase-item">Institution-scoped data access (RLS)</div>
+        <div class="phase-item">Multi-tenant department management</div>
+        <div class="phase-item">Audit logs + compliance reporting</div>
+        <div class="phase-item">Custom alert thresholds per region</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="section-divider"></div>
+
+<!-- ── AUTH DIAGRAM ────────────────────────────────────────────────── -->
+<section>
+  <div class="section-label">Product Phase</div>
+  <h2 class="section-title">Authentication Architecture</h2>
+  <p class="section-desc">
+    Supabase Auth integrates with zero changes to the aggregator or Realtime pipeline.
+    Only RLS policies are updated to require <code style="background:var(--bg3);padding:2px 6px;border-radius:4px;font-size:12px;">auth.role() = 'authenticated'</code>.
+  </p>
+
+  <div class="auth-diagram">
+    <div class="auth-flow">
+      <div class="auth-node">
+        <div class="auth-node-icon">🏛️</div>
+        <div class="auth-node-name">Ministry / Agency</div>
+        <div class="auth-node-sub">Government institution</div>
+      </div>
+      <div class="auth-arrow">→</div>
+      <div class="auth-node">
+        <div class="auth-node-icon">🔐</div>
+        <div class="auth-node-name">Supabase Auth</div>
+        <div class="auth-node-sub">Email · SSO / SAML 2.0</div>
+      </div>
+      <div class="auth-arrow">→</div>
+      <div class="auth-node">
+        <div class="auth-node-icon">🛡️</div>
+        <div class="auth-node-name">RLS Policy</div>
+        <div class="auth-node-sub">auth.role() = authenticated</div>
+      </div>
+      <div class="auth-arrow">→</div>
+      <div class="auth-node">
+        <div class="auth-node-icon">🗺️</div>
+        <div class="auth-node-name">GEWS Dashboard</div>
+        <div class="auth-node-sub">Live situational awareness</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="section-divider"></div>
+
+<!-- ── FOOTER ─────────────────────────────────────────────────────── -->
+<footer>
+  <strong>GEWS — Global Early Warning System</strong><br>
+  Multi-Hazard Early Warning Platform · Architecture Document v2.0 · May 2026<br><br>
+  <span class="footer-note">
+    This document is intended for government, institutional, and technical partner distribution.
+  </span>
+</footer>
+
+</body>
+</html>

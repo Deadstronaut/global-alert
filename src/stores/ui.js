@@ -8,6 +8,9 @@ export const useUIStore = defineStore('ui', () => {
     const selectedRegion = ref(null); // { lat, lng, zoom }
     const selectedDisaster = ref(null); // DisasterEvent or null
 
+    // Tenant country config — null means global view
+    const activeCountryConfig = ref(null);
+
     // Sidebar
     const sidebarOpen = ref(true);
     const sidebarCollapsed = ref(false);
@@ -91,6 +94,10 @@ export const useUIStore = defineStore('ui', () => {
         settingsPanelOpen.value = !settingsPanelOpen.value;
     }
 
+    function setCountryConfig(config) {
+        activeCountryConfig.value = config;
+    }
+
     return {
         viewMode,
         transitionState,
@@ -115,6 +122,8 @@ export const useUIStore = defineStore('ui', () => {
         clearSelection,
         toggleSidebar,
         toggleAlertPanel,
-        toggleSettings
+        toggleSettings,
+        activeCountryConfig,
+        setCountryConfig
     };
 });

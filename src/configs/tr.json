@@ -1,0 +1,18 @@
+{
+  "countryCode": "tr",
+  "name": "Türkiye",
+  "nameEn": "Turkey",
+  "defaultLocale": "tr",
+  "flagEmoji": "🇹🇷",
+  "centerLat": 39.0,
+  "centerLng": 35.0,
+  "defaultZoom": 6,
+  "bbox": {
+    "minLat": 35.8,
+    "maxLat": 42.2,
+    "minLng": 25.6,
+    "maxLng": 44.8
+  },
+  "disasterTypes": ["earthquake", "wildfire", "flood", "drought", "tsunami", "epidemic"],
+  "timezone": "Europe/Istanbul"
+}

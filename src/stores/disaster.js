@@ -80,6 +80,9 @@ export const useDisasterStore = defineStore('disaster', () => {
   const minMagnitude = ref(0);    // 0–9
   const maxDepth = ref(null); // null = TÜMÜ, sayı = km
 
+  // Ülke bbox filtresi — null = global görünüm
+  const activeBbox = ref(null); // { minLat, maxLat, minLng, maxLng }
+
   // Erken uyarılar
   const earlyWarnings = ref([]);   // Son 10 erken uyarı
   const activeWarning = ref(null); // Şu an gösterilen uyarı
@@ -119,10 +122,16 @@ export const useDisasterStore = defineStore('disaster', () => {
     // Severity filtresini dedup'tan önce uygularsak, yüksek-severity olayları düşük-severity
     // aynı lokasyondaki olayları "yutamaz" ve filtre sonuçları tutarsız olur.
     const status = sourcesStatus.value;
+    const bbox = activeBbox.value;
     const filtered = rawEvents.filter(e => {
       if (minMagnitude.value > 0 && (e.magnitude == null || e.magnitude < minMagnitude.value)) return false;
       if (maxDepth.value !== null && e.depth != null && e.depth > maxDepth.value) return false;
       if (status[(e.source || 'Unknown')] === false) return false;
+      if (bbox) {
+        const lat = Number(e.lat);
+        const lng = Number(e.lng);
+        if (lat < bbox.minLat || lat > bbox.maxLat || lng < bbox.minLng || lng > bbox.maxLng) return false;
+      }
 
       const t = new Date(e.time || e.created_at).getTime();
       if (isNaN(t)) return true;
@@ -562,7 +571,7 @@ export const useDisasterStore = defineStore('disaster', () => {
     isConnected, isLoading, lastUpdated,
     startDate, endDate, selectedTimeRange,
     sourcesStatus, errors,
-    minMagnitude, maxDepth,
+    minMagnitude, maxDepth, activeBbox,
     earlyWarnings, activeWarning,
     supabaseCounts, supabaseLoading,
     allEvents, totalCount, criticalEvents, sourcesOnline, h3Events,

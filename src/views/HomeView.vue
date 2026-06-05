@@ -1,5 +1,6 @@
 <script setup>
 import { watch, defineAsyncComponent } from 'vue'
+import { useRoute } from 'vue-router'
 const GlobeView = defineAsyncComponent(() => import('@/components/GlobeView.vue'))
 const MapView = defineAsyncComponent(() => import('@/components/MapView.vue'))
 import SidebarPanel from '@/components/SidebarPanel.vue'
@@ -11,11 +12,32 @@ import { useUIStore } from '@/stores/ui.js'
 import { useGeolocationStore } from '@/stores/geolocation.js'
 import { useI18n } from 'vue-i18n'
 import EmergencyPopup from '@/components/EmergencyPopup.vue'
+import { loadConfig } from '@/configs/index.js'
+import { useAuthStore } from '@/stores/auth.js'
 
+const route = useRoute()
 const disasterStore = useDisasterStore()
 const uiStore = useUIStore()
 const geoStore = useGeolocationStore()
+const authStore = useAuthStore()
 const { locale } = useI18n()
+
+function applyCountryConfig(countryCode) {
+  const config = loadConfig(countryCode)
+  uiStore.setCountryConfig(config)
+  // Super admin sees all data regardless of country URL
+  disasterStore.activeBbox = (config && !authStore.isSuperAdmin) ? config.bbox : null
+  if (config) {
+    locale.value = config.defaultLocale
+    uiStore.transitionToMap(config.centerLat, config.centerLng, config.defaultZoom)
+  }
+}
+
+watch(
+  () => route.params.countryCode,
+  (code) => applyCountryConfig(code || null),
+  { immediate: true }
+)
 
 // Watch for locale changes to handle RTL and set lang attribute
 watch(

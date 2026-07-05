@@ -40,7 +40,7 @@ Kaynak: `docs/iş planı istereler.txt` — proje genelinde takip edilen ana tab
 | Data Ingestion & Monitoring | **%64** | Orta | Spec 001 (source health/state machine, admin dashboard, CRUD, payload validation) + spec 002 (kaynakların küresel/ülkeye-özel ayrımı, RLS) + spec 003 (GDACS küresel çok-afetli kaynak, 4 mevcut fetch-* fonksiyonuna entegre) tamamlandı. Kalan: OGC WMS/WFS adapter |
 | Integration & API Gateway | %67 | Kolay | Neredeyse bitti |
 | Impact Analysis (Map Viz) | %15 | Orta-Zor | Split-view, geocoding, PostGIS exposure analizi eksik |
-| Administration & Access | %43 | Kolay | Spec 004 tamamlandı: /admin route guard, country/org-scoped profiles RLS, gerçek askıya alma, davetle onboarding, self-registration kapatma. Canlıya migration+config uygulanması kullanıcı onayı bekliyor. Kalan: custom permissions, MFA (ayrı spec 005) |
+| Administration & Access | %62 | Kolay | Spec 004 (RBAC hardening) + spec 005 (TOTP MFA, SRS NFR-0057) tamamlandı: /admin route guard, country/org-scoped profiles RLS, gerçek askıya alma, davetle onboarding, self-registration kapatma, herkese açık Hesap Güvenliği sayfası + login'de AAL challenge + kurtarma kodları + rol bazlı zorunlu-MFA politikası. Migration'ların canlıya uygulanması kullanıcı onayı bekliyor. Kalan: custom permissions (roller sabit 4 kademe) |
 | Alert Authoring / CAP | %1 | Orta | Sadece `cap_drafts` tablosu var, form UI yok |
 | Dissemination | %0 | Orta | Hiç başlanmadı (email/WhatsApp gönderim) |
 | Incident Tracking | %0 | Orta | Hiç başlanmadı |
@@ -49,7 +49,7 @@ Kaynak: `docs/iş planı istereler.txt` — proje genelinde takip edilen ana tab
 | Forecasting / AI | %0 | Çok Zor | Hiç başlanmadı |
 | Risk & Scenario Modeling | %0 | Çok Zor | Hiç başlanmadı |
 | Preparedness, Drill & Response | %0 | Orta | Hiç başlanmadı |
-| **TOPLAM** | **%14** (384/446 kalem tamamlanmadı ⚠️ tablo "Kalan/Toplam" formatında, %14 = tamamlanma) | | |
+| **TOPLAM** | **%15** (380/446 kalem tamamlanmadı ⚠️ tablo "Kalan/Toplam" formatında, %15 = tamamlanma) | | |
 
 **Not:** Bu tablo çok geniş bir gereksinim listesine (446 madde) göre hesaplanmış olduğu için toplam %14 düşük görünüyor; asıl aktif çalışılan modüllerde (Data Ingestion, Admin/Access) ilerleme çok daha yüksek.
 

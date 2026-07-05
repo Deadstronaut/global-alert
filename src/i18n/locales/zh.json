@@ -19,7 +19,12 @@
     "wildfire": "野火",
     "flood": "洪水",
     "drought": "干旱",
-    "all": "所有灾害"
+    "all": "所有灾害",
+    "food_security": "粮食安全",
+    "tsunami": "海啸",
+    "cyclone": "气旋",
+    "volcano": "火山",
+    "epidemic": "流行病"
   },
   "severity": {
     "critical": "极端",
@@ -54,7 +59,8 @@
     "criticalAlert": "极端警报",
     "emergencyTitle": "紧急警报",
     "emergencyInstruction": "请移动到安全区域并听从当地政府的指示。",
-    "emergencyDismiss": "明白"
+    "emergencyDismiss": "明白",
+    "events": "事件"
   },
   "stats": {
     "activeEarthquakes": "活动地震",
@@ -62,7 +68,8 @@
     "activeFloods": "活动洪水",
     "activeDroughts": "干旱区",
     "totalEvents": "总计事件",
-    "sourcesOnline": "在线来源"
+    "sourcesOnline": "在线来源",
+    "activeFoodSecurity": "粮食安全警报"
   },
   "settings": {
     "title": "设置",
@@ -77,7 +84,13 @@
     "language": "语言",
     "accessibility": "无障碍",
     "colorblindMode": "色盲模式",
-    "colorblindDesc": "使用图案和图标代替颜色"
+    "colorblindDesc": "使用图案和图标代替颜色",
+    "showHeatmap": "显示热图",
+    "showHexbins": "显示六边形",
+    "showHexbinsDesc": "蜂巢式聚类可视化",
+    "account": "账户",
+    "loggedInAs": "已以 {email} 身份登录",
+    "logout": "退出登录"
   },
   "map": {
     "zoomIn": "放大",
@@ -99,5 +112,29 @@
     "minutesAgo": "{count} 分钟前",
     "hoursAgo": "{count} 小时前",
     "daysAgo": "{count} 天前"
+  },
+  "accountSecurity": {
+    "title": "账户安全",
+    "description": "为您的账户添加第二重身份验证因素以获得额外保护。",
+    "startEnroll": "设置身份验证器应用",
+    "codePlaceholder": "6 位数验证码",
+    "confirm": "确认",
+    "factorActive": "您的账户已启用身份验证器应用。",
+    "removeFactor": "移除",
+    "cannotRemoveRequired": "您的角色需要一个有效的身份验证器 — 请先设置替代项再移除此项。",
+    "requiredForRole": "您的角色需要第二重身份验证因素，请立即设置。",
+    "reEnrollPrompt": "您最近使用恢复代码登录。请设置新的身份验证器应用。",
+    "recoveryCodesTitle": "保存您的恢复代码",
+    "recoveryCodesWarning": "这些代码仅显示一次。请妥善保存 — 如果您无法访问身份验证器应用，将需要使用其中之一。",
+    "recoveryCodesSaved": "我已保存这些代码"
+  },
+  "mfaChallenge": {
+    "enterCode": "请输入身份验证器应用中的 6 位数代码。",
+    "verify": "验证",
+    "useRecoveryCode": "使用恢复代码",
+    "enterRecoveryCode": "请输入您的一个恢复代码。",
+    "backToCode": "返回验证码",
+    "invalidCode": "代码无效",
+    "invalidRecoveryCode": "恢复代码无效"
   }
 }

@@ -19,7 +19,12 @@
     "wildfire": "Feux de forêt",
     "flood": "Inundations",
     "drought": "Sécheresses",
-    "all": "Toutes les catastrophes"
+    "all": "Toutes les catastrophes",
+    "food_security": "Sécurité Alimentaire",
+    "tsunami": "Tsunami",
+    "cyclone": "Cyclone",
+    "volcano": "Volcan",
+    "epidemic": "Épidémie"
   },
   "severity": {
     "critical": "Critique",
@@ -54,7 +59,8 @@
     "criticalAlert": "ALERTE CRITIQUE",
     "emergencyTitle": "ALERTE D'URGENCE",
     "emergencyInstruction": "Veuillez vous déplacer vers une zone sûre et suivre les instructions des autorités locales.",
-    "emergencyDismiss": "Compris"
+    "emergencyDismiss": "Compris",
+    "events": "Événements"
   },
   "stats": {
     "activeEarthquakes": "Séismes actifs",
@@ -62,7 +68,8 @@
     "activeFloods": "Inundations actives",
     "activeDroughts": "Zones de sécheresse",
     "totalEvents": "Total des événements",
-    "sourcesOnline": "Sources en ligne"
+    "sourcesOnline": "Sources en ligne",
+    "activeFoodSecurity": "Alertes de Sécurité Alimentaire"
   },
   "settings": {
     "title": "Paramètres",
@@ -77,7 +84,13 @@
     "language": "Langue",
     "accessibility": "Accessibilité",
     "colorblindMode": "Mode daltonien",
-    "colorblindDesc": "Utilise des motifs et des icônes au lieu des couleurs"
+    "colorblindDesc": "Utilise des motifs et des icônes au lieu des couleurs",
+    "showHeatmap": "Afficher la Carte Thermique",
+    "showHexbins": "Afficher les Bacs Hexagonaux",
+    "showHexbinsDesc": "Visualisation en grappes de type nid d'abeille",
+    "account": "Compte",
+    "loggedInAs": "Connecté en tant que {email}",
+    "logout": "Déconnexion"
   },
   "map": {
     "zoomIn": "Zoomer",
@@ -99,5 +112,29 @@
     "minutesAgo": "il y a {count} minutes",
     "hoursAgo": "il y a {count} heures",
     "daysAgo": "il y a {count} jours"
+  },
+  "accountSecurity": {
+    "title": "Sécurité du Compte",
+    "description": "Ajoutez un deuxième facteur d'authentification à votre compte pour plus de protection.",
+    "startEnroll": "Configurer une application d'authentification",
+    "codePlaceholder": "Code à 6 chiffres",
+    "confirm": "Confirmer",
+    "factorActive": "Une application d'authentification est active sur votre compte.",
+    "removeFactor": "Supprimer",
+    "cannotRemoveRequired": "Votre rôle exige un authentificateur actif — configurez-en un nouveau avant de supprimer celui-ci.",
+    "requiredForRole": "Votre rôle exige un deuxième facteur d'authentification. Veuillez le configurer maintenant.",
+    "reEnrollPrompt": "Vous vous êtes récemment connecté avec un code de récupération. Veuillez configurer une nouvelle application d'authentification.",
+    "recoveryCodesTitle": "Enregistrez vos codes de récupération",
+    "recoveryCodesWarning": "Ces codes ne seront affichés qu'une seule fois. Conservez-les en lieu sûr — vous en aurez besoin d'un si vous perdez l'accès à votre application d'authentification.",
+    "recoveryCodesSaved": "J'ai enregistré ces codes"
+  },
+  "mfaChallenge": {
+    "enterCode": "Entrez le code à 6 chiffres de votre application d'authentification.",
+    "verify": "Vérifier",
+    "useRecoveryCode": "Utiliser un code de récupération",
+    "enterRecoveryCode": "Entrez l'un de vos codes de récupération.",
+    "backToCode": "Retour au code d'authentification",
+    "invalidCode": "Code invalide",
+    "invalidRecoveryCode": "Code de récupération invalide"
   }
 }

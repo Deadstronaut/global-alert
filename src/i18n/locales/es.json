@@ -19,7 +19,12 @@
     "wildfire": "Incendios forestales",
     "flood": "Inundaciones",
     "drought": "Sequías",
-    "all": "Todos los desastres"
+    "all": "Todos los desastres",
+    "food_security": "Seguridad Alimentaria",
+    "tsunami": "Tsunami",
+    "cyclone": "Ciclón",
+    "volcano": "Volcán",
+    "epidemic": "Epidemia"
   },
   "severity": {
     "critical": "Crítico",
@@ -54,7 +59,8 @@
     "criticalAlert": "ALERTA CRÍTICA",
     "emergencyTitle": "ALERTA DE EMERGENCIA",
     "emergencyInstruction": "Por favor, diríjase a una zona segura y siga las instrucciones de las autoridades locales.",
-    "emergencyDismiss": "Entendido"
+    "emergencyDismiss": "Entendido",
+    "events": "Eventos"
   },
   "stats": {
     "activeEarthquakes": "Terremotos activos",
@@ -62,7 +68,8 @@
     "activeFloods": "Inundaciones activas",
     "activeDroughts": "Zonas de sequía",
     "totalEvents": "Eventos totales",
-    "sourcesOnline": "Fuentes en línea"
+    "sourcesOnline": "Fuentes en línea",
+    "activeFoodSecurity": "Alertas de Seguridad Alimentaria"
   },
   "settings": {
     "title": "Ajustes",
@@ -77,7 +84,13 @@
     "language": "Idioma",
     "accessibility": "Accesibilidad",
     "colorblindMode": "Modo daltónico",
-    "colorblindDesc": "Usa patrones e iconos en lugar de colores"
+    "colorblindDesc": "Usa patrones e iconos en lugar de colores",
+    "showHeatmap": "Mostrar Mapa de Calor",
+    "showHexbins": "Mostrar Contenedores Hexagonales",
+    "showHexbinsDesc": "Visualización de clúster tipo panal",
+    "account": "Cuenta",
+    "loggedInAs": "Sesión iniciada como {email}",
+    "logout": "Cerrar sesión"
   },
   "map": {
     "zoomIn": "Acercar",
@@ -99,5 +112,29 @@
     "minutesAgo": "hace {count} minutos",
     "hoursAgo": "hace {count} horas",
     "daysAgo": "hace {count} días"
+  },
+  "accountSecurity": {
+    "title": "Seguridad de la Cuenta",
+    "description": "Agregue un segundo factor de autenticación a su cuenta para mayor protección.",
+    "startEnroll": "Configurar aplicación autenticadora",
+    "codePlaceholder": "Código de 6 dígitos",
+    "confirm": "Confirmar",
+    "factorActive": "Hay una aplicación autenticadora activa en su cuenta.",
+    "removeFactor": "Eliminar",
+    "cannotRemoveRequired": "Su rol requiere un autenticador activo — configure uno nuevo antes de eliminar este.",
+    "requiredForRole": "Su rol requiere un segundo factor de autenticación. Configúrelo ahora.",
+    "reEnrollPrompt": "Recientemente inició sesión con un código de recuperación. Configure una nueva aplicación autenticadora.",
+    "recoveryCodesTitle": "Guarde sus códigos de recuperación",
+    "recoveryCodesWarning": "Estos códigos solo se mostrarán una vez. Guárdelos en un lugar seguro — necesitará uno si pierde acceso a su aplicación autenticadora.",
+    "recoveryCodesSaved": "He guardado estos códigos"
+  },
+  "mfaChallenge": {
+    "enterCode": "Ingrese el código de 6 dígitos de su aplicación autenticadora.",
+    "verify": "Verificar",
+    "useRecoveryCode": "Usar un código de recuperación",
+    "enterRecoveryCode": "Ingrese uno de sus códigos de recuperación.",
+    "backToCode": "Volver al código de autenticación",
+    "invalidCode": "Código inválido",
+    "invalidRecoveryCode": "Código de recuperación inválido"
   }
 }

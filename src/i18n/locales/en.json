@@ -87,7 +87,10 @@
     "colorblindDesc": "Uses patterns and icons instead of colors",
     "showHeatmap": "Show Heatmap",
     "showHexbins": "Show Hexagonal Bins",
-    "showHexbinsDesc": "Honeycomb-style cluster visualization"
+    "showHexbinsDesc": "Honeycomb-style cluster visualization",
+    "account": "Account",
+    "loggedInAs": "Logged in as {email}",
+    "logout": "Log Out"
   },
   "map": {
     "zoomIn": "Zoom In",
@@ -109,5 +112,29 @@
     "minutesAgo": "{count} minutes ago",
     "hoursAgo": "{count} hours ago",
     "daysAgo": "{count} days ago"
+  },
+  "accountSecurity": {
+    "title": "Account Security",
+    "description": "Add a second authentication factor to your account for extra protection.",
+    "startEnroll": "Set up authenticator app",
+    "codePlaceholder": "6-digit code",
+    "confirm": "Confirm",
+    "factorActive": "An authenticator app is active on your account.",
+    "removeFactor": "Remove",
+    "cannotRemoveRequired": "Your role requires an active authenticator — enroll a replacement before removing this one.",
+    "requiredForRole": "Your role requires a second authentication factor. Please set it up now.",
+    "reEnrollPrompt": "You recently signed in with a recovery code. Please set up a new authenticator app.",
+    "recoveryCodesTitle": "Save your recovery codes",
+    "recoveryCodesWarning": "These codes will only be shown once. Store them somewhere safe — you'll need one if you lose access to your authenticator app.",
+    "recoveryCodesSaved": "I've saved these codes"
+  },
+  "mfaChallenge": {
+    "enterCode": "Enter the 6-digit code from your authenticator app.",
+    "verify": "Verify",
+    "useRecoveryCode": "Use a recovery code",
+    "enterRecoveryCode": "Enter one of your recovery codes.",
+    "backToCode": "Back to authenticator code",
+    "invalidCode": "Invalid code",
+    "invalidRecoveryCode": "Invalid recovery code"
   }
 }

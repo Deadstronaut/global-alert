@@ -19,7 +19,12 @@
     "wildfire": "حرائق الغابات",
     "flood": "الفيضانات",
     "drought": "الجفاف",
-    "all": "جميع الكوارث"
+    "all": "جميع الكوارث",
+    "food_security": "الأمن الغذائي",
+    "tsunami": "تسونامي",
+    "cyclone": "إعصار",
+    "volcano": "بركان",
+    "epidemic": "وباء"
   },
   "severity": {
     "critical": "حرجة",
@@ -54,7 +59,8 @@
     "criticalAlert": "تنبيه حرج",
     "emergencyTitle": "تنبيه طارئ",
     "emergencyInstruction": "يرجى الانتقال إلى منطقة آمنة واتباع تعليمات السلطات المحلية.",
-    "emergencyDismiss": "مفهوم"
+    "emergencyDismiss": "مفهوم",
+    "events": "أحداث"
   },
   "stats": {
     "activeEarthquakes": "الزلازل النشطة",
@@ -62,7 +68,8 @@
     "activeFloods": "الفيضانات النشطة",
     "activeDroughts": "مناطق الجفاف",
     "totalEvents": "إجمالي الأحداث",
-    "sourcesOnline": "المصادر المتصلة"
+    "sourcesOnline": "المصادر المتصلة",
+    "activeFoodSecurity": "تنبيهات الأمن الغذائي"
   },
   "settings": {
     "title": "الإعدادات",
@@ -77,7 +84,13 @@
     "language": "اللغة",
     "accessibility": "إمكانية الوصول",
     "colorblindMode": "وضع عمى الألوان",
-    "colorblindDesc": "يستخدم الأنماط والأيقونات بدلاً من الألوان"
+    "colorblindDesc": "يستخدم الأنماط والأيقونات بدلاً من الألوان",
+    "showHeatmap": "إظهار خريطة الحرارة",
+    "showHexbins": "إظهار الصناديق السداسية",
+    "showHexbinsDesc": "عرض التجمعات بأسلوب خلية النحل",
+    "account": "الحساب",
+    "loggedInAs": "تم تسجيل الدخول باسم {email}",
+    "logout": "تسجيل الخروج"
   },
   "map": {
     "zoomIn": "تكبير",
@@ -99,5 +112,29 @@
     "minutesAgo": "منذ {count} دقائق",
     "hoursAgo": "منذ {count} ساعات",
     "daysAgo": "منذ {count} أيام"
+  },
+  "accountSecurity": {
+    "title": "أمان الحساب",
+    "description": "أضف عامل مصادقة ثانٍ إلى حسابك لمزيد من الحماية.",
+    "startEnroll": "إعداد تطبيق المصادقة",
+    "codePlaceholder": "رمز مكون من 6 أرقام",
+    "confirm": "تأكيد",
+    "factorActive": "يوجد تطبيق مصادقة نشط على حسابك.",
+    "removeFactor": "إزالة",
+    "cannotRemoveRequired": "يتطلب دورك مصادقًا نشطًا — قم بإعداد بديل قبل إزالة هذا.",
+    "requiredForRole": "يتطلب دورك عامل مصادقة ثانٍ. يرجى إعداده الآن.",
+    "reEnrollPrompt": "لقد سجلت الدخول مؤخرًا باستخدام رمز استرداد. يرجى إعداد تطبيق مصادقة جديد.",
+    "recoveryCodesTitle": "احفظ رموز الاسترداد الخاصة بك",
+    "recoveryCodesWarning": "ستُعرض هذه الرموز مرة واحدة فقط. احتفظ بها في مكان آمن — ستحتاج إلى واحد منها إذا فقدت الوصول إلى تطبيق المصادقة.",
+    "recoveryCodesSaved": "لقد حفظت هذه الرموز"
+  },
+  "mfaChallenge": {
+    "enterCode": "أدخل الرمز المكون من 6 أرقام من تطبيق المصادقة الخاص بك.",
+    "verify": "تحقق",
+    "useRecoveryCode": "استخدام رمز استرداد",
+    "enterRecoveryCode": "أدخل أحد رموز الاسترداد الخاصة بك.",
+    "backToCode": "العودة إلى رمز المصادقة",
+    "invalidCode": "رمز غير صالح",
+    "invalidRecoveryCode": "رمز استرداد غير صالح"
   }
 }

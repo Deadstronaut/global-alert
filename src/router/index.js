@@ -1,5 +1,6 @@
 import { createRouter, createWebHistory, createMemoryHistory } from 'vue-router';
 import { useAuthStore } from '@/stores/auth.js';
+import { supabase } from '@/services/api/config.js';
 
 // Exported separately (rather than only used inline below) so tests can build
 // a router against these same routes/guard with createMemoryHistory, without
@@ -49,6 +50,19 @@ export const routes = [
       component: () => import('@/views/AdminView.vue'),
       meta: { roles: ['super_admin', 'country_admin', 'org_admin'] }
     },
+    {
+      path: '/mfa-challenge',
+      name: 'mfa-challenge',
+      component: () => import('@/views/LoginView.vue'),
+    },
+    {
+      path: '/account-security',
+      name: 'account-security',
+      component: () => import('@/views/AccountSecurityView.vue'),
+      // No meta.roles — reachable by every authenticated role regardless of
+      // /admin access (spec 005 clarification: Viewers must be able to reach
+      // this page even though spec 004 blocks them from /admin).
+    },
   ];
 
 export async function authGuard(to) {
@@ -61,6 +75,22 @@ export async function authGuard(to) {
   if (to.meta.roles && !to.meta.roles.includes(auth.session?.role)) {
     return { name: 'home' };
   }
+
+  // Spec 005 FR-003: a password-correct session with an active second factor
+  // is not "fully authenticated" until that factor is also challenged — this
+  // holds on every navigation, not just the initial login form submission.
+  const { data: aal } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+  const mfaPending = aal.currentLevel === 'aal1' && aal.nextLevel === 'aal2';
+  if (mfaPending && to.name !== 'mfa-challenge') {
+    return { name: 'mfa-challenge' };
+  }
+
+  // Spec 005 FR-009: a role configured as requiring MFA guides an unenrolled
+  // user straight into enrollment rather than letting them postpone it.
+  if (!mfaPending && to.name !== 'account-security' && (await auth.isMfaRequiredForRoleButUnenrolled())) {
+    return { name: 'account-security' };
+  }
+
   return true;
 }
 

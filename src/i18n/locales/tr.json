@@ -87,7 +87,10 @@
     "colorblindDesc": "Renk yerine desen ve ikonlar kullanılır",
     "showHeatmap": "Isı Görünümü",
     "showHexbins": "Petek Görünümü",
-    "showHexbinsDesc": "Altıgen petekler halinde kümeleme"
+    "showHexbinsDesc": "Altıgen petekler halinde kümeleme",
+    "account": "Hesap",
+    "loggedInAs": "{email} olarak giriş yapıldı",
+    "logout": "Çıkış Yap"
   },
   "map": {
     "zoomIn": "Yakınlaştır",
@@ -109,5 +112,29 @@
     "minutesAgo": "{count} dakika önce",
     "hoursAgo": "{count} saat önce",
     "daysAgo": "{count} gün önce"
+  },
+  "accountSecurity": {
+    "title": "Hesap Güvenliği",
+    "description": "Hesabınıza ekstra koruma için ikinci bir doğrulama faktörü ekleyin.",
+    "startEnroll": "Kimlik doğrulama uygulaması kur",
+    "codePlaceholder": "6 haneli kod",
+    "confirm": "Onayla",
+    "factorActive": "Hesabınızda bir kimlik doğrulama uygulaması aktif.",
+    "removeFactor": "Kaldır",
+    "cannotRemoveRequired": "Rolünüz aktif bir kimlik doğrulayıcı gerektiriyor — kaldırmadan önce bir yenisini kurun.",
+    "requiredForRole": "Rolünüz ikinci bir doğrulama faktörü gerektiriyor. Lütfen şimdi kurun.",
+    "reEnrollPrompt": "Yakın zamanda bir kurtarma kodu ile giriş yaptınız. Lütfen yeni bir kimlik doğrulama uygulaması kurun.",
+    "recoveryCodesTitle": "Kurtarma kodlarınızı kaydedin",
+    "recoveryCodesWarning": "Bu kodlar yalnızca bir kez gösterilecek. Güvenli bir yerde saklayın — kimlik doğrulama uygulamanıza erişiminizi kaybederseniz birine ihtiyacınız olacak.",
+    "recoveryCodesSaved": "Bu kodları kaydettim"
+  },
+  "mfaChallenge": {
+    "enterCode": "Kimlik doğrulama uygulamanızdaki 6 haneli kodu girin.",
+    "verify": "Doğrula",
+    "useRecoveryCode": "Kurtarma kodu kullan",
+    "enterRecoveryCode": "Kurtarma kodlarınızdan birini girin.",
+    "backToCode": "Kimlik doğrulama koduna dön",
+    "invalidCode": "Kod geçersiz",
+    "invalidRecoveryCode": "Kurtarma kodu geçersiz"
   }
 }

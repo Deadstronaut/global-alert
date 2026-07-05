@@ -1,8 +1,11 @@
 <script setup>
-import { ref } from 'vue'
+import { ref, onMounted } from 'vue'
 import { useAuthStore } from '@/stores/auth.js'
 import { useRouter } from 'vue-router'
+import { useI18n } from 'vue-i18n'
+import { supabase } from '@/services/api/config.js'
 
+const { t } = useI18n()
 const auth = useAuthStore()
 const router = useRouter()
 const email = ref('')
@@ -10,16 +13,76 @@ const password = ref('')
 const loading = ref(false)
 const error = ref(null)
 
+// Spec 005 US2/US3: once a second factor is enrolled, a correct password
+// alone does not complete login — this local step gates navigation until a
+// TOTP code (or a recovery code) is also verified.
+const mfaPending = ref(false)
+const mfaFactorId = ref(null)
+const mfaCode = ref('')
+const useRecoveryCode = ref(false)
+const recoveryCode = ref('')
+
+function goToApp(session) {
+  // super_admin (no country_code) -> global view; country_admin/org_admin -> scoped to their country
+  router.push(session.countryCode ? `/${session.countryCode}` : '/')
+}
+
+async function loadPendingFactor() {
+  const { data: factors } = await supabase.auth.mfa.listFactors()
+  mfaFactorId.value = factors?.totp?.[0]?.id ?? null
+}
+
+// Handles arriving directly at /mfa-challenge (e.g. redirected by the router
+// guard from another URL) rather than having just submitted the password
+// form in this same component instance.
+onMounted(async () => {
+  const { data } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel()
+  if (data.currentLevel === 'aal1' && data.nextLevel === 'aal2') {
+    mfaPending.value = true
+    await loadPendingFactor()
+  }
+})
+
 async function handleLogin() {
   if (!email.value || !password.value) return
   loading.value = true
   error.value = null
   try {
-    const session = await auth.login(email.value, password.value)
-    // super_admin (no country_code) -> global view; country_admin/org_admin -> scoped to their country
-    router.push(session.countryCode ? `/${session.countryCode}` : '/')
+    const result = await auth.login(email.value, password.value)
+    if (result?.mfaPending) {
+      mfaPending.value = true
+      await loadPendingFactor()
+      return
+    }
+    goToApp(result)
   } catch (err) {
     error.value = err.message ?? 'Giriş başarısız'
+  } finally {
+    loading.value = false
+  }
+}
+
+async function handleMfaVerify() {
+  loading.value = true
+  error.value = null
+  try {
+    const session = await auth.verifyMfaChallenge(mfaFactorId.value, mfaCode.value)
+    goToApp(session)
+  } catch (err) {
+    error.value = err.message ?? t('mfaChallenge.invalidCode')
+  } finally {
+    loading.value = false
+  }
+}
+
+async function handleRecoveryCodeVerify() {
+  loading.value = true
+  error.value = null
+  try {
+    const session = await auth.verifyRecoveryCode(recoveryCode.value)
+    goToApp(session)
+  } catch (err) {
+    error.value = err.message ?? t('mfaChallenge.invalidRecoveryCode')
   } finally {
     loading.value = false
   }
@@ -51,7 +114,7 @@ async function handleLogin() {
         <p class="login-welcome">Emergency Operations Center</p>
         <p class="login-desc">Authorized personnel only. All access is logged and monitored.</p>
 
-        <form class="login-form" @submit.prevent="handleLogin">
+        <form v-if="!mfaPending" class="login-form" @submit.prevent="handleLogin">
           <input
             v-model="email"
             type="email"
@@ -72,6 +135,51 @@ async function handleLogin() {
           <button type="submit" class="login-btn btn-admin" :disabled="loading">
             <span v-if="!loading">Giriş Yap</span>
             <span v-else class="btn-spinner" />
+          </button>
+        </form>
+
+        <form
+          v-else-if="!useRecoveryCode"
+          class="login-form"
+          @submit.prevent="handleMfaVerify"
+        >
+          <p class="login-desc">{{ t('mfaChallenge.enterCode') }}</p>
+          <input
+            v-model="mfaCode"
+            type="text"
+            inputmode="numeric"
+            autocomplete="one-time-code"
+            placeholder="123456"
+            maxlength="6"
+            class="login-input"
+            required
+          />
+          <div v-if="error" class="login-error">{{ error }}</div>
+          <button type="submit" class="login-btn btn-admin" :disabled="loading || !mfaCode">
+            <span v-if="!loading">{{ t('mfaChallenge.verify') }}</span>
+            <span v-else class="btn-spinner" />
+          </button>
+          <button type="button" class="login-link" @click="useRecoveryCode = true; error = null">
+            {{ t('mfaChallenge.useRecoveryCode') }}
+          </button>
+        </form>
+
+        <form v-else class="login-form" @submit.prevent="handleRecoveryCodeVerify">
+          <p class="login-desc">{{ t('mfaChallenge.enterRecoveryCode') }}</p>
+          <input
+            v-model="recoveryCode"
+            type="text"
+            placeholder="xxxx-xxxx-xxxx-xxxx-xxxx"
+            class="login-input"
+            required
+          />
+          <div v-if="error" class="login-error">{{ error }}</div>
+          <button type="submit" class="login-btn btn-admin" :disabled="loading || !recoveryCode">
+            <span v-if="!loading">{{ t('mfaChallenge.verify') }}</span>
+            <span v-else class="btn-spinner" />
+          </button>
+          <button type="button" class="login-link" @click="useRecoveryCode = false; error = null">
+            {{ t('mfaChallenge.backToCode') }}
           </button>
         </form>
       </div>
@@ -248,6 +356,16 @@ async function handleLogin() {
   color: #f87171;
   font-size: 0.78rem;
   text-align: center;
+}
+
+.login-link {
+  background: none;
+  border: none;
+  color: #8c97b3;
+  font-size: 0.75rem;
+  text-decoration: underline;
+  cursor: pointer;
+  margin-top: 4px;
 }
 
 .login-btn {

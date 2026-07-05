@@ -4,6 +4,7 @@ import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useAuthStore } from '@/stores/auth.js'
 import { useSourcesStore } from '@/stores/sources.js'
+import { useDisasterStore } from '@/stores/disaster.js'
 import { supabase } from '@/services/api/config.js'
 import SourceHealthCard from '@/components/admin/SourceHealthCard.vue'
 import SourceFormModal from '@/components/admin/SourceFormModal.vue'
@@ -340,6 +341,66 @@ function closeAudit() {
   auditData.value = null
 }
 
+// ── Built-in feed health (aggregator server) ────────────────────────────────
+// These are the always-on ingestion feeds the server polls directly, shown here
+// split by scope: worldwide feeds vs. Turkey-only feeds (AFAD, Kandilli).
+const disasterStore = useDisasterStore()
+const AGGREGATOR_URL = import.meta.env.VITE_AGGREGATOR_URL || 'http://localhost:8765'
+const GLOBAL_FEED_LIST = ['EMSC', 'USGS', 'GEOFON', 'GDACS', 'PTWC', 'NASA FIRMS', 'FEWS NET', 'WHO']
+const LOCAL_FEED_LIST = ['AFAD', 'Kandilli']
+
+const feedServerStatus = ref({})
+let feedServerTimer = null
+
+async function checkFeedServer() {
+  try {
+    const res = await fetch(`${AGGREGATOR_URL}/status`, { signal: AbortSignal.timeout(4000) })
+    feedServerStatus.value = res.ok ? ((await res.json()).sources ?? {}) : {}
+  } catch {
+    feedServerStatus.value = {}
+  }
+}
+
+function feedStatusColor(entry) {
+  if (!entry) return '#6b7280'
+  const code = entry.code
+  if (code === 200) return '#22c55e'
+  if (code === 0) return '#f59e0b'
+  if (code === 401 || code === 403) return '#f97316'
+  return '#ef4444'
+}
+
+function feedStatusLabel(entry) {
+  if (!entry) return 'Bilinmiyor'
+  if (entry.code === 0) return 'WS kapalı'
+  return `HTTP ${entry.code}`
+}
+
+function feedLastCheck(entry) {
+  if (!entry?.at) return 'Henüz yok'
+  const diff = Math.round((Date.now() - entry.at) / 1000)
+  if (diff < 60) return `${diff}sn önce`
+  return `${Math.round(diff / 60)}dk önce`
+}
+
+function buildFeedRows(names) {
+  const status = disasterStore.sourcesStatus
+  return names.map((name) => ({
+    name,
+    entry: feedServerStatus.value[name] ?? null,
+    active: status[name] !== false,
+  }))
+}
+
+const feedSources = computed(() => ({
+  global: buildFeedRows(GLOBAL_FEED_LIST),
+  local: buildFeedRows(LOCAL_FEED_LIST),
+}))
+
+function toggleFeedSource(name) {
+  disasterStore.toggleSource(name)
+}
+
 // ── Audit & Compliance (spec 007) ───────────────────────────────────────────
 const AUDIT_PAGE_SIZE = 25
 const AUDIT_EXPORT_CAP = 5000
@@ -438,10 +499,13 @@ onMounted(() => {
   loadDrills()
   sourcesStore.fetchSources()
   sourcesRefreshTimer = setInterval(() => sourcesStore.fetchSources(), FASTEST_POLL_MS)
+  checkFeedServer()
+  feedServerTimer = setInterval(checkFeedServer, 30_000)
 })
 
 onUnmounted(() => {
   if (sourcesRefreshTimer) clearInterval(sourcesRefreshTimer)
+  if (feedServerTimer) clearInterval(feedServerTimer)
 })
 </script>
 
@@ -804,6 +868,54 @@ onUnmounted(() => {
           "
         />
       </Transition>
+
+      <!-- Built-in ingestion feeds (aggregator server health) -->
+      <div class="sources-group-label">🌍 Global Kaynaklar</div>
+      <div class="sources-grid">
+        <button
+          v-for="source in feedSources.global"
+          :key="source.name"
+          class="feed-card"
+          :class="{ 'feed-card-inactive': !source.active }"
+          @click="toggleFeedSource(source.name)"
+        >
+          <div class="feed-card-top">
+            <span
+              class="feed-state"
+              :style="{ color: source.active ? feedStatusColor(source.entry) : '#6b7280' }"
+            >
+              ● {{ source.active ? feedStatusLabel(source.entry) : 'Devre Dışı' }}
+            </span>
+          </div>
+          <div class="source-name">{{ source.name }}</div>
+          <div class="feed-card-meta">Son kontrol: {{ feedLastCheck(source.entry) }}</div>
+        </button>
+      </div>
+
+      <div class="sources-divider"></div>
+      <div class="sources-group-label">📍 Yerel Kaynaklar (Türkiye)</div>
+      <div class="sources-grid">
+        <button
+          v-for="source in feedSources.local"
+          :key="source.name"
+          class="feed-card"
+          :class="{ 'feed-card-inactive': !source.active }"
+          @click="toggleFeedSource(source.name)"
+        >
+          <div class="feed-card-top">
+            <span
+              class="feed-state"
+              :style="{ color: source.active ? feedStatusColor(source.entry) : '#6b7280' }"
+            >
+              ● {{ source.active ? feedStatusLabel(source.entry) : 'Devre Dışı' }}
+            </span>
+          </div>
+          <div class="source-name">{{ source.name }}</div>
+          <div class="feed-card-meta">Son kontrol: {{ feedLastCheck(source.entry) }}</div>
+        </button>
+      </div>
+
+      <div class="sources-divider"></div>
 
       <div v-if="sourcesStore.error" class="tab-error">{{ sourcesStore.error }}</div>
       <div v-if="sourcesStore.loading && !sourcesStore.sources.length" class="tab-loading">
@@ -1434,6 +1546,45 @@ onUnmounted(() => {
   height: 1px;
   background: var(--color-border, rgba(255, 255, 255, 0.12));
   margin: 20px 0 4px;
+}
+.feed-card {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  cursor: pointer;
+  text-align: left;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.feed-card:hover {
+  background: rgba(255, 255, 255, 0.07);
+  border-color: rgba(255, 255, 255, 0.15);
+}
+.feed-card-inactive {
+  opacity: 0.45;
+  filter: grayscale(0.6);
+}
+.feed-card-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.72rem;
+}
+.feed-state {
+  font-weight: 700;
+}
+.feed-card-meta {
+  font-size: 0.75rem;
+  color: var(--color-text-muted, #94a3b8);
+}
+.source-name {
+  flex: 1;
+  color: var(--color-text-secondary);
+  font-size: 0.95rem;
+  font-weight: 700;
 }
 .audit-panel {
   margin-top: 20px;

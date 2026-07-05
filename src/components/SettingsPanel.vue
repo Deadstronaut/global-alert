@@ -1,17 +1,14 @@
 <script setup>
-import { computed, ref, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useUIStore } from '@/stores/ui.js'
 import { useGeolocationStore } from '@/stores/geolocation.js'
 import { useI18n } from 'vue-i18n'
-import { useDisasterStore } from '@/stores/disaster.js'
 import { useAuthStore } from '@/stores/auth.js'
 
 const { t, locale } = useI18n()
 const router = useRouter()
 const uiStore = useUIStore()
 const geoStore = useGeolocationStore()
-const disasterStore = useDisasterStore()
 const authStore = useAuthStore()
 
 async function handleLogout() {
@@ -20,80 +17,9 @@ async function handleLogout() {
   router.push('/')
 }
 
-// ── Aggregator server health ──────────────────────────────────────────────────
-const SERVER_URL = import.meta.env.VITE_AGGREGATOR_URL || 'http://localhost:8765'
-
-const serverSources = ref({})
-
-async function checkServer() {
-  try {
-    const res = await fetch(`${SERVER_URL}/status`, {
-      signal: AbortSignal.timeout(4000),
-    })
-    if (res.ok) {
-      const data = await res.json()
-      serverSources.value = data.sources ?? {}
-    } else {
-      serverSources.value = {}
-    }
-  } catch {
-    serverSources.value = {}
-  }
-}
-
-let serverTimer = null
-onMounted(() => {
-  checkServer()
-  serverTimer = setInterval(checkServer, 30_000)
-})
-onUnmounted(() => clearInterval(serverTimer))
-
 function changeLanguage(lang) {
   locale.value = lang
 }
-
-// Kaynak durumu rengi
-function statusColor(entry) {
-  if (!entry) return '#6b7280' // gri - henüz bilgi yok
-  const code = entry.code
-  if (code === 200) return '#22c55e' // yeşil
-  if (code === 0) return '#f59e0b' // sarı - bağlantı yok (WS)
-  if (code === 401 || code === 403) return '#f97316' // turuncu
-  return '#ef4444' // kırmızı - 400/404/500
-}
-
-function statusLabel(entry) {
-  if (!entry) return '—'
-  if (entry.code === 0) return 'WS kapalı'
-  return `HTTP ${entry.code}`
-}
-
-function lastCheck(entry) {
-  if (!entry?.at) return ''
-  const diff = Math.round((Date.now() - entry.at) / 1000)
-  if (diff < 60) return `${diff}s önce`
-  return `${Math.round(diff / 60)}dk önce`
-}
-
-const sources = computed(() => {
-  const s = serverSources.value;
-  const defaultList = ['EMSC', 'USGS', 'AFAD', 'Kandilli', 'GEOFON', 'GDACS', 'PTWC', 'NASA FIRMS', 'FEWS NET', 'WHO'];
-  
-  // Use reactive property from store
-  const status = disasterStore.sourcesStatus;
-  
-  const all = new Set([...defaultList, ...Object.keys(status)]);
-  
-  return Array.from(all).map((name) => ({ 
-    name, 
-    entry: s[name] ?? null,
-    active: status[name] !== false 
-  }));
-});
-
-const toggleSource = (sourceName) => {
-  disasterStore.toggleSource(sourceName);
-};
 </script>
 
 <template>
@@ -178,23 +104,6 @@ const toggleSource = (sourceName) => {
             @input="geoStore.setAlertRadius(Number($event.target.value))"
           />
           <span class="range-value">{{ geoStore.alertRadius }} km</span>
-        </div>
-      </div>
-
-      <!-- Data Sources -->
-      <div class="settings-section">
-        <h4 class="settings-section-title">Veri Kaynakları</h4>
-        <div class="source-list">
-            <button
-              v-for="source in sources"
-              :key="source.name"
-              class="source-row"
-              :class="{ 'source-inactive': !source.active }"
-              @click="toggleSource(source.name)"
-            >
-              <span class="source-dot" :style="{ background: source.active ? statusColor(source.entry) : '#4b5563' }"></span>
-              <span class="source-name">{{ source.name }}</span>
-            </button>
         </div>
       </div>
 
@@ -397,70 +306,6 @@ const toggleSource = (sourceName) => {
   font-family: var(--font-mono);
   font-weight: 700;
   padding: 8px;
-}
-
-/* Source health list */
-.source-list {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.source-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 10px;
-  border-radius: 8px;
-  background: rgba(255, 255, 255, 0.04);
-  font-size: 0.78rem;
-  cursor: pointer;
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-  user-select: none;
-}
-
-.source-row:hover {
-  background: rgba(255, 255, 255, 0.08);
-  transform: translateX(2px);
-}
-
-.source-inactive {
-  opacity: 0.35;
-  filter: grayscale(1);
-  background: transparent;
-}
-
-.source-inactive:hover {
-  opacity: 0.6;
-}
-
-.source-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  flex-shrink: 0;
-  transition: background 0.3s ease;
-}
-
-.source-name {
-  flex: 1;
-  color: var(--color-text-secondary);
-  font-weight: 500;
-}
-
-.source-code {
-  font-family: var(--font-mono);
-  font-size: 0.7rem;
-  font-weight: 700;
-  transition: color 0.3s ease;
-}
-
-.source-age {
-  font-size: 0.65rem;
-  color: var(--color-text-muted);
-  min-width: 44px;
-  text-align: right;
-  margin-right: 4px;
 }
 
 /* Slide transition */

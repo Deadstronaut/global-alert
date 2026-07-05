@@ -28,6 +28,17 @@ function onFileChange(e) {
   form.value.file = e.target.files?.[0] ?? null
 }
 
+async function extractFunctionErrorMessage(invokeError) {
+  if (!invokeError) return null
+  try {
+    const body = await invokeError.context?.json?.()
+    if (body?.error) return body.error
+  } catch {
+    // response body wasn't JSON or already consumed — fall through
+  }
+  return invokeError.message ?? null
+}
+
 async function upload() {
   if (!form.value.file || !form.value.name.trim() || !form.value.metricPropertyName.trim()) return
   uploading.value = true
@@ -44,7 +55,7 @@ async function upload() {
       },
     })
     if (invokeError || result?.error) {
-      error.value = result?.error || invokeError?.message || t('impact.errors.uploadFailed')
+      error.value = result?.error || (await extractFunctionErrorMessage(invokeError)) || t('impact.errors.uploadFailed')
       return
     }
     form.value = { name: '', description: '', metricPropertyName: '', file: null }

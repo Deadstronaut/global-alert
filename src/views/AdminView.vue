@@ -346,7 +346,16 @@ function closeAudit() {
 // split by scope: worldwide feeds vs. Turkey-only feeds (AFAD, Kandilli).
 const disasterStore = useDisasterStore()
 const AGGREGATOR_URL = import.meta.env.VITE_AGGREGATOR_URL || 'http://localhost:8765'
-const GLOBAL_FEED_LIST = ['EMSC', 'USGS', 'GEOFON', 'GDACS', 'PTWC', 'NASA FIRMS', 'FEWS NET', 'WHO']
+const GLOBAL_FEED_LIST = [
+  'EMSC',
+  'USGS',
+  'GEOFON',
+  'GDACS',
+  'PTWC',
+  'NASA FIRMS',
+  'FEWS NET',
+  'WHO',
+]
 const LOCAL_FEED_LIST = ['AFAD', 'Kandilli']
 
 const feedServerStatus = ref({})
@@ -448,9 +457,7 @@ function resetAuditPage() {
 async function exportAudit(format) {
   let query = supabase.from('audit_log').select('*')
   query = buildAuditQuery(query)
-  const { data, error } = await query
-    .order('seq', { ascending: false })
-    .limit(AUDIT_EXPORT_CAP)
+  const { data, error } = await query.order('seq', { ascending: false }).limit(AUDIT_EXPORT_CAP)
   if (error || !data) return
   auditExportCapped.value = data.length === AUDIT_EXPORT_CAP
   const stamp = Date.now()
@@ -491,7 +498,9 @@ function closeHistory() {
   historyRows.value = null
 }
 
-const auditTotalPages = computed(() => Math.max(1, Math.ceil(auditTotalCount.value / AUDIT_PAGE_SIZE)))
+const auditTotalPages = computed(() =>
+  Math.max(1, Math.ceil(auditTotalCount.value / AUDIT_PAGE_SIZE)),
+)
 
 onMounted(() => {
   loadUsers()
@@ -517,8 +526,8 @@ onUnmounted(() => {
         <button
           class="btn-back"
           @click="
-            auth.logout();
-            router.push('/login');
+            auth.logout()
+            router.push('/login')
           "
         >
           ⎋ Çıkış Yap
@@ -562,7 +571,10 @@ onUnmounted(() => {
       <button
         v-if="auth.isSuperAdmin"
         :class="['tab', { active: tab === 'audit' }]"
-        @click="tab = 'audit'; loadAuditLog()"
+        @click="
+          tab = 'audit'
+          loadAuditLog()
+        "
       >
         🛡️ {{ t('audit.tabLabel') }}
       </button>
@@ -848,8 +860,8 @@ onUnmounted(() => {
           v-if="canAdmin"
           class="btn-new"
           @click="
-            showSourceForm = !showSourceForm;
-            editingSource = null;
+            showSourceForm = !showSourceForm
+            editingSource = null
           "
         >
           {{ showSourceForm && !editingSource ? '✕ Kapat' : '+ Kaynak Ekle' }}
@@ -863,8 +875,8 @@ onUnmounted(() => {
           :error="sourceFormError"
           @save="saveSource"
           @cancel="
-            showSourceForm = false;
-            editingSource = null;
+            showSourceForm = false
+            editingSource = null
           "
         />
       </Transition>
@@ -934,9 +946,7 @@ onUnmounted(() => {
             @delete="deleteSourceConfirm"
             @view-audit="viewAudit"
           />
-          <div v-if="!groupedSources.global.length" class="tab-loading">
-            Küresel kaynak yok.
-          </div>
+          <div v-if="!groupedSources.global.length" class="tab-loading">Küresel kaynak yok.</div>
         </div>
 
         <template v-if="groupedSources.local.length">
@@ -1045,17 +1055,26 @@ onUnmounted(() => {
 
       <div class="audit-actions">
         <button class="btn-export" @click="exportAudit('csv')">{{ t('audit.export.csv') }}</button>
-        <button class="btn-export" @click="exportAudit('json')">{{ t('audit.export.json') }}</button>
+        <button class="btn-export" @click="exportAudit('json')">
+          {{ t('audit.export.json') }}
+        </button>
         <button class="btn-verify" :disabled="integrityChecking" @click="verifyIntegrity">
           {{ integrityChecking ? t('audit.integrity.checking') : t('audit.integrity.verify') }}
         </button>
       </div>
       <p v-if="auditExportCapped" class="audit-notice">{{ t('audit.export.capped') }}</p>
-      <p v-if="integrityResult === 'intact'" class="audit-notice audit-notice-ok">{{ t('audit.integrity.intact') }}</p>
-      <p v-if="integrityResult && integrityResult.seq !== undefined" class="audit-notice audit-notice-error">
+      <p v-if="integrityResult === 'intact'" class="audit-notice audit-notice-ok">
+        {{ t('audit.integrity.intact') }}
+      </p>
+      <p
+        v-if="integrityResult && integrityResult.seq !== undefined"
+        class="audit-notice audit-notice-error"
+      >
         {{ t('audit.integrity.broken', { seq: integrityResult.seq }) }}
       </p>
-      <p v-if="integrityResult && integrityResult.error" class="audit-notice audit-notice-error">{{ integrityResult.error }}</p>
+      <p v-if="integrityResult && integrityResult.error" class="audit-notice audit-notice-error">
+        {{ integrityResult.error }}
+      </p>
 
       <div v-if="auditLogLoading" class="tab-loading">{{ t('audit.loading') }}</div>
       <div v-else-if="auditRows.length === 0" class="tab-empty">{{ t('audit.empty') }}</div>
@@ -1077,21 +1096,48 @@ onUnmounted(() => {
             <td class="audit-mono">{{ row.record_id }}</td>
             <td class="audit-mono">{{ row.changed_by }}</td>
             <td>{{ formatDate(row.created_at) }}</td>
-            <td><button class="btn-history" @click="viewRecordHistory(row)">{{ t('audit.history.view') }}</button></td>
+            <td>
+              <button class="btn-history" @click="viewRecordHistory(row)">
+                {{ t('audit.history.view') }}
+              </button>
+            </td>
           </tr>
         </tbody>
       </table>
 
       <div v-if="auditRows.length" class="audit-pagination">
-        <button :disabled="auditPage === 0" @click="auditPage--; loadAuditLog()">←</button>
+        <button
+          :disabled="auditPage === 0"
+          @click="
+            auditPage--
+            loadAuditLog()
+          "
+        >
+          ←
+        </button>
         <span>{{ auditPage + 1 }} / {{ auditTotalPages }}</span>
-        <button :disabled="auditPage + 1 >= auditTotalPages" @click="auditPage++; loadAuditLog()">→</button>
+        <button
+          :disabled="auditPage + 1 >= auditTotalPages"
+          @click="
+            auditPage++
+            loadAuditLog()
+          "
+        >
+          →
+        </button>
       </div>
 
       <!-- Single-record history panel -->
       <div v-if="historyTarget" class="history-modal-backdrop" @click.self="closeHistory">
         <div class="history-modal">
-          <h4>{{ t('audit.history.title', { table: historyTarget.table_name, id: historyTarget.record_id }) }}</h4>
+          <h4>
+            {{
+              t('audit.history.title', {
+                table: historyTarget.table_name,
+                id: historyTarget.record_id,
+              })
+            }}
+          </h4>
           <div v-if="historyRows === null" class="tab-loading">{{ t('audit.loading') }}</div>
           <ul v-else class="history-list">
             <li v-for="h in historyRows" :key="h.id">
@@ -1112,7 +1158,8 @@ onUnmounted(() => {
 
 <style scoped>
 .admin-page {
-  min-height: 100vh;
+  height: 100vh;
+  overflow-y: auto;
   background: var(--color-bg, #0f1117);
   color: var(--color-text-primary, #e2e8f0);
   padding: 24px;
@@ -1625,36 +1672,132 @@ onUnmounted(() => {
 }
 
 /* ── Audit & Compliance tab (spec 007) ─────────────────────────────────── */
-.audit-filters { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 16px; }
-.audit-field { display: flex; flex-direction: column; gap: 4px; font-size: .78rem; color: var(--color-text-muted, #94a3b8); }
-.audit-field input, .audit-field select {
-  background: #1e2330; border: 1px solid rgba(255,255,255,.15); border-radius: 8px;
-  padding: 6px 10px; color: #e2e8f0; font-size: .82rem;
+.audit-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 16px;
 }
-.audit-actions { display: flex; gap: 10px; margin-bottom: 12px; flex-wrap: wrap; }
-.btn-export, .btn-verify, .btn-history {
-  padding: 6px 14px; background: rgba(77,163,255,.15); border: 1px solid rgba(77,163,255,.35);
-  border-radius: 8px; color: #4da3ff; font-size: .78rem; font-weight: 600; cursor: pointer;
+.audit-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 0.78rem;
+  color: var(--color-text-muted, #94a3b8);
 }
-.btn-export:hover, .btn-verify:hover, .btn-history:hover { background: rgba(77,163,255,.25); }
-.btn-verify:disabled { opacity: .5; cursor: not-allowed; }
-.audit-notice { font-size: .8rem; padding: 8px 12px; border-radius: 8px; margin-bottom: 10px; }
-.audit-notice-ok { background: rgba(34,197,94,.12); color: #22c55e; }
-.audit-notice-error { background: rgba(239,68,68,.12); color: #ef4444; }
-.audit-table { width: 100%; border-collapse: collapse; font-size: .82rem; }
-.audit-table th { text-align: left; padding: 8px; border-bottom: 1px solid rgba(255,255,255,.15); color: var(--color-text-muted, #94a3b8); }
-.audit-table td { padding: 8px; border-bottom: 1px solid rgba(255,255,255,.06); }
-.audit-mono { font-family: monospace; font-size: .75rem; }
-.audit-pagination { display: flex; align-items: center; gap: 12px; margin-top: 14px; font-size: .82rem; }
-.audit-pagination button { padding: 4px 12px; border-radius: 6px; border: 1px solid rgba(255,255,255,.15); background: transparent; color: #e2e8f0; cursor: pointer; }
-.audit-pagination button:disabled { opacity: .4; cursor: not-allowed; }
+.audit-field input,
+.audit-field select {
+  background: #1e2330;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 8px;
+  padding: 6px 10px;
+  color: #e2e8f0;
+  font-size: 0.82rem;
+}
+.audit-actions {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+.btn-export,
+.btn-verify,
+.btn-history {
+  padding: 6px 14px;
+  background: rgba(77, 163, 255, 0.15);
+  border: 1px solid rgba(77, 163, 255, 0.35);
+  border-radius: 8px;
+  color: #4da3ff;
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.btn-export:hover,
+.btn-verify:hover,
+.btn-history:hover {
+  background: rgba(77, 163, 255, 0.25);
+}
+.btn-verify:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.audit-notice {
+  font-size: 0.8rem;
+  padding: 8px 12px;
+  border-radius: 8px;
+  margin-bottom: 10px;
+}
+.audit-notice-ok {
+  background: rgba(34, 197, 94, 0.12);
+  color: #22c55e;
+}
+.audit-notice-error {
+  background: rgba(239, 68, 68, 0.12);
+  color: #ef4444;
+}
+.audit-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.82rem;
+}
+.audit-table th {
+  text-align: left;
+  padding: 8px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.15);
+  color: var(--color-text-muted, #94a3b8);
+}
+.audit-table td {
+  padding: 8px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+.audit-mono {
+  font-family: monospace;
+  font-size: 0.75rem;
+}
+.audit-pagination {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 14px;
+  font-size: 0.82rem;
+}
+.audit-pagination button {
+  padding: 4px 12px;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: transparent;
+  color: #e2e8f0;
+  cursor: pointer;
+}
+.audit-pagination button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
 .history-modal-backdrop {
-  position: fixed; inset: 0; background: rgba(0,0,0,.5);
-  display: flex; align-items: center; justify-content: center; z-index: 50;
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 50;
 }
 .history-modal {
-  background: #1a1e29; border: 1px solid rgba(255,255,255,.15);
-  border-radius: 12px; padding: 20px; width: min(480px, 90vw); max-height: 70vh; overflow-y: auto;
+  background: #1a1e29;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 12px;
+  padding: 20px;
+  width: min(480px, 90vw);
+  max-height: 70vh;
+  overflow-y: auto;
 }
-.history-list { list-style: none; padding: 0; margin: 12px 0; display: flex; flex-direction: column; gap: 8px; font-size: .82rem; }
+.history-list {
+  list-style: none;
+  padding: 0;
+  margin: 12px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 0.82rem;
+}
 </style>

@@ -8,6 +8,9 @@ import { normalize } from '../shared/normalize.ts'
 import { upsertEvents } from '../shared/upsert.ts'
 import { validatePayload } from '../shared/validatePayload.ts'
 import { recordFetchOutcome, resolveSourceId, logRejectedPayload, isSourceActive } from '../shared/sourceHealth.ts'
+import { fetchGdacsFeatures, toGdacsNormalized } from '../shared/gdacsFetch.ts'
+import { gdacsSplit } from '../shared/gdacsSplit.ts'
+import { deduplicateEvents } from '../shared/dedup.ts'
 
 async function fetchFEWSNET(sourceId: string | null) {
   // FEWS NET IPC classifications — public GeoJSON
@@ -44,22 +47,48 @@ async function fetchFEWSNET(sourceId: string | null) {
   return out
 }
 
+// GDACS (feature 003-gdacs-source) covers 4 hazard types from one endpoint; this
+// is its drought contribution. Dropped out-of-scope categories (TC, VO) are not
+// re-logged here — fetch-earthquakes already logs them once per poll cycle.
+async function fetchGDACS(sourceId: string | null) {
+  const features = await fetchGdacsFeatures()
+  const split = gdacsSplit(features)
+  return toGdacsNormalized('drought', split.drought, sourceId)
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
-  const fetchErrors: string[] = []; let events: any[] = []
+  const fetchErrors: string[] = []
+  const sources: Record<string, any[]> = {}
 
-  const sourceId = await resolveSourceId('drought', 'FEWS NET')
-  if (await isSourceActive(sourceId)) {
-    await fetchFEWSNET(sourceId)
-      .then(async r => {
-        events = r
-        if (sourceId) await recordFetchOutcome(sourceId, 'success')
-      })
-      .catch(async e => {
+  const fewsId = await resolveSourceId('drought', 'FEWS NET')
+  const gdacsId = await resolveSourceId('drought', 'GDACS')
+
+  await Promise.allSettled([
+    (async () => {
+      if (!(await isSourceActive(fewsId))) return
+      try {
+        sources['FEWS NET'] = await fetchFEWSNET(fewsId)
+        if (fewsId) await recordFetchOutcome(fewsId, 'success')
+      } catch (e) {
         fetchErrors.push(`FEWS NET: ${e.message}`)
-        if (sourceId) await recordFetchOutcome(sourceId, 'failure', e.message)
-      })
-  }
+        if (fewsId) await recordFetchOutcome(fewsId, 'failure', e.message)
+      }
+    })(),
+    (async () => {
+      if (!(await isSourceActive(gdacsId))) return
+      try {
+        sources['GDACS'] = await fetchGDACS(gdacsId)
+        if (gdacsId) await recordFetchOutcome(gdacsId, 'success')
+      } catch (e) {
+        fetchErrors.push(`GDACS: ${e.message}`)
+        if (gdacsId) await recordFetchOutcome(gdacsId, 'failure', e.message)
+      }
+    })(),
+  ])
+
+  const all = [...(sources['FEWS NET'] ?? []), ...(sources['GDACS'] ?? [])]
+  const events = deduplicateEvents(all, 20) // 20km threshold per TECHNICAL.md §3
 
   const { inserted, errors: dbErrors } = await upsertEvents(events)
   return new Response(JSON.stringify({

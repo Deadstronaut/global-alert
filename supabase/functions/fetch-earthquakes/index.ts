@@ -10,6 +10,8 @@ import { normalize } from '../shared/normalize.ts'
 import { upsertEvents } from '../shared/upsert.ts'
 import { validatePayload } from '../shared/validatePayload.ts'
 import { recordFetchOutcome, resolveSourceId, logRejectedPayload, isSourceActive } from '../shared/sourceHealth.ts'
+import { fetchGdacsFeatures, toGdacsNormalized } from '../shared/gdacsFetch.ts'
+import { gdacsSplit } from '../shared/gdacsSplit.ts'
 
 // ── Source fetchers ────────────────────────────────────────────────────────────
 // Each fetcher validates each raw record via validatePayload() before normalize();
@@ -157,6 +159,19 @@ async function fetchKandilli(sourceId: string | null): Promise<ReturnType<typeof
   return out
 }
 
+// GDACS (feature 003-gdacs-source) covers 4 hazard types from one endpoint; this
+// is its earthquake contribution. Logs GDACS's out-of-scope categories (TC, VO)
+// here only — fetch-wildfires/fetch-floods/fetch-droughts also pull GDACS but
+// skip re-logging the same dropped categories to avoid 4x-redundant log noise.
+async function fetchGDACS(sourceId: string | null): Promise<ReturnType<typeof normalize>[]> {
+  const features = await fetchGdacsFeatures()
+  const split = gdacsSplit(features)
+  for (const d of split.dropped) {
+    console.log(`[fetch-earthquakes] GDACS dropped out-of-scope record: ${d.reason}`)
+  }
+  return toGdacsNormalized('earthquake', split.earthquake, sourceId)
+}
+
 // ── Spatial-temporal deduplication ────────────────────────────────────────────
 
 function deduplicate(events: ReturnType<typeof normalize>[]) {
@@ -210,6 +225,7 @@ Deno.serve(async (req) => {
     trackedFetch('EMSC', fetchEMSC),
     trackedFetch('AFAD', fetchAFAD),
     trackedFetch('Kandilli', fetchKandilli),
+    trackedFetch('GDACS', fetchGDACS),
   ])
   for (const r of results) {
     sources[r.name] = r.events
@@ -217,9 +233,11 @@ Deno.serve(async (req) => {
   }
 
   const all = Object.values(sources).flat()
-  // Tier-1 sources first (USGS > EMSC > AFAD > Kandilli) so dedup keeps the authoritative record
+  // Tier-1 sources first (USGS > EMSC > AFAD > Kandilli > GDACS) so dedup keeps the
+  // authoritative record — GDACS is a supplementary/secondary source layered on top
+  // of these dedicated feeds (research.md §5), so it yields to all of them on conflict.
   all.sort((a, b) => {
-    const order = ['USGS', 'EMSC', 'AFAD', 'Kandilli']
+    const order = ['USGS', 'EMSC', 'AFAD', 'Kandilli', 'GDACS']
     return order.indexOf(a.source) - order.indexOf(b.source)
   })
   const events = deduplicate(all)

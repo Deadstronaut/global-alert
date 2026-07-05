@@ -10,6 +10,9 @@ import { normalize } from '../shared/normalize.ts'
 import { upsertEvents } from '../shared/upsert.ts'
 import { validatePayload } from '../shared/validatePayload.ts'
 import { recordFetchOutcome, resolveSourceId, logRejectedPayload, isSourceActive } from '../shared/sourceHealth.ts'
+import { fetchGdacsFeatures, toGdacsNormalized } from '../shared/gdacsFetch.ts'
+import { gdacsSplit } from '../shared/gdacsSplit.ts'
+import { deduplicateEvents } from '../shared/dedup.ts'
 
 async function fetchFIRMS(sourceId: string | null): Promise<ReturnType<typeof normalize>[]> {
   const key = Deno.env.get('NASA_FIRMS_KEY')
@@ -53,24 +56,52 @@ async function fetchFIRMS(sourceId: string | null): Promise<ReturnType<typeof no
   return out
 }
 
+// GDACS (feature 003-gdacs-source) covers 4 hazard types from one endpoint; this
+// is its wildfire contribution. Dropped out-of-scope categories (TC, VO) are not
+// re-logged here — fetch-earthquakes already logs them once per poll cycle.
+async function fetchGDACS(sourceId: string | null): Promise<ReturnType<typeof normalize>[]> {
+  const features = await fetchGdacsFeatures()
+  const split = gdacsSplit(features)
+  return toGdacsNormalized('wildfire', split.wildfire, sourceId)
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
 
   const fetchErrors: string[] = []
-  let events: ReturnType<typeof normalize>[] = []
+  const sources: Record<string, ReturnType<typeof normalize>[]> = {}
 
-  const sourceId = await resolveSourceId('wildfire', 'NASA FIRMS')
-  if (await isSourceActive(sourceId)) {
-    await fetchFIRMS(sourceId)
-      .then(async r => {
-        events = r
-        if (sourceId) await recordFetchOutcome(sourceId, 'success')
-      })
-      .catch(async e => {
+  const firmsId = await resolveSourceId('wildfire', 'NASA FIRMS')
+  const gdacsId = await resolveSourceId('wildfire', 'GDACS')
+
+  await Promise.allSettled([
+    (async () => {
+      if (!(await isSourceActive(firmsId))) return
+      try {
+        sources['NASA FIRMS'] = await fetchFIRMS(firmsId)
+        if (firmsId) await recordFetchOutcome(firmsId, 'success')
+      } catch (e) {
         fetchErrors.push(`NASA FIRMS: ${e.message}`)
-        if (sourceId) await recordFetchOutcome(sourceId, 'failure', e.message)
-      })
-  }
+        if (firmsId) await recordFetchOutcome(firmsId, 'failure', e.message)
+      }
+    })(),
+    (async () => {
+      if (!(await isSourceActive(gdacsId))) return
+      try {
+        sources['GDACS'] = await fetchGDACS(gdacsId)
+        if (gdacsId) await recordFetchOutcome(gdacsId, 'success')
+      } catch (e) {
+        fetchErrors.push(`GDACS: ${e.message}`)
+        if (gdacsId) await recordFetchOutcome(gdacsId, 'failure', e.message)
+      }
+    })(),
+  ])
+
+  // NASA FIRMS (dedicated satellite feed) is authoritative over GDACS (secondary,
+  // supplementary source) on conflict — same source-priority convention as
+  // fetch-earthquakes (research.md §5).
+  const all = [...(sources['NASA FIRMS'] ?? []), ...(sources['GDACS'] ?? [])]
+  const events = deduplicateEvents(all, 5) // 5km threshold per TECHNICAL.md §3
 
   const { inserted, errors: dbErrors } = await upsertEvents(events)
 

@@ -8,6 +8,9 @@ import { normalize } from '../shared/normalize.ts'
 import { upsertEvents } from '../shared/upsert.ts'
 import { validatePayload } from '../shared/validatePayload.ts'
 import { recordFetchOutcome, resolveSourceId, logRejectedPayload, isSourceActive } from '../shared/sourceHealth.ts'
+import { fetchGdacsFeatures, toGdacsNormalized } from '../shared/gdacsFetch.ts'
+import { gdacsSplit } from '../shared/gdacsSplit.ts'
+import { deduplicateEvents } from '../shared/dedup.ts'
 
 async function fetchGloFAS(sourceId: string | null) {
   const url = 'https://www.globalfloods.eu/glofas-forecasting/glofas-api/?format=json&alertlevel=1'
@@ -63,12 +66,22 @@ async function fetchReliefWeb(sourceId: string | null) {
   return out
 }
 
+// GDACS (feature 003-gdacs-source) covers 4 hazard types from one endpoint; this
+// is its flood contribution. Dropped out-of-scope categories (TC, VO) are not
+// re-logged here — fetch-earthquakes already logs them once per poll cycle.
+async function fetchGDACS(sourceId: string | null) {
+  const features = await fetchGdacsFeatures()
+  const split = gdacsSplit(features)
+  return toGdacsNormalized('flood', split.flood, sourceId)
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
   const fetchErrors: string[] = []; const all: any[] = []
 
   const glofasId = await resolveSourceId('flood', 'GloFAS/Copernicus')
   const reliefwebId = await resolveSourceId('flood', 'ReliefWeb')
+  const gdacsId = await resolveSourceId('flood', 'GDACS')
 
   await Promise.allSettled([
     (async () => {
@@ -91,11 +104,26 @@ Deno.serve(async (req) => {
         if (reliefwebId) await recordFetchOutcome(reliefwebId, 'failure', e.message)
       }
     })(),
+    (async () => {
+      if (!(await isSourceActive(gdacsId))) return
+      try {
+        all.push(...await fetchGDACS(gdacsId))
+        if (gdacsId) await recordFetchOutcome(gdacsId, 'success')
+      } catch (e) {
+        fetchErrors.push(`GDACS: ${e.message}`)
+        if (gdacsId) await recordFetchOutcome(gdacsId, 'failure', e.message)
+      }
+    })(),
   ])
 
-  const { inserted, errors: dbErrors } = await upsertEvents(all)
+  // No dedup existed across GloFAS/ReliefWeb before this feature; adding GDACS as a
+  // 3rd source makes duplicate real-world events across sources more likely, so a
+  // dedup pass is added now for all 3 (feature 003-gdacs-source, spec FR-006).
+  const events = deduplicateEvents(all, 20) // 20km threshold per TECHNICAL.md §3
+
+  const { inserted, errors: dbErrors } = await upsertEvents(events)
   return new Response(JSON.stringify({
-    meta: { status: dbErrors.length === 0 ? 'ok' : 'partial', fetched: all.length, inserted, fetchErrors, dbErrors },
-    data: all,
+    meta: { status: dbErrors.length === 0 ? 'ok' : 'partial', fetched: events.length, inserted, fetchErrors, dbErrors },
+    data: events,
   }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 })
 })

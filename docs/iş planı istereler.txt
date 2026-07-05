@@ -19,6 +19,24 @@ Data Ingestion & Monitoring    24/66    %64         Orta       OGC WMS/WFS adapt
                                                                görünüm (Madagaskar'ın
                                                                Türkiye'ye özel kaynakları
                                                                görmemesi sorunu çözüldü).
+                                                               Tamamlandı (2026-07-06,
+                                                               spec 003): GDACS (BM/AB ortak
+                                                               küresel afet koordinasyon
+                                                               sistemi) 5. deprem/2. yangın/
+                                                               3. sel/2. kuraklık kaynağı
+                                                               olarak eklendi — tek bir
+                                                               GDACS uç noktasından 4 afet
+                                                               tipi birden çekiliyor, TC
+                                                               (tropik siklon)/VO (volkan)
+                                                               kategorileri desteklenmediği
+                                                               için hariç tutuluyor. Mevcut
+                                                               4 fetch-* fonksiyonuna entegre
+                                                               edildi (ayrı fonksiyon değil)
+                                                               ki mevcut dedup mekanizması
+                                                               GDACS'ı da kapsasın. Canlıya
+                                                               4 kaynak satırı da eklendi
+                                                               (T006 tamamlandı) — GDACS artık
+                                                               canlı sistemde aktif.
 
 Impact Analysis (Map Viz)      45/53    %15         Orta–Zor   Frontend: split-view,
                                                                geocoding search, 24h

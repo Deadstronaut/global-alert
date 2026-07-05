@@ -62,10 +62,32 @@ export const useAuthStore = defineStore('auth', () => {
 
   // Admin-provisioned accounts only (no public self-registration) — calls the
   // create-user Edge Function, which enforces the super_admin/country_admin
-  // hierarchy server-side and auto-confirms the new account.
-  async function createUser({ email, password, role, countryCode, orgId, regionCode, fullName }) {
+  // hierarchy server-side and sends the new user a secure invite email to set
+  // their own password (spec 004 gap 4 — no password is chosen by the admin).
+  async function createUser({ email, role, countryCode, orgId, regionCode, fullName }) {
     const { data, error } = await supabase.functions.invoke('create-user', {
-      body: { email, password, role, country_code: countryCode, org_id: orgId, region_code: regionCode, full_name: fullName },
+      body: { email, role, country_code: countryCode, org_id: orgId, region_code: regionCode, full_name: fullName },
+    });
+    if (error) throw error;
+    if (data?.error) throw new Error(data.error);
+    return data;
+  }
+
+  // Real access suspension, distinct from a role downgrade (spec 004 gap 3) —
+  // calls the suspend-user Edge Function, which enforces the same
+  // super_admin/country_admin/org_admin hierarchy as createUser server-side.
+  async function suspendUser(targetUserId) {
+    const { data, error } = await supabase.functions.invoke('suspend-user', {
+      body: { target_user_id: targetUserId, action: 'suspend' },
+    });
+    if (error) throw error;
+    if (data?.error) throw new Error(data.error);
+    return data;
+  }
+
+  async function reactivateUser(targetUserId) {
+    const { data, error } = await supabase.functions.invoke('suspend-user', {
+      body: { target_user_id: targetUserId, action: 'reactivate' },
     });
     if (error) throw error;
     if (data?.error) throw new Error(data.error);
@@ -87,6 +109,8 @@ export const useAuthStore = defineStore('auth', () => {
     init,
     login,
     createUser,
+    suspendUser,
+    reactivateUser,
     logout,
   };
 });

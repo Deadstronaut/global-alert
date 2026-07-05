@@ -56,9 +56,27 @@ Incident Tracking              28/28    %0          Orta       Yeni Supabase tab
                                                                + state machine + SOP
                                                                repo
 
-Administration & Access        17/21    %19         Kolay      Supabase Auth aktif et,
-                                                               user CRUD UI, custom
-                                                               permissions
+Administration & Access        12/21    %43         Kolay      Tamamlandı (2026-07-06,
+                                                               spec 004): /admin rotasına
+                                                               rol bazlı guard (viewer artık
+                                                               admin sorgularını hiç
+                                                               tetiklemiyor), country_admin/
+                                                               org_admin için gerçek profiles
+                                                               RLS (Users sekmesi artık
+                                                               çalışıyor), rol düşürmeden
+                                                               ayrı gerçek askıya alma
+                                                               (is_active + Supabase ban),
+                                                               şifre yerine davet e-postası
+                                                               ile onboarding, yetim self-
+                                                               registration kapatıldı. Canlıya
+                                                               3 migration + Mailer OTP
+                                                               Expiry ayarı (T016) kullanıcı
+                                                               onayı bekliyor. Kalan: custom
+                                                               permissions (roller sabit 4
+                                                               kademe, konfigüre edilemiyor),
+                                                               MFA (docs/21_structured_srs.md
+                                                               NFR-0057, CRITICAL — ayrı spec
+                                                               005 olarak planlanıyor).
 
 Hazard Taxonomy Admin          21/21    %0          Orta       Admin UI + Supabase
                                                                config tabloları
@@ -83,4 +101,4 @@ Preparedness, Drill & Response  3/3     %0          Orta       DrillMode flag +
                                                                CAP Exercise status +
                                                                otomatik rapor
 ─────────────────────────────────────────────────────────────────────────────────
-TOPLAM                        389/446   %14
+TOPLAM                        384/446   %14

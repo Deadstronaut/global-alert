@@ -31,7 +31,7 @@ async function loadUsers() {
   usersError.value = null
   const { data, error } = await supabase
     .from('profiles')
-    .select('id, email, full_name, role, country_code, org_id, created_at')
+    .select('id, email, full_name, role, country_code, org_id, is_active, created_at')
     .order('created_at', { ascending: false })
     .limit(100)
   if (error) usersError.value = error.message
@@ -44,7 +44,11 @@ async function saveUser() {
   savingUser.value = true
   const { error } = await supabase
     .from('profiles')
-    .update({ role: editingUser.value.role, country_code: editingUser.value.country_code || null })
+    .update({
+      role: editingUser.value.role,
+      country_code: editingUser.value.country_code || null,
+      org_id: editingUser.value.org_id || null,
+    })
     .eq('id', editingUser.value.id)
   savingUser.value = false
   if (error) {
@@ -64,6 +68,26 @@ async function revokeAccess(userId) {
   await loadUsers()
 }
 
+// Real access suspension (spec 004 gap 3) — distinct from revokeAccess()'s role
+// downgrade above: this blocks login entirely rather than just lowering permissions.
+async function suspendUser(userId) {
+  try {
+    await auth.suspendUser(userId)
+    await loadUsers()
+  } catch (err) {
+    usersError.value = err.message
+  }
+}
+
+async function reactivateUser(userId) {
+  try {
+    await auth.reactivateUser(userId)
+    await loadUsers()
+  } catch (err) {
+    usersError.value = err.message
+  }
+}
+
 // Admin-provisioned accounts (docs/security_roles_protocol.md §2-3):
 //   super_admin -> any role/country; country_admin -> org_admin/viewer in own
 //   country; org_admin -> viewer only, in own country + own org.
@@ -72,7 +96,6 @@ const showUserForm = ref(false)
 const creatingUser = ref(false)
 const userForm = ref({
   email: '',
-  password: '',
   role: 'viewer',
   country_code: '',
   org_id: '',
@@ -104,7 +127,6 @@ async function createUser() {
   try {
     await auth.createUser({
       email: userForm.value.email,
-      password: userForm.value.password,
       role: userForm.value.role,
       countryCode: userForm.value.country_code.trim().toLowerCase() || null,
       orgId: userForm.value.org_id || null,
@@ -113,7 +135,6 @@ async function createUser() {
     })
     userForm.value = {
       email: '',
-      password: '',
       role: 'viewer',
       country_code: '',
       org_id: '',
@@ -395,15 +416,6 @@ onUnmounted(() => {
               <input v-model="userForm.email" type="email" placeholder="personel@bakanlik.gov.tr" />
             </label>
             <label class="form-field"
-              ><span>Parola *</span>
-              <input
-                v-model="userForm.password"
-                type="password"
-                placeholder="en az 6 karakter"
-                minlength="6"
-              />
-            </label>
-            <label class="form-field"
               ><span>Ad Soyad</span>
               <input v-model="userForm.full_name" placeholder="opsiyonel" />
             </label>
@@ -441,9 +453,9 @@ onUnmounted(() => {
             <button
               class="btn-submit"
               @click="createUser"
-              :disabled="creatingUser || !userForm.email || !userForm.password"
+              :disabled="creatingUser || !userForm.email"
             >
-              {{ creatingUser ? 'Oluşturuluyor...' : '💾 Oluştur' }}
+              {{ creatingUser ? 'Davet gönderiliyor...' : '📧 Davet Gönder' }}
             </button>
           </div>
         </div>
@@ -458,6 +470,7 @@ onUnmounted(() => {
               <th>Ad Soyad</th>
               <th>Rol</th>
               <th>Ülke</th>
+              <th>Org</th>
               <th>Kayıt</th>
               <th>İşlem</th>
             </tr>
@@ -468,10 +481,10 @@ onUnmounted(() => {
               <td>{{ u.full_name || '—' }}</td>
               <td>
                 <span v-if="editingUser?.id !== u.id" class="role-badge" :class="'role-' + u.role">
-                  {{ u.role }}
+                  {{ u.role }}<span v-if="u.is_active === false" title="Askıya alındı"> 🚫</span>
                 </span>
                 <select v-else v-model="editingUser.role" class="inline-select">
-                  <option v-for="r in ROLES" :key="r" :value="r">{{ r }}</option>
+                  <option v-for="r in creatableRoles" :key="r" :value="r">{{ r }}</option>
                 </select>
               </td>
               <td>
@@ -484,6 +497,15 @@ onUnmounted(() => {
                   maxlength="2"
                 />
               </td>
+              <td>
+                <span v-if="editingUser?.id !== u.id" class="muted">{{ u.org_id || '—' }}</span>
+                <input
+                  v-else
+                  v-model="editingUser.org_id"
+                  class="inline-input"
+                  placeholder="org uuid"
+                />
+              </td>
               <td class="muted">{{ formatDate(u.created_at) }}</td>
               <td>
                 <div v-if="editingUser?.id !== u.id" class="row-actions">
@@ -494,9 +516,25 @@ onUnmounted(() => {
                     v-if="canAdmin && u.role !== 'viewer'"
                     class="btn-revoke"
                     @click="revokeAccess(u.id)"
-                    title="Erişimi kısıtla"
+                    title="Erişimi kısıtla (rolü viewer'a düşür)"
                   >
                     🔒
+                  </button>
+                  <button
+                    v-if="canAdmin && u.id !== auth.session?.id && u.is_active !== false"
+                    class="btn-suspend"
+                    @click="suspendUser(u.id)"
+                    title="Hesabı askıya al (girişi tamamen engeller)"
+                  >
+                    ⛔
+                  </button>
+                  <button
+                    v-if="canAdmin && u.id !== auth.session?.id && u.is_active === false"
+                    class="btn-reactivate"
+                    @click="reactivateUser(u.id)"
+                    title="Hesabı yeniden aktifleştir"
+                  >
+                    ✅
                   </button>
                 </div>
                 <div v-else class="row-actions">

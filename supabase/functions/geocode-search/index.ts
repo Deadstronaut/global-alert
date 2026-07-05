@@ -41,15 +41,23 @@ Deno.serve(async (req) => {
 
   try {
     const url = new URL(apiUrl)
-    url.searchParams.set('q', query)
+    const isGoogle = url.hostname.endsWith('googleapis.com')
+
+    if (isGoogle) {
+      url.searchParams.set('address', query)
+      if (apiKey) url.searchParams.set('key', apiKey)
+    } else {
+      url.searchParams.set('q', query)
+    }
+
     const response = await fetch(url.toString(), {
-      headers: apiKey ? { Authorization: `Bearer ${apiKey}` } : {},
+      headers: !isGoogle && apiKey ? { Authorization: `Bearer ${apiKey}` } : {},
     })
     if (!response.ok) {
       return json({ error: `Geocoding provider returned ${response.status}` }, 502)
     }
     const raw = await response.json()
-    const results = normalizeResults(raw)
+    const results = isGoogle ? normalizeGoogleResults(raw) : normalizeNominatimResults(raw)
     return json({ results })
   } catch (err) {
     return json({ error: err instanceof Error ? err.message : 'Geocoding request failed' }, 502)
@@ -60,13 +68,27 @@ Deno.serve(async (req) => {
 // self-hostable/free geocoding API) into {lat,lng,label}[]. A deployment
 // using a different provider's response shape can adjust this mapping
 // without touching any other part of the application.
-function normalizeResults(raw: unknown): Array<{ lat: number; lng: number; label: string }> {
+function normalizeNominatimResults(raw: unknown): Array<{ lat: number; lng: number; label: string }> {
   if (!Array.isArray(raw)) return []
   return raw
     .map((item: any) => ({
       lat: Number(item.lat),
       lng: Number(item.lon ?? item.lng),
       label: String(item.display_name ?? item.label ?? ''),
+    }))
+    .filter((r) => Number.isFinite(r.lat) && Number.isFinite(r.lng))
+}
+
+// Normalizes a Google Geocoding API response (results[].geometry.location)
+// into the same {lat,lng,label}[] shape used by the rest of the app.
+function normalizeGoogleResults(raw: unknown): Array<{ lat: number; lng: number; label: string }> {
+  const results = (raw as any)?.results
+  if (!Array.isArray(results)) return []
+  return results
+    .map((item: any) => ({
+      lat: Number(item?.geometry?.location?.lat),
+      lng: Number(item?.geometry?.location?.lng),
+      label: String(item?.formatted_address ?? ''),
     }))
     .filter((r) => Number.isFinite(r.lat) && Number.isFinite(r.lng))
 }

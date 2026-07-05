@@ -10,6 +10,7 @@ import { supabase } from '@/services/api/config.js'
 
 const BUNDLED_LOADERS = {
   tr: () => import('./tr-provinces.json'),
+  my: () => import('./my-provinces.json'),
 }
 const BUNDLED_NAME_PROPERTY = 'shapeName'
 

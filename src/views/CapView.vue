@@ -1,32 +1,38 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 import { useAuthStore } from '@/stores/auth.js'
+import { useDisasterStore } from '@/stores/disaster.js'
 import { supabase } from '@/services/api/config.js'
+import { allowedTransitions, isDraftCompleteForApproval, canUserActOnDraft } from '@/lib/capStateMachine.js'
 
 const router = useRouter()
+const { t } = useI18n()
 
 const auth = useAuthStore()
+const disaster = useDisasterStore()
+
 const drafts = ref([])
 const loading = ref(false)
 const showForm = ref(false)
 const submitting = ref(false)
 const error = ref(null)
+const activeTab = ref('active') // 'active' | 'history'
 
 const HAZARD_TYPES = ['earthquake','wildfire','flood','drought','food_security','tsunami','cyclone','volcano','epidemic']
 const SEVERITIES   = ['critical','high','moderate','low','minimal']
 const CERTAINTIES  = ['observed','likely','possible','unlikely','unknown']
 const URGENCIES    = ['immediate','expected','future','past','unknown']
-const STATUS_LABELS = {
-  draft: 'Taslak', pending_approval: 'Onay Bekliyor', approved: 'Onaylandı',
-  broadcast: 'Yayınlandı', rejected: 'Reddedildi', cancelled: 'İptal',
-  expired: 'Süresi Doldu', false_alarm: 'Yanlış Alarm', all_clear: 'Tehlike Geçti',
-}
+const ACTIVE_STATUSES  = ['draft','pending_approval','approved','broadcast']
+const HISTORY_STATUSES = ['rejected','cancelled','expired','false_alarm','all_clear']
 const STATUS_COLORS = {
   draft: '#94a3b8', pending_approval: '#f59e0b', approved: '#22c55e',
   broadcast: '#4ade80', rejected: '#ef4444', cancelled: '#6b7280',
   expired: '#6b7280', false_alarm: '#f97316', all_clear: '#60a5fa',
 }
+
+const selectedSourceEventId = ref(null)
 
 const form = ref({
   hazard_type: 'earthquake',
@@ -42,22 +48,19 @@ const form = ref({
   expires_at:   new Date(Date.now() + 86400000).toISOString().slice(0,16),
 })
 
-// Valid state transitions (FR-0027)
-const TRANSITIONS = {
-  draft:            ['pending_approval','cancelled'],
-  pending_approval: ['approved','rejected','cancelled'],
-  approved:         ['broadcast','cancelled'],
-  broadcast:        ['false_alarm','all_clear','expired'],
-  rejected:         [],
-  cancelled:        [],
-  expired:          [],
-  false_alarm:      [],
-  all_clear:        [],
-}
+// Reason prompt modal state (reject/cancel — spec 006 FR-011)
+const reasonPrompt = ref(null) // { draft, targetStatus, reason }
 
 const canCreate = computed(() =>
   auth.isSuperAdmin || ['country_admin','org_admin'].includes(auth.session?.role)
 )
+
+const detectedEvents = computed(() => disaster.allEvents?.value ?? disaster.allEvents ?? [])
+
+const visibleDrafts = computed(() => {
+  const statuses = activeTab.value === 'active' ? ACTIVE_STATUSES : HISTORY_STATUSES
+  return drafts.value.filter(d => statuses.includes(d.status))
+})
 
 async function loadDrafts() {
   loading.value = true
@@ -72,6 +75,19 @@ async function loadDrafts() {
   loading.value = false
 }
 
+function startBlankDraft() {
+  selectedSourceEventId.value = null
+  showForm.value = true
+}
+
+function startFromEvent(event) {
+  selectedSourceEventId.value = String(event.id ?? '')
+  form.value.hazard_type = event.type || form.value.hazard_type
+  form.value.severity = event.severity || form.value.severity
+  form.value.area_desc = event.title || form.value.area_desc
+  showForm.value = true
+}
+
 async function submitDraft() {
   if (!form.value.title.trim()) return
   submitting.value = true
@@ -81,32 +97,97 @@ async function submitDraft() {
     effective_at: new Date(form.value.effective_at).toISOString(),
     expires_at:   new Date(form.value.expires_at).toISOString(),
     country_code: auth.countryCode,
+    org_id: auth.session?.orgId ?? null,
+    source_event_id: selectedSourceEventId.value,
     status: 'draft',
   })
   submitting.value = false
-  if (err) { error.value = err.message; return }
+  if (err) { error.value = translateError(err.message); return }
   showForm.value = false
+  selectedSourceEventId.value = null
   form.value.title = ''
   form.value.description = ''
   form.value.instructions = ''
   await loadDrafts()
 }
 
-async function transition(draft, newStatus) {
+function translateError(message) {
+  if (!message) return t('cap.errors.generic')
+  if (message.includes('incomplete_draft')) return t('cap.errors.incompleteDraft', { fields: '' })
+  if (message.includes('four_eyes_violation')) return t('cap.errors.fourEyes')
+  if (message.includes('invalid_transition') || message.includes('stale')) return t('cap.errors.staleStatus')
+  if (message.includes('reason_required')) return t('cap.errors.reasonRequired')
+  return message
+}
+
+function requiresReason(status) {
+  return status === 'rejected' || status === 'cancelled'
+}
+
+function requestTransition(draft, newStatus) {
+  if (requiresReason(newStatus)) {
+    reasonPrompt.value = { draft, targetStatus: newStatus, reason: '' }
+    return
+  }
+  performTransition(draft, newStatus, {})
+}
+
+async function confirmReasonPrompt() {
+  if (!reasonPrompt.value) return
+  const { draft, targetStatus, reason } = reasonPrompt.value
+  if (!reason.trim()) { error.value = t('cap.errors.reasonRequired'); return }
+  const extra = targetStatus === 'rejected'
+    ? { rejection_reason: reason.trim() }
+    : { cancellation_reason: reason.trim() }
+  await performTransition(draft, targetStatus, extra)
+  reasonPrompt.value = null
+}
+
+async function performTransition(draft, newStatus, extra) {
+  const payload = { status: newStatus, ...extra }
+  if (newStatus === 'approved') payload.approved_by = auth.session?.id
+  if (['approved','rejected'].includes(newStatus)) payload.last_edited_by = auth.session?.id
   const { error: err } = await supabase
     .from('cap_drafts')
-    .update({ status: newStatus, approved_by: newStatus === 'approved' ? auth.session?.id : null })
+    .update(payload)
     .eq('id', draft.id)
-  if (err) { error.value = err.message; return }
+  if (err) { error.value = translateError(err.message) }
   await loadDrafts()
 }
 
-function allowedTransitions(status) {
-  return TRANSITIONS[status] || []
+function reviseDraft(draft) {
+  performTransition(draft, 'draft', { last_edited_by: auth.session?.id })
+}
+
+function allowedTransitionsFor(draft) {
+  const all = allowedTransitions(draft.status)
+  if (draft.status === 'pending_approval') {
+    // Four-eyes: approve/reject hidden for the draft's own author/last editor.
+    if (!canUserActOnDraft(draft, auth.session?.id)) {
+      return all.filter(s => !['approved','rejected'].includes(s))
+    }
+  }
+  if (draft.status === 'rejected') {
+    // Resubmission is author-only.
+    return draft.created_by === auth.session?.id ? all : []
+  }
+  return all
+}
+
+function actionLabel(status) {
+  const map = {
+    pending_approval: t('cap.actions.submitForApproval'),
+    approved: t('cap.actions.approve'),
+    rejected: t('cap.actions.reject'),
+    broadcast: t('cap.actions.broadcast'),
+    cancelled: t('cap.actions.cancel'),
+    draft: t('cap.actions.revise'),
+  }
+  return map[status] || status
 }
 
 function formatDate(iso) {
-  return iso ? new Date(iso).toLocaleString('tr-TR') : '—'
+  return iso ? new Date(iso).toLocaleString() : '—'
 }
 
 onMounted(loadDrafts)
@@ -116,62 +197,77 @@ onMounted(loadDrafts)
   <div class="cap-page">
     <div class="cap-header">
       <div class="cap-title-row">
-        <button class="btn-back" @click="router.push('/')">← Harita</button>
-        <h1 class="cap-title">⚠️ CAP Uyarı Sistemi</h1>
-        <span class="cap-subtitle">Common Alerting Protocol</span>
+        <button class="btn-back" @click="router.push('/')">{{ t('cap.backToMap') }}</button>
+        <h1 class="cap-title">⚠️ {{ t('cap.title') }}</h1>
+        <span class="cap-subtitle">{{ t('cap.subtitle') }}</span>
       </div>
       <button v-if="canCreate" class="btn-new" @click="showForm = !showForm">
-        {{ showForm ? '✕ Kapat' : '+ Yeni Uyarı' }}
+        {{ showForm ? t('cap.close') : t('cap.newAlert') }}
       </button>
     </div>
 
-    <!-- Create form -->
+    <!-- Event picker + create form -->
     <Transition name="slide-down">
       <div v-if="showForm && canCreate" class="cap-form-card">
-        <h3 class="form-title">Yeni CAP Taslağı</h3>
+        <div v-if="detectedEvents.length" class="event-picker">
+          <h4 class="event-picker-heading">{{ t('cap.pickEvent.heading') }}</h4>
+          <div class="event-list">
+            <button
+              v-for="ev in detectedEvents.slice(0, 8)"
+              :key="ev.id"
+              class="event-chip"
+              @click="startFromEvent(ev)"
+            >
+              {{ ev.type }} · {{ ev.severity }} · {{ ev.title || ev.id }}
+            </button>
+          </div>
+          <button class="btn-blank" @click="startBlankDraft">{{ t('cap.pickEvent.orBlank') }}</button>
+        </div>
+
+        <h3 class="form-title">{{ t('cap.form.title') }}</h3>
         <div class="form-grid">
           <label class="form-field">
-            <span>Tehlike Türü</span>
+            <span>{{ t('cap.form.hazardType') }}</span>
             <select v-model="form.hazard_type">
               <option v-for="h in HAZARD_TYPES" :key="h" :value="h">{{ h }}</option>
             </select>
           </label>
           <label class="form-field">
-            <span>Şiddet</span>
+            <span>{{ t('cap.form.severity') }}</span>
             <select v-model="form.severity">
               <option v-for="s in SEVERITIES" :key="s" :value="s">{{ s }}</option>
             </select>
           </label>
           <label class="form-field">
-            <span>Kesinlik</span>
+            <span>{{ t('cap.form.certainty') }}</span>
             <select v-model="form.certainty">
               <option v-for="c in CERTAINTIES" :key="c" :value="c">{{ c }}</option>
             </select>
           </label>
           <label class="form-field">
-            <span>Aciliyet</span>
+            <span>{{ t('cap.form.urgency') }}</span>
             <select v-model="form.urgency">
               <option v-for="u in URGENCIES" :key="u" :value="u">{{ u }}</option>
             </select>
           </label>
           <label class="form-field span-2">
-            <span>Başlık *</span>
-            <input v-model="form.title" placeholder="Uyarı başlığı..." />
+            <span>{{ t('cap.form.titleLabel') }}</span>
+            <input v-model="form.title" :placeholder="t('cap.form.titlePlaceholder')" />
           </label>
           <label class="form-field span-2">
-            <span>Açıklama</span>
-            <textarea v-model="form.description" rows="3" placeholder="Durum açıklaması..." />
+            <span>{{ t('cap.form.description') }}</span>
+            <textarea v-model="form.description" rows="3" :placeholder="t('cap.form.descriptionPlaceholder')" />
           </label>
           <label class="form-field span-2">
-            <span>Koruyucu Talimatlar</span>
-            <textarea v-model="form.instructions" rows="2" placeholder="Halkın yapması gerekenler..." />
+            <span>{{ t('cap.form.instructions') }}</span>
+            <textarea v-model="form.instructions" rows="2" :placeholder="t('cap.form.instructionsPlaceholder')" />
           </label>
           <label class="form-field">
-            <span>Etkilenen Bölge</span>
-            <input v-model="form.area_desc" placeholder="İstanbul, Kadıköy..." />
+            <span>{{ t('cap.form.area') }}</span>
+            <input v-model="form.area_desc" :placeholder="t('cap.form.areaPlaceholder')" />
           </label>
           <label class="form-field">
-            <span>Dil</span>
+            <span>{{ t('cap.form.lang') }}</span>
             <select v-model="form.lang">
               <option value="tr">Türkçe</option>
               <option value="en">English</option>
@@ -180,42 +276,60 @@ onMounted(loadDrafts)
             </select>
           </label>
           <label class="form-field">
-            <span>Geçerlilik Başlangıcı</span>
+            <span>{{ t('cap.form.effectiveAt') }}</span>
             <input type="datetime-local" v-model="form.effective_at" />
           </label>
           <label class="form-field">
-            <span>Geçerlilik Sonu</span>
+            <span>{{ t('cap.form.expiresAt') }}</span>
             <input type="datetime-local" v-model="form.expires_at" />
           </label>
         </div>
         <div class="form-actions">
           <p v-if="error" class="form-error">{{ error }}</p>
           <button class="btn-submit" @click="submitDraft" :disabled="submitting || !form.title.trim()">
-            {{ submitting ? 'Kaydediliyor...' : '💾 Taslak Oluştur' }}
+            {{ submitting ? t('cap.form.submitting') : t('cap.form.submit') }}
           </button>
         </div>
       </div>
     </Transition>
 
+    <!-- Reason prompt modal -->
+    <div v-if="reasonPrompt" class="reason-modal-backdrop" @click.self="reasonPrompt = null">
+      <div class="reason-modal">
+        <h4>{{ reasonPrompt.targetStatus === 'rejected' ? t('cap.reasonPrompt.rejectTitle') : t('cap.reasonPrompt.cancelTitle') }}</h4>
+        <textarea v-model="reasonPrompt.reason" rows="3" :placeholder="t('cap.reasonPrompt.placeholder')" />
+        <div class="reason-modal-actions">
+          <button class="btn-back" @click="reasonPrompt = null">{{ t('cap.reasonPrompt.cancelButton') }}</button>
+          <button class="btn-submit" @click="confirmReasonPrompt">{{ t('cap.reasonPrompt.confirm') }}</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tabs -->
+    <div class="cap-tabs">
+      <button :class="['tab-btn', { active: activeTab === 'active' }]" @click="activeTab = 'active'">{{ t('cap.history.activeTab') }}</button>
+      <button :class="['tab-btn', { active: activeTab === 'history' }]" @click="activeTab = 'history'">{{ t('cap.history.historyTab') }}</button>
+    </div>
+
     <!-- Error -->
     <div v-if="error && !showForm" class="cap-error">{{ error }}</div>
 
     <!-- Loading -->
-    <div v-if="loading" class="cap-loading">Yükleniyor...</div>
+    <div v-if="loading" class="cap-loading">{{ t('cap.loading') }}</div>
 
     <!-- Empty -->
-    <div v-else-if="!loading && drafts.length === 0" class="cap-empty">
-      Henüz uyarı taslağı yok.
+    <div v-else-if="!loading && visibleDrafts.length === 0" class="cap-empty">
+      {{ t('cap.empty') }}
     </div>
 
     <!-- Drafts list -->
     <div v-else class="drafts-list">
-      <div v-for="draft in drafts" :key="draft.id" class="draft-card">
+      <div v-for="draft in visibleDrafts" :key="draft.id" class="draft-card">
         <div class="draft-top">
           <span class="draft-hazard">{{ draft.hazard_type }}</span>
           <span class="draft-severity" :class="'sev-' + draft.severity">{{ draft.severity }}</span>
           <span class="draft-status" :style="{ color: STATUS_COLORS[draft.status] }">
-            ● {{ STATUS_LABELS[draft.status] }}
+            ● {{ t('cap.status.' + draft.status) }}
           </span>
           <span class="draft-date">{{ formatDate(draft.created_at) }}</span>
         </div>
@@ -225,17 +339,19 @@ onMounted(loadDrafts)
         <div class="draft-validity">
           {{ formatDate(draft.effective_at) }} → {{ formatDate(draft.expires_at) }}
         </div>
+        <div v-if="draft.status === 'broadcast'" class="draft-readonly">🔒 {{ t('cap.readOnly') }}</div>
+        <div v-if="draft.rejection_reason" class="draft-reason">{{ t('cap.history.rejectionReason') }}: {{ draft.rejection_reason }}</div>
+        <div v-if="draft.cancellation_reason" class="draft-reason">{{ t('cap.history.cancellationReason') }}: {{ draft.cancellation_reason }}</div>
 
-        <!-- State transition buttons (FR-0027) -->
-        <div v-if="canCreate && allowedTransitions(draft.status).length" class="draft-actions">
+        <div v-if="canCreate && allowedTransitionsFor(draft).length" class="draft-actions">
           <button
-            v-for="next in allowedTransitions(draft.status)"
+            v-for="next in allowedTransitionsFor(draft)"
             :key="next"
             class="btn-transition"
             :style="{ borderColor: STATUS_COLORS[next] }"
-            @click="transition(draft, next)"
+            @click="next === 'draft' ? reviseDraft(draft) : requestTransition(draft, next)"
           >
-            → {{ STATUS_LABELS[next] }}
+            → {{ actionLabel(next) }}
           </button>
         </div>
       </div>
@@ -295,6 +411,28 @@ onMounted(loadDrafts)
   padding: 20px;
   margin-bottom: 24px;
 }
+.event-picker { margin-bottom: 16px; padding-bottom: 16px; border-bottom: 1px dashed rgba(255,255,255,.12); }
+.event-picker-heading { font-size: .85rem; font-weight: 700; margin: 0 0 8px; }
+.event-list { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
+.event-chip {
+  padding: 6px 12px;
+  background: rgba(77,163,255,.12);
+  border: 1px solid rgba(77,163,255,.3);
+  border-radius: 999px;
+  color: #4da3ff;
+  font-size: .75rem;
+  cursor: pointer;
+}
+.event-chip:hover { background: rgba(77,163,255,.22); }
+.btn-blank {
+  background: transparent;
+  border: 1px solid rgba(255,255,255,.2);
+  border-radius: 8px;
+  color: var(--color-text-muted, #94a3b8);
+  padding: 5px 12px;
+  font-size: .75rem;
+  cursor: pointer;
+}
 .form-title { font-size: 1rem; font-weight: 700; margin: 0 0 16px; }
 .form-grid {
   display: grid;
@@ -350,6 +488,28 @@ onMounted(loadDrafts)
 }
 .btn-submit:disabled { opacity: .45; cursor: not-allowed; }
 .btn-submit:not(:disabled):hover { background: rgba(34,197,94,.3); }
+
+.reason-modal-backdrop {
+  position: fixed; inset: 0; background: rgba(0,0,0,.5);
+  display: flex; align-items: center; justify-content: center; z-index: 50;
+}
+.reason-modal {
+  background: #1a1e29; border: 1px solid rgba(255,255,255,.15);
+  border-radius: 12px; padding: 20px; width: min(420px, 90vw);
+}
+.reason-modal h4 { margin: 0 0 12px; font-size: .95rem; }
+.reason-modal textarea {
+  width: 100%; background: #1e2330; border: 1px solid rgba(255,255,255,.15);
+  border-radius: 8px; padding: 8px 10px; color: #e2e8f0; font-size: .85rem; resize: vertical;
+}
+.reason-modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 14px; }
+
+.cap-tabs { display: flex; gap: 8px; margin-bottom: 16px; }
+.tab-btn {
+  padding: 6px 16px; background: transparent; border: 1px solid rgba(255,255,255,.15);
+  border-radius: 999px; color: var(--color-text-muted, #94a3b8); font-size: .8rem; cursor: pointer;
+}
+.tab-btn.active { background: rgba(77,163,255,.18); border-color: rgba(77,163,255,.4); color: #4da3ff; }
 
 .cap-loading, .cap-empty {
   text-align: center;
@@ -413,6 +573,8 @@ onMounted(loadDrafts)
 .draft-desc  { font-size: .82rem; color: var(--color-text-muted, #94a3b8); margin: 0 0 6px; line-height: 1.5; }
 .draft-area  { font-size: .78rem; color: #60a5fa; margin-bottom: 4px; }
 .draft-validity { font-size: .72rem; color: var(--color-text-muted, #94a3b8); font-family: monospace; }
+.draft-readonly { font-size: .72rem; color: #fbbf24; margin-top: 6px; }
+.draft-reason { font-size: .78rem; color: #f87171; margin-top: 6px; font-style: italic; }
 
 .draft-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
 .btn-transition {

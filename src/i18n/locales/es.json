@@ -136,5 +136,162 @@
     "backToCode": "Volver al código de autenticación",
     "invalidCode": "Código inválido",
     "invalidRecoveryCode": "Código de recuperación inválido"
+  },
+  "cap": {
+    "title": "Sistema de Alertas CAP",
+    "subtitle": "Common Alerting Protocol",
+    "backToMap": "← Mapa",
+    "newAlert": "+ Nueva Alerta",
+    "close": "✕ Cerrar",
+    "loading": "Cargando...",
+    "empty": "Aún no hay borradores de alerta.",
+    "pickEvent": {
+      "heading": "Crear a partir de un evento detectado",
+      "useEvent": "Crear alerta a partir de este evento",
+      "orBlank": "O iniciar un borrador en blanco"
+    },
+    "form": {
+      "title": "Nuevo Borrador CAP",
+      "hazardType": "Tipo de Peligro",
+      "severity": "Severidad",
+      "certainty": "Certeza",
+      "urgency": "Urgencia",
+      "titleLabel": "Título *",
+      "titlePlaceholder": "Título de la alerta...",
+      "description": "Descripción",
+      "descriptionPlaceholder": "Descripción de la situación...",
+      "instructions": "Instrucciones de Protección",
+      "instructionsPlaceholder": "Qué debe hacer el público...",
+      "area": "Área Afectada",
+      "areaPlaceholder": "Estambul, Kadıköy...",
+      "lang": "Idioma",
+      "effectiveAt": "Vigente Desde",
+      "expiresAt": "Vence El",
+      "submit": "Guardar Borrador",
+      "submitting": "Guardando..."
+    },
+    "status": {
+      "draft": "Borrador",
+      "pending_approval": "Pendiente de Aprobación",
+      "approved": "Aprobado",
+      "broadcast": "Emitido",
+      "rejected": "Rechazado",
+      "cancelled": "Cancelado",
+      "expired": "Expirado",
+      "false_alarm": "Falsa Alarma",
+      "all_clear": "Todo Despejado"
+    },
+    "actions": {
+      "submitForApproval": "Enviar para Aprobación",
+      "approve": "Aprobar",
+      "reject": "Rechazar",
+      "broadcast": "Emitir",
+      "cancel": "Cancelar",
+      "revise": "Revisar y Reenviar"
+    },
+    "reasonPrompt": {
+      "rejectTitle": "Motivo del rechazo",
+      "cancelTitle": "Motivo de la cancelación",
+      "placeholder": "Explique el motivo...",
+      "confirm": "Confirmar",
+      "cancelButton": "Volver"
+    },
+    "history": {
+      "activeTab": "Activo",
+      "historyTab": "Historial",
+      "rejectionReason": "Motivo del rechazo",
+      "cancellationReason": "Motivo de la cancelación"
+    },
+    "readOnly": "Esta alerta ya fue emitida y su contenido está bloqueado.",
+    "errors": {
+      "incompleteDraft": "Faltan campos obligatorios: {fields}",
+      "staleStatus": "Este borrador ya fue actualizado por otra persona — actualizando la lista.",
+      "fourEyes": "No puede aprobar o rechazar su propio borrador — un revisor diferente debe actuar sobre él.",
+      "reasonRequired": "Se requiere un motivo.",
+      "generic": "Algo salió mal."
+    }
+  },
+  "audit": {
+    "tabLabel": "Auditoría",
+    "loading": "Cargando...",
+    "empty": "No hay entradas de auditoría coincidentes.",
+    "close": "✕ Cerrar",
+    "filters": {
+      "table": "Tabla",
+      "action": "Acción",
+      "userId": "ID de Usuario",
+      "from": "Desde",
+      "to": "Hasta",
+      "all": "Todos"
+    },
+    "export": {
+      "csv": "Exportar CSV",
+      "json": "Exportar JSON",
+      "capped": "La exportación se limitó a 5.000 filas — puede haber más entradas coincidentes."
+    },
+    "integrity": {
+      "verify": "Verificar Integridad",
+      "checking": "Verificando...",
+      "intact": "La cadena de auditoría está intacta.",
+      "broken": "La verificación de integridad falló en la entrada #{seq}."
+    },
+    "columns": {
+      "action": "Acción",
+      "table": "Tabla",
+      "recordId": "ID de Registro",
+      "changedBy": "Modificado Por",
+      "createdAt": "Fecha"
+    },
+    "history": {
+      "view": "Historial",
+      "title": "Historial de {table} / {id}"
+    }
+  },
+  "impact": {
+    "loading": "Cargando...",
+    "exposure": {
+      "tabLabel": "Datos de Exposición",
+      "uploadTitle": "Subir Conjunto de Datos de Exposición",
+      "name": "Nombre",
+      "description": "Descripción",
+      "metricProperty": "Propiedad Métrica",
+      "metricPropertyPlaceholder": "ej. población",
+      "file": "Archivo GeoJSON",
+      "upload": "Subir",
+      "uploading": "Subiendo...",
+      "listTitle": "Conjuntos de Datos de Exposición",
+      "empty": "Aún no hay conjuntos de datos de exposición.",
+      "features": "elementos",
+      "delete": "Eliminar"
+    },
+    "panel": {
+      "selectPrompt": "Seleccione un evento de peligro en el mapa para comenzar el análisis de impacto.",
+      "step1": "Paso 1",
+      "datasetLabel": "Conjunto de datos de exposición",
+      "radiusOverride": "Anular radio (km)",
+      "defaultRadius": "predeterminado: {km} km",
+      "runAnalysis": "Ejecutar Análisis",
+      "analyzing": "Analizando...",
+      "error": "No se pudo completar el análisis.",
+      "noOverlap": "Ningún dato de exposición se cruza con esta área.",
+      "featuresCount": "{count} elementos",
+      "exportCsv": "CSV",
+      "exportJson": "JSON",
+      "exportGeoJson": "GeoJSON",
+      "scenarioNamePlaceholder": "Nombre del escenario...",
+      "saveScenario": "Guardar Escenario",
+      "savedScenarios": "Escenarios Guardados",
+      "dataUnavailable": "los datos referenciados ya no están disponibles"
+    },
+    "geocoding": {
+      "placeholder": "Buscar un lugar o dirección...",
+      "search": "Buscar",
+      "searching": "Buscando...",
+      "noResults": "No se encontraron resultados.",
+      "error": "La búsqueda de geocodificación falló."
+    },
+    "errors": {
+      "uploadFailed": "La subida falló."
+    }
   }
 }

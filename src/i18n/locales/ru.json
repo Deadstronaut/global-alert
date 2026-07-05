@@ -136,5 +136,162 @@
     "backToCode": "Вернуться к коду аутентификации",
     "invalidCode": "Неверный код",
     "invalidRecoveryCode": "Неверный код восстановления"
+  },
+  "cap": {
+    "title": "Система оповещений CAP",
+    "subtitle": "Common Alerting Protocol",
+    "backToMap": "← Карта",
+    "newAlert": "+ Новое оповещение",
+    "close": "✕ Закрыть",
+    "loading": "Загрузка...",
+    "empty": "Пока нет черновиков оповещений.",
+    "pickEvent": {
+      "heading": "Создать на основе обнаруженного события",
+      "useEvent": "Создать оповещение на основе этого события",
+      "orBlank": "Или начать с пустого черновика"
+    },
+    "form": {
+      "title": "Новый черновик CAP",
+      "hazardType": "Тип опасности",
+      "severity": "Серьёзность",
+      "certainty": "Достоверность",
+      "urgency": "Срочность",
+      "titleLabel": "Заголовок *",
+      "titlePlaceholder": "Заголовок оповещения...",
+      "description": "Описание",
+      "descriptionPlaceholder": "Описание ситуации...",
+      "instructions": "Инструкции по защите",
+      "instructionsPlaceholder": "Что должно делать население...",
+      "area": "Затронутая территория",
+      "areaPlaceholder": "Стамбул, Кадыкёй...",
+      "lang": "Язык",
+      "effectiveAt": "Действует с",
+      "expiresAt": "Истекает",
+      "submit": "Сохранить черновик",
+      "submitting": "Сохранение..."
+    },
+    "status": {
+      "draft": "Черновик",
+      "pending_approval": "Ожидает утверждения",
+      "approved": "Утверждено",
+      "broadcast": "Опубликовано",
+      "rejected": "Отклонено",
+      "cancelled": "Отменено",
+      "expired": "Истекло",
+      "false_alarm": "Ложная тревога",
+      "all_clear": "Опасность миновала"
+    },
+    "actions": {
+      "submitForApproval": "Отправить на утверждение",
+      "approve": "Утвердить",
+      "reject": "Отклонить",
+      "broadcast": "Опубликовать",
+      "cancel": "Отменить",
+      "revise": "Доработать и отправить снова"
+    },
+    "reasonPrompt": {
+      "rejectTitle": "Причина отклонения",
+      "cancelTitle": "Причина отмены",
+      "placeholder": "Укажите причину...",
+      "confirm": "Подтвердить",
+      "cancelButton": "Назад"
+    },
+    "history": {
+      "activeTab": "Активные",
+      "historyTab": "История",
+      "rejectionReason": "Причина отклонения",
+      "cancellationReason": "Причина отмены"
+    },
+    "readOnly": "Это оповещение уже опубликовано, и его содержимое заблокировано.",
+    "errors": {
+      "incompleteDraft": "Отсутствуют обязательные поля: {fields}",
+      "staleStatus": "Этот черновик уже был обновлён кем-то другим — список обновляется.",
+      "fourEyes": "Вы не можете утвердить или отклонить собственный черновик — это должен сделать другой проверяющий.",
+      "reasonRequired": "Необходимо указать причину.",
+      "generic": "Что-то пошло не так."
+    }
+  },
+  "audit": {
+    "tabLabel": "Аудит",
+    "loading": "Загрузка...",
+    "empty": "Нет соответствующих записей аудита.",
+    "close": "✕ Закрыть",
+    "filters": {
+      "table": "Таблица",
+      "action": "Действие",
+      "userId": "ID пользователя",
+      "from": "С",
+      "to": "По",
+      "all": "Все"
+    },
+    "export": {
+      "csv": "Экспорт CSV",
+      "json": "Экспорт JSON",
+      "capped": "Экспорт ограничен 5000 строками — могут существовать дополнительные записи."
+    },
+    "integrity": {
+      "verify": "Проверить целостность",
+      "checking": "Проверка...",
+      "intact": "Цепочка аудита не нарушена.",
+      "broken": "Проверка целостности не пройдена на записи №{seq}."
+    },
+    "columns": {
+      "action": "Действие",
+      "table": "Таблица",
+      "recordId": "ID записи",
+      "changedBy": "Изменил",
+      "createdAt": "Дата"
+    },
+    "history": {
+      "view": "История",
+      "title": "История {table} / {id}"
+    }
+  },
+  "impact": {
+    "loading": "Загрузка...",
+    "exposure": {
+      "tabLabel": "Данные подверженности",
+      "uploadTitle": "Загрузить набор данных подверженности",
+      "name": "Название",
+      "description": "Описание",
+      "metricProperty": "Числовое свойство",
+      "metricPropertyPlaceholder": "напр. население",
+      "file": "Файл GeoJSON",
+      "upload": "Загрузить",
+      "uploading": "Загрузка...",
+      "listTitle": "Наборы данных подверженности",
+      "empty": "Пока нет наборов данных подверженности.",
+      "features": "объектов",
+      "delete": "Удалить"
+    },
+    "panel": {
+      "selectPrompt": "Выберите опасное событие на карте, чтобы начать анализ воздействия.",
+      "step1": "Шаг 1",
+      "datasetLabel": "Набор данных подверженности",
+      "radiusOverride": "Переопределить радиус (км)",
+      "defaultRadius": "по умолчанию: {km} км",
+      "runAnalysis": "Запустить анализ",
+      "analyzing": "Анализ...",
+      "error": "Не удалось завершить анализ.",
+      "noOverlap": "Данные подверженности не пересекаются с этой областью.",
+      "featuresCount": "{count} объектов",
+      "exportCsv": "CSV",
+      "exportJson": "JSON",
+      "exportGeoJson": "GeoJSON",
+      "scenarioNamePlaceholder": "Название сценария...",
+      "saveScenario": "Сохранить сценарий",
+      "savedScenarios": "Сохранённые сценарии",
+      "dataUnavailable": "связанные данные больше недоступны"
+    },
+    "geocoding": {
+      "placeholder": "Поиск места или адреса...",
+      "search": "Поиск",
+      "searching": "Поиск...",
+      "noResults": "Результаты не найдены.",
+      "error": "Ошибка геокодирования."
+    },
+    "errors": {
+      "uploadFailed": "Загрузка не удалась."
+    }
   }
 }

@@ -136,5 +136,162 @@
     "backToCode": "العودة إلى رمز المصادقة",
     "invalidCode": "رمز غير صالح",
     "invalidRecoveryCode": "رمز استرداد غير صالح"
+  },
+  "cap": {
+    "title": "نظام تنبيهات CAP",
+    "subtitle": "Common Alerting Protocol",
+    "backToMap": "← الخريطة",
+    "newAlert": "+ تنبيه جديد",
+    "close": "✕ إغلاق",
+    "loading": "جاري التحميل...",
+    "empty": "لا توجد مسودات تنبيه بعد.",
+    "pickEvent": {
+      "heading": "إنشاء من حدث تم اكتشافه",
+      "useEvent": "إنشاء تنبيه من هذا الحدث",
+      "orBlank": "أو بدء مسودة فارغة"
+    },
+    "form": {
+      "title": "مسودة CAP جديدة",
+      "hazardType": "نوع الخطر",
+      "severity": "الخطورة",
+      "certainty": "اليقين",
+      "urgency": "الإلحاح",
+      "titleLabel": "العنوان *",
+      "titlePlaceholder": "عنوان التنبيه...",
+      "description": "الوصف",
+      "descriptionPlaceholder": "وصف الحالة...",
+      "instructions": "تعليمات الحماية",
+      "instructionsPlaceholder": "ما يجب على الجمهور فعله...",
+      "area": "المنطقة المتأثرة",
+      "areaPlaceholder": "إسطنبول، قاضي كوي...",
+      "lang": "اللغة",
+      "effectiveAt": "ساري من",
+      "expiresAt": "ينتهي في",
+      "submit": "حفظ المسودة",
+      "submitting": "جارٍ الحفظ..."
+    },
+    "status": {
+      "draft": "مسودة",
+      "pending_approval": "بانتظار الموافقة",
+      "approved": "تمت الموافقة",
+      "broadcast": "تم البث",
+      "rejected": "مرفوض",
+      "cancelled": "ملغى",
+      "expired": "منتهي الصلاحية",
+      "false_alarm": "إنذار كاذب",
+      "all_clear": "زال الخطر"
+    },
+    "actions": {
+      "submitForApproval": "إرسال للموافقة",
+      "approve": "موافقة",
+      "reject": "رفض",
+      "broadcast": "بث",
+      "cancel": "إلغاء",
+      "revise": "تعديل وإعادة الإرسال"
+    },
+    "reasonPrompt": {
+      "rejectTitle": "سبب الرفض",
+      "cancelTitle": "سبب الإلغاء",
+      "placeholder": "اشرح السبب...",
+      "confirm": "تأكيد",
+      "cancelButton": "رجوع"
+    },
+    "history": {
+      "activeTab": "نشط",
+      "historyTab": "السجل",
+      "rejectionReason": "سبب الرفض",
+      "cancellationReason": "سبب الإلغاء"
+    },
+    "readOnly": "تم بث هذا التنبيه ومحتواه مقفل الآن.",
+    "errors": {
+      "incompleteDraft": "حقول مطلوبة مفقودة: {fields}",
+      "staleStatus": "تم تحديث هذه المسودة بالفعل من قبل شخص آخر — جارٍ تحديث القائمة.",
+      "fourEyes": "لا يمكنك الموافقة على مسودتك الخاصة أو رفضها — يجب أن يقوم مراجع مختلف بذلك.",
+      "reasonRequired": "السبب مطلوب.",
+      "generic": "حدث خطأ ما."
+    }
+  },
+  "audit": {
+    "tabLabel": "التدقيق",
+    "loading": "جاري التحميل...",
+    "empty": "لا توجد سجلات تدقيق مطابقة.",
+    "close": "✕ إغلاق",
+    "filters": {
+      "table": "الجدول",
+      "action": "الإجراء",
+      "userId": "معرّف المستخدم",
+      "from": "من",
+      "to": "إلى",
+      "all": "الكل"
+    },
+    "export": {
+      "csv": "تصدير CSV",
+      "json": "تصدير JSON",
+      "capped": "تم تحديد التصدير بـ 5000 صف — قد توجد سجلات مطابقة إضافية."
+    },
+    "integrity": {
+      "verify": "التحقق من السلامة",
+      "checking": "جارٍ التحقق...",
+      "intact": "سلسلة التدقيق سليمة.",
+      "broken": "فشل التحقق من السلامة عند السجل رقم #{seq}."
+    },
+    "columns": {
+      "action": "الإجراء",
+      "table": "الجدول",
+      "recordId": "معرّف السجل",
+      "changedBy": "غيّره",
+      "createdAt": "التاريخ"
+    },
+    "history": {
+      "view": "السجل",
+      "title": "سجل {table} / {id}"
+    }
+  },
+  "impact": {
+    "loading": "جاري التحميل...",
+    "exposure": {
+      "tabLabel": "بيانات التعرض",
+      "uploadTitle": "رفع مجموعة بيانات التعرض",
+      "name": "الاسم",
+      "description": "الوصف",
+      "metricProperty": "الخاصية العددية",
+      "metricPropertyPlaceholder": "مثال: عدد السكان",
+      "file": "ملف GeoJSON",
+      "upload": "رفع",
+      "uploading": "جارٍ الرفع...",
+      "listTitle": "مجموعات بيانات التعرض",
+      "empty": "لا توجد مجموعات بيانات تعرض بعد.",
+      "features": "عنصر",
+      "delete": "حذف"
+    },
+    "panel": {
+      "selectPrompt": "اختر حدث خطر على الخريطة لبدء تحليل الأثر.",
+      "step1": "الخطوة 1",
+      "datasetLabel": "مجموعة بيانات التعرض",
+      "radiusOverride": "تجاوز نصف القطر (كم)",
+      "defaultRadius": "الافتراضي: {km} كم",
+      "runAnalysis": "تشغيل التحليل",
+      "analyzing": "جارٍ التحليل...",
+      "error": "تعذر إكمال التحليل.",
+      "noOverlap": "لا توجد بيانات تعرض تتقاطع مع هذه المنطقة.",
+      "featuresCount": "{count} عنصر",
+      "exportCsv": "CSV",
+      "exportJson": "JSON",
+      "exportGeoJson": "GeoJSON",
+      "scenarioNamePlaceholder": "اسم السيناريو...",
+      "saveScenario": "حفظ السيناريو",
+      "savedScenarios": "السيناريوهات المحفوظة",
+      "dataUnavailable": "البيانات المرجعية لم تعد متوفرة"
+    },
+    "geocoding": {
+      "placeholder": "ابحث عن مكان أو عنوان...",
+      "search": "بحث",
+      "searching": "جارٍ البحث...",
+      "noResults": "لم يتم العثور على نتائج.",
+      "error": "فشل البحث الجغرافي."
+    },
+    "errors": {
+      "uploadFailed": "فشل الرفع."
+    }
   }
 }

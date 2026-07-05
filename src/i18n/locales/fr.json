@@ -136,5 +136,162 @@
     "backToCode": "Retour au code d'authentification",
     "invalidCode": "Code invalide",
     "invalidRecoveryCode": "Code de récupération invalide"
+  },
+  "cap": {
+    "title": "Système d'Alerte CAP",
+    "subtitle": "Common Alerting Protocol",
+    "backToMap": "← Carte",
+    "newAlert": "+ Nouvelle Alerte",
+    "close": "✕ Fermer",
+    "loading": "Chargement...",
+    "empty": "Aucun brouillon d'alerte pour le moment.",
+    "pickEvent": {
+      "heading": "Créer à partir d'un événement détecté",
+      "useEvent": "Créer une alerte à partir de cet événement",
+      "orBlank": "Ou démarrer un brouillon vierge"
+    },
+    "form": {
+      "title": "Nouveau Brouillon CAP",
+      "hazardType": "Type de Danger",
+      "severity": "Gravité",
+      "certainty": "Certitude",
+      "urgency": "Urgence",
+      "titleLabel": "Titre *",
+      "titlePlaceholder": "Titre de l'alerte...",
+      "description": "Description",
+      "descriptionPlaceholder": "Description de la situation...",
+      "instructions": "Instructions de Protection",
+      "instructionsPlaceholder": "Ce que le public doit faire...",
+      "area": "Zone Affectée",
+      "areaPlaceholder": "Istanbul, Kadıköy...",
+      "lang": "Langue",
+      "effectiveAt": "En Vigueur À Partir De",
+      "expiresAt": "Expire Le",
+      "submit": "Enregistrer le Brouillon",
+      "submitting": "Enregistrement..."
+    },
+    "status": {
+      "draft": "Brouillon",
+      "pending_approval": "En Attente d'Approbation",
+      "approved": "Approuvé",
+      "broadcast": "Diffusé",
+      "rejected": "Rejeté",
+      "cancelled": "Annulé",
+      "expired": "Expiré",
+      "false_alarm": "Fausse Alerte",
+      "all_clear": "Danger Écarté"
+    },
+    "actions": {
+      "submitForApproval": "Soumettre pour Approbation",
+      "approve": "Approuver",
+      "reject": "Rejeter",
+      "broadcast": "Diffuser",
+      "cancel": "Annuler",
+      "revise": "Réviser et Resoumettre"
+    },
+    "reasonPrompt": {
+      "rejectTitle": "Motif du rejet",
+      "cancelTitle": "Motif de l'annulation",
+      "placeholder": "Expliquez le motif...",
+      "confirm": "Confirmer",
+      "cancelButton": "Retour"
+    },
+    "history": {
+      "activeTab": "Actif",
+      "historyTab": "Historique",
+      "rejectionReason": "Motif du rejet",
+      "cancellationReason": "Motif de l'annulation"
+    },
+    "readOnly": "Cette alerte a été diffusée et son contenu est désormais verrouillé.",
+    "errors": {
+      "incompleteDraft": "Champs obligatoires manquants : {fields}",
+      "staleStatus": "Ce brouillon a déjà été mis à jour par quelqu'un d'autre — actualisation de la liste.",
+      "fourEyes": "Vous ne pouvez pas approuver ou rejeter votre propre brouillon — un autre relecteur doit agir dessus.",
+      "reasonRequired": "Un motif est requis.",
+      "generic": "Une erreur s'est produite."
+    }
+  },
+  "audit": {
+    "tabLabel": "Audit",
+    "loading": "Chargement...",
+    "empty": "Aucune entrée d'audit correspondante.",
+    "close": "✕ Fermer",
+    "filters": {
+      "table": "Table",
+      "action": "Action",
+      "userId": "ID Utilisateur",
+      "from": "Du",
+      "to": "Au",
+      "all": "Tous"
+    },
+    "export": {
+      "csv": "Exporter en CSV",
+      "json": "Exporter en JSON",
+      "capped": "L'export a été limité à 5 000 lignes — d'autres entrées correspondantes peuvent exister."
+    },
+    "integrity": {
+      "verify": "Vérifier l'Intégrité",
+      "checking": "Vérification...",
+      "intact": "La chaîne d'audit est intacte.",
+      "broken": "Échec de la vérification d'intégrité à l'entrée #{seq}."
+    },
+    "columns": {
+      "action": "Action",
+      "table": "Table",
+      "recordId": "ID d'Enregistrement",
+      "changedBy": "Modifié Par",
+      "createdAt": "Date"
+    },
+    "history": {
+      "view": "Historique",
+      "title": "Historique de {table} / {id}"
+    }
+  },
+  "impact": {
+    "loading": "Chargement...",
+    "exposure": {
+      "tabLabel": "Données d'Exposition",
+      "uploadTitle": "Télécharger un Jeu de Données d'Exposition",
+      "name": "Nom",
+      "description": "Description",
+      "metricProperty": "Propriété Métrique",
+      "metricPropertyPlaceholder": "ex. population",
+      "file": "Fichier GeoJSON",
+      "upload": "Télécharger",
+      "uploading": "Téléchargement...",
+      "listTitle": "Jeux de Données d'Exposition",
+      "empty": "Aucun jeu de données d'exposition pour le moment.",
+      "features": "entités",
+      "delete": "Supprimer"
+    },
+    "panel": {
+      "selectPrompt": "Sélectionnez un événement de danger sur la carte pour commencer l'analyse d'impact.",
+      "step1": "Étape 1",
+      "datasetLabel": "Jeu de données d'exposition",
+      "radiusOverride": "Rayon personnalisé (km)",
+      "defaultRadius": "par défaut : {km} km",
+      "runAnalysis": "Lancer l'Analyse",
+      "analyzing": "Analyse en cours...",
+      "error": "L'analyse n'a pas pu être terminée.",
+      "noOverlap": "Aucune donnée d'exposition ne croise cette zone.",
+      "featuresCount": "{count} entités",
+      "exportCsv": "CSV",
+      "exportJson": "JSON",
+      "exportGeoJson": "GeoJSON",
+      "scenarioNamePlaceholder": "Nom du scénario...",
+      "saveScenario": "Enregistrer le Scénario",
+      "savedScenarios": "Scénarios Enregistrés",
+      "dataUnavailable": "les données référencées ne sont plus disponibles"
+    },
+    "geocoding": {
+      "placeholder": "Rechercher un lieu ou une adresse...",
+      "search": "Rechercher",
+      "searching": "Recherche...",
+      "noResults": "Aucun résultat trouvé.",
+      "error": "La recherche de géocodage a échoué."
+    },
+    "errors": {
+      "uploadFailed": "Le téléchargement a échoué."
+    }
   }
 }

@@ -1,14 +1,24 @@
 <script setup>
 import { computed, ref, onMounted, onUnmounted } from 'vue'
+import { useRouter } from 'vue-router'
 import { useUIStore } from '@/stores/ui.js'
 import { useGeolocationStore } from '@/stores/geolocation.js'
 import { useI18n } from 'vue-i18n'
 import { useDisasterStore } from '@/stores/disaster.js'
+import { useAuthStore } from '@/stores/auth.js'
 
 const { t, locale } = useI18n()
+const router = useRouter()
 const uiStore = useUIStore()
 const geoStore = useGeolocationStore()
 const disasterStore = useDisasterStore()
+const authStore = useAuthStore()
+
+async function handleLogout() {
+  await authStore.logout()
+  uiStore.toggleSettings()
+  router.push('/')
+}
 
 // ── Aggregator server health ──────────────────────────────────────────────────
 const SERVER_URL = import.meta.env.VITE_AGGREGATOR_URL || 'http://localhost:8765'
@@ -242,6 +252,15 @@ const toggleSource = (sourceName) => {
             TR
           </button>
         </div>
+      </div>
+
+      <!-- Account -->
+      <div class="settings-section" v-if="authStore.isLoggedIn">
+        <h4 class="settings-section-title">{{ t('settings.account') }}</h4>
+        <p class="settings-desc">{{ t('settings.loggedInAs', { email: authStore.session?.email }) }}</p>
+        <button class="btn btn-danger logout-btn" @click="handleLogout">
+          ⎋ {{ t('settings.logout') }}
+        </button>
       </div>
     </div>
   </transition>
@@ -487,6 +506,19 @@ const toggleSource = (sourceName) => {
   border-color: var(--color-accent);
   color: var(--color-accent);
   box-shadow: 0 0 12px rgba(77, 163, 255, 0.1);
+}
+
+.logout-btn {
+  width: 100%;
+  justify-content: center;
+  color: #ef4444;
+  border: 1px solid rgba(239, 68, 68, 0.4);
+  background: rgba(239, 68, 68, 0.08);
+}
+
+.logout-btn:hover {
+  background: rgba(239, 68, 68, 0.18);
+  border-color: rgba(239, 68, 68, 0.6);
 }
 </style>
 

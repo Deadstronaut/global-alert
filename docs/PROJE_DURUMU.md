@@ -39,17 +39,17 @@ Kaynak: `docs/iş planı istereler.txt` — proje genelinde takip edilen ana tab
 |---|---|---|---|
 | Data Ingestion & Monitoring | **%64** | Orta | Spec 001 (source health/state machine, admin dashboard, CRUD, payload validation) + spec 002 (kaynakların küresel/ülkeye-özel ayrımı, RLS) + spec 003 (GDACS küresel çok-afetli kaynak, 4 mevcut fetch-* fonksiyonuna entegre) tamamlandı. Kalan: OGC WMS/WFS adapter |
 | Integration & API Gateway | %67 | Kolay | Neredeyse bitti |
-| Impact Analysis (Map Viz) | %15 | Orta-Zor | Split-view, geocoding, PostGIS exposure analizi eksik |
+| Impact Analysis (Map Viz) | ~%70 | Orta-Zor | Spec 008 tamamlandı (tam kapsam: frontend + PostGIS): PostGIS extension etkinleştirildi, exposure dataset yükleme (GeoJSON→PostGIS), 2 adımlı etki analizi iş akışı (tehlike olayı + exposure veri seti seçip zonal istatistik hesaplama, afet tipine özel varsayılan yarıçap: deprem için 2^magnitude, diğerleri için şiddet tablosu), senaryo kaydetme/yükleme, split-view (harita + kalıcı yan panel), geocoding arama, bağımlılıksız 24s trend sparkline, CSV/JSON/GeoJSON export. Kalan: Shapefile yükleme (sadece GeoJSON v1), ağırlıklı zafiyet endeksleri + olasılıksal simülasyon (ayrı "Risk & Scenario Modeling" modülü) |
 | Administration & Access | %62 | Kolay | Spec 004 (RBAC hardening) + spec 005 (TOTP MFA, SRS NFR-0057) tamamlandı: /admin route guard, country/org-scoped profiles RLS, gerçek askıya alma, davetle onboarding, self-registration kapatma, herkese açık Hesap Güvenliği sayfası + login'de AAL challenge + kurtarma kodları + rol bazlı zorunlu-MFA politikası. Migration'ların canlıya uygulanması kullanıcı onayı bekliyor. Kalan: custom permissions (roller sabit 4 kademe) |
-| Alert Authoring / CAP | %1 | Orta | Sadece `cap_drafts` tablosu var, form UI yok |
+| Alert Authoring / CAP | ~%40 | Orta | Spec 006 tamamlandı: `cap_drafts` + `CapView.vue` zaten mevcuttu (tahmin edilenden çok daha ileri durumdaydı) — bu spec four-eyes onay kuralı (kendi taslağını onaylayamama), tespit edilen olaydan taslak oluşturma, broadcast sonrası içerik kilidi, ret/iptal için zorunlu gerekçe, viewer görünürlüğünün daraltılması ve tam i18n (7 dil) ekledi. Kalan: CAP zarfı alanları (identifier/sender/msgType/scope), gerçek CAP XML/JSON export fonksiyonu, migration'ın canlıya uygulanması kullanıcı onayı bekliyor |
 | Dissemination | %0 | Orta | Hiç başlanmadı (email/WhatsApp gönderim) |
 | Incident Tracking | %0 | Orta | Hiç başlanmadı |
 | Hazard Taxonomy Admin | %0 | Orta | Hiç başlanmadı |
-| Audit & Compliance | %0 | Orta-Zor | Hiç başlanmadı |
+| Audit & Compliance | ~%25 | Orta-Zor | Spec 007 tamamlandı: mevcut `audit_log` tablosu için görünür bir arayüz yoktu (sadece kaynak-bazlı dar bir audit paneli vardı) — bu spec super_admin'e özel bir Denetim sekmesi (AdminView.vue içinde), tablo/kullanıcı/işlem/tarih filtreleme + sayfalama, CSV/JSON dışa aktarım (5.000 satır sınırlı), SHA-256 hash-zinciri bütünlük doğrulaması (`verify_audit_chain()`) ve tek-kayıt geçmişi görünümü ekledi. Kalan: PDF kanıt paketleri + nesne depolama (MinIO/S3 — Principle VIII gereği bilinçli olarak kapsam dışı), zamanlanmış/otomatik uyum raporları, AI/LLM çıktı denetim alanları (henüz AI pipeline yok) |
 | Forecasting / AI | %0 | Çok Zor | Hiç başlanmadı |
 | Risk & Scenario Modeling | %0 | Çok Zor | Hiç başlanmadı |
 | Preparedness, Drill & Response | %0 | Orta | Hiç başlanmadı |
-| **TOPLAM** | **%15** (380/446 kalem tamamlanmadı ⚠️ tablo "Kalan/Toplam" formatında, %15 = tamamlanma) | | |
+| **TOPLAM** | **~%33** (301/446 kalem tamamlanmadı ⚠️ tablo "Kalan/Toplam" formatında, %33 = tamamlanma) | | |
 
 **Not:** Bu tablo çok geniş bir gereksinim listesine (446 madde) göre hesaplanmış olduğu için toplam %14 düşük görünüyor; asıl aktif çalışılan modüllerde (Data Ingestion, Admin/Access) ilerleme çok daha yüksek.
 

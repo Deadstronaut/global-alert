@@ -16,6 +16,17 @@ import { CUSTOM_TERRITORIES } from '@/data/customTerritories.js'
 import { COUNTRY_NAMES } from '@/data/countryNames.js'
 import maplibregl from 'maplibre-gl'
 import 'maplibre-gl/dist/maplibre-gl.css'
+import ImpactPanel from '@/components/impact/ImpactPanel.vue'
+import GeocodingSearch from '@/components/impact/GeocodingSearch.vue'
+
+// Impact Analysis (spec 008): selected event for the split-view side panel,
+// set from marker clicks below — independent of the existing popup behavior.
+const selectedImpactEvent = ref(null)
+
+function onLocationSelected(location) {
+  if (!map) return
+  map.flyTo({ center: [location.lng, location.lat], zoom: 10 })
+}
 
 /**
  * Fixes antimeridian wrapping and winding order for GeoJSON features.
@@ -1151,6 +1162,12 @@ function updateMarkers() {
       .setPopup(popup)
       .addTo(map)
 
+    // Impact Analysis (spec 008): drive the split-view side panel independently
+    // of the existing popup toggle behavior.
+    el.addEventListener('click', () => {
+      selectedImpactEvent.value = event
+    })
+
     markerObjects.push(marker)
   })
 }
@@ -1495,6 +1512,12 @@ onBeforeUnmount(() => {
         <div class="country-badge-close" @click="clearCountrySelection" title="Temizle">✕</div>
       </div>
     </Transition>
+
+    <!-- Impact Analysis (spec 008): geocoding search + split-view side panel -->
+    <GeocodingSearch @location-selected="onLocationSelected" />
+    <div class="impact-panel-dock">
+      <ImpactPanel :selected-event="selectedImpactEvent" />
+    </div>
   </div>
 </template>
 
@@ -1803,6 +1826,16 @@ onBeforeUnmount(() => {
 .country-badge-leave-to {
   opacity: 0;
   transform: translateY(-8px);
+}
+
+/* Impact Analysis (spec 008): split-view side panel dock */
+.impact-panel-dock {
+  position: absolute;
+  top: 0;
+  right: 0;
+  height: 100%;
+  z-index: 15;
+  pointer-events: auto;
 }
 </style>
 

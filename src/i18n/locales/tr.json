@@ -136,5 +136,162 @@
     "backToCode": "Kimlik doğrulama koduna dön",
     "invalidCode": "Kod geçersiz",
     "invalidRecoveryCode": "Kurtarma kodu geçersiz"
+  },
+  "cap": {
+    "title": "CAP Uyarı Sistemi",
+    "subtitle": "Common Alerting Protocol",
+    "backToMap": "← Harita",
+    "newAlert": "+ Yeni Uyarı",
+    "close": "✕ Kapat",
+    "loading": "Yükleniyor...",
+    "empty": "Henüz uyarı taslağı yok.",
+    "pickEvent": {
+      "heading": "Tespit edilen olaydan oluştur",
+      "useEvent": "Bu olaydan uyarı oluştur",
+      "orBlank": "Veya boş taslak başlat"
+    },
+    "form": {
+      "title": "Yeni CAP Taslağı",
+      "hazardType": "Tehlike Türü",
+      "severity": "Şiddet",
+      "certainty": "Kesinlik",
+      "urgency": "Aciliyet",
+      "titleLabel": "Başlık *",
+      "titlePlaceholder": "Uyarı başlığı...",
+      "description": "Açıklama",
+      "descriptionPlaceholder": "Durum açıklaması...",
+      "instructions": "Koruyucu Talimatlar",
+      "instructionsPlaceholder": "Halkın yapması gerekenler...",
+      "area": "Etkilenen Bölge",
+      "areaPlaceholder": "İstanbul, Kadıköy...",
+      "lang": "Dil",
+      "effectiveAt": "Geçerlilik Başlangıcı",
+      "expiresAt": "Geçerlilik Sonu",
+      "submit": "Taslak Oluştur",
+      "submitting": "Kaydediliyor..."
+    },
+    "status": {
+      "draft": "Taslak",
+      "pending_approval": "Onay Bekliyor",
+      "approved": "Onaylandı",
+      "broadcast": "Yayınlandı",
+      "rejected": "Reddedildi",
+      "cancelled": "İptal",
+      "expired": "Süresi Doldu",
+      "false_alarm": "Yanlış Alarm",
+      "all_clear": "Tehlike Geçti"
+    },
+    "actions": {
+      "submitForApproval": "Onaya Gönder",
+      "approve": "Onayla",
+      "reject": "Reddet",
+      "broadcast": "Yayınla",
+      "cancel": "İptal Et",
+      "revise": "Düzenle ve Yeniden Gönder"
+    },
+    "reasonPrompt": {
+      "rejectTitle": "Reddetme nedeni",
+      "cancelTitle": "İptal nedeni",
+      "placeholder": "Nedenini açıklayın...",
+      "confirm": "Onayla",
+      "cancelButton": "Geri"
+    },
+    "history": {
+      "activeTab": "Aktif",
+      "historyTab": "Geçmiş",
+      "rejectionReason": "Reddetme nedeni",
+      "cancellationReason": "İptal nedeni"
+    },
+    "readOnly": "Bu uyarı yayınlandı ve içeriği artık kilitli.",
+    "errors": {
+      "incompleteDraft": "Eksik zorunlu alanlar: {fields}",
+      "staleStatus": "Bu taslak başka biri tarafından zaten güncellendi — liste yenileniyor.",
+      "fourEyes": "Kendi taslağınızı onaylayamaz veya reddedemezsiniz — farklı bir inceleyici işlem yapmalı.",
+      "reasonRequired": "Bir neden belirtilmesi gerekiyor.",
+      "generic": "Bir şeyler ters gitti."
+    }
+  },
+  "audit": {
+    "tabLabel": "Denetim",
+    "loading": "Yükleniyor...",
+    "empty": "Eşleşen denetim kaydı yok.",
+    "close": "✕ Kapat",
+    "filters": {
+      "table": "Tablo",
+      "action": "İşlem",
+      "userId": "Kullanıcı ID",
+      "from": "Başlangıç",
+      "to": "Bitiş",
+      "all": "Tümü"
+    },
+    "export": {
+      "csv": "CSV Dışa Aktar",
+      "json": "JSON Dışa Aktar",
+      "capped": "Dışa aktarım 5.000 satırla sınırlandı — daha fazla eşleşen kayıt olabilir."
+    },
+    "integrity": {
+      "verify": "Bütünlüğü Doğrula",
+      "checking": "Kontrol ediliyor...",
+      "intact": "Denetim zinciri bozulmamış.",
+      "broken": "Bütünlük kontrolü #{seq} numaralı kayıtta başarısız oldu."
+    },
+    "columns": {
+      "action": "İşlem",
+      "table": "Tablo",
+      "recordId": "Kayıt ID",
+      "changedBy": "Değiştiren",
+      "createdAt": "Tarih"
+    },
+    "history": {
+      "view": "Geçmiş",
+      "title": "{table} / {id} için geçmiş"
+    }
+  },
+  "impact": {
+    "loading": "Yükleniyor...",
+    "exposure": {
+      "tabLabel": "Etkilenme Verisi",
+      "uploadTitle": "Etkilenme Veri Seti Yükle",
+      "name": "Ad",
+      "description": "Açıklama",
+      "metricProperty": "Metrik Alanı",
+      "metricPropertyPlaceholder": "örn. nüfus",
+      "file": "GeoJSON Dosyası",
+      "upload": "Yükle",
+      "uploading": "Yükleniyor...",
+      "listTitle": "Etkilenme Veri Setleri",
+      "empty": "Henüz etkilenme veri seti yok.",
+      "features": "öğe",
+      "delete": "Sil"
+    },
+    "panel": {
+      "selectPrompt": "Etki analizine başlamak için haritada bir tehlike olayı seçin.",
+      "step1": "Adım 1",
+      "datasetLabel": "Etkilenme veri seti",
+      "radiusOverride": "Yarıçap geçersiz kılma (km)",
+      "defaultRadius": "varsayılan: {km} km",
+      "runAnalysis": "Analizi Çalıştır",
+      "analyzing": "Analiz ediliyor...",
+      "error": "Analiz tamamlanamadı.",
+      "noOverlap": "Bu alanla kesişen etkilenme verisi yok.",
+      "featuresCount": "{count} öğe",
+      "exportCsv": "CSV",
+      "exportJson": "JSON",
+      "exportGeoJson": "GeoJSON",
+      "scenarioNamePlaceholder": "Senaryo adı...",
+      "saveScenario": "Senaryoyu Kaydet",
+      "savedScenarios": "Kaydedilmiş Senaryolar",
+      "dataUnavailable": "referans veri artık mevcut değil"
+    },
+    "geocoding": {
+      "placeholder": "Bir yer veya adres arayın...",
+      "search": "Ara",
+      "searching": "Aranıyor...",
+      "noResults": "Sonuç bulunamadı.",
+      "error": "Konum arama başarısız oldu."
+    },
+    "errors": {
+      "uploadFailed": "Yükleme başarısız oldu."
+    }
   }
 }

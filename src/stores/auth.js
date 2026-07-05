@@ -16,7 +16,7 @@ export const useAuthStore = defineStore('auth', () => {
   async function loadProfile(user) {
     const { data: profile } = await supabase
       .from('profiles')
-      .select('role, country_code, region_code')
+      .select('role, country_code, region_code, org_id')
       .eq('id', user.id)
       .maybeSingle();
 
@@ -26,6 +26,7 @@ export const useAuthStore = defineStore('auth', () => {
       role: profile?.role ?? 'viewer',
       countryCode: profile?.country_code ?? null,
       regionCode: profile?.region_code ?? null,
+      orgId: profile?.org_id ?? null,
     };
   }
 

@@ -38,15 +38,42 @@ Data Ingestion & Monitoring    24/66    %64         Orta       OGC WMS/WFS adapt
                                                                (T006 tamamlandı) — GDACS artık
                                                                canlı sistemde aktif.
 
-Impact Analysis (Map Viz)      45/53    %15         Orta–Zor   Frontend: split-view,
-                                                               geocoding search, 24h
-                                                               popup grafik → Kolay
-                                                               PostGIS: exposure,
-                                                               zonal stats → Zor
+Impact Analysis (Map Viz)      16/53    ~%70        Orta–Zor   Tamamlandı (2026-07-06,
+                                                               spec 008, tam kapsam):
+                                                               PostGIS extension, GeoJSON
+                                                               exposure dataset yükleme,
+                                                               2 adımlı etki analizi
+                                                               (zonal istatistik, afet
+                                                               tipine özel varsayılan
+                                                               yarıçap), senaryo kaydet/
+                                                               yükle, split-view harita +
+                                                               panel, geocoding arama,
+                                                               24s trend sparkline (kütüphane
+                                                               eklenmeden), CSV/JSON/GeoJSON
+                                                               export. Kalan: Shapefile
+                                                               yükleme, ağırlıklı zafiyet
+                                                               endeksleri (Risk & Scenario
+                                                               Modeling modülüne ait).
+                                                               Migration + Edge Function
+                                                               deploy canlıya uygulanması
+                                                               kullanıcı onayı bekliyor.
 
-Alert Authoring / CAP          66/67    %1          Orta       Supabase cap_drafts
-                                                               tablosu + state machine
-                                                               + Vue form UI
+Alert Authoring / CAP          39/67    ~%40        Orta       Tamamlandı (2026-07-06,
+                                                               spec 006): cap_drafts +
+                                                               CapView.vue zaten mevcuttu
+                                                               (tahminden çok ileri) — bu
+                                                               spec four-eyes onay kuralı,
+                                                               tespit edilen olaydan taslak
+                                                               oluşturma, broadcast sonrası
+                                                               içerik kilidi, ret/iptal için
+                                                               zorunlu gerekçe, viewer
+                                                               görünürlüğü daraltma, tam
+                                                               i18n (7 dil) ekledi. Kalan:
+                                                               CAP zarfı alanları (identifier/
+                                                               sender/msgType/scope), CAP
+                                                               XML/JSON export fonksiyonu.
+                                                               Migration canlıya uygulanması
+                                                               kullanıcı onayı bekliyor.
 
 Dissemination                  65/65    %0          Orta       Supabase Edge Function
                                                                + email (Resend/SES)
@@ -90,9 +117,20 @@ Hazard Taxonomy Admin          21/21    %0          Orta       Admin UI + Supaba
                                                                config tabloları
                                                                (hazard types, scales)
 
-Audit & Compliance             59/59    %0          Orta–Zor   audit_log tablosu +
-                                                               Postgres trigger +
-                                                               crypto checksum
+Audit & Compliance             44/59    ~%25        Orta–Zor   Tamamlandı (2026-07-06,
+                                                               spec 007): audit_log zaten
+                                                               vardı ama görünür arayüzü
+                                                               yoktu — super_admin'e özel
+                                                               Denetim sekmesi (AdminView.vue),
+                                                               filtre + sayfalama, CSV/JSON
+                                                               export (5.000 satır sınırlı),
+                                                               SHA-256 hash-zinciri bütünlük
+                                                               doğrulaması, tek-kayıt geçmişi
+                                                               eklendi. Kalan: PDF kanıt
+                                                               paketleri + MinIO/S3 (bilinçli
+                                                               kapsam dışı), zamanlanmış
+                                                               raporlar, AI/LLM denetim
+                                                               alanları.
 
 Integration & API Gateway       1/3     %67         Kolay      Admin UI for API
                                                                endpoint config
@@ -109,4 +147,4 @@ Preparedness, Drill & Response  3/3     %0          Orta       DrillMode flag +
                                                                CAP Exercise status +
                                                                otomatik rapor
 ─────────────────────────────────────────────────────────────────────────────────
-TOPLAM                        380/446   %15
+TOPLAM                        301/446   ~%33

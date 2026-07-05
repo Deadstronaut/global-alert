@@ -136,5 +136,162 @@
     "backToCode": "返回验证码",
     "invalidCode": "代码无效",
     "invalidRecoveryCode": "恢复代码无效"
+  },
+  "cap": {
+    "title": "CAP 警报系统",
+    "subtitle": "Common Alerting Protocol",
+    "backToMap": "← 地图",
+    "newAlert": "+ 新建警报",
+    "close": "✕ 关闭",
+    "loading": "加载中...",
+    "empty": "暂无警报草稿。",
+    "pickEvent": {
+      "heading": "根据检测到的事件创建",
+      "useEvent": "根据此事件创建警报",
+      "orBlank": "或从空白草稿开始"
+    },
+    "form": {
+      "title": "新建 CAP 草稿",
+      "hazardType": "灾害类型",
+      "severity": "严重程度",
+      "certainty": "确定性",
+      "urgency": "紧急程度",
+      "titleLabel": "标题 *",
+      "titlePlaceholder": "警报标题...",
+      "description": "描述",
+      "descriptionPlaceholder": "情况描述...",
+      "instructions": "防护指示",
+      "instructionsPlaceholder": "公众应采取的行动...",
+      "area": "受影响区域",
+      "areaPlaceholder": "伊斯坦布尔，卡德柯伊...",
+      "lang": "语言",
+      "effectiveAt": "生效时间",
+      "expiresAt": "失效时间",
+      "submit": "保存草稿",
+      "submitting": "保存中..."
+    },
+    "status": {
+      "draft": "草稿",
+      "pending_approval": "待审批",
+      "approved": "已批准",
+      "broadcast": "已发布",
+      "rejected": "已拒绝",
+      "cancelled": "已取消",
+      "expired": "已过期",
+      "false_alarm": "误报",
+      "all_clear": "警报解除"
+    },
+    "actions": {
+      "submitForApproval": "提交审批",
+      "approve": "批准",
+      "reject": "拒绝",
+      "broadcast": "发布",
+      "cancel": "取消",
+      "revise": "修改并重新提交"
+    },
+    "reasonPrompt": {
+      "rejectTitle": "拒绝原因",
+      "cancelTitle": "取消原因",
+      "placeholder": "请说明原因...",
+      "confirm": "确认",
+      "cancelButton": "返回"
+    },
+    "history": {
+      "activeTab": "进行中",
+      "historyTab": "历史记录",
+      "rejectionReason": "拒绝原因",
+      "cancellationReason": "取消原因"
+    },
+    "readOnly": "该警报已发布，内容已被锁定。",
+    "errors": {
+      "incompleteDraft": "缺少必填字段：{fields}",
+      "staleStatus": "此草稿已被他人更新——正在刷新列表。",
+      "fourEyes": "您不能批准或拒绝自己的草稿——必须由另一位审核人处理。",
+      "reasonRequired": "需要填写原因。",
+      "generic": "出了点问题。"
+    }
+  },
+  "audit": {
+    "tabLabel": "审计",
+    "loading": "加载中...",
+    "empty": "没有匹配的审计记录。",
+    "close": "✕ 关闭",
+    "filters": {
+      "table": "表",
+      "action": "操作",
+      "userId": "用户 ID",
+      "from": "从",
+      "to": "到",
+      "all": "全部"
+    },
+    "export": {
+      "csv": "导出 CSV",
+      "json": "导出 JSON",
+      "capped": "导出已限制为 5000 行——可能还有更多匹配记录。"
+    },
+    "integrity": {
+      "verify": "验证完整性",
+      "checking": "检查中...",
+      "intact": "审计链完整无损。",
+      "broken": "完整性检查在第 #{seq} 条记录处失败。"
+    },
+    "columns": {
+      "action": "操作",
+      "table": "表",
+      "recordId": "记录 ID",
+      "changedBy": "修改者",
+      "createdAt": "日期"
+    },
+    "history": {
+      "view": "历史记录",
+      "title": "{table} / {id} 的历史记录"
+    }
+  },
+  "impact": {
+    "loading": "加载中...",
+    "exposure": {
+      "tabLabel": "暴露数据",
+      "uploadTitle": "上传暴露数据集",
+      "name": "名称",
+      "description": "描述",
+      "metricProperty": "数值属性",
+      "metricPropertyPlaceholder": "例如：人口",
+      "file": "GeoJSON 文件",
+      "upload": "上传",
+      "uploading": "上传中...",
+      "listTitle": "暴露数据集",
+      "empty": "暂无暴露数据集。",
+      "features": "个要素",
+      "delete": "删除"
+    },
+    "panel": {
+      "selectPrompt": "在地图上选择一个灾害事件以开始影响分析。",
+      "step1": "第 1 步",
+      "datasetLabel": "暴露数据集",
+      "radiusOverride": "覆盖半径（公里）",
+      "defaultRadius": "默认：{km} 公里",
+      "runAnalysis": "运行分析",
+      "analyzing": "分析中...",
+      "error": "分析未能完成。",
+      "noOverlap": "该区域没有相交的暴露数据。",
+      "featuresCount": "{count} 个要素",
+      "exportCsv": "CSV",
+      "exportJson": "JSON",
+      "exportGeoJson": "GeoJSON",
+      "scenarioNamePlaceholder": "情景名称...",
+      "saveScenario": "保存情景",
+      "savedScenarios": "已保存的情景",
+      "dataUnavailable": "引用的数据已不可用"
+    },
+    "geocoding": {
+      "placeholder": "搜索地点或地址...",
+      "search": "搜索",
+      "searching": "搜索中...",
+      "noResults": "未找到结果。",
+      "error": "地理编码搜索失败。"
+    },
+    "errors": {
+      "uploadFailed": "上传失败。"
+    }
   }
 }

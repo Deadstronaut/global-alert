@@ -130,6 +130,11 @@ const rangeStartDate = ref(today)
 const rangeEndDate = ref('')
 const calendarPickValue = ref(today)
 
+async function handleLogout() {
+  await authStore.logout()
+  router.push('/')
+}
+
 function handleLocate() {
   geoStore.requestLocation().then(() => {
     if (geoStore.hasLocation) {
@@ -905,6 +910,18 @@ watch([rangeStartDate, rangeEndDate], ([start, end]) => {
         {{ disasterStore.sourcesOnline }}/10 {{ t('stats.sourcesOnline') }}
       </span>
     </div>
+
+    <!-- Logout -->
+    <button
+      v-if="authStore.isLoggedIn"
+      class="btn sidebar-logout-btn"
+      :class="{ 'sidebar-logout-btn-collapsed': isCollapsed }"
+      @click="handleLogout"
+      :title="t('settings.logout')"
+    >
+      <span>⎋</span>
+      <span v-if="!isCollapsed">{{ t('settings.logout') }}</span>
+    </button>
   </aside>
 </template>
 
@@ -1009,6 +1026,7 @@ watch([rangeStartDate, rangeEndDate], ([start, end]) => {
 
 .brand-icon {
   font-size: 1.5rem;
+  flex-shrink: 0;
 }
 
 .brand-title {
@@ -1027,11 +1045,39 @@ watch([rangeStartDate, rangeEndDate], ([start, end]) => {
 }
 
 .sidebar-toggle {
-  font-size: 0.8rem;
-  opacity: 0.6;
+  flex-shrink: 0;
+  width: 30px;
+  height: 30px;
+  min-width: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.95rem;
+  font-weight: 700;
+  opacity: 0.85;
 }
 
 .sidebar-toggle:hover {
+  opacity: 1;
+}
+
+.sidebar-collapsed .sidebar-header {
+  flex-direction: column;
+  justify-content: center;
+  gap: var(--space-sm);
+  padding-bottom: var(--space-sm);
+}
+
+.sidebar-collapsed .sidebar-brand {
+  justify-content: center;
+}
+
+.sidebar-collapsed .sidebar-toggle {
+  align-self: center;
+  border-color: var(--color-accent, #4aa3ff);
+  color: var(--color-accent, #4aa3ff);
+  background: rgba(77, 163, 255, 0.12);
+  box-shadow: 0 0 10px rgba(77, 163, 255, 0.25);
   opacity: 1;
 }
 
@@ -2033,6 +2079,37 @@ html[data-theme='light'] .mode-btn.active {
 
 html[data-theme='light'] .footer-sources {
   color: #2f4f8f;
+}
+
+.sidebar-logout-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  margin-top: var(--space-sm);
+  padding: 10px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #ef4444;
+  background: rgba(239, 68, 68, 0.08);
+  border: 1px solid rgba(239, 68, 68, 0.35);
+  border-radius: var(--radius-sm, 8px);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+}
+
+.sidebar-logout-btn:hover {
+  background: rgba(239, 68, 68, 0.18);
+  border-color: rgba(239, 68, 68, 0.6);
+}
+
+.sidebar-logout-btn-collapsed {
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  margin: var(--space-sm) auto 0;
 }
 
 /* Mobile */

@@ -136,5 +136,162 @@
     "backToCode": "Back to authenticator code",
     "invalidCode": "Invalid code",
     "invalidRecoveryCode": "Invalid recovery code"
+  },
+  "cap": {
+    "title": "CAP Alert System",
+    "subtitle": "Common Alerting Protocol",
+    "backToMap": "← Map",
+    "newAlert": "+ New Alert",
+    "close": "✕ Close",
+    "loading": "Loading...",
+    "empty": "No alert drafts yet.",
+    "pickEvent": {
+      "heading": "Create from a detected event",
+      "useEvent": "Create alert from this event",
+      "orBlank": "Or start a blank draft"
+    },
+    "form": {
+      "title": "New CAP Draft",
+      "hazardType": "Hazard Type",
+      "severity": "Severity",
+      "certainty": "Certainty",
+      "urgency": "Urgency",
+      "titleLabel": "Title *",
+      "titlePlaceholder": "Alert title...",
+      "description": "Description",
+      "descriptionPlaceholder": "Situation description...",
+      "instructions": "Protective Instructions",
+      "instructionsPlaceholder": "What the public should do...",
+      "area": "Affected Area",
+      "areaPlaceholder": "Istanbul, Kadikoy...",
+      "lang": "Language",
+      "effectiveAt": "Effective From",
+      "expiresAt": "Expires At",
+      "submit": "Save Draft",
+      "submitting": "Saving..."
+    },
+    "status": {
+      "draft": "Draft",
+      "pending_approval": "Pending Approval",
+      "approved": "Approved",
+      "broadcast": "Broadcast",
+      "rejected": "Rejected",
+      "cancelled": "Cancelled",
+      "expired": "Expired",
+      "false_alarm": "False Alarm",
+      "all_clear": "All Clear"
+    },
+    "actions": {
+      "submitForApproval": "Submit for Approval",
+      "approve": "Approve",
+      "reject": "Reject",
+      "broadcast": "Broadcast",
+      "cancel": "Cancel",
+      "revise": "Revise & Resubmit"
+    },
+    "reasonPrompt": {
+      "rejectTitle": "Reason for rejection",
+      "cancelTitle": "Reason for cancellation",
+      "placeholder": "Explain why...",
+      "confirm": "Confirm",
+      "cancelButton": "Back"
+    },
+    "history": {
+      "activeTab": "Active",
+      "historyTab": "History",
+      "rejectionReason": "Rejection reason",
+      "cancellationReason": "Cancellation reason"
+    },
+    "readOnly": "This alert has been broadcast and its content is now locked.",
+    "errors": {
+      "incompleteDraft": "Required fields are missing: {fields}",
+      "staleStatus": "This draft was already updated by someone else — refreshing the list.",
+      "fourEyes": "You cannot approve or reject your own draft — a different reviewer must act on it.",
+      "reasonRequired": "A reason is required.",
+      "generic": "Something went wrong."
+    }
+  },
+  "audit": {
+    "tabLabel": "Audit",
+    "loading": "Loading...",
+    "empty": "No matching audit entries.",
+    "close": "✕ Close",
+    "filters": {
+      "table": "Table",
+      "action": "Action",
+      "userId": "User ID",
+      "from": "From",
+      "to": "To",
+      "all": "All"
+    },
+    "export": {
+      "csv": "Export CSV",
+      "json": "Export JSON",
+      "capped": "Export was capped at 5,000 rows — more matching entries may exist."
+    },
+    "integrity": {
+      "verify": "Verify Integrity",
+      "checking": "Checking...",
+      "intact": "Audit chain is intact.",
+      "broken": "Integrity check failed at entry #{seq}."
+    },
+    "columns": {
+      "action": "Action",
+      "table": "Table",
+      "recordId": "Record ID",
+      "changedBy": "Changed By",
+      "createdAt": "Date"
+    },
+    "history": {
+      "view": "History",
+      "title": "History for {table} / {id}"
+    }
+  },
+  "impact": {
+    "loading": "Loading...",
+    "exposure": {
+      "tabLabel": "Exposure Data",
+      "uploadTitle": "Upload Exposure Dataset",
+      "name": "Name",
+      "description": "Description",
+      "metricProperty": "Metric Property",
+      "metricPropertyPlaceholder": "e.g. population",
+      "file": "GeoJSON File",
+      "upload": "Upload",
+      "uploading": "Uploading...",
+      "listTitle": "Exposure Datasets",
+      "empty": "No exposure datasets yet.",
+      "features": "features",
+      "delete": "Delete"
+    },
+    "panel": {
+      "selectPrompt": "Select a hazard event on the map to begin impact analysis.",
+      "step1": "Step 1",
+      "datasetLabel": "Exposure dataset",
+      "radiusOverride": "Radius override (km)",
+      "defaultRadius": "default: {km} km",
+      "runAnalysis": "Run Analysis",
+      "analyzing": "Analyzing...",
+      "error": "The analysis could not be completed.",
+      "noOverlap": "No exposure data intersects this area.",
+      "featuresCount": "{count} features",
+      "exportCsv": "CSV",
+      "exportJson": "JSON",
+      "exportGeoJson": "GeoJSON",
+      "scenarioNamePlaceholder": "Scenario name...",
+      "saveScenario": "Save Scenario",
+      "savedScenarios": "Saved Scenarios",
+      "dataUnavailable": "referenced data no longer available"
+    },
+    "geocoding": {
+      "placeholder": "Search a place or address...",
+      "search": "Search",
+      "searching": "Searching...",
+      "noResults": "No results found.",
+      "error": "Geocoding search failed."
+    },
+    "errors": {
+      "uploadFailed": "Upload failed."
+    }
   }
 }

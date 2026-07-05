@@ -1,6 +1,7 @@
 <script setup>
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 import { useAuthStore } from '@/stores/auth.js'
 import { useSourcesStore } from '@/stores/sources.js'
 import { supabase } from '@/services/api/config.js'
@@ -11,11 +12,14 @@ import FileImportForm from '@/components/admin/FileImportForm.vue'
 import BoundaryUploadForm from '@/components/admin/BoundaryUploadForm.vue'
 import { getRegionNames } from '@/data/boundaries/index.js'
 import { groupSourcesByScope } from '@/utils/sourceScope.js'
+import { rowsToCsv, rowsToJson, triggerDownload } from '@/lib/auditExport.js'
+import ExposureDatasetManager from '@/components/impact/ExposureDatasetManager.vue'
 
 const router = useRouter()
+const { t } = useI18n()
 
 const auth = useAuthStore()
-const tab = ref('users') // 'users' | 'orgs' | 'drill' | 'sources' | 'manual' | 'csv' | 'boundaries'
+const tab = ref('users') // 'users' | 'orgs' | 'drill' | 'sources' | 'manual' | 'csv' | 'boundaries' | 'audit'
 
 // ── Users ──────────────────────────────────────────────────────────────────────
 const users = ref([])
@@ -336,6 +340,98 @@ function closeAudit() {
   auditData.value = null
 }
 
+// ── Audit & Compliance (spec 007) ───────────────────────────────────────────
+const AUDIT_PAGE_SIZE = 25
+const AUDIT_EXPORT_CAP = 5000
+const auditRows = ref([])
+const auditTotalCount = ref(0)
+const auditPage = ref(0)
+const auditLogLoading = ref(false)
+const auditFilters = ref({ tableName: '', userId: '', action: '', from: '', to: '' })
+const auditExportCapped = ref(false)
+const integrityChecking = ref(false)
+const integrityResult = ref(null) // null | 'intact' | { seq }
+const historyRows = ref(null)
+const historyTarget = ref(null)
+
+function buildAuditQuery(query) {
+  const f = auditFilters.value
+  if (f.tableName) query = query.eq('table_name', f.tableName)
+  if (f.userId) query = query.eq('changed_by', f.userId)
+  if (f.action) query = query.eq('action', f.action)
+  if (f.from) query = query.gte('created_at', f.from)
+  if (f.to) query = query.lte('created_at', f.to)
+  return query
+}
+
+async function loadAuditLog() {
+  auditLogLoading.value = true
+  const offset = auditPage.value * AUDIT_PAGE_SIZE
+  let query = supabase.from('audit_log').select('*', { count: 'exact' })
+  query = buildAuditQuery(query)
+  const { data, count, error } = await query
+    .order('seq', { ascending: false })
+    .range(offset, offset + AUDIT_PAGE_SIZE - 1)
+  if (!error) {
+    auditRows.value = data || []
+    auditTotalCount.value = count || 0
+  }
+  auditLogLoading.value = false
+}
+
+function resetAuditPage() {
+  auditPage.value = 0
+  loadAuditLog()
+}
+
+async function exportAudit(format) {
+  let query = supabase.from('audit_log').select('*')
+  query = buildAuditQuery(query)
+  const { data, error } = await query
+    .order('seq', { ascending: false })
+    .limit(AUDIT_EXPORT_CAP)
+  if (error || !data) return
+  auditExportCapped.value = data.length === AUDIT_EXPORT_CAP
+  const stamp = Date.now()
+  if (format === 'csv') {
+    triggerDownload(rowsToCsv(data), `audit-export-${stamp}.csv`, 'text/csv')
+  } else {
+    triggerDownload(rowsToJson(data), `audit-export-${stamp}.json`, 'application/json')
+  }
+}
+
+async function verifyIntegrity() {
+  integrityChecking.value = true
+  integrityResult.value = null
+  const { data, error } = await supabase.rpc('verify_audit_chain')
+  if (error) {
+    integrityResult.value = { error: error.message }
+  } else if (data === null || data === undefined) {
+    integrityResult.value = 'intact'
+  } else {
+    integrityResult.value = { seq: data }
+  }
+  integrityChecking.value = false
+}
+
+async function viewRecordHistory(row) {
+  historyTarget.value = row
+  const { data } = await supabase
+    .from('audit_log')
+    .select('*')
+    .eq('table_name', row.table_name)
+    .eq('record_id', row.record_id)
+    .order('seq', { ascending: true })
+  historyRows.value = data || []
+}
+
+function closeHistory() {
+  historyTarget.value = null
+  historyRows.value = null
+}
+
+const auditTotalPages = computed(() => Math.max(1, Math.ceil(auditTotalCount.value / AUDIT_PAGE_SIZE)))
+
 onMounted(() => {
   loadUsers()
   loadOrgs()
@@ -398,6 +494,20 @@ onUnmounted(() => {
         @click="tab = 'boundaries'"
       >
         🗺️ Sınır Verisi
+      </button>
+      <button
+        v-if="auth.isSuperAdmin"
+        :class="['tab', { active: tab === 'audit' }]"
+        @click="tab = 'audit'; loadAuditLog()"
+      >
+        🛡️ {{ t('audit.tabLabel') }}
+      </button>
+      <button
+        v-if="canAdmin"
+        :class="['tab', { active: tab === 'exposure' }]"
+        @click="tab = 'exposure'"
+      >
+        📊 {{ t('impact.exposure.tabLabel') }}
       </button>
     </div>
 
@@ -783,6 +893,107 @@ onUnmounted(() => {
     <!-- ── Boundary Upload tab ───────────────────────────────────────────── -->
     <div v-if="tab === 'boundaries'" class="tab-content">
       <BoundaryUploadForm />
+    </div>
+
+    <!-- ── Audit & Compliance tab (spec 007, super_admin only) ─────────────── -->
+    <div v-if="tab === 'audit' && auth.isSuperAdmin" class="tab-content audit-tab">
+      <div class="audit-filters">
+        <label class="audit-field">
+          <span>{{ t('audit.filters.table') }}</span>
+          <select v-model="auditFilters.tableName" @change="resetAuditPage">
+            <option value="">{{ t('audit.filters.all') }}</option>
+            <option value="profiles">profiles</option>
+            <option value="organizations">organizations</option>
+            <option value="cap_drafts">cap_drafts</option>
+            <option value="mfa_recovery_codes">mfa_recovery_codes</option>
+          </select>
+        </label>
+        <label class="audit-field">
+          <span>{{ t('audit.filters.action') }}</span>
+          <select v-model="auditFilters.action" @change="resetAuditPage">
+            <option value="">{{ t('audit.filters.all') }}</option>
+            <option value="INSERT">INSERT</option>
+            <option value="UPDATE">UPDATE</option>
+            <option value="DELETE">DELETE</option>
+          </select>
+        </label>
+        <label class="audit-field">
+          <span>{{ t('audit.filters.userId') }}</span>
+          <input v-model="auditFilters.userId" @change="resetAuditPage" placeholder="UUID" />
+        </label>
+        <label class="audit-field">
+          <span>{{ t('audit.filters.from') }}</span>
+          <input type="date" v-model="auditFilters.from" @change="resetAuditPage" />
+        </label>
+        <label class="audit-field">
+          <span>{{ t('audit.filters.to') }}</span>
+          <input type="date" v-model="auditFilters.to" @change="resetAuditPage" />
+        </label>
+      </div>
+
+      <div class="audit-actions">
+        <button class="btn-export" @click="exportAudit('csv')">{{ t('audit.export.csv') }}</button>
+        <button class="btn-export" @click="exportAudit('json')">{{ t('audit.export.json') }}</button>
+        <button class="btn-verify" :disabled="integrityChecking" @click="verifyIntegrity">
+          {{ integrityChecking ? t('audit.integrity.checking') : t('audit.integrity.verify') }}
+        </button>
+      </div>
+      <p v-if="auditExportCapped" class="audit-notice">{{ t('audit.export.capped') }}</p>
+      <p v-if="integrityResult === 'intact'" class="audit-notice audit-notice-ok">{{ t('audit.integrity.intact') }}</p>
+      <p v-if="integrityResult && integrityResult.seq !== undefined" class="audit-notice audit-notice-error">
+        {{ t('audit.integrity.broken', { seq: integrityResult.seq }) }}
+      </p>
+      <p v-if="integrityResult && integrityResult.error" class="audit-notice audit-notice-error">{{ integrityResult.error }}</p>
+
+      <div v-if="auditLogLoading" class="tab-loading">{{ t('audit.loading') }}</div>
+      <div v-else-if="auditRows.length === 0" class="tab-empty">{{ t('audit.empty') }}</div>
+      <table v-else class="audit-table">
+        <thead>
+          <tr>
+            <th>{{ t('audit.columns.action') }}</th>
+            <th>{{ t('audit.columns.table') }}</th>
+            <th>{{ t('audit.columns.recordId') }}</th>
+            <th>{{ t('audit.columns.changedBy') }}</th>
+            <th>{{ t('audit.columns.createdAt') }}</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="row in auditRows" :key="row.id">
+            <td>{{ row.action }}</td>
+            <td>{{ row.table_name }}</td>
+            <td class="audit-mono">{{ row.record_id }}</td>
+            <td class="audit-mono">{{ row.changed_by }}</td>
+            <td>{{ formatDate(row.created_at) }}</td>
+            <td><button class="btn-history" @click="viewRecordHistory(row)">{{ t('audit.history.view') }}</button></td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div v-if="auditRows.length" class="audit-pagination">
+        <button :disabled="auditPage === 0" @click="auditPage--; loadAuditLog()">←</button>
+        <span>{{ auditPage + 1 }} / {{ auditTotalPages }}</span>
+        <button :disabled="auditPage + 1 >= auditTotalPages" @click="auditPage++; loadAuditLog()">→</button>
+      </div>
+
+      <!-- Single-record history panel -->
+      <div v-if="historyTarget" class="history-modal-backdrop" @click.self="closeHistory">
+        <div class="history-modal">
+          <h4>{{ t('audit.history.title', { table: historyTarget.table_name, id: historyTarget.record_id }) }}</h4>
+          <div v-if="historyRows === null" class="tab-loading">{{ t('audit.loading') }}</div>
+          <ul v-else class="history-list">
+            <li v-for="h in historyRows" :key="h.id">
+              <strong>{{ h.action }}</strong> — {{ formatDate(h.created_at) }} ({{ h.changed_by }})
+            </li>
+          </ul>
+          <button class="btn-back" @click="closeHistory">{{ t('audit.close') }}</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Exposure Datasets tab (spec 008) ─────────────────────────────────── -->
+    <div v-if="tab === 'exposure' && canAdmin" class="tab-content">
+      <ExposureDatasetManager />
     </div>
   </div>
 </template>
@@ -1261,4 +1472,38 @@ onUnmounted(() => {
   font-size: 0.82rem;
   flex-wrap: wrap;
 }
+
+/* ── Audit & Compliance tab (spec 007) ─────────────────────────────────── */
+.audit-filters { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 16px; }
+.audit-field { display: flex; flex-direction: column; gap: 4px; font-size: .78rem; color: var(--color-text-muted, #94a3b8); }
+.audit-field input, .audit-field select {
+  background: #1e2330; border: 1px solid rgba(255,255,255,.15); border-radius: 8px;
+  padding: 6px 10px; color: #e2e8f0; font-size: .82rem;
+}
+.audit-actions { display: flex; gap: 10px; margin-bottom: 12px; flex-wrap: wrap; }
+.btn-export, .btn-verify, .btn-history {
+  padding: 6px 14px; background: rgba(77,163,255,.15); border: 1px solid rgba(77,163,255,.35);
+  border-radius: 8px; color: #4da3ff; font-size: .78rem; font-weight: 600; cursor: pointer;
+}
+.btn-export:hover, .btn-verify:hover, .btn-history:hover { background: rgba(77,163,255,.25); }
+.btn-verify:disabled { opacity: .5; cursor: not-allowed; }
+.audit-notice { font-size: .8rem; padding: 8px 12px; border-radius: 8px; margin-bottom: 10px; }
+.audit-notice-ok { background: rgba(34,197,94,.12); color: #22c55e; }
+.audit-notice-error { background: rgba(239,68,68,.12); color: #ef4444; }
+.audit-table { width: 100%; border-collapse: collapse; font-size: .82rem; }
+.audit-table th { text-align: left; padding: 8px; border-bottom: 1px solid rgba(255,255,255,.15); color: var(--color-text-muted, #94a3b8); }
+.audit-table td { padding: 8px; border-bottom: 1px solid rgba(255,255,255,.06); }
+.audit-mono { font-family: monospace; font-size: .75rem; }
+.audit-pagination { display: flex; align-items: center; gap: 12px; margin-top: 14px; font-size: .82rem; }
+.audit-pagination button { padding: 4px 12px; border-radius: 6px; border: 1px solid rgba(255,255,255,.15); background: transparent; color: #e2e8f0; cursor: pointer; }
+.audit-pagination button:disabled { opacity: .4; cursor: not-allowed; }
+.history-modal-backdrop {
+  position: fixed; inset: 0; background: rgba(0,0,0,.5);
+  display: flex; align-items: center; justify-content: center; z-index: 50;
+}
+.history-modal {
+  background: #1a1e29; border: 1px solid rgba(255,255,255,.15);
+  border-radius: 12px; padding: 20px; width: min(480px, 90vw); max-height: 70vh; overflow-y: auto;
+}
+.history-list { list-style: none; padding: 0; margin: 12px 0; display: flex; flex-direction: column; gap: 8px; font-size: .82rem; }
 </style>

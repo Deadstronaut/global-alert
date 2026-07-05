@@ -1,5 +1,11 @@
 <script setup>
 import { ref, watch, computed } from 'vue'
+import { useAuthStore } from '@/stores/auth.js'
+
+const auth = useAuthStore()
+// Feature 002-source-scoping: a country_admin may only create/edit sources scoped to
+// their own country (enforced by RLS regardless — this just keeps the form honest).
+const scopeLocked = computed(() => !auth.isSuperAdmin)
 
 const HAZARD_TYPES = ['earthquake', 'wildfire', 'flood', 'drought', 'food_security']
 // Only "id"/"lat"/"lng"/"time" are required by validatePayload(); the rest are optional extras.
@@ -33,6 +39,12 @@ function blankForm() {
     is_custom: false,
     response_path: '',
     field_map: {},
+    // country_admin can only ever save their own country's scope; super_admin defaults
+    // new sources to Global (null) and can change it. `scopeChoice` is UI-only state
+    // (not a data_sources column) driving which fields are shown; the final `country_code`
+    // sent to the store is derived from it in submit().
+    country_code: scopeLocked.value ? auth.countryCode : null,
+    scopeChoice: scopeLocked.value ? 'country' : 'global',
   }
 }
 
@@ -42,6 +54,8 @@ function fromSource(src) {
     is_custom: !!src.endpoint_config?.field_map,
     response_path: src.endpoint_config?.response_path ?? '',
     field_map: { ...(src.endpoint_config?.field_map ?? {}) },
+    country_code: scopeLocked.value ? auth.countryCode : (src.country_code ?? null),
+    scopeChoice: scopeLocked.value || src.country_code ? 'country' : 'global',
   }
 }
 
@@ -58,10 +72,25 @@ const requiredMappingFilled = computed(() =>
   !form.value.is_custom || ['id', 'lat', 'lng', 'time'].every((k) => form.value.field_map[k]?.trim())
 )
 
+const scopeFilled = computed(() =>
+  form.value.scopeChoice === 'global' || !!form.value.country_code?.trim()
+)
+
+// Translates a raw RLS-rejection error (e.g. a country_admin trying to save an
+// out-of-scope country_code, feature 002-source-scoping) into a readable message.
+const friendlyError = computed(() => {
+  if (!props.error) return null
+  if (/row-level security/i.test(props.error)) {
+    return 'Bu kapsamda (ülke) bir kaynak kaydetme yetkiniz yok — sadece kendi ülkenize ait kaynakları yönetebilirsiniz.'
+  }
+  return props.error
+})
+
 function submit() {
-  const { is_custom, response_path, field_map, ...rest } = form.value
+  const { is_custom, response_path, field_map, scopeChoice, ...rest } = form.value
   const payload = {
     ...rest,
+    country_code: scopeChoice === 'global' ? null : rest.country_code || null,
     endpoint_config: is_custom ? { response_path, field_map } : {},
   }
   emit('save', payload)
@@ -84,6 +113,22 @@ function submit() {
       </label>
       <label class="form-field span-2"><span>Endpoint URL *</span>
         <input v-model="form.endpoint_url" placeholder="https://..." />
+      </label>
+      <label class="form-field"><span>Kapsam (Scope)</span>
+        <input
+          v-if="scopeLocked"
+          :value="form.country_code || '—'"
+          disabled
+          title="Sadece kendi ülkenize ait kaynak kaydedebilirsiniz"
+        />
+        <select v-else v-model="form.scopeChoice">
+          <option value="global">🌍 Küresel (herkes görür)</option>
+          <option value="country">📍 Ülkeye özel</option>
+        </select>
+      </label>
+      <label v-if="!scopeLocked && form.scopeChoice === 'country'" class="form-field">
+        <span>Ülke Kodu *</span>
+        <input v-model="form.country_code" placeholder="tr, mg..." maxlength="2" />
       </label>
       <label class="form-field"><span>Staleness Eşiği (saniye, opsiyonel)</span>
         <input v-model.number="form.staleness_threshold_seconds" type="number" min="1" placeholder="varsayılan: 3x poll aralığı" />
@@ -114,10 +159,10 @@ function submit() {
     </div>
 
     <div class="form-actions">
-      <div v-if="error" class="form-error">{{ error }}</div>
+      <div v-if="friendlyError" class="form-error">{{ friendlyError }}</div>
       <button class="btn-cancel-form" @click="$emit('cancel')">İptal</button>
       <button class="btn-submit"
-        :disabled="saving || !form.name || !form.endpoint_url || !requiredMappingFilled"
+        :disabled="saving || !form.name || !form.endpoint_url || !requiredMappingFilled || !scopeFilled"
         @click="submit">
         {{ saving ? 'Kaydediliyor...' : '💾 Kaydet' }}
       </button>

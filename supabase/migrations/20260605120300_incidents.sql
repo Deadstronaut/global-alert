@@ -53,11 +53,13 @@ CREATE TRIGGER incidents_updated_at
 -- RLS
 ALTER TABLE incidents ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "super_admin_incidents_all" ON incidents;
 CREATE POLICY "super_admin_incidents_all" ON incidents
   FOR ALL USING (
     EXISTS (SELECT 1 FROM profiles p WHERE p.id = auth.uid() AND p.role = 'super_admin')
   );
 
+DROP POLICY IF EXISTS "country_admin_incidents_own" ON incidents;
 CREATE POLICY "country_admin_incidents_own" ON incidents
   FOR ALL USING (
     EXISTS (
@@ -68,6 +70,7 @@ CREATE POLICY "country_admin_incidents_own" ON incidents
     )
   );
 
+DROP POLICY IF EXISTS "viewer_incidents_read" ON incidents;
 CREATE POLICY "viewer_incidents_read" ON incidents
   FOR SELECT USING (
     EXISTS (

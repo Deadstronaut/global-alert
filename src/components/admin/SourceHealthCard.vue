@@ -4,6 +4,9 @@ import { computed } from 'vue'
 const props = defineProps({
   source: { type: Object, required: true },
   canManage: { type: Boolean, default: false },
+  // Feature 002-source-scoping: only relevant when the viewer (super_admin) can see
+  // local sources from more than one country and needs to tell them apart.
+  showCountryBadge: { type: Boolean, default: false },
 })
 
 defineEmits(['edit', 'toggle-active', 'delete', 'view-audit'])
@@ -38,7 +41,12 @@ function relativeTime(iso) {
       </span>
       <span class="source-hazard-type">{{ source.hazard_type }}</span>
     </div>
-    <div class="source-name">{{ source.name }}</div>
+    <div class="source-name">
+      {{ source.name }}
+      <span v-if="showCountryBadge && source.country_code" class="source-country-badge">
+        {{ source.country_code }}
+      </span>
+    </div>
     <div class="source-meta">
       <span>Son başarı: {{ relativeTime(source.last_success_at) }}</span>
       <span v-if="source.consecutive_failures > 0" class="source-failures">
@@ -84,6 +92,16 @@ function relativeTime(iso) {
   color: var(--color-text-muted, #94a3b8);
 }
 .source-name { font-size: 0.95rem; font-weight: 700; }
+.source-country-badge {
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: var(--color-text-muted, #94a3b8);
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 4px;
+  padding: 1px 6px;
+  margin-left: 4px;
+  vertical-align: middle;
+}
 .source-meta {
   display: flex;
   gap: 10px;

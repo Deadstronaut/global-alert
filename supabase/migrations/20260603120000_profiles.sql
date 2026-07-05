@@ -37,9 +37,11 @@ CREATE TRIGGER on_auth_user_created
 -- profiles okuma: herkes kendi profilini görsün
 ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "users_read_own_profile" ON profiles;
 CREATE POLICY "users_read_own_profile" ON profiles
   FOR SELECT USING (auth.uid() = id);
 
+DROP POLICY IF EXISTS "super_admin_read_all_profiles" ON profiles;
 CREATE POLICY "super_admin_read_all_profiles" ON profiles
   FOR SELECT USING (
     EXISTS (
@@ -48,6 +50,7 @@ CREATE POLICY "super_admin_read_all_profiles" ON profiles
     )
   );
 
+DROP POLICY IF EXISTS "super_admin_update_profiles" ON profiles;
 CREATE POLICY "super_admin_update_profiles" ON profiles
   FOR UPDATE USING (
     EXISTS (

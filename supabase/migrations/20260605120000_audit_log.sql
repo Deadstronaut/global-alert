@@ -23,10 +23,13 @@ CREATE TABLE IF NOT EXISTS audit_log (
 -- Append-only: UPDATE ve DELETE yasak
 ALTER TABLE audit_log ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "no_update_audit" ON audit_log;
 CREATE POLICY "no_update_audit" ON audit_log FOR UPDATE USING (false);
+DROP POLICY IF EXISTS "no_delete_audit" ON audit_log;
 CREATE POLICY "no_delete_audit" ON audit_log FOR DELETE USING (false);
 
 -- Super admin okuyabilir
+DROP POLICY IF EXISTS "super_admin_read_audit" ON audit_log;
 CREATE POLICY "super_admin_read_audit" ON audit_log
   FOR SELECT USING (
     EXISTS (

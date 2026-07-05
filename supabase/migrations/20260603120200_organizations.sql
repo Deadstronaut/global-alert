@@ -21,14 +21,24 @@ CREATE INDEX IF NOT EXISTS idx_org_country ON organizations (country_code);
 CREATE INDEX IF NOT EXISTS idx_org_parent  ON organizations (parent_org_id);
 
 -- profiles.org_id → organizations FK (profiles tablosu zaten oluşturulduysa)
-ALTER TABLE profiles
-  ADD CONSTRAINT fk_profiles_org
-  FOREIGN KEY (org_id) REFERENCES organizations(id) ON DELETE SET NULL;
+-- ADD CONSTRAINT has no IF NOT EXISTS in Postgres — guard via a DO block so this
+-- migration can be safely re-run (idempotency fix, 2026-07-06).
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conname = 'fk_profiles_org'
+  ) THEN
+    ALTER TABLE profiles
+      ADD CONSTRAINT fk_profiles_org
+      FOREIGN KEY (org_id) REFERENCES organizations(id) ON DELETE SET NULL;
+  END IF;
+END $$;
 
 -- organizations okuma politikası
 ALTER TABLE organizations ENABLE ROW LEVEL SECURITY;
 
 -- Super admin: tüm organizasyonları görebilir
+DROP POLICY IF EXISTS "super_admin_read_all_orgs" ON organizations;
 CREATE POLICY "super_admin_read_all_orgs" ON organizations
   FOR SELECT USING (
     EXISTS (
@@ -38,6 +48,7 @@ CREATE POLICY "super_admin_read_all_orgs" ON organizations
   );
 
 -- Country admin/org_admin: sadece kendi ülkesindeki organizasyonları görebilir
+DROP POLICY IF EXISTS "country_users_read_own_country_orgs" ON organizations;
 CREATE POLICY "country_users_read_own_country_orgs" ON organizations
   FOR SELECT USING (
     EXISTS (

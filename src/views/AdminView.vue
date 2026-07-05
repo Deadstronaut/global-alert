@@ -10,6 +10,7 @@ import ManualEntryForm from '@/components/admin/ManualEntryForm.vue'
 import FileImportForm from '@/components/admin/FileImportForm.vue'
 import BoundaryUploadForm from '@/components/admin/BoundaryUploadForm.vue'
 import { getRegionNames } from '@/data/boundaries/index.js'
+import { groupSourcesByScope } from '@/utils/sourceScope.js'
 
 const router = useRouter()
 
@@ -244,6 +245,17 @@ const auditError = ref(null)
 
 const FASTEST_POLL_MS = 60_000 // matches earthquake's 60s interval — fastest configured source
 let sourcesRefreshTimer = null
+
+// Feature 002-source-scoping: group already-RLS-filtered sources into global/local for display.
+const groupedSources = computed(() => groupSourcesByScope(sourcesStore.sources))
+
+// A country_admin may only manage (edit/toggle/delete) sources scoped to their own country —
+// enforced by RLS (20260706_data_sources_country_scope.sql), mirrored here so the UI doesn't
+// offer actions that would just be rejected by the database.
+function canManageSource(source) {
+  if (auth.isSuperAdmin) return true
+  return canAdmin.value && source.country_code === auth.countryCode
+}
 
 async function saveSource(payload) {
   savingSource.value = true
@@ -649,17 +661,42 @@ onUnmounted(() => {
       <div v-if="sourcesStore.loading && !sourcesStore.sources.length" class="tab-loading">
         Yükleniyor...
       </div>
-      <div v-else class="sources-grid">
-        <SourceHealthCard
-          v-for="source in sourcesStore.sources"
-          :key="source.id"
-          :source="source"
-          :can-manage="canAdmin"
-          @edit="editSource"
-          @toggle-active="toggleSourceActive"
-          @delete="deleteSourceConfirm"
-          @view-audit="viewAudit"
-        />
+      <div v-else>
+        <div class="sources-group-label">🌍 Küresel Kaynaklar</div>
+        <div class="sources-grid">
+          <SourceHealthCard
+            v-for="source in groupedSources.global"
+            :key="source.id"
+            :source="source"
+            :can-manage="canManageSource(source)"
+            @edit="editSource"
+            @toggle-active="toggleSourceActive"
+            @delete="deleteSourceConfirm"
+            @view-audit="viewAudit"
+          />
+          <div v-if="!groupedSources.global.length" class="tab-loading">
+            Küresel kaynak yok.
+          </div>
+        </div>
+
+        <template v-if="groupedSources.local.length">
+          <div class="sources-divider"></div>
+          <div class="sources-group-label">📍 Yerel Kaynaklar</div>
+          <div class="sources-grid">
+            <SourceHealthCard
+              v-for="source in groupedSources.local"
+              :key="source.id"
+              :source="source"
+              :can-manage="canManageSource(source)"
+              :show-country-badge="auth.isSuperAdmin"
+              @edit="editSource"
+              @toggle-active="toggleSourceActive"
+              @delete="deleteSourceConfirm"
+              @view-audit="viewAudit"
+            />
+          </div>
+        </template>
+
         <div v-if="!sourcesStore.sources.length" class="tab-loading">
           Henüz kayıtlı veri kaynağı yok.
         </div>
@@ -1135,6 +1172,19 @@ onUnmounted(() => {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
   gap: 12px;
+}
+.sources-group-label {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--color-text-muted, #94a3b8);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin: 14px 0 8px;
+}
+.sources-divider {
+  height: 1px;
+  background: var(--color-border, rgba(255, 255, 255, 0.12));
+  margin: 20px 0 4px;
 }
 .audit-panel {
   margin-top: 20px;

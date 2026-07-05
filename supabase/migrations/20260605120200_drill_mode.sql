@@ -38,11 +38,13 @@ CREATE TRIGGER drill_sessions_updated_at
 -- RLS
 ALTER TABLE drill_sessions ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "super_admin_drill_all" ON drill_sessions;
 CREATE POLICY "super_admin_drill_all" ON drill_sessions
   FOR ALL USING (
     EXISTS (SELECT 1 FROM profiles p WHERE p.id = auth.uid() AND p.role = 'super_admin')
   );
 
+DROP POLICY IF EXISTS "country_admin_drill_own" ON drill_sessions;
 CREATE POLICY "country_admin_drill_own" ON drill_sessions
   FOR ALL USING (
     EXISTS (

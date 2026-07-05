@@ -1,6 +1,6 @@
 # GEWS Proje Durumu (Özet)
 
-> Son güncelleme: 2026-07-05
+> Son güncelleme: 2026-07-06
 > Bu doküman "şu an ne durumdayız?" sorusuna hızlı cevap vermek için yazıldı. Detaylı teknik bilgi için [TECHNICAL.md](../TECHNICAL.md), genel tanıtım için [README.md](../README.md) dosyalarına bakın.
 
 ---
@@ -24,6 +24,7 @@
 | [docs/security_roles_protocol.md](security_roles_protocol.md) | Rol hiyerarşisi (Super Admin → Country Admin → Org Admin → Viewer), RLS planı |
 | [docs/iş planı istereler.txt](iş%20planı%20istereler.txt) | Modül bazlı iş listesi ve tamamlanma yüzdeleri (ana takip tablosu) |
 | [specs/001-data-ingestion-monitoring/](../specs/001-data-ingestion-monitoring/) | Spec-Kit ile yazılmış tam spec (spec/plan/tasks/data-model) — "Data Source Health" özelliği |
+| [specs/002-source-scoping/](../specs/002-source-scoping/) | Spec-Kit ile yazılmış tam spec — kaynakların (data_sources) küresel/ülkeye-özel olarak ayrılması (bkz. bölüm 4b) |
 | [docs/plans/2024-05-14-map-fixes.md](plans/2024-05-14-map-fixes.md) | Harita düzeltmeleri planı |
 
 Bu belge bunların **yerine geçmiyor**, sadece hepsine tek bir yerden özet ve yönlendirme sağlıyor.
@@ -36,7 +37,7 @@ Kaynak: `docs/iş planı istereler.txt` — proje genelinde takip edilen ana tab
 
 | Modül | Tamamlanma | Zorluk | Durum |
 |---|---|---|---|
-| Data Ingestion & Monitoring | **%64** | Orta | Spec 001 ile source health/state machine, admin dashboard, CRUD, payload validation tamamlandı. Kalan: OGC WMS/WFS adapter |
+| Data Ingestion & Monitoring | **%64** | Orta | Spec 001 (source health/state machine, admin dashboard, CRUD, payload validation) + spec 002 (kaynakların küresel/ülkeye-özel ayrımı, RLS) tamamlandı. Kalan: OGC WMS/WFS adapter |
 | Integration & API Gateway | %67 | Kolay | Neredeyse bitti |
 | Impact Analysis (Map Viz) | %15 | Orta-Zor | Split-view, geocoding, PostGIS exposure analizi eksik |
 | Administration & Access | %19 | Kolay | Auth aktif ediliyor (bkz. bölüm 4), user CRUD UI sürüyor |
@@ -70,6 +71,12 @@ Repo'da **çok sayıda commit'lenmemiş değişiklik** var. Başlıcaları:
 - Kod tarafı hazır: `supabase/functions/shared/{sourceHealth,validatePayload}.ts` + testleri, 5 `fetch-*` edge function'a entegre edilmiş, `src/stores/sources.js`, `SourceHealthCard.vue`, `SourceFormModal.vue`, AdminView'de "Sources" sekmesi.
 - **Önemli tutarsızlık:** `npx supabase migration list` bu migration'ları remote'ta **görmüyor** — local dosya tarihleri (20260703, 20260704, 20260705...) ile remote'ta kayıtlı migration ID'leri (20260221102710, 20260410020512, ...) hiç örtüşmüyor. Şema fiilen uygulanmış olmasına rağmen CLI'ın migration-tracking tablosu bunu bilmiyor — muhtemelen bu değişiklikler `supabase db push` yerine dashboard/SQL editor üzerinden elle uygulanmış. Detay için bkz. bölüm 5.
 
+### b2) Data Source Country Scoping (spec 002) — tamamlandı ve canlıya uygulandı (2026-07-06)
+- Sorun: proje Türkiye'ye özel kaynaklarla (Kandilli, AFAD) başladı; yeni bir ülkeye (örn. Madagaskar) verildiğinde o ülkenin admin'i bu Türkiye'ye özel kaynakları görmemeli.
+- Çözüm: `data_sources` tablosuna nullable `country_code` eklendi (`NULL` = küresel, herkes görür/yönetir; bir ülke kodu = sadece o ülkenin admin'leri görür/yönetir). RLS ile hem okuma hem yazma kısıtlandı; Sources sekmesi artık "Küresel Kaynaklar" / "Yerel Kaynaklar" olarak gruplu, yerel kaynak yoksa ayraç hiç görünmüyor.
+- Migration (`20260706_data_sources_country_scope.sql`) canlıya **Supabase Dashboard SQL Editor üzerinden elle** uygulandı (CLI'ın `db push`'u, aşağıdaki 5. bölümde açıklanan migration-geçmişi karmaşası yüzünden kullanılamadı). Canlıda `data_sources.country_code` kolonunun var olduğu REST ile doğrulandı.
+- `npm run test` (5/5), `eslint`, `npm run build` — hepsi temiz.
+
 ### c) Coğrafi/idari sınır (boundary) desteği — yeni
 - `src/data/boundaries/` (Türkiye il sınırları JSON + index), `src/utils/pointInPolygon.js`, `src/utils/geoCountry.js`, `server/src/processors/geoCountry.js`
 - Amaç: olayları ülke/il koduna göre etiketleyip RLS ile ülke-bazlı filtreleme yapmak (`country_code` kolonu, `20260704_country_scoped_disaster_reads.sql`, `20260705_country_boundaries.sql`).
@@ -88,7 +95,7 @@ Repo'da **çok sayıda commit'lenmemiş değişiklik** var. Başlıcaları:
 ## 5. Şu an "riskli" veya dikkat gerektiren noktalar
 
 1. **102 değişmiş/yeni dosya commit edilmemiş durumda.** Çok büyük bir çalışma alanı birikmiş — bir noktada mantıklı commit'lere bölünüp gönderilmesi gerekecek.
-2. **CLI migration geçmişi gerçek şemadan kopuk.** Migration dosyaları (20260703–20260705 arası) canlıya uygulanmış ama `supabase migration list` bunları remote'ta göstermiyor (local/remote timestamp'ler hiç eşleşmiyor). Bu, biri ileride `supabase db push` çalıştırdığında **"relation already exists" gibi hatalarla veya CLI'ın durumu yanlış özetlemesiyle** sonuçlanabilir. Önce `supabase migration repair` ile CLI geçmişini gerçek duruma göre senkronize etmek gerekiyor — aksi halde bir sonraki push riskli.
+2. ~~CLI migration geçmişi hâlâ kısmen kopuk~~ **ÇÖZÜLDÜ (2026-07-06).** Kök sebep tamamen düzeltildi: aynı tarihi paylaşan (dosya adı sadece `YYYYMMDD` içerdiği için) 18 migration dosyası `git mv` ile tam zaman damgalı (`YYYYMMDDHHMMSS`) benzersiz isimlere yeniden adlandırıldı — bu arada gerçek bağımlılık sırası da düzeltildi (`organizations.sql` `profiles` tablosunu `ALTER` ettiği için `profiles.sql`'den sonra gelmeli; `backfill_country_code.sql` var olan bir kolonu güncellediği için `country_code.sql`'den sonra gelmeli — alfabetik sırada bunlar tersti). Ayrıca 7 dosyadaki (6'sı önceden, +`20260605_audit_log.sql` sonradan fark edildi) korumasız `CREATE POLICY` ifadelerine `DROP POLICY IF EXISTS` eklendi. Eski çakışan versiyon kayıtları `migration repair --status reverted`, yeni 20 versiyonun hepsi `--status applied` ile senkronize edildi (tek tek, toplu komut ara sıra bağlantı hatası veriyordu). **Doğrulandı:** `supabase migration list` artık tüm dosyalarda local=remote eşleşmesi gösteriyor, `supabase db push` **"Remote database is up to date."** diyor — `--include-all` gerekmiyor. Canlı şema (`data_sources`, `organizations`, `profiles`, `cap_drafts`, `incidents`, `drill_sessions`) REST ile tekrar doğrulandı, hiçbir şey bozulmadı.
 3. **RBAC değişiklikleri (auth.js, router, AdminView) büyük ve aktif** — bu üçü birbirine bağımlı olduğu için yarım bırakılırsa login/admin akışı bozulabilir. Bu değişiklikler commit'lenmeden migration geçmişiyle uğraşmak riski artırır (ikisi karışabilir).
 4. **i18n eksik:** Admin panelinin hiçbir yerinde çeviri anahtarı yok (Türkçe hardcoded) — bu bilinen ve kabul edilmiş bir eksik (spec 001 notlarında da belirtilmiş).
 
@@ -97,7 +104,6 @@ Repo'da **çok sayıda commit'lenmemiş değişiklik** var. Başlıcaları:
 ## 6. Önerilen sıradaki adımlar
 
 1. RBAC (auth/router/AdminView) değişikliklerini test edip commit'leyin — şu an en riskli, yarım kalmış iş bu.
-2. `supabase migration repair` ile CLI'ın migration geçmişini gerçek (zaten canlıda uygulanmış) duruma senkronize edin — bunu yapmadan tekrar `db push` denemek riskli.
-3. Büyük commit yığınını mantıklı gruplara bölün (örn: "RBAC", "boundary/country desteği", "manuel veri girişi", "spec-kit setup").
+2. Büyük commit yığınını mantıklı gruplara bölün (örn: "RBAC", "boundary/country desteği", "manuel veri girişi", "spec-kit setup", "source scoping", "migration dosya adı düzeltmeleri").
 4. Kök dizindeki geçici SQL/script dosyalarını (`check_auth.sql`, `simulate_auth_insert.sql`, `update_excel.cjs`) temizleyin veya `scripts/`/`docs/` altına taşıyın.
-5. `specs/001-data-ingestion-monitoring/tasks.md` içindeki T032 notunu güncelleyin — orada hâlâ "kullanıcı onayı bekleniyor" yazıyor ama migration'lar zaten canlıda.
+5. `specs/001-data-ingestion-monitoring/tasks.md` içindeki T032 notunu güncelleyin — orada hâlâ "kullanıcı onayı bekleniyor" yazıyor ama migration'lar zaten canlıda (spec 002'nin tasks.md'sindeki T016 zaten güncellendi, 001'inki henüz değil).

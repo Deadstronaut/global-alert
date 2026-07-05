@@ -25,6 +25,7 @@ $$;
 -- so this one only ever WIDENS what a user can touch on their own row, never
 -- narrows the super_admin path). Enforced at the RLS level via a trigger check
 -- below rather than trusting the client to never send a `role` change.
+DROP POLICY IF EXISTS "users_update_own_profile" ON profiles;
 CREATE POLICY "users_update_own_profile" ON profiles
   FOR UPDATE USING (auth.uid() = id);
 

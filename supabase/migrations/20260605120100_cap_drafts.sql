@@ -89,12 +89,14 @@ CREATE TRIGGER cap_drafts_updated_at
 ALTER TABLE cap_drafts ENABLE ROW LEVEL SECURITY;
 
 -- Super admin: her şeyi görür
+DROP POLICY IF EXISTS "super_admin_cap_all" ON cap_drafts;
 CREATE POLICY "super_admin_cap_all" ON cap_drafts
   FOR ALL USING (
     EXISTS (SELECT 1 FROM profiles p WHERE p.id = auth.uid() AND p.role = 'super_admin')
   );
 
 -- Country admin/org_admin: kendi ülkesini görür
+DROP POLICY IF EXISTS "country_admin_cap_own" ON cap_drafts;
 CREATE POLICY "country_admin_cap_own" ON cap_drafts
   FOR ALL USING (
     EXISTS (
@@ -106,6 +108,7 @@ CREATE POLICY "country_admin_cap_own" ON cap_drafts
   );
 
 -- Viewer: broadcast + approved olanları okuyabilir
+DROP POLICY IF EXISTS "viewer_cap_read_public" ON cap_drafts;
 CREATE POLICY "viewer_cap_read_public" ON cap_drafts
   FOR SELECT USING (status IN ('broadcast','approved'));
 

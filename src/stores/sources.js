@@ -16,6 +16,11 @@ export const useSourcesStore = defineStore('sources', () => {
   const loading = ref(false);
   const error = ref(null);
 
+  // Country-scoped visibility (feature 002-source-scoping) is enforced entirely by RLS
+  // (country_scoped_read_data_sources, supabase/migrations/20260706_data_sources_country_scope.sql)
+  // — a super_admin gets every row, everyone else gets global (country_code IS NULL) rows plus
+  // their own country's rows. Do NOT add a client-side filter here; it would be redundant with,
+  // and non-authoritative compared to, the database-level policy.
   async function fetchSources() {
     loading.value = true;
     error.value = null;
@@ -29,6 +34,12 @@ export const useSourcesStore = defineStore('sources', () => {
     loading.value = false;
   }
 
+  // createSource/updateSource forward `payload` as-is (including an optional `country_code`,
+  // feature 002-source-scoping) — no allowlist to update here. If a caller's payload sets
+  // `country_code` outside what their role permits (e.g. a country_admin trying to save a
+  // global/other-country source), the write is rejected by RLS, not by this store; the
+  // resulting Postgres error surfaces via `error.value`/the re-thrown error below, same as any
+  // other RLS rejection already handled by this store's existing error-propagation pattern.
   async function createSource(payload) {
     const { data, error: err } = await supabase
       .from('data_sources')

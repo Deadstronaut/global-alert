@@ -9,6 +9,16 @@ Data Ingestion & Monitoring    24/66    %64         Orta       OGC WMS/WFS adapt
                                                                kaynak CRUD, payload
                                                                validation + reddedilen
                                                                veri audit'i.
+                                                               Tamamlandı (2026-07-05,
+                                                               spec 002): data_sources'a
+                                                               country_code (scope) alanı,
+                                                               RLS ile küresel/yerel kaynak
+                                                               görünürlüğü + yazma kısıtı,
+                                                               Sources sekmesinde
+                                                               küresel/yerel gruplu
+                                                               görünüm (Madagaskar'ın
+                                                               Türkiye'ye özel kaynakları
+                                                               görmemesi sorunu çözüldü).
 
 Impact Analysis (Map Viz)      45/53    %15         Orta–Zor   Frontend: split-view,
                                                                geocoding search, 24h

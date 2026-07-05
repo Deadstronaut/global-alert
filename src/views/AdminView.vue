@@ -22,6 +22,11 @@ const { t } = useI18n()
 const auth = useAuthStore()
 const tab = ref('users') // 'users' | 'orgs' | 'drill' | 'sources' | 'manual' | 'csv' | 'boundaries' | 'audit'
 
+async function handleLogout() {
+  await auth.logout()
+  router.push('/login')
+}
+
 // ── Users ──────────────────────────────────────────────────────────────────────
 const users = ref([])
 const usersLoading = ref(false)
@@ -263,6 +268,15 @@ const sourcesStore = useSourcesStore()
 const showSourceForm = ref(false)
 const editingSource = ref(null) // null = create mode
 const savingSource = ref(false)
+
+function toggleSourceForm() {
+  showSourceForm.value = !showSourceForm.value
+  editingSource.value = null
+}
+function cancelSourceForm() {
+  showSourceForm.value = false
+  editingSource.value = null
+}
 const sourceFormError = ref(null)
 const auditingSource = ref(null)
 const auditData = ref(null)
@@ -454,6 +468,21 @@ function resetAuditPage() {
   loadAuditLog()
 }
 
+function openAuditTab() {
+  tab.value = 'audit'
+  loadAuditLog()
+}
+
+function prevAuditPage() {
+  auditPage.value--
+  loadAuditLog()
+}
+
+function nextAuditPage() {
+  auditPage.value++
+  loadAuditLog()
+}
+
 async function exportAudit(format) {
   let query = supabase.from('audit_log').select('*')
   query = buildAuditQuery(query)
@@ -523,13 +552,7 @@ onUnmounted(() => {
     <div class="admin-header">
       <div class="admin-header-top">
         <button class="btn-back" @click="router.push('/')">← Harita</button>
-        <button
-          class="btn-back"
-          @click="
-            auth.logout()
-            router.push('/login')
-          "
-        >
+        <button class="btn-back" @click="handleLogout">
           ⎋ Çıkış Yap
         </button>
       </div>
@@ -571,10 +594,7 @@ onUnmounted(() => {
       <button
         v-if="auth.isSuperAdmin"
         :class="['tab', { active: tab === 'audit' }]"
-        @click="
-          tab = 'audit'
-          loadAuditLog()
-        "
+        @click="openAuditTab"
       >
         🛡️ {{ t('audit.tabLabel') }}
       </button>
@@ -859,10 +879,7 @@ onUnmounted(() => {
         <button
           v-if="canAdmin"
           class="btn-new"
-          @click="
-            showSourceForm = !showSourceForm
-            editingSource = null
-          "
+          @click="toggleSourceForm"
         >
           {{ showSourceForm && !editingSource ? '✕ Kapat' : '+ Kaynak Ekle' }}
         </button>
@@ -874,10 +891,7 @@ onUnmounted(() => {
           :saving="savingSource"
           :error="sourceFormError"
           @save="saveSource"
-          @cancel="
-            showSourceForm = false
-            editingSource = null
-          "
+          @cancel="cancelSourceForm"
         />
       </Transition>
 
@@ -1108,20 +1122,14 @@ onUnmounted(() => {
       <div v-if="auditRows.length" class="audit-pagination">
         <button
           :disabled="auditPage === 0"
-          @click="
-            auditPage--
-            loadAuditLog()
-          "
+          @click="prevAuditPage"
         >
           ←
         </button>
         <span>{{ auditPage + 1 }} / {{ auditTotalPages }}</span>
         <button
           :disabled="auditPage + 1 >= auditTotalPages"
-          @click="
-            auditPage++
-            loadAuditLog()
-          "
+          @click="nextAuditPage"
         >
           →
         </button>

@@ -50,9 +50,10 @@ const router = createRouter({
   ]
 });
 
-router.beforeEach((to) => {
-  if (to.meta.public) return true;
+router.beforeEach(async (to) => {
   const auth = useAuthStore();
+  await auth.init(); // restores an existing session on hard refresh, no-op after first call
+  if (to.meta.public) return true;
   if (!auth.isLoggedIn) return { name: 'login' };
   return true;
 });

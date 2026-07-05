@@ -1,0 +1,58 @@
+Modül                          Kalan    Tamamlanan  Zorluk     Ne Gerekiyor
+─────────────────────────────────────────────────────────────────────────────────
+Data Ingestion & Monitoring    24/66    %64         Orta       OGC WMS/WFS adapter kaldı.
+                                                               Tamamlandı (2026-07-03,
+                                                               spec 001): source state
+                                                               machine (healthy/degraded/
+                                                               down/disabled), health
+                                                               dashboard (AdminView),
+                                                               kaynak CRUD, payload
+                                                               validation + reddedilen
+                                                               veri audit'i.
+
+Impact Analysis (Map Viz)      45/53    %15         Orta–Zor   Frontend: split-view,
+                                                               geocoding search, 24h
+                                                               popup grafik → Kolay
+                                                               PostGIS: exposure,
+                                                               zonal stats → Zor
+
+Alert Authoring / CAP          66/67    %1          Orta       Supabase cap_drafts
+                                                               tablosu + state machine
+                                                               + Vue form UI
+
+Dissemination                  65/65    %0          Orta       Supabase Edge Function
+                                                               + email (Resend/SES)
+                                                               + WhatsApp API
+
+Incident Tracking              28/28    %0          Orta       Yeni Supabase tabloları
+                                                               + state machine + SOP
+                                                               repo
+
+Administration & Access        17/21    %19         Kolay      Supabase Auth aktif et,
+                                                               user CRUD UI, custom
+                                                               permissions
+
+Hazard Taxonomy Admin          21/21    %0          Orta       Admin UI + Supabase
+                                                               config tabloları
+                                                               (hazard types, scales)
+
+Audit & Compliance             59/59    %0          Orta–Zor   audit_log tablosu +
+                                                               Postgres trigger +
+                                                               crypto checksum
+
+Integration & API Gateway       1/3     %67         Kolay      Admin UI for API
+                                                               endpoint config
+
+Forecasting / AI               49/49    %0          Çok Zor    Ayrı ML servisi,
+                                                               model registry,
+                                                               Python pipeline
+
+Risk & Scenario Modeling       11/11    %0          Çok Zor    Simulation engine,
+                                                               PostGIS spatial,
+                                                               asset graph
+
+Preparedness, Drill & Response  3/3     %0          Orta       DrillMode flag +
+                                                               CAP Exercise status +
+                                                               otomatik rapor
+─────────────────────────────────────────────────────────────────────────────────
+TOPLAM                        389/446   %14

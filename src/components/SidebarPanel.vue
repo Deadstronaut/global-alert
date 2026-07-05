@@ -12,7 +12,10 @@ const router = useRouter()
 const disasterStore = useDisasterStore()
 const uiStore = useUIStore()
 const authStore = useAuthStore()
-const isSuperAdmin = computed(() => authStore.isSuperAdmin)
+const canAccessAdmin = computed(() =>
+  ['super_admin', 'country_admin', 'org_admin'].includes(authStore.session?.role)
+)
+const hasMyRegion = computed(() => !!disasterStore.myRegionGeometry)
 
 const activeCountryConfig = computed(() => uiStore.activeCountryConfig)
 
@@ -873,8 +876,15 @@ watch([rangeStartDate, rangeEndDate], ([start, end]) => {
             <button class="btn btn-ghost sidebar-action-btn" @click="router.push('/alerts/incidents')">
               🚨 Olay Takip
             </button>
-            <button v-if="isSuperAdmin" class="btn btn-ghost sidebar-action-btn" @click="router.push('/admin')">
+            <button v-if="canAccessAdmin" class="btn btn-ghost sidebar-action-btn" @click="router.push('/admin')">
               🛡️ Yönetim
+            </button>
+            <button
+              v-if="hasMyRegion"
+              :class="['btn', 'btn-ghost', 'sidebar-action-btn', { active: disasterStore.showOnlyMyRegion }]"
+              @click="disasterStore.showOnlyMyRegion = !disasterStore.showOnlyMyRegion"
+            >
+              📍 {{ disasterStore.showOnlyMyRegion ? 'Tüm Ülke' : 'Sadece Bölgem' }}
             </button>
           </div>
 

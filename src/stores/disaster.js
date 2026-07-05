@@ -8,6 +8,9 @@ import {defineStore} from 'pinia';
 import {ref, computed, watch} from 'vue';
 import {fetchRecentDisasters, subscribeRealtime, fetchAggregatedDisasters} from '@/services/supabaseService.js';
 import {readAllFromCache, writeToCache, getLastFetchAt, setLastFetchAt} from '@/services/idbCache.js';
+import {useAuthStore} from '@/stores/auth.js';
+import {findRegionGeometry} from '@/data/boundaries/index.js';
+import {pointInGeometry} from '@/utils/pointInPolygon.js';
 
 // ─────────────────────────────────────────
 // localStorage helpers
@@ -83,6 +86,34 @@ export const useDisasterStore = defineStore('disaster', () => {
   // Ülke bbox filtresi — null = global görünüm
   const activeBbox = ref(null); // { minLat, maxLat, minLng, maxLng }
 
+  // "Sadece bölgemi göster" — kullanıcının kendi tercihi (güvenlik kısıtlaması
+  // DEĞİL, sadece view filtresi), profiles.region_code'a atanmış il/bölge
+  // sınırına (varsa) göre filtreler. Sınır dosyası (örn. tr-provinces.json,
+  // ~1.3MB) sadece bu kullanıcının gerçekten bir bölgesi VARSA, ihtiyaç
+  // anında (lazy) yükleniyor — her ziyaretçi için baştan yüklenmiyor.
+  const showOnlyMyRegion = ref(false);
+  const myRegionGeometry = ref(null);
+
+  async function loadMyRegionGeometry() {
+    const auth = useAuthStore();
+    const cc = auth.countryCode?.toLowerCase();
+    const regionName = auth.regionCode;
+    if (!cc || !regionName) { myRegionGeometry.value = null; return; }
+    myRegionGeometry.value = await findRegionGeometry(cc, regionName);
+  }
+
+  // Session'daki ülke/bölge değiştikçe (login/logout/rol güncelleme sonrası)
+  // sınır dosyasını yeniden değerlendir — sadece gerçekten bir region_code
+  // atanmışsa indirir, aksi halde hiç network isteği yapmaz.
+  watch(
+    () => {
+      const auth = useAuthStore();
+      return [auth.countryCode, auth.regionCode];
+    },
+    () => { loadMyRegionGeometry(); },
+    { immediate: true },
+  );
+
   // Erken uyarılar
   const earlyWarnings = ref([]);   // Son 10 erken uyarı
   const activeWarning = ref(null); // Şu an gösterilen uyarı
@@ -131,6 +162,9 @@ export const useDisasterStore = defineStore('disaster', () => {
         const lat = Number(e.lat);
         const lng = Number(e.lng);
         if (lat < bbox.minLat || lat > bbox.maxLat || lng < bbox.minLng || lng > bbox.maxLng) return false;
+      }
+      if (showOnlyMyRegion.value && myRegionGeometry.value) {
+        if (!pointInGeometry(Number(e.lat), Number(e.lng), myRegionGeometry.value)) return false;
       }
 
       const t = new Date(e.time || e.created_at).getTime();
@@ -572,6 +606,7 @@ export const useDisasterStore = defineStore('disaster', () => {
     startDate, endDate, selectedTimeRange,
     sourcesStatus, errors,
     minMagnitude, maxDepth, activeBbox,
+    showOnlyMyRegion, myRegionGeometry,
     earlyWarnings, activeWarning,
     supabaseCounts, supabaseLoading,
     allEvents, totalCount, criticalEvents, sourcesOnline, h3Events,

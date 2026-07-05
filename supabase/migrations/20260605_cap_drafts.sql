@@ -8,6 +8,15 @@
 --                             → EXPIRED (time-based)
 -- =====================================================
 
+-- extract()/date_trunc() over timestamptz are marked STABLE (not IMMUTABLE) in
+-- Postgres's catalog as a blanket rule covering all timezone-dependent fields,
+-- even though forcing UTC here makes the result depend only on the input value.
+-- Wrapping in our own IMMUTABLE function is a truthful label, not a workaround.
+CREATE OR REPLACE FUNCTION generate_cap_dedup_hash(h_type text, sev text, a_desc text, eff_at timestamptz)
+RETURNS text LANGUAGE sql IMMUTABLE AS $$
+  SELECT md5(h_type || sev || COALESCE(a_desc,'') || date_trunc('hour', eff_at AT TIME ZONE 'UTC')::text);
+$$;
+
 CREATE TABLE IF NOT EXISTS cap_drafts (
   id              UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
 
@@ -46,8 +55,7 @@ CREATE TABLE IF NOT EXISTS cap_drafts (
 
   -- Duplicate prevention (FR-0016)
   dedup_hash      TEXT GENERATED ALWAYS AS (
-    md5(hazard_type || severity || COALESCE(area_desc,'') ||
-        date_trunc('hour', effective_at)::text)
+    generate_cap_dedup_hash(hazard_type, severity, area_desc, effective_at)
   ) STORED,
 
   -- Audit fields

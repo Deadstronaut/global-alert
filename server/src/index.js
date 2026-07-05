@@ -25,11 +25,13 @@ import { startWHO }        from './sources/who.js';
 import { startFEWSNET }    from './sources/fewsnet.js';
 import { startGDACSRSS, startPTWCRSS } from './sources/rss.js';
 import { startIoTSource }  from './sources/iot.js';
+import { startDynamicSources } from './sources/dynamicSources.js';
 
 // ── İşlemciler ───────────────────────────────────────────────────────────────
 import { Deduplicator }        from './processors/deduplicator.js';
 import { calculateEarlyWarning } from './processors/pwave.js';
 import { runPreflight }          from './processors/preflight.js';
+import { resolveCountryCode }    from './processors/geoCountry.js';
 
 // ── Çıktı ────────────────────────────────────────────────────────────────────
 import { initSupabase, queueWrite, writeEarlyWarning } from './output/supabaseWriter.js';
@@ -50,6 +52,10 @@ await runPreflight();
 function handleEvent(event) {
   if (deduplicator.isDuplicate(event)) return;
   deduplicator.add(event);
+
+  // Country-scoped map visibility (RLS) rely on this being set — resolved
+  // from lat/lng via bounding boxes, see processors/geoCountry.js.
+  event.countryCode = resolveCountryCode(event.lat, event.lng);
 
   // DB yazma kuyruğu (Supabase upsert)
   queueWrite(event);
@@ -109,6 +115,9 @@ stoppers.push(startFEWSNET(handleEvent));
 
 // 🦠 Salgın — WHO
 stoppers.push(startWHO(handleEvent));
+
+// 🌐 Ülkelerin admin panelden ekleyeceği özel kaynaklar (sıfır kod değişikliği)
+stoppers.push(startDynamicSources(handleEvent));
 
 // 📡 Ek IoT kaynakları (opsiyonel — .env ile aktif)
 // Örnek: SENSOR_URL tanımlıysa OGC SensorThings endpoint'i dinle

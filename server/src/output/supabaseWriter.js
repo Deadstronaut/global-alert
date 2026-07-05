@@ -21,6 +21,12 @@ export function initSupabase() {
   return true;
 }
 
+// Diğer modüllerin (örn. dynamicSources.js) data_sources tablosunu okuyup
+// yazabilmesi için — initSupabase() çağrıldıktan sonra kullanılabilir.
+export function getSupabaseClient() {
+  return supabase;
+}
+
 // Tip → tablo adı (mevcut Supabase tablo adlarıyla eşleşir)
 const TABLE_MAP = {
   earthquake:    'earthquake',
@@ -123,6 +129,7 @@ function mapToRow(event) {
     time: event.time,
     source: event.source,
     source_url: event.sourceUrl,
+    country_code: event.countryCode ?? null,
     extra: JSON.stringify(event.extra || {}),
     received_at: event.receivedAt,
   };

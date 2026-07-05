@@ -8,47 +8,71 @@
 import { corsHeaders } from '../shared/cors.ts'
 import { normalize } from '../shared/normalize.ts'
 import { upsertEvents } from '../shared/upsert.ts'
+import { validatePayload } from '../shared/validatePayload.ts'
+import { recordFetchOutcome, resolveSourceId, logRejectedPayload, isSourceActive } from '../shared/sourceHealth.ts'
 
 // ── Source fetchers ────────────────────────────────────────────────────────────
+// Each fetcher validates each raw record via validatePayload() before normalize();
+// invalid records are logged to rejected_payloads and excluded from the batch
+// (spec FR-010–FR-013 — partial-batch tolerance, malformed records never persisted).
 
-async function fetchUSGS(): Promise<ReturnType<typeof normalize>[]> {
+async function fetchUSGS(sourceId: string | null): Promise<ReturnType<typeof normalize>[]> {
   const url = 'https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/2.5_day.geojson'
   const res = await fetch(url, { signal: AbortSignal.timeout(10_000) })
   if (!res.ok) throw new Error(`USGS HTTP ${res.status}`)
   const data = await res.json()
-  return (data.features ?? []).map((f: any) => normalize({
-    id:          `usgs-${f.id}`,
-    type:        'earthquake',
-    lat:         f.geometry.coordinates[1],
-    lng:         f.geometry.coordinates[0],
-    magnitude:   f.properties.mag,
-    depth:       f.geometry.coordinates[2],
-    title:       f.properties.title ?? f.properties.place,
-    description: `M${f.properties.mag} — ${f.properties.place ?? ''} | Depth: ${f.geometry.coordinates[2]}km`,
-    time:        f.properties.time,
-    source:      'USGS',
-    sourceUrl:   f.properties.url ?? 'https://earthquake.usgs.gov',
-    extra: {
-      felt: f.properties.felt,
-      tsunami: f.properties.tsunami,
-      status: f.properties.status,
-      net: f.properties.net,
-    },
-  }))
+
+  const out: ReturnType<typeof normalize>[] = []
+  for (const f of data.features ?? []) {
+    const raw = { id: `usgs-${f.id}`, lat: f.geometry.coordinates[1], lng: f.geometry.coordinates[0], time: f.properties.time, magnitude: f.properties.mag, depth: f.geometry.coordinates[2] }
+    const validation = validatePayload(raw, 'earthquake')
+    if (!validation.valid) {
+      await logRejectedPayload(sourceId, 'earthquake', validation.reason, f)
+      continue
+    }
+    out.push(normalize({
+      id:          raw.id,
+      type:        'earthquake',
+      lat:         raw.lat,
+      lng:         raw.lng,
+      magnitude:   f.properties.mag,
+      depth:       f.geometry.coordinates[2],
+      title:       f.properties.title ?? f.properties.place,
+      description: `M${f.properties.mag} — ${f.properties.place ?? ''} | Depth: ${f.geometry.coordinates[2]}km`,
+      time:        f.properties.time,
+      source:      'USGS',
+      sourceUrl:   f.properties.url ?? 'https://earthquake.usgs.gov',
+      extra: {
+        felt: f.properties.felt,
+        tsunami: f.properties.tsunami,
+        status: f.properties.status,
+        net: f.properties.net,
+      },
+    }))
+  }
+  return out
 }
 
-async function fetchEMSC(): Promise<ReturnType<typeof normalize>[]> {
+async function fetchEMSC(sourceId: string | null): Promise<ReturnType<typeof normalize>[]> {
   const url = 'https://www.seismicportal.eu/fdsnws/event/1/query?limit=100&format=json&minmagnitude=2.5'
   const res = await fetch(url, { signal: AbortSignal.timeout(10_000) })
   if (!res.ok) throw new Error(`EMSC HTTP ${res.status}`)
   const data = await res.json()
-  return (data.features ?? []).map((f: any) => {
+
+  const out: ReturnType<typeof normalize>[] = []
+  for (const f of data.features ?? []) {
     const p = f.properties
-    return normalize({
-      id:          `emsc-${p.source_id ?? f.id}`,
+    const raw = { id: `emsc-${p.source_id ?? f.id}`, lat: f.geometry.coordinates[1], lng: f.geometry.coordinates[0], time: p.time ?? p.lastupdate, magnitude: p.mag, depth: f.geometry.coordinates[2] }
+    const validation = validatePayload(raw, 'earthquake')
+    if (!validation.valid) {
+      await logRejectedPayload(sourceId, 'earthquake', validation.reason, f)
+      continue
+    }
+    out.push(normalize({
+      id:          raw.id,
       type:        'earthquake',
-      lat:         f.geometry.coordinates[1],
-      lng:         f.geometry.coordinates[0],
+      lat:         raw.lat,
+      lng:         raw.lng,
       magnitude:   p.mag,
       depth:       f.geometry.coordinates[2],
       title:       `M${p.mag} — ${p.flynn_region ?? 'Unknown'}`,
@@ -57,50 +81,80 @@ async function fetchEMSC(): Promise<ReturnType<typeof normalize>[]> {
       source:      'EMSC',
       sourceUrl:   `https://www.emsc-csem.org/Earthquake/earthquake.php?id=${p.source_id ?? ''}`,
       extra: { region: p.flynn_region, auth: p.auth },
-    })
-  })
+    }))
+  }
+  return out
 }
 
-async function fetchAFAD(): Promise<ReturnType<typeof normalize>[]> {
+async function fetchAFAD(sourceId: string | null): Promise<ReturnType<typeof normalize>[]> {
   const url = 'https://deprem.afad.gov.tr/apiv2/event/filter?limit=100&orderby=timedesc'
   const res = await fetch(url, { signal: AbortSignal.timeout(10_000) })
   if (!res.ok) throw new Error(`AFAD HTTP ${res.status}`)
   const data = await res.json()
-  return (data ?? []).map((e: any) => normalize({
-    id:          `afad-${e.eventID}`,
-    type:        'earthquake',
-    lat:         parseFloat(e.latitude),
-    lng:         parseFloat(e.longitude),
-    magnitude:   parseFloat(e.magnitude),
-    depth:       parseFloat(e.depth ?? '0'),
-    title:       `M${e.magnitude} — ${e.location}`,
-    description: `${e.location} | AFAD`,
-    time:        e.eventDate,
-    source:      'AFAD',
-    sourceUrl:   'https://deprem.afad.gov.tr',
-    extra: { location: e.location, type: e.type },
-  }))
+
+  const out: ReturnType<typeof normalize>[] = []
+  for (const e of data ?? []) {
+    const raw = { id: `afad-${e.eventID}`, lat: parseFloat(e.latitude), lng: parseFloat(e.longitude), time: e.eventDate, magnitude: parseFloat(e.magnitude), depth: parseFloat(e.depth ?? '0') }
+    const validation = validatePayload(raw, 'earthquake')
+    if (!validation.valid) {
+      await logRejectedPayload(sourceId, 'earthquake', validation.reason, e)
+      continue
+    }
+    out.push(normalize({
+      id:          raw.id,
+      type:        'earthquake',
+      lat:         raw.lat,
+      lng:         raw.lng,
+      magnitude:   parseFloat(e.magnitude),
+      depth:       parseFloat(e.depth ?? '0'),
+      title:       `M${e.magnitude} — ${e.location}`,
+      description: `${e.location} | AFAD`,
+      time:        e.eventDate,
+      source:      'AFAD',
+      sourceUrl:   'https://deprem.afad.gov.tr',
+      extra: { location: e.location, type: e.type },
+    }))
+  }
+  return out
 }
 
-async function fetchKandilli(): Promise<ReturnType<typeof normalize>[]> {
+async function fetchKandilli(sourceId: string | null): Promise<ReturnType<typeof normalize>[]> {
   const url = 'https://api.orhanaydogdu.com.tr/deprem/kandilli/live'
   const res = await fetch(url, { signal: AbortSignal.timeout(10_000) })
   if (!res.ok) throw new Error(`Kandilli HTTP ${res.status}`)
   const data = await res.json()
-  return (data.result ?? []).map((e: any) => normalize({
-    id:          `kandilli-${e.earthquake_id ?? e.hash ?? `${e.lat}-${e.lng}-${e.date}`}`,
-    type:        'earthquake',
-    lat:         parseFloat(e.geojson?.coordinates?.[1] ?? e.lat),
-    lng:         parseFloat(e.geojson?.coordinates?.[0] ?? e.lng),
-    magnitude:   e.mag,
-    depth:       e.depth,
-    title:       e.title ?? `M${e.mag} — ${e.location_properties?.closestCity?.name ?? ''}`,
-    description: `${e.location_properties?.closestCity?.name ?? e.title} | Kandilli`,
-    time:        e.date,
-    source:      'Kandilli',
-    sourceUrl:   'http://www.koeri.boun.edu.tr/sismo/2/latest-earthquakes/',
-    extra: { location: e.title, closestCity: e.location_properties?.closestCity },
-  }))
+
+  const out: ReturnType<typeof normalize>[] = []
+  for (const e of data.result ?? []) {
+    const raw = {
+      id: `kandilli-${e.earthquake_id ?? e.hash ?? `${e.lat}-${e.lng}-${e.date}`}`,
+      lat: parseFloat(e.geojson?.coordinates?.[1] ?? e.lat),
+      lng: parseFloat(e.geojson?.coordinates?.[0] ?? e.lng),
+      time: e.date,
+      magnitude: e.mag,
+      depth: e.depth,
+    }
+    const validation = validatePayload(raw, 'earthquake')
+    if (!validation.valid) {
+      await logRejectedPayload(sourceId, 'earthquake', validation.reason, e)
+      continue
+    }
+    out.push(normalize({
+      id:          raw.id,
+      type:        'earthquake',
+      lat:         raw.lat,
+      lng:         raw.lng,
+      magnitude:   e.mag,
+      depth:       e.depth,
+      title:       e.title ?? `M${e.mag} — ${e.location_properties?.closestCity?.name ?? ''}`,
+      description: `${e.location_properties?.closestCity?.name ?? e.title} | Kandilli`,
+      time:        e.date,
+      source:      'Kandilli',
+      sourceUrl:   'http://www.koeri.boun.edu.tr/sismo/2/latest-earthquakes/',
+      extra: { location: e.title, closestCity: e.location_properties?.closestCity },
+    }))
+  }
+  return out
 }
 
 // ── Spatial-temporal deduplication ────────────────────────────────────────────
@@ -120,6 +174,29 @@ function deduplicate(events: ReturnType<typeof normalize>[]) {
   return result
 }
 
+// ── Health tracking (feature 001-data-ingestion-monitoring) ───────────────────
+// Each upstream fetcher is tracked against its data_sources row (looked up by
+// hazard_type + name). Sources not yet registered in data_sources resolve to
+// null and are skipped gracefully (resolveSourceId/recordFetchOutcome never throw).
+// A source with is_active = false is skipped entirely (spec FR-006, FR-016).
+async function trackedFetch(
+  name: string,
+  fetcher: (sourceId: string | null) => Promise<ReturnType<typeof normalize>[]>,
+): Promise<{ name: string; events: ReturnType<typeof normalize>[]; error?: string; skipped?: boolean }> {
+  const sourceId = await resolveSourceId('earthquake', name)
+  if (!(await isSourceActive(sourceId))) {
+    return { name, events: [], skipped: true }
+  }
+  try {
+    const events = await fetcher(sourceId)
+    if (sourceId) await recordFetchOutcome(sourceId, 'success')
+    return { name, events }
+  } catch (e) {
+    if (sourceId) await recordFetchOutcome(sourceId, 'failure', e.message)
+    return { name, events: [], error: e.message }
+  }
+}
+
 // ── Handler ───────────────────────────────────────────────────────────────────
 
 Deno.serve(async (req) => {
@@ -128,12 +205,16 @@ Deno.serve(async (req) => {
   const sources: Record<string, ReturnType<typeof normalize>[]> = {}
   const fetchErrors: string[] = []
 
-  await Promise.allSettled([
-    fetchUSGS().then(r => { sources.USGS = r }).catch(e => fetchErrors.push(`USGS: ${e.message}`)),
-    fetchEMSC().then(r => { sources.EMSC = r }).catch(e => fetchErrors.push(`EMSC: ${e.message}`)),
-    fetchAFAD().then(r => { sources.AFAD = r }).catch(e => fetchErrors.push(`AFAD: ${e.message}`)),
-    fetchKandilli().then(r => { sources.Kandilli = r }).catch(e => fetchErrors.push(`Kandilli: ${e.message}`)),
+  const results = await Promise.all([
+    trackedFetch('USGS', fetchUSGS),
+    trackedFetch('EMSC', fetchEMSC),
+    trackedFetch('AFAD', fetchAFAD),
+    trackedFetch('Kandilli', fetchKandilli),
   ])
+  for (const r of results) {
+    sources[r.name] = r.events
+    if (r.error) fetchErrors.push(`${r.name}: ${r.error}`)
+  }
 
   const all = Object.values(sources).flat()
   // Tier-1 sources first (USGS > EMSC > AFAD > Kandilli) so dedup keeps the authoritative record

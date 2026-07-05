@@ -1,45 +1,92 @@
 import { defineStore } from 'pinia';
 import { ref, computed } from 'vue';
-
-const LS_KEY = 'ga_session';
-
-function loadSession() {
-  try {
-    const raw = localStorage.getItem(LS_KEY);
-    return raw ? JSON.parse(raw) : null;
-  } catch {
-    return null;
-  }
-}
-
-function saveSession(session) {
-  try {
-    if (session) localStorage.setItem(LS_KEY, JSON.stringify(session));
-    else localStorage.removeItem(LS_KEY);
-  } catch { /* ignore */ }
-}
+import { supabase } from '@/services/api/config.js';
 
 export const useAuthStore = defineStore('auth', () => {
-  const session = ref(loadSession());
+  // session: { id, email, role, countryCode } | null
+  const session = ref(null);
+  const initialized = ref(false);
+  const authError = ref(null);
 
   const isLoggedIn = computed(() => session.value !== null);
   const isSuperAdmin = computed(() => session.value?.role === 'super_admin');
   const countryCode = computed(() => session.value?.countryCode ?? null);
+  const regionCode = computed(() => session.value?.regionCode ?? null);
 
-  function loginAsSuperAdmin() {
-    session.value = { role: 'super_admin', countryCode: null };
-    saveSession(session.value);
+  async function loadProfile(user) {
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('role, country_code, region_code')
+      .eq('id', user.id)
+      .maybeSingle();
+
+    session.value = {
+      id: user.id,
+      email: user.email,
+      role: profile?.role ?? 'viewer',
+      countryCode: profile?.country_code ?? null,
+      regionCode: profile?.region_code ?? null,
+    };
   }
 
-  function loginAsViewer() {
-    session.value = { role: 'viewer', countryCode: null };
-    saveSession(session.value);
+  // Restores an existing browser session (page refresh) and subscribes to future
+  // auth changes. Safe to call multiple times — only runs its setup once.
+  async function init() {
+    if (initialized.value) return;
+    initialized.value = true;
+
+    const { data } = await supabase.auth.getSession();
+    if (data.session?.user) {
+      await loadProfile(data.session.user);
+    }
+
+    supabase.auth.onAuthStateChange((_event, sbSession) => {
+      if (sbSession?.user) {
+        loadProfile(sbSession.user);
+      } else {
+        session.value = null;
+      }
+    });
   }
 
-  function logout() {
+  async function login(email, password) {
+    authError.value = null;
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error) {
+      authError.value = error.message;
+      throw error;
+    }
+    await loadProfile(data.user);
+    return session.value;
+  }
+
+  // Admin-provisioned accounts only (no public self-registration) — calls the
+  // create-user Edge Function, which enforces the super_admin/country_admin
+  // hierarchy server-side and auto-confirms the new account.
+  async function createUser({ email, password, role, countryCode, orgId, regionCode, fullName }) {
+    const { data, error } = await supabase.functions.invoke('create-user', {
+      body: { email, password, role, country_code: countryCode, org_id: orgId, region_code: regionCode, full_name: fullName },
+    });
+    if (error) throw error;
+    if (data?.error) throw new Error(data.error);
+    return data;
+  }
+
+  async function logout() {
+    await supabase.auth.signOut();
     session.value = null;
-    saveSession(null);
   }
 
-  return { session, isLoggedIn, isSuperAdmin, countryCode, loginAsSuperAdmin, loginAsViewer, logout };
+  return {
+    session,
+    isLoggedIn,
+    isSuperAdmin,
+    countryCode,
+    regionCode,
+    authError,
+    init,
+    login,
+    createUser,
+    logout,
+  };
 });

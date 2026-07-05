@@ -5,20 +5,24 @@ import { useRouter } from 'vue-router'
 
 const auth = useAuthStore()
 const router = useRouter()
-const loading = ref(null) // 'admin' | 'user' | null
+const email = ref('')
+const password = ref('')
+const loading = ref(false)
+const error = ref(null)
 
-async function loginAsAdmin() {
-  loading.value = 'admin'
-  await new Promise(r => setTimeout(r, 600))
-  auth.loginAsSuperAdmin()
-  router.push('/')
-}
-
-async function loginAsUser() {
-  loading.value = 'user'
-  await new Promise(r => setTimeout(r, 600))
-  auth.loginAsViewer()
-  router.push('/')
+async function handleLogin() {
+  if (!email.value || !password.value) return
+  loading.value = true
+  error.value = null
+  try {
+    const session = await auth.login(email.value, password.value)
+    // super_admin (no country_code) -> global view; country_admin/org_admin -> scoped to their country
+    router.push(session.countryCode ? `/${session.countryCode}` : '/')
+  } catch (err) {
+    error.value = err.message ?? 'Giriş başarısız'
+  } finally {
+    loading.value = false
+  }
 }
 </script>
 
@@ -47,20 +51,29 @@ async function loginAsUser() {
         <p class="login-welcome">Emergency Operations Center</p>
         <p class="login-desc">Authorized personnel only. All access is logged and monitored.</p>
 
-        <button class="login-btn btn-admin" :disabled="loading !== null" @click="loginAsAdmin">
-          <span v-if="loading !== 'admin'">Super Admin</span>
-          <span v-else class="btn-spinner" />
-        </button>
-
-        <button class="login-btn btn-user" :disabled="loading !== null" @click="loginAsUser">
-          <span v-if="loading !== 'user'">User Entry</span>
-          <span v-else class="btn-spinner" />
-        </button>
-
-        <div class="login-dev-badge">
-          <span class="dev-dot" />
-          Development mode — authentication bypassed
-        </div>
+        <form class="login-form" @submit.prevent="handleLogin">
+          <input
+            v-model="email"
+            type="email"
+            autocomplete="username"
+            placeholder="E-posta"
+            class="login-input"
+            required
+          />
+          <input
+            v-model="password"
+            type="password"
+            autocomplete="current-password"
+            placeholder="Parola"
+            class="login-input"
+            required
+          />
+          <div v-if="error" class="login-error">{{ error }}</div>
+          <button type="submit" class="login-btn btn-admin" :disabled="loading">
+            <span v-if="!loading">Giriş Yap</span>
+            <span v-else class="btn-spinner" />
+          </button>
+        </form>
       </div>
 
       <div class="login-footer">
@@ -210,6 +223,33 @@ async function loginAsUser() {
   line-height: 1.5;
 }
 
+.login-form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.login-input {
+  width: 100%;
+  padding: 12px 14px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.05);
+  color: #f4f7ff;
+  font-size: 0.88rem;
+}
+
+.login-input:focus {
+  outline: none;
+  border-color: rgba(74, 163, 255, 0.5);
+}
+
+.login-error {
+  color: #f87171;
+  font-size: 0.78rem;
+  text-align: center;
+}
+
 .login-btn {
   width: 100%;
   padding: 13px;
@@ -231,12 +271,6 @@ async function loginAsUser() {
 .btn-admin {
   background: linear-gradient(135deg, #1a6fd4, #4aa3ff);
   margin-top: 8px;
-}
-
-.btn-user {
-  background: rgba(255, 255, 255, 0.07);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  color: #c4cee6;
 }
 
 .login-btn:hover:not(:disabled) {
@@ -261,27 +295,6 @@ async function loginAsUser() {
 
 @keyframes spin {
   to { transform: rotate(360deg); }
-}
-
-.login-dev-badge {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  font-size: 0.7rem;
-  color: #8c97b3;
-  background: rgba(255,255,255,0.03);
-  border: 1px solid rgba(255,255,255,0.06);
-  border-radius: 6px;
-  padding: 6px 10px;
-}
-
-.dev-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: #ffd600;
-  flex-shrink: 0;
 }
 
 .login-footer {

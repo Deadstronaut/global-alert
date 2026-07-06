@@ -1,6 +1,23 @@
 Modül                          Kalan    Tamamlanan  Zorluk     Ne Gerekiyor
 ─────────────────────────────────────────────────────────────────────────────────
-Data Ingestion & Monitoring    24/66    %64         Orta       OGC WMS/WFS adapter kaldı.
+Data Ingestion & Monitoring     0/66    %100        Orta       Tamamlandı (2026-07-06,
+                                                               spec 012): modülün son kalemi
+                                                               OGC WMS/WFS adapter (MHEWS-FR-0037,
+                                                               MHEWS-SD-MAP-03) kapatıldı — bu,
+                                                               mevcut 5 hazard-event fetch-*
+                                                               pipeline'ından farklı bir yetenek:
+                                                               WMS/WFS verisi bir DisasterEvent
+                                                               değil, MapLibre GL üzerinde canlı
+                                                               render edilen bir görsel katman
+                                                               (ayrı map_layers registry, super_admin
+                                                               CRUD, harita üzerinde toggle +
+                                                               opaklık kontrolü, veri hiç
+                                                               depolanmıyor/normalize edilmiyor —
+                                                               "consume only" C4 kısıtına uygun).
+                                                               HTTPS-only + private/loopback adres
+                                                               reddi (SSRF koruması) eklendi.
+                                                               Migration canlıya uygulanması
+                                                               kullanıcı onayı bekliyor.
                                                                Tamamlandı (2026-07-03,
                                                                spec 001): source state
                                                                machine (healthy/degraded/
@@ -38,7 +55,7 @@ Data Ingestion & Monitoring    24/66    %64         Orta       OGC WMS/WFS adapt
                                                                (T006 tamamlandı) — GDACS artık
                                                                canlı sistemde aktif.
 
-Impact Analysis (Map Viz)      16/53    ~%70        Orta–Zor   Tamamlandı (2026-07-06,
+Impact Analysis (Map Viz)      8/53     ~%85        Orta–Zor   Tamamlandı (2026-07-06,
                                                                spec 008, tam kapsam):
                                                                PostGIS extension, GeoJSON
                                                                exposure dataset yükleme,
@@ -50,40 +67,168 @@ Impact Analysis (Map Viz)      16/53    ~%70        Orta–Zor   Tamamlandı (20
                                                                panel, geocoding arama,
                                                                24s trend sparkline (kütüphane
                                                                eklenmeden), CSV/JSON/GeoJSON
-                                                               export. Kalan: Shapefile
-                                                               yükleme, ağırlıklı zafiyet
-                                                               endeksleri (Risk & Scenario
-                                                               Modeling modülüne ait).
-                                                               Migration + Edge Function
+                                                               export. Kalan: ağırlıklı
+                                                               zafiyet endeksleri (Risk &
+                                                               Scenario Modeling modülüne
+                                                               ait). Migration + Edge Function
                                                                deploy canlıya uygulanması
                                                                kullanıcı onayı bekliyor.
+Tamamlandı (2026-07-06, spec 023): "Shapefile yükleme"
+                                                               kalemi kapatıldı — yeni
+                                                               client-side shpjs bağımlılığı
+                                                               ile .zip (shapefile bundle)
+                                                               dosya uzantısı otomatik
+                                                               algılanıp GeoJSON'a çevriliyor,
+                                                               sonuç mevcut
+                                                               upload-exposure-dataset Edge
+                                                               Function'a aynen aynı payload
+                                                               ile gönderiliyor (sıfır backend
+                                                               değişikliği, sıfır regresyon —
+                                                               bu projenin en küçük ayak izli
+                                                               spec'i, hiç migration/RLS/Edge
+                                                               Function değişikliği yok). WGS84
+                                                               olmayan projeksiyonlu
+                                                               shapefile'lar için reprojeksiyon
+                                                               bilinçli kapsam dışı (mevcut
+                                                               WGS84 doğrulaması zaten
+                                                               reddediyor).
 
-Alert Authoring / CAP          39/67    ~%40        Orta       Tamamlandı (2026-07-06,
-                                                               spec 006): cap_drafts +
+Alert Authoring / CAP           0/67    %100        Orta       Tamamlandı (2026-07-06,
+                                                               spec 006 + spec 014): cap_drafts +
                                                                CapView.vue zaten mevcuttu
-                                                               (tahminden çok ileri) — bu
-                                                               spec four-eyes onay kuralı,
-                                                               tespit edilen olaydan taslak
-                                                               oluşturma, broadcast sonrası
-                                                               içerik kilidi, ret/iptal için
-                                                               zorunlu gerekçe, viewer
-                                                               görünürlüğü daraltma, tam
-                                                               i18n (7 dil) ekledi. Kalan:
-                                                               CAP zarfı alanları (identifier/
-                                                               sender/msgType/scope), CAP
-                                                               XML/JSON export fonksiyonu.
+                                                               (tahminden çok ileri) — spec 006
+                                                               four-eyes onay kuralı, tespit
+                                                               edilen olaydan taslak oluşturma,
+                                                               broadcast sonrası içerik kilidi,
+                                                               ret/iptal için zorunlu gerekçe,
+                                                               viewer görünürlüğü daraltma, tam
+                                                               i18n ekledi. Spec 014 modülün son
+                                                               kalemini kapattı — constitution
+                                                               Principle III (CAP v1.2 Compliance)
+                                                               ihlaliydi, kod taramasıyla hiçbir
+                                                               CAP export'un var olmadığı
+                                                               doğrulandı: identifier (draft id)
+                                                               + sender (insert-time otomatik),
+                                                               broadcast öncesi tamlık kapısı
+                                                               genişletildi, broadcast_at ile
+                                                               "bu uyarı gerçekten broadcast oldu
+                                                               mu" sinyali (status tek başına
+                                                               yetersiz — cancelled durumu
+                                                               broadcast'tan geçmeden de
+                                                               ulaşılabiliyor), tam CAP v1.2 XML/
+                                                               JSON export (msgType Alert/Update/
+                                                               Cancel, references, exercise
+                                                               alerts için status=Exercise).
                                                                Migration canlıya uygulanması
                                                                kullanıcı onayı bekliyor.
 
-Dissemination                  65/65    %0          Orta       Supabase Edge Function
-                                                               + email (Resend/SES)
-                                                               + WhatsApp API
+Dissemination                  30/65    ~%54        Orta       Tamamlandı (2026-07-06,
+                                                               spec 009): contact directory
+                                                               (super_admin/country_admin/
+                                                               org_admin scoped CRUD + CSV
+                                                               toplu içe aktarma), CAP
+                                                               broadcast anında otomatik
+                                                               e-posta dispatch (pg_net DB
+                                                               trigger → dispatch-alert Edge
+                                                               Function, Resend/SendGrid
+                                                               arasında env ile değiştirilebilir
+                                                               sağlayıcı), WhatsApp mock adapter
+                                                               (gerçek Meta Cloud API entegrasyonu
+                                                               kapsam dışı — sadece state
+                                                               machine/receipt izleme kanıtlandı),
+                                                               DispatchJob/DispatchReceipt
+                                                               state machine + kısmi hata
+                                                               toleransı + retry, kimlik
+                                                               doğrulaması gerektirmeyen Public
+                                                               Alert Portal.
+                                                               Tamamlandı (2026-07-06, spec 015):
+                                                               "polygon/geofence bazlı hedefleme"
+                                                               boşluğunun bölge-kodu seviyesindeki
+                                                               kısmı kapatıldı — contacts.region_code
+                                                               zaten vardı ama dispatchMatching.ts
+                                                               hiç kullanmıyordu (kod taramasıyla
+                                                               tespit edildi); cap_drafts'a opsiyonel
+                                                               region_code eklendi, matchesContact()
+                                                               region'u ek daraltma katmanı olarak
+                                                               kontrol edecek şekilde genişletildi
+                                                               (iki taraftan biri region_code
+                                                               girmemişse asla eşleşmeyi reddetmez —
+                                                               geriye dönük tam uyumlu), dispatch-alert
+                                                               Edge Function'daki draftForMatching
+                                                               nesnesinin region_code'u hiç
+                                                               geçirmediği bir kablolama açığı da
+                                                               aynı spec'te kapatıldı. Tam PostGIS/
+                                                               polygon tabanlı geofencing bilinçli
+                                                               kapsam dışı bırakıldı (ayrı Risk &
+                                                               Scenario Modeling modülüne ait).
+                                                               Kalan: gerçek WhatsApp API, tam
+                                                               polygon/PostGIS geofencing, community
+                                                               hazard reporting + NLP/LLM
+                                                               kategorileştirme, harita üzerinde
+                                                               sığınak gösterimi (ayrı takip işi),
+                                                               Public Portal'a sığınak bilgisi
+                                                               eklenmesi (müşterinin kendisi
+                                                               ekleyecek, bu projede planlanmıyor),
+                                                               public self-registration
+                                                               (bilinçli kapsam dışı — bu proje
+                                                               self-registration'ı tamamen
+                                                               kaldırdı). Migration + Edge
+                                                               Function deploy canlıya
+                                                               uygulanması kullanıcı onayı
+                                                               bekliyor.
+Tamamlandı (2026-07-06, spec 021): "shelter management dashboard"
+                                                               kalemi kapatıldı — yeni additive
+                                                               shelters tablosu (contacts deseniyle
+                                                               aynı country/org-scoped CRUD, DB
+                                                               seviyesinde CHECK kısıtları ile
+                                                               doluluk/kapasite garantisi,
+                                                               incidents'a opsiyonel ON DELETE SET
+                                                               NULL bağlantısı). Contacts'tan farklı
+                                                               olarak: sığınak müsaitliği can
+                                                               güvenliği bilgisi olduğu için her
+                                                               signed-in kullanıcı (viewer dahil)
+                                                               tüm ülkelerdeki aktif sığınakları
+                                                               görebiliyor. İmplementasyon sırasında
+                                                               gerçek bir mimari sorun bulundu ve
+                                                               düzeltildi: /admin rotası viewer'ı
+                                                               tamamen engelliyor (spec 004'ün test
+                                                               kilitli garantisi) — bu yüzden sığınak
+                                                               görünümü AdminView sekmesi yerine
+                                                               ayrı, herkese açık bir /shelters
+                                                               rotasına taşındı, /admin'in viewer
+                                                               engeli hiç değiştirilmedi. Harita
+                                                               üzerinde gösterim ve Public Portal
+                                                               entegrasyonu kapsam dışı bırakıldı
+                                                               (ikincisi müşterinin kendi ekleyeceği
+                                                               belirtildi). Migration canlıya
+                                                               uygulanması kullanıcı onayı bekliyor.
 
-Incident Tracking              28/28    %0          Orta       Yeni Supabase tabloları
-                                                               + state machine + SOP
-                                                               repo
+Incident Tracking               6/28    ~%79        Orta       Tamamlandı (2026-07-06,
+                                                               spec 011): incidents tablosu
+                                                               ve IncidentsView.vue zaten
+                                                               vardı (tahminden ileri) — bu
+                                                               spec DB seviyesinde zorunlu
+                                                               state machine (guard trigger,
+                                                               open→in_progress→monitoring→
+                                                               closed→archived, MHEWS-FC-STM-04),
+                                                               monitoring→closed için zorunlu
+                                                               AAR (after-action notlar) kuralı,
+                                                               SOP repository (hazard tipine
+                                                               bağlı, admin CRUD, incident'ta
+                                                               otomatik eşleşen prosedür
+                                                               gösterimi), ve broadcast CAP
+                                                               uyarısından tek tıkla bağlantılı
+                                                               incident oluşturma ekledi.
+                                                               Kalan: drill/exercise simulation
+                                                               (ayrı modül, zaten mevcut
+                                                               drill_sessions tablosu), otomatik/
+                                                               yıllık rapor üretimi, LLM SOP
+                                                               asistanı, timeline playback,
+                                                               false-alarm-rate metrikleri.
+                                                               Migration canlıya uygulanması
+                                                               kullanıcı onayı bekliyor.
 
-Administration & Access        8/21     %62         Kolay      Tamamlandı (2026-07-06,
+Administration & Access        3/21     ~%86        Kolay      Tamamlandı (2026-07-06,
                                                                spec 004): /admin rotasına
                                                                rol bazlı guard, country_admin/
                                                                org_admin için gerçek profiles
@@ -107,17 +252,141 @@ Administration & Access        8/21     %62         Kolay      Tamamlandı (2026
                                                                Function), rol bazlı/dağıtım
                                                                bazlı zorunlu-MFA politikası
                                                                (varsayılan: opsiyonel).
+                                                               Tamamlandı (2026-07-06, spec 018):
+                                                               "custom permissions" kalemi dar
+                                                               kapsamlı ve güvenli şekilde
+                                                               kapatıldı — sabit 4 rol ve
+                                                               mevcut ~50+ RLS kuralına HİÇ
+                                                               dokunulmadan (kod taramasıyla
+                                                               tam blast-radius tespit edildi,
+                                                               tam yeniden yazım riskli
+                                                               bulunup reddedildi), yeni bir
+                                                               profile_capability_grants
+                                                               tablosu + current_profile_
+                                                               has_capability() helper
+                                                               fonksiyonu ile super_admin artık
+                                                               4 admin alanını (Hazard
+                                                               Taxonomy, SOP Repository, Map
+                                                               Layers, Audit) tek tek bir
+                                                               country_admin/org_admin
+                                                               kullanıcıya, tam süper admin
+                                                               yapmadan verebiliyor/geri
+                                                               alabiliyor — kullanıcı listesinde
+                                                               her alan için ayrı checkbox,
+                                                               RLS seviyesinde ek/additive
+                                                               policy (mevcut super_admin_*
+                                                               policy'ler değişmedi), sadece
+                                                               country_admin/org_admin hedef
+                                                               alınabiliyor (viewer'a grant
+                                                               DB trigger'ıyla engelleniyor).
                                                                Migration canlıya uygulanması
                                                                kullanıcı onayı bekliyor.
-                                                               Kalan: custom permissions
-                                                               (roller sabit 4 kademe,
-                                                               konfigüre edilemiyor).
+                                                               Kalan: tam yapılandırılabilir
+                                                               rol/izin sistemi (rollerin
+                                                               kendisini değiştirme) — bilinçli
+                                                               olarak kapsam dışı bırakıldı,
+                                                               riski çok yüksek bulunup
+                                                               reddedildi.
 
-Hazard Taxonomy Admin          21/21    %0          Orta       Admin UI + Supabase
-                                                               config tabloları
-                                                               (hazard types, scales)
+Hazard Taxonomy Admin          0/21     %100        Orta       Tamamlandı (2026-07-07,
+                                                               spec 024): modülün son 2 kalemi
+                                                               kapatıldı — hazard_types tablosuna
+                                                               additive nullable parent_code
+                                                               (self-referencing FK) eklendi,
+                                                               kendine-referans ve döngü (cycle)
+                                                               oluşturan atamalar hem DB seviyesinde
+                                                               (BEFORE INSERT/UPDATE trigger,
+                                                               recursive CTE) hem client
+                                                               tarafında (wouldCreateCycle() saf
+                                                               fonksiyonu, form kaydetmeden önce
+                                                               anlık uyarı) reddediliyor. Admin
+                                                               formuna opsiyonel "Üst Hazard Tipi"
+                                                               dropdown'ı eklendi, taxonomy
+                                                               tablosuna üst tip sütunu eklendi.
+                                                               Yazma yetkisi tamamen mevcut
+                                                               super_admin_hazard_types_all RLS
+                                                               policy'sine bağlı (spec 018'in
+                                                               hazard_taxonomy capability grant'i
+                                                               dahil) — hiç yeni yetkilendirme
+                                                               yolu açılmadı. Ayrıca yeni, herkese
+                                                               açık (viewer dahil) /hazards
+                                                               rotasında salt-okunur "Afet
+                                                               Ansiklopedisi" sayfası eklendi — her
+                                                               aktif hazard type'ın açıklaması,
+                                                               kategorisi, üst/alt ilişkisi ve
+                                                               şiddet eşikleri gösteriliyor,
+                                                               tamamen mevcut önbelleklenmiş
+                                                               store'dan okunuyor (ek network
+                                                               isteği yok). /admin rotasının
+                                                               viewer-engelleme davranışı (spec
+                                                               004) hiç değiştirilmedi — spec
+                                                               021'deki /shelters çözümüyle aynı
+                                                               mimari desen. Migration canlıya
+                                                               uygulanması kullanıcı onayı
+                                                               bekliyor.
+                                                               Tamamlandı (2026-07-06,
+                                                               spec 010): Constitution
+                                                               Principle I ihlalini
+                                                               (hazard type'lar ve şiddet
+                                                               eşikleri 6+ dosyada
+                                                               hardcoded) düzeltti —
+                                                               hazard_types + hazard_thresholds
+                                                               registry (sadece super_admin
+                                                               yazabilir, JSONB breakpoint
+                                                               dizisi), admin UI (tip
+                                                               ekleme/deaktive etme, eşik
+                                                               düzenleyici), 9 mevcut hazard
+                                                               type'ın hardcoded değerleri
+                                                               sıfır regresyonla seed edildi,
+                                                               6 dosya (ContactFormModal,
+                                                               FileImportForm, ManualEntryForm,
+                                                               SourceFormModal, CapView,
+                                                               IncidentsView) registry'den
+                                                               okuyacak şekilde taşındı
+                                                               (offline fallback ile).
+                                                               Migration canlıya uygulanması
+                                                               kullanıcı onayı bekliyor.
+                                                               Tamamlandı (2026-07-06, spec 016):
+                                                               "backend normalize.ts/normalizer.js
+                                                               runtime'larının aynı registry'e
+                                                               bağlanması" kalemi kapatıldı — iki
+                                                               bağımsız ingestion runtime'ı
+                                                               (Deno Edge Function ve Node.js
+                                                               aggregator) artık gerçek zamanlı
+                                                               ingest edilen afet verisinin
+                                                               severity hesabında hazard_thresholds
+                                                               registry'sini okuyor (TTL'li,
+                                                               arka planda yenilenen cache —
+                                                               normalize()'ın senkron çağrı
+                                                               şekli hiç değişmedi). Registry
+                                                               erişilemezse veya hazard tipi hiç
+                                                               özelleştirilmemişse mevcut hardcoded
+                                                               eşiklere sıfır regresyonla düşülüyor.
+                                                               Kalan: hiyerarşik hazard ilişkileri,
+                                                               hazard ansiklopedisi UI'ı.
+                                                               Tamamlandı (2026-07-06, spec 020):
+                                                               "bölgesel eşik override'ları" kalemi
+                                                               kapatıldı — yeni additive
+                                                               hazard_threshold_overrides tablosu
+                                                               (ülke+hazard tipi başına tek
+                                                               override, mevcut hazard_thresholds
+                                                               hiç değişmedi), erişim tamamen
+                                                               spec 018'in hazard_taxonomy
+                                                               capability grant'ine bağlı (düz
+                                                               country_admin/org_admin rolü tek
+                                                               başına yeterli değil), resolveThresholds()
+                                                               saf fonksiyonu (test edildi)
+                                                               computeSeverity()'ye opsiyonel
+                                                               üçüncü countryCode parametresi
+                                                               olarak eklendi (eski çağrılar
+                                                               değişmedi). Kapsam sadece frontend
+                                                               (backend ingestion runtime'larının
+                                                               override okuması ayrı bir iterasyona
+                                                               bırakıldı, spec 010→016 hikayesindeki
+                                                               gibi). Migration canlıya uygulanması
+                                                               kullanıcı onayı bekliyor.
 
-Audit & Compliance             44/59    ~%25        Orta–Zor   Tamamlandı (2026-07-06,
+Audit & Compliance             41/59    ~%31        Orta–Zor   Tamamlandı (2026-07-06,
                                                                spec 007): audit_log zaten
                                                                vardı ama görünür arayüzü
                                                                yoktu — super_admin'e özel
@@ -126,14 +395,128 @@ Audit & Compliance             44/59    ~%25        Orta–Zor   Tamamlandı (20
                                                                export (5.000 satır sınırlı),
                                                                SHA-256 hash-zinciri bütünlük
                                                                doğrulaması, tek-kayıt geçmişi
-                                                               eklendi. Kalan: PDF kanıt
+                                                               eklendi.
+                                                               Tamamlandı (2026-07-06, spec 019):
+                                                               "zamanlanmış raporlar" kalemi
+                                                               kapatıldı — yeni compliance_reports
+                                                               tablosu + generate-compliance-report
+                                                               Edge Function, pg_cron ile haftalık
+                                                               (her Pazartesi 00:00 UTC) otomatik
+                                                               çalışıyor: o haftanın audit_log
+                                                               aktivitesini action/tablo bazlı
+                                                               özetliyor, mevcut
+                                                               verify_audit_chain() bütünlük
+                                                               sonucunu rapora ekliyor, aynı dönem
+                                                               için asla ikinci rapor üretmiyor
+                                                               (DB seviyesinde UNIQUE kısıt).
+                                                               Denetim sekmesine "Geçmiş
+                                                               Raporlar" alt bölümü eklendi,
+                                                               mevcut CSV/JSON export
+                                                               fonksiyonları yeniden kullanıldı
+                                                               (yeni export mekanizması yok).
+                                                               Projede ilk kez bir migration
+                                                               dosyası pg_cron.schedule()
+                                                               kaydediyor (önceki 5 fetch-*
+                                                               job'ı muhtemelen Dashboard'dan
+                                                               elle kaydedilmişti) — bu yüzden
+                                                               migration sonrası kayıt kontrolü
+                                                               için ayrı bir doğrulama adımı var.
+                                                               Migration + Edge Function deploy
+                                                               canlıya uygulanması kullanıcı
+                                                               onayı bekliyor. Kalan: PDF kanıt
                                                                paketleri + MinIO/S3 (bilinçli
-                                                               kapsam dışı), zamanlanmış
-                                                               raporlar, AI/LLM denetim
-                                                               alanları.
+                                                               kapsam dışı), AI/LLM denetim
+                                                               alanları (henüz AI pipeline yok),
+                                                               yapılandırılabilir raporlama
+                                                               periyodu (bilinçli kapsam dışı,
+                                                               sabit haftalık).
 
-Integration & API Gateway       1/3     %67         Kolay      Admin UI for API
-                                                               endpoint config
+Integration & API Gateway       0/3     %100        Kolay      Tamamlandı (2026-07-06,
+                                                               spec 022): backlog'daki
+                                                               "Admin UI for API endpoint
+                                                               config" (kalan tek kalem)
+                                                               yanıltıcı çıktı — bu aslında
+                                                               zaten tamamlanmış data_sources
+                                                               panelini (spec 001-003)
+                                                               kastediyordu. PRD'nin gerçek 3
+                                                               gereksinimi (API Key Issuance,
+                                                               Schema Enforcement, WhatsApp
+                                                               webhook) kodda hiç yoktu.
+                                                               Proje sahibiyle kapsam yeniden
+                                                               çerçevelendi: sistem farklı
+                                                               ülkelere/müşterilere teslim
+                                                               edilen hazır bir sistem
+                                                               olduğundan, kendi WhatsApp
+                                                               kimlik bilgilerimizi önceden
+                                                               yapılandırmak yanlış — her ülke
+                                                               KENDİ WhatsApp Business API
+                                                               kimlik bilgilerini (access
+                                                               token, phone number id,
+                                                               webhook verify token) admin
+                                                               panelinden girip yönetebiliyor,
+                                                               kimlik bilgileri sadece
+                                                               Supabase Vault'a yazılıyor
+                                                               (spec 019'daki gibi tek bir
+                                                               SECURITY DEFINER fonksiyon
+                                                               üzerinden), client'a gerçek
+                                                               değer asla dönmüyor. Mevcut
+                                                               dispatch-alert'teki WhatsApp
+                                                               mock adapter'ı bilinçli olarak
+                                                               değiştirilmedi (sıfır
+                                                               regresyon). API Key Issuance
+                                                               ve Schema Enforcement, dış API
+                                                               tüketici senaryosu olmadığı
+                                                               için YAGNI gerekçesiyle kapsam
+                                                               dışı bırakıldı (muhtemelen hiç
+                                                               yapılmayacak). Gerçek Meta
+                                                               Cloud API çağrısı ve inbound
+                                                               webhook receiver, gerçek bir
+                                                               WhatsApp Business hesabı
+                                                               olmadan test edilemediği için
+                                                               ayrı bir iterasyona bırakıldı.
+                                                               Tamamlandı (2026-07-08, spec 025):
+                                                               proje sahibinin geri bildirimiyle
+                                                               (sistem farklı ülkelere hazır
+                                                               şablon olarak verildiği için
+                                                               WhatsApp'a özel sabit 3 alanlı
+                                                               panel yetersiz bulundu) spec
+                                                               022'nin WhatsApp'a özel sistemi
+                                                               GENEL bir entegrasyon kimlik
+                                                               bilgisi yönetim sistemine
+                                                               dönüştürüldü — yeni
+                                                               integration_types registry'si
+                                                               (hazard_types deseniyle aynı,
+                                                               sadece super_admin yazabiliyor,
+                                                               her tür kendi field_template'ini
+                                                               JSONB olarak taşıyor), WhatsApp
+                                                               artık bu registry'nin ilk
+                                                               önceden-tanımlı türü (gelecekte
+                                                               yeni bir entegrasyon eklemek
+                                                               sadece bir registry satırı
+                                                               gerektiriyor, yeni migration/kod
+                                                               değil). save_integration_
+                                                               credentials() genel SECURITY
+                                                               DEFINER fonksiyonu rastgele
+                                                               sayıda key-value alanı kabul
+                                                               ediyor (şablon alanları + admin'in
+                                                               eklediği serbest özel alanlar),
+                                                               aynı yetkilendirme/case-
+                                                               normalization/Vault create_secret-
+                                                               update_secret deseni (spec
+                                                               019/022) aynen korunuyor. Sert
+                                                               geçiş (hard cutover): eski
+                                                               whatsapp_integration_settings
+                                                               tablosu ve save_whatsapp_
+                                                               credentials() fonksiyonu aynı
+                                                               migrationda kaldırıldı — üretimde
+                                                               henüz gerçek kullanım olmadığı
+                                                               için (dispatch-alert'teki
+                                                               WhatsApp adapter'ı hâlâ mock)
+                                                               veri taşıma gerekmedi. dispatch-
+                                                               alert'teki mock adapter hiç
+                                                               değiştirilmedi. Migration canlıya
+                                                               uygulanması kullanıcı onayı
+                                                               bekliyor.
 
 Forecasting / AI               49/49    %0          Çok Zor    Ayrı ML servisi,
                                                                model registry,
@@ -143,8 +526,49 @@ Risk & Scenario Modeling       11/11    %0          Çok Zor    Simulation engin
                                                                PostGIS spatial,
                                                                asset graph
 
-Preparedness, Drill & Response  3/3     %0          Orta       DrillMode flag +
-                                                               CAP Exercise status +
-                                                               otomatik rapor
+Preparedness, Drill & Response  1/3    ~%67         Orta       Tamamlandı (2026-07-06,
+                                                               spec 013): drill_sessions
+                                                               tablosu ve tatbikat başlat/
+                                                               bitir CRUD'u zaten vardı —
+                                                               bu spec modülün güvenlik-
+                                                               kritik boşluğunu kapattı:
+                                                               tatbikat sırasında oluşturulan
+                                                               CAP uyarıları otomatik olarak
+                                                               "exercise" işaretleniyor
+                                                               (is_exercise, insert-time
+                                                               trigger), exercise uyarıları
+                                                               broadcast olsa bile gerçek
+                                                               email/WhatsApp dispatch'i
+                                                               tetiklemiyor (DB seviyesinde,
+                                                               notify_dispatch_on_broadcast
+                                                               WHEN koşuluna eklendi — hiçbir
+                                                               kod yolu bunu atlayamaz),
+                                                               CapView'da her durumda görünür
+                                                               "SADECE TATBİKAT" işareti,
+                                                               tatbikat özetine otomatik
+                                                               uyarı sayısı eklendi.
+                                                               Tamamlandı (2026-07-06, spec 017):
+                                                               "tepki süresi ölçümü" ve "katılım/
+                                                               ack metrikleri" kalemleri kapatıldı
+                                                               — tatbikat bittiğinde artık
+                                                               tatbikat başlangıcından ilk
+                                                               exercise uyarısına kadar geçen
+                                                               süre gösteriliyor (hiç uyarı
+                                                               yoksa "veri yok", asla yanıltıcı
+                                                               sıfır değil), ve dispatch edilen
+                                                               her e-postaya tek tıkla "aldım"
+                                                               onay linki eklendi (dispatch_
+                                                               receipts.acknowledged_at, sadece
+                                                               yeni public/anon Edge Function
+                                                               ack-dispatch yazabiliyor —
+                                                               anon'a doğrudan RLS izni asla
+                                                               verilmedi), tatbikat özetinde
+                                                               onay oranı (X/Y) gösteriliyor.
+                                                               Migration canlıya uygulanması ve
+                                                               ack-dispatch Edge Function deploy'u
+                                                               (verify_jwt=false ile) kullanıcı
+                                                               onayı bekliyor. Kalan: simüle
+                                                               tehlike enjeksiyonu (ayrı, daha
+                                                               büyük bir iterasyon).
 ─────────────────────────────────────────────────────────────────────────────────
-TOPLAM                        301/446   ~%33
+TOPLAM                        149/446   ~%67

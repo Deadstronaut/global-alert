@@ -4,9 +4,15 @@ import { supabase } from '@/services/api/config.js'
 import { parseDataFile, SUPPORTED_EXTENSIONS } from '@/utils/fileParsers.js'
 import { buildEventRow } from '@/utils/severity.js'
 import { useAuthStore } from '@/stores/auth.js'
+import { useHazardTypesStore } from '@/stores/hazardTypes.js'
 
-const HAZARD_TYPES = ['earthquake', 'wildfire', 'flood', 'drought', 'food_security']
+// spec 010: intersected with TABLE_MAP, same reasoning as ManualEntryForm.vue
+// — this form can only write hazard types that have a dedicated table.
 const TABLE_MAP = { earthquake: 'earthquake', wildfire: 'wildfire', flood: 'flood', drought: 'drought', food_security: 'food_security' }
+const hazardTypesStore = useHazardTypesStore()
+const HAZARD_TYPES = computed(() =>
+  hazardTypesStore.activeHazardTypes.filter((h) => TABLE_MAP[h.code]),
+)
 const MAPPABLE_FIELDS = [
   { key: 'id', label: 'ID *' },
   { key: 'lat', label: 'Enlem (lat) *' },
@@ -126,7 +132,7 @@ async function runImport() {
     <div class="form-grid">
       <label class="form-field"><span>Afet Tipi *</span>
         <select v-model="hazardType">
-          <option v-for="t in HAZARD_TYPES" :key="t" :value="t">{{ t }}</option>
+          <option v-for="t in HAZARD_TYPES" :key="t.code" :value="t.code">{{ t.display_name }}</option>
         </select>
       </label>
       <label class="form-field"><span>Ülke Kodu</span>

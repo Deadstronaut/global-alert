@@ -1,4 +1,17 @@
 
+# spec 017: the only Edge Function in this project with verify_jwt = false,
+# deliberately — it must be reachable by a direct click from an email client
+# with no bearer token available (research.md). See ack-dispatch/index.ts.
+[functions.ack-dispatch]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/ack-dispatch/index.ts"
+
+[functions.generate-compliance-report]
+enabled = true
+verify_jwt = true
+entrypoint = "./functions/generate-compliance-report/index.ts"
+
 [functions.fetch-historical-events]
 enabled = true
 verify_jwt = true

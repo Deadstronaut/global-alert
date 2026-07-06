@@ -4,14 +4,17 @@ import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useAuthStore } from '@/stores/auth.js'
 import { useDisasterStore } from '@/stores/disaster.js'
+import { useHazardTypesStore } from '@/stores/hazardTypes.js'
 import { supabase } from '@/services/api/config.js'
 import { allowedTransitions, isDraftCompleteForApproval, canUserActOnDraft } from '@/lib/capStateMachine.js'
+import { generateCapXml, generateCapJson } from '@/lib/capExport.js'
 
 const router = useRouter()
 const { t } = useI18n()
 
 const auth = useAuthStore()
 const disaster = useDisasterStore()
+const hazardTypesStore = useHazardTypesStore()
 
 const drafts = ref([])
 const loading = ref(false)
@@ -20,7 +23,11 @@ const submitting = ref(false)
 const error = ref(null)
 const activeTab = ref('active') // 'active' | 'history'
 
-const HAZARD_TYPES = ['earthquake','wildfire','flood','drought','food_security','tsunami','cyclone','volcano','epidemic']
+// spec 010: sourced from the hazard taxonomy registry instead of a hardcoded
+// list — a CAP alert can be authored for any registered hazard type, unlike
+// ManualEntryForm/FileImportForm/SourceFormModal which are limited to
+// hazard types with a dedicated disaster table.
+const HAZARD_TYPES = computed(() => hazardTypesStore.activeHazardTypes)
 const SEVERITIES   = ['critical','high','moderate','low','minimal']
 const CERTAINTIES  = ['observed','likely','possible','unlikely','unknown']
 const URGENCIES    = ['immediate','expected','future','past','unknown']
@@ -43,6 +50,7 @@ const form = ref({
   description: '',
   instructions: '',
   area_desc: '',
+  region_code: '',
   lang: 'en',
   effective_at: new Date().toISOString().slice(0,16),
   expires_at:   new Date(Date.now() + 86400000).toISOString().slice(0,16),
@@ -108,6 +116,7 @@ async function submitDraft() {
   form.value.title = ''
   form.value.description = ''
   form.value.instructions = ''
+  form.value.region_code = ''
   await loadDrafts()
 }
 
@@ -190,6 +199,63 @@ function formatDate(iso) {
   return iso ? new Date(iso).toLocaleString() : '—'
 }
 
+// spec 011 FR-007/FR-008: operator convenience — pre-fill a new incident
+// from a broadcast alert's own fields and link back to it. Existing
+// `incidents` RLS insert policies (unchanged by this spec) continue to
+// scope who may perform this insert.
+const creatingIncidentFor = ref(null)
+
+async function createIncidentFromDraft(draft) {
+  creatingIncidentFor.value = draft.id
+  const { error: err } = await supabase.from('incidents').insert({
+    title: draft.title,
+    description: draft.description,
+    hazard_type: draft.hazard_type,
+    severity: draft.severity,
+    area_desc: draft.area_desc,
+    country_code: draft.country_code,
+    linked_cap_id: draft.id,
+    status: 'open',
+  })
+  creatingIncidentFor.value = null
+  if (err) { error.value = err.message; return }
+  router.push({ name: 'incidents' })
+}
+
+// spec 014 FR-003/FR-005/FR-007: export a broadcast-or-later alert as a
+// CAP v1.2-compliant XML/JSON document. Gated on broadcast_at (not status,
+// since a 'cancelled' draft may have been cancelled before ever broadcasting
+// — see contracts/cap-export.md).
+async function fetchSupersededDraft(draft) {
+  if (!draft.supersedes_id) return null
+  const { data } = await supabase
+    .from('cap_drafts')
+    .select('sender, id, effective_at')
+    .eq('id', draft.supersedes_id)
+    .maybeSingle()
+  return data ?? null
+}
+
+function triggerDownload(filename, content, mimeType) {
+  const blob = new Blob([content], { type: mimeType })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filename
+  a.click()
+  URL.revokeObjectURL(url)
+}
+
+async function exportCapXml(draft) {
+  const superseded = await fetchSupersededDraft(draft)
+  triggerDownload(`cap-${draft.id}.xml`, generateCapXml(draft, superseded), 'application/xml')
+}
+
+async function exportCapJson(draft) {
+  const superseded = await fetchSupersededDraft(draft)
+  triggerDownload(`cap-${draft.id}.json`, JSON.stringify(generateCapJson(draft, superseded), null, 2), 'application/json')
+}
+
 onMounted(loadDrafts)
 </script>
 
@@ -229,7 +295,7 @@ onMounted(loadDrafts)
           <label class="form-field">
             <span>{{ t('cap.form.hazardType') }}</span>
             <select v-model="form.hazard_type">
-              <option v-for="h in HAZARD_TYPES" :key="h" :value="h">{{ h }}</option>
+              <option v-for="h in HAZARD_TYPES" :key="h.code" :value="h.code">{{ h.display_name }}</option>
             </select>
           </label>
           <label class="form-field">
@@ -265,6 +331,10 @@ onMounted(loadDrafts)
           <label class="form-field">
             <span>{{ t('cap.form.area') }}</span>
             <input v-model="form.area_desc" :placeholder="t('cap.form.areaPlaceholder')" />
+          </label>
+          <label class="form-field">
+            <span>{{ t('cap.form.regionCode') }}</span>
+            <input v-model="form.region_code" :placeholder="t('cap.form.regionCodePlaceholder')" />
           </label>
           <label class="form-field">
             <span>{{ t('cap.form.lang') }}</span>
@@ -324,7 +394,8 @@ onMounted(loadDrafts)
 
     <!-- Drafts list -->
     <div v-else class="drafts-list">
-      <div v-for="draft in visibleDrafts" :key="draft.id" class="draft-card">
+      <div v-for="draft in visibleDrafts" :key="draft.id" class="draft-card" :class="{ 'draft-exercise': draft.is_exercise }">
+        <div v-if="draft.is_exercise" class="draft-exercise-badge">🎯 {{ t('cap.exerciseOnly') }}</div>
         <div class="draft-top">
           <span class="draft-hazard">{{ draft.hazard_type }}</span>
           <span class="draft-severity" :class="'sev-' + draft.severity">{{ draft.severity }}</span>
@@ -336,10 +407,24 @@ onMounted(loadDrafts)
         <h4 class="draft-title">{{ draft.title }}</h4>
         <p v-if="draft.description" class="draft-desc">{{ draft.description }}</p>
         <div v-if="draft.area_desc" class="draft-area">📍 {{ draft.area_desc }}</div>
+        <div v-if="draft.region_code" class="draft-region">🎯 {{ t('cap.form.regionCode') }}: {{ draft.region_code }}</div>
         <div class="draft-validity">
           {{ formatDate(draft.effective_at) }} → {{ formatDate(draft.expires_at) }}
         </div>
         <div v-if="draft.status === 'broadcast'" class="draft-readonly">🔒 {{ t('cap.readOnly') }}</div>
+        <div v-if="draft.status === 'broadcast' && canCreate" class="draft-create-incident">
+          <button
+            class="btn-transition"
+            :disabled="creatingIncidentFor === draft.id"
+            @click="createIncidentFromDraft(draft)"
+          >
+            🚨 {{ t('incidentTracking.createIncidentFromAlert') }}
+          </button>
+        </div>
+        <div v-if="draft.broadcast_at" class="draft-cap-export">
+          <button class="btn-transition" @click="exportCapXml(draft)">📄 {{ t('cap.exportXml') }}</button>
+          <button class="btn-transition" @click="exportCapJson(draft)">🗂️ {{ t('cap.exportJson') }}</button>
+        </div>
         <div v-if="draft.rejection_reason" class="draft-reason">{{ t('cap.history.rejectionReason') }}: {{ draft.rejection_reason }}</div>
         <div v-if="draft.cancellation_reason" class="draft-reason">{{ t('cap.history.cancellationReason') }}: {{ draft.cancellation_reason }}</div>
 
@@ -574,6 +659,13 @@ onMounted(loadDrafts)
 .draft-area  { font-size: .78rem; color: #60a5fa; margin-bottom: 4px; }
 .draft-validity { font-size: .72rem; color: var(--color-text-muted, #94a3b8); font-family: monospace; }
 .draft-readonly { font-size: .72rem; color: #fbbf24; margin-top: 6px; }
+.draft-create-incident { margin-top: 8px; }
+.draft-cap-export { margin-top: 8px; display: flex; gap: 8px; }
+.draft-exercise { border: 2px dashed #f97316; }
+.draft-exercise-badge {
+  display: inline-block; font-size: .72rem; font-weight: 800; letter-spacing: .05em;
+  color: #0b0d12; background: #f97316; padding: 3px 10px; border-radius: 6px; margin-bottom: 8px;
+}
 .draft-reason { font-size: .78rem; color: #f87171; margin-top: 6px; font-style: italic; }
 
 .draft-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }

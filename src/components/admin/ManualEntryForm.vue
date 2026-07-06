@@ -1,11 +1,21 @@
 <script setup>
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import { supabase } from '@/services/api/config.js'
 import { buildEventRow } from '@/utils/severity.js'
 import { useAuthStore } from '@/stores/auth.js'
+import { useHazardTypesStore } from '@/stores/hazardTypes.js'
 
-const HAZARD_TYPES = ['earthquake', 'wildfire', 'flood', 'drought', 'food_security']
+// spec 010: display list is sourced from the hazard taxonomy registry, but
+// intersected with the hazard types that actually have a dedicated table
+// (TABLE_MAP) — unlike ContactFormModal/CapView/IncidentsView, this form
+// can't offer tsunami/cyclone/volcano/epidemic etc. even if a super_admin
+// activates them in the registry, since no dedicated table exists for them
+// yet (that's a separate, larger backend change, out of this spec's scope).
 const TABLE_MAP = { earthquake: 'earthquake', wildfire: 'wildfire', flood: 'flood', drought: 'drought', food_security: 'food_security' }
+const hazardTypesStore = useHazardTypesStore()
+const HAZARD_TYPES = computed(() =>
+  hazardTypesStore.activeHazardTypes.filter((h) => TABLE_MAP[h.code]),
+)
 
 const auth = useAuthStore()
 
@@ -60,7 +70,7 @@ async function submit() {
     <div class="form-grid">
       <label class="form-field"><span>Afet Tipi *</span>
         <select v-model="form.hazard_type">
-          <option v-for="t in HAZARD_TYPES" :key="t" :value="t">{{ t }}</option>
+          <option v-for="t in HAZARD_TYPES" :key="t.code" :value="t.code">{{ t.display_name }}</option>
         </select>
       </label>
       <label class="form-field"><span>Ülke Kodu</span>

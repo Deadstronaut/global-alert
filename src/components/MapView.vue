@@ -18,6 +18,103 @@ import maplibregl from 'maplibre-gl'
 import 'maplibre-gl/dist/maplibre-gl.css'
 import ImpactPanel from '@/components/impact/ImpactPanel.vue'
 import GeocodingSearch from '@/components/impact/GeocodingSearch.vue'
+import { useMapLayersStore } from '@/stores/mapLayers.js'
+
+// spec 012: OGC WMS/WFS map layer registry — admin-registered external
+// overlays rendered live on this map (never stored/normalized, FR-008).
+const mapLayersStore = useMapLayersStore()
+const layerVisibility = ref({}) // { [layerId]: boolean }
+const layerOpacity = ref({}) // { [layerId]: number 0..1 }
+const DEFAULT_LAYER_OPACITY = 0.7
+
+function isLayerVisible(layerId) {
+  return !!layerVisibility.value[layerId]
+}
+
+function getLayerOpacity(layerId) {
+  return layerOpacity.value[layerId] ?? DEFAULT_LAYER_OPACITY
+}
+
+function wmsSourceId(layer) { return `map-layer-wms-${layer.id}` }
+function wfsSourceId(layer) { return `map-layer-wfs-${layer.id}` }
+
+function addWmsLayer(layer) {
+  if (!map) return
+  const sourceId = wmsSourceId(layer)
+  const base = layer.endpoint_url.includes('?') ? `${layer.endpoint_url}&` : `${layer.endpoint_url}?`
+  const tileUrl = `${base}SERVICE=WMS&VERSION=1.3.0&REQUEST=GetMap&LAYERS=${encodeURIComponent(layer.layer_name)}&STYLES=&FORMAT=image/png&TRANSPARENT=true&CRS=EPSG:3857&WIDTH=256&HEIGHT=256&BBOX={bbox-epsg-3857}`
+  map.addSource(sourceId, { type: 'raster', tiles: [tileUrl], tileSize: 256 })
+  map.addLayer({
+    id: sourceId,
+    type: 'raster',
+    source: sourceId,
+    paint: { 'raster-opacity': getLayerOpacity(layer.id) },
+  })
+}
+
+async function addWfsLayer(layer) {
+  if (!map) return
+  const sourceId = wfsSourceId(layer)
+  const base = layer.endpoint_url.includes('?') ? `${layer.endpoint_url}&` : `${layer.endpoint_url}?`
+  const url = `${base}SERVICE=WFS&VERSION=2.0.0&REQUEST=GetFeature&TYPENAMES=${encodeURIComponent(layer.layer_name)}&OUTPUTFORMAT=application/json`
+  let geojson
+  try {
+    const res = await fetch(url)
+    if (!res.ok) return // silent render failure per spec.md Edge Cases
+    geojson = await res.json()
+  } catch {
+    return // silent render failure — no data/table write, no blocking error
+  }
+  // Toggle may have been switched off again while the fetch was in flight.
+  if (!map || !isLayerVisible(layer.id) || map.getSource(sourceId)) return
+
+  map.addSource(sourceId, { type: 'geojson', data: geojson })
+  const opacity = getLayerOpacity(layer.id)
+  map.addLayer({ id: `${sourceId}-fill`, type: 'fill', source: sourceId, filter: ['==', ['geometry-type'], 'Polygon'], paint: { 'fill-color': '#4da3ff', 'fill-opacity': opacity * 0.4 } })
+  map.addLayer({ id: `${sourceId}-line`, type: 'line', source: sourceId, filter: ['in', ['geometry-type'], ['literal', ['LineString', 'Polygon']]], paint: { 'line-color': '#4da3ff', 'line-opacity': opacity, 'line-width': 2 } })
+  map.addLayer({ id: `${sourceId}-point`, type: 'circle', source: sourceId, filter: ['==', ['geometry-type'], 'Point'], paint: { 'circle-color': '#4da3ff', 'circle-opacity': opacity, 'circle-radius': 5 } })
+}
+
+function removeMapLayerRendering(layer) {
+  if (!map) return
+  if (layer.source_type === 'wms') {
+    const sourceId = wmsSourceId(layer)
+    if (map.getLayer(sourceId)) map.removeLayer(sourceId)
+    if (map.getSource(sourceId)) map.removeSource(sourceId)
+  } else {
+    const sourceId = wfsSourceId(layer)
+    for (const suffix of ['-fill', '-line', '-point']) {
+      if (map.getLayer(sourceId + suffix)) map.removeLayer(sourceId + suffix)
+    }
+    if (map.getSource(sourceId)) map.removeSource(sourceId)
+  }
+}
+
+function toggleMapLayer(layer) {
+  const next = !isLayerVisible(layer.id)
+  layerVisibility.value = { ...layerVisibility.value, [layer.id]: next }
+  if (!mapLoaded) return
+  if (next) {
+    if (layer.source_type === 'wms') addWmsLayer(layer)
+    else addWfsLayer(layer)
+  } else {
+    removeMapLayerRendering(layer)
+  }
+}
+
+function setMapLayerOpacity(layer, value) {
+  layerOpacity.value = { ...layerOpacity.value, [layer.id]: value }
+  if (!map || !isLayerVisible(layer.id)) return
+  if (layer.source_type === 'wms') {
+    const sourceId = wmsSourceId(layer)
+    if (map.getLayer(sourceId)) map.setPaintProperty(sourceId, 'raster-opacity', value)
+  } else {
+    const sourceId = wfsSourceId(layer)
+    if (map.getLayer(`${sourceId}-fill`)) map.setPaintProperty(`${sourceId}-fill`, 'fill-opacity', value * 0.4)
+    if (map.getLayer(`${sourceId}-line`)) map.setPaintProperty(`${sourceId}-line`, 'line-opacity', value)
+    if (map.getLayer(`${sourceId}-point`)) map.setPaintProperty(`${sourceId}-point`, 'circle-opacity', value)
+  }
+}
 
 // Impact Analysis (spec 008): selected event for the split-view side panel,
 // set from marker clicks below — independent of the existing popup behavior.
@@ -1413,6 +1510,10 @@ function handleMapModeKey(e) {
 
 onMounted(() => {
   window.addEventListener('keydown', handleMapModeKey)
+  // spec 012 T020: always re-fetch here too (idempotent-safe) so a layer
+  // deactivated by an admin is absent from the panel on this map's next
+  // mount, even if App.vue's boot-time fetch is stale from an earlier session.
+  mapLayersStore.fetchMapLayers()
   requestAnimationFrame(function tryInit() {
     if (!mapContainer.value) return
     const { offsetWidth, offsetHeight } = mapContainer.value
@@ -1518,6 +1619,25 @@ onBeforeUnmount(() => {
     <div class="impact-panel-dock">
       <ImpactPanel :selected-event="selectedImpactEvent" />
     </div>
+
+    <!-- OGC WMS/WFS Map Layers (spec 012): toggle + opacity, session-only state -->
+    <div v-if="mapLayersStore.activeMapLayers.length" class="map-layers-panel">
+      <h4 class="map-layers-title">{{ t('mapLayers.panelTitle') }}</h4>
+      <div v-for="layer in mapLayersStore.activeMapLayers" :key="layer.id" class="map-layer-row">
+        <label class="map-layer-toggle">
+          <input type="checkbox" :checked="isLayerVisible(layer.id)" @change="toggleMapLayer(layer)" />
+          <span>{{ layer.display_name }}</span>
+          <span class="map-layer-type">{{ layer.source_type.toUpperCase() }}</span>
+        </label>
+        <input
+          v-if="isLayerVisible(layer.id)"
+          type="range" min="0" max="1" step="0.05"
+          :value="getLayerOpacity(layer.id)"
+          @input="setMapLayerOpacity(layer, Number($event.target.value))"
+          class="map-layer-opacity"
+        />
+      </div>
+    </div>
   </div>
 </template>
 
@@ -1534,6 +1654,26 @@ onBeforeUnmount(() => {
   width: 100%;
   height: 100vh;
 }
+
+.map-layers-panel {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  z-index: 5;
+  background: rgba(15,17,23,.9);
+  border: 1px solid rgba(255,255,255,.12);
+  border-radius: 10px;
+  padding: 12px;
+  min-width: 220px;
+  max-width: 280px;
+  color: #e2e8f0;
+  font-size: .8rem;
+}
+.map-layers-title { margin: 0 0 8px; font-size: .8rem; font-weight: 700; }
+.map-layer-row { margin-bottom: 8px; }
+.map-layer-toggle { display: flex; align-items: center; gap: 6px; cursor: pointer; }
+.map-layer-type { margin-left: auto; font-size: .68rem; color: var(--color-text-muted,#94a3b8); }
+.map-layer-opacity { width: 100%; margin-top: 4px; }
 
 .zoom-indicator {
   position: absolute;

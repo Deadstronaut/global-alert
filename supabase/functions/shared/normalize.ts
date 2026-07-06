@@ -3,6 +3,8 @@
  * Mirrors server/src/processors/normalizer.js — keep in sync.
  */
 
+import { getCachedBreakpoints, type Breakpoint } from './hazardThresholdsCache.ts'
+
 export type Severity = 'critical' | 'high' | 'moderate' | 'low' | 'minimal'
 
 export type DisasterType =
@@ -59,6 +61,20 @@ function foodSeverity(phase: number): Severity {
   return 'minimal'
 }
 
+// Pure evaluation of an ordered (ascending min_value) breakpoints array
+// against a numeric value — a TS port of src/stores/hazardTypes.js's
+// evaluateBreakpoints() (spec 016). Exported so normalize.test.ts can test
+// it directly.
+export function evaluateBreakpoints(breakpoints: Breakpoint[], value: number): Severity {
+  if (!Array.isArray(breakpoints) || breakpoints.length === 0) return 'low'
+  let result: Severity = 'low'
+  for (const bp of breakpoints) {
+    if (value >= bp.min_value) result = bp.severity as Severity
+    else break
+  }
+  return result
+}
+
 const SEVERITY_FN: Record<string, (v: number) => Severity> = {
   earthquake:    eqSeverity,
   wildfire:      fireSeverity,
@@ -88,13 +104,15 @@ export function normalize(params: {
 }): NormalizedEvent {
   const mag = params.magnitude ?? 0
   const severityFn = SEVERITY_FN[params.type] ?? (() => 'low' as Severity)
+  const customBreakpoints = getCachedBreakpoints(params.type)
+  const severity = customBreakpoints ? evaluateBreakpoints(customBreakpoints, mag) : severityFn(mag)
 
   return {
     id:           String(params.id),
     type:         params.type,
     lat:          Number(params.lat),
     lng:          Number(params.lng),
-    severity:     severityFn(mag),
+    severity,
     magnitude:    params.magnitude != null ? Number(params.magnitude) : null,
     depth:        params.depth != null ? Number(params.depth) : null,
     title:        String(params.title ?? '').slice(0, 200),

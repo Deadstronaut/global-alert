@@ -20,6 +20,13 @@ export const useAuthStore = defineStore('auth', () => {
       .eq('id', user.id)
       .maybeSingle();
 
+    // spec 018: own capability grants (empty for super_admin — isSuperAdmin
+    // already implies full access, so this is never consulted for that role).
+    const { data: grants } = await supabase
+      .from('profile_capability_grants')
+      .select('capability')
+      .eq('profile_id', user.id);
+
     session.value = {
       id: user.id,
       email: user.email,
@@ -27,6 +34,7 @@ export const useAuthStore = defineStore('auth', () => {
       countryCode: profile?.country_code ?? null,
       regionCode: profile?.region_code ?? null,
       orgId: profile?.org_id ?? null,
+      capabilities: (grants ?? []).map((g) => g.capability),
     };
   }
 
@@ -224,6 +232,32 @@ export const useAuthStore = defineStore('auth', () => {
     return data;
   }
 
+  // ── Capability grants (spec 018) — super_admin-only delegation of one of
+  // the 4 named admin areas to a country_admin/org_admin user, without a
+  // full role promotion. Enforced server-side (RLS + BEFORE INSERT trigger);
+  // these are thin wrappers, not the actual authorization boundary.
+  async function fetchAllCapabilityGrants() {
+    const { data, error } = await supabase.from('profile_capability_grants').select('profile_id, capability');
+    if (error) throw error;
+    return data ?? [];
+  }
+
+  async function grantCapability(profileId, capability) {
+    const { error } = await supabase
+      .from('profile_capability_grants')
+      .upsert({ profile_id: profileId, capability, granted_by: session.value.id }, { onConflict: 'profile_id,capability', ignoreDuplicates: true });
+    if (error) throw error;
+  }
+
+  async function revokeCapability(profileId, capability) {
+    const { error } = await supabase
+      .from('profile_capability_grants')
+      .delete()
+      .eq('profile_id', profileId)
+      .eq('capability', capability);
+    if (error) throw error;
+  }
+
   async function logout() {
     await supabase.auth.signOut();
     session.value = null;
@@ -251,6 +285,9 @@ export const useAuthStore = defineStore('auth', () => {
     createUser,
     suspendUser,
     reactivateUser,
+    fetchAllCapabilityGrants,
+    grantCapability,
+    revokeCapability,
     logout,
   };
 });

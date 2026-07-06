@@ -15,12 +15,19 @@ import { getRegionNames } from '@/data/boundaries/index.js'
 import { groupSourcesByScope } from '@/utils/sourceScope.js'
 import { rowsToCsv, rowsToJson, triggerDownload } from '@/lib/auditExport.js'
 import ExposureDatasetManager from '@/components/impact/ExposureDatasetManager.vue'
+import ContactsPanel from '@/components/admin/ContactsPanel.vue'
+import DispatchPanel from '@/components/admin/DispatchPanel.vue'
+import IntegrationsPanel from '@/components/admin/IntegrationsPanel.vue'
+import HazardTaxonomyPanel from '@/components/admin/HazardTaxonomyPanel.vue'
+import SopRepositoryPanel from '@/components/admin/SopRepositoryPanel.vue'
+import MapLayerRegistryPanel from '@/components/admin/MapLayerRegistryPanel.vue'
+import { computeResponseTimeSeconds, computeAckRate } from '@/utils/drillMetrics.js'
 
 const router = useRouter()
 const { t } = useI18n()
 
 const auth = useAuthStore()
-const tab = ref('users') // 'users' | 'orgs' | 'drill' | 'sources' | 'manual' | 'csv' | 'boundaries' | 'audit'
+const tab = ref('users') // 'users' | 'orgs' | 'drill' | 'sources' | 'manual' | 'csv' | 'boundaries' | 'contacts' | 'dispatch' | 'audit'
 
 async function handleLogout() {
   await auth.logout()
@@ -36,6 +43,55 @@ const savingUser = ref(false)
 
 const ROLES = ['super_admin', 'country_admin', 'org_admin', 'viewer']
 
+// spec 018: which of the 4 named capabilities each country_admin/org_admin
+// currently holds — { [profileId]: Set<capability> }. Loaded fresh alongside
+// the user list so toggle state always reflects ground truth (US3), not just
+// local UI state.
+const CAPABILITIES = ['hazard_taxonomy', 'sop_repository', 'map_layers', 'audit']
+const capabilityGrants = ref({})
+const capabilityGrantError = ref(null)
+
+async function loadCapabilityGrants() {
+  if (!auth.isSuperAdmin) return
+  try {
+    const grants = await auth.fetchAllCapabilityGrants()
+    const byProfile = {}
+    for (const g of grants) {
+      if (!byProfile[g.profile_id]) byProfile[g.profile_id] = new Set()
+      byProfile[g.profile_id].add(g.capability)
+    }
+    capabilityGrants.value = byProfile
+  } catch (err) {
+    capabilityGrantError.value = err.message ?? String(err)
+  }
+}
+
+function hasGrantedCapability(profileId, capability) {
+  return capabilityGrants.value[profileId]?.has(capability) ?? false
+}
+
+// Only country_admin/org_admin are valid grant targets (FR-003) — enforced
+// server-side by a trigger, this is just to keep the toggle UI from offering
+// a meaningless action for other rows.
+function canHaveCapabilityGrants(user) {
+  return user.role === 'country_admin' || user.role === 'org_admin'
+}
+
+async function toggleCapability(user, capability) {
+  capabilityGrantError.value = null
+  const currentlyGranted = hasGrantedCapability(user.id, capability)
+  try {
+    if (currentlyGranted) {
+      await auth.revokeCapability(user.id, capability)
+    } else {
+      await auth.grantCapability(user.id, capability)
+    }
+    await loadCapabilityGrants()
+  } catch (err) {
+    capabilityGrantError.value = err.message ?? String(err)
+  }
+}
+
 async function loadUsers() {
   usersLoading.value = true
   usersError.value = null
@@ -47,6 +103,7 @@ async function loadUsers() {
   if (error) usersError.value = error.message
   else users.value = data || []
   usersLoading.value = false
+  await loadCapabilityGrants()
 }
 
 async function saveUser() {
@@ -238,9 +295,59 @@ async function startDrill() {
 }
 
 async function endDrill(drill) {
+  // spec 013 FR-006: count exercise CAP alerts authored during this drill's
+  // active window, so the summary reflects actual drill activity.
+  const { count: alertsIssued } = await supabase
+    .from('cap_drafts')
+    .select('id', { count: 'exact', head: true })
+    .eq('is_exercise', true)
+    .eq('country_code', drill.country_code)
+    .gte('created_at', drill.started_at)
+
+  // spec 017 US1 FR-001: response time = elapsed time from drill start to
+  // the first exercise alert issued during it (not last/average — see
+  // spec.md Acceptance Scenario 3).
+  const { data: exerciseDrafts } = await supabase
+    .from('cap_drafts')
+    .select('id, created_at')
+    .eq('is_exercise', true)
+    .eq('country_code', drill.country_code)
+    .gte('created_at', drill.started_at)
+    .order('created_at', { ascending: true })
+
+  const firstAlertAt = exerciseDrafts?.[0]?.created_at ?? null
+  const responseTimeSeconds = computeResponseTimeSeconds(drill.started_at, firstAlertAt)
+
+  // spec 017 US2 FR-005: ack rate is counted only against dispatches that
+  // were actually sent, using the same exercise-draft ID set fetched above
+  // (analysis finding M1 — a dedicated ID-set query, not a reuse of the
+  // alertsIssued aggregate).
+  let ackRate = null
+  const draftIds = (exerciseDrafts ?? []).map((d) => d.id)
+  if (draftIds.length > 0) {
+    const { data: jobs } = await supabase.from('dispatch_jobs').select('id').in('cap_draft_id', draftIds)
+    const jobIds = (jobs ?? []).map((j) => j.id)
+    if (jobIds.length > 0) {
+      const { count: sentCount } = await supabase
+        .from('dispatch_receipts')
+        .select('id', { count: 'exact', head: true })
+        .in('dispatch_job_id', jobIds)
+        .in('status', ['sent', 'delivered'])
+      const { count: ackCount } = await supabase
+        .from('dispatch_receipts')
+        .select('id', { count: 'exact', head: true })
+        .in('dispatch_job_id', jobIds)
+        .not('acknowledged_at', 'is', null)
+      ackRate = computeAckRate(sentCount ?? 0, ackCount ?? 0)
+    }
+  }
+
   const summary = {
     duration_min: Math.round((Date.now() - new Date(drill.started_at).getTime()) / 60000),
     ended_at: new Date().toISOString(),
+    alerts_issued: alertsIssued ?? 0,
+    response_time_seconds: responseTimeSeconds,
+    ack_rate: ackRate,
   }
   const { error } = await supabase
     .from('drill_sessions')
@@ -254,6 +361,13 @@ async function endDrill(drill) {
 }
 
 const canAdmin = computed(() => auth.isSuperAdmin || auth.session?.role === 'country_admin')
+
+// spec 018: a country_admin/org_admin granted one of the 4 named capabilities
+// gets the same access as super_admin for that specific admin area only —
+// does not widen canAdmin/canCreateUsers or any other super_admin-only ability.
+function hasCapability(cap) {
+  return auth.isSuperAdmin || (auth.session?.capabilities ?? []).includes(cap)
+}
 
 // org_admin may provision viewer accounts (docs/security_roles_protocol.md §2)
 // but doesn't get the broader org/drill/source management canAdmin grants.
@@ -468,9 +582,48 @@ function resetAuditPage() {
   loadAuditLog()
 }
 
+// spec 019: automatically generated weekly compliance reports (audit
+// activity counts + verify_audit_chain() integrity result). Read-only here —
+// the only writer is the generate-compliance-report Edge Function.
+const complianceReports = ref([])
+const complianceReportsLoading = ref(false)
+
+async function loadComplianceReports() {
+  complianceReportsLoading.value = true
+  const { data } = await supabase
+    .from('compliance_reports')
+    .select('*')
+    .order('period_start', { ascending: false })
+  complianceReports.value = data || []
+  complianceReportsLoading.value = false
+}
+
+// Flattens a report's summary JSONB into row-shaped data so it can go
+// through the same rowsToCsv/rowsToJson/triggerDownload helpers already used
+// for the manual audit log export (FR-009 — no new export mechanism).
+function downloadComplianceReport(report, format) {
+  const flatRows = [
+    { period_start: report.period_start, period_end: report.period_end, kind: 'integrity', key: 'integrity_ok', value: report.summary.integrity_ok },
+    { period_start: report.period_start, period_end: report.period_end, kind: 'integrity', key: 'broken_seq', value: report.summary.broken_seq },
+    ...Object.entries(report.summary.by_action || {}).map(([action, count]) => ({
+      period_start: report.period_start, period_end: report.period_end, kind: 'by_action', key: action, value: count,
+    })),
+    ...Object.entries(report.summary.by_table || {}).map(([table, count]) => ({
+      period_start: report.period_start, period_end: report.period_end, kind: 'by_table', key: table, value: count,
+    })),
+  ]
+  const stamp = report.period_start.slice(0, 10)
+  if (format === 'csv') {
+    triggerDownload(rowsToCsv(flatRows), `compliance-report-${stamp}.csv`, 'text/csv')
+  } else {
+    triggerDownload(rowsToJson(flatRows), `compliance-report-${stamp}.json`, 'application/json')
+  }
+}
+
 function openAuditTab() {
   tab.value = 'audit'
   loadAuditLog()
+  loadComplianceReports()
 }
 
 function prevAuditPage() {
@@ -592,7 +745,49 @@ onUnmounted(() => {
         🗺️ Sınır Verisi
       </button>
       <button
-        v-if="auth.isSuperAdmin"
+        v-if="canCreateUsers"
+        :class="['tab', { active: tab === 'contacts' }]"
+        @click="tab = 'contacts'"
+      >
+        📇 {{ t('contacts.tabLabel') }}
+      </button>
+      <button
+        v-if="canCreateUsers"
+        :class="['tab', { active: tab === 'dispatch' }]"
+        @click="tab = 'dispatch'"
+      >
+        📨 {{ t('dispatch.panelTitle') }}
+      </button>
+      <button
+        v-if="canCreateUsers"
+        :class="['tab', { active: tab === 'integrations' }]"
+        @click="tab = 'integrations'"
+      >
+        🔌 {{ t('integrations.tabLabel') }}
+      </button>
+      <button
+        v-if="hasCapability('hazard_taxonomy')"
+        :class="['tab', { active: tab === 'hazardTaxonomy' }]"
+        @click="tab = 'hazardTaxonomy'"
+      >
+        🌋 {{ t('hazardTaxonomy.tabLabel') }}
+      </button>
+      <button
+        v-if="hasCapability('sop_repository')"
+        :class="['tab', { active: tab === 'sopRepository' }]"
+        @click="tab = 'sopRepository'"
+      >
+        📋 {{ t('incidentTracking.sopTabLabel') }}
+      </button>
+      <button
+        v-if="hasCapability('map_layers')"
+        :class="['tab', { active: tab === 'mapLayers' }]"
+        @click="tab = 'mapLayers'"
+      >
+        🗺️ {{ t('mapLayers.tabLabel') }}
+      </button>
+      <button
+        v-if="hasCapability('audit')"
         :class="['tab', { active: tab === 'audit' }]"
         @click="openAuditTab"
       >
@@ -667,6 +862,7 @@ onUnmounted(() => {
         </div>
       </Transition>
       <div v-if="usersError" class="tab-error">{{ usersError }}</div>
+      <div v-if="capabilityGrantError" class="tab-error">{{ capabilityGrantError }}</div>
       <div v-if="usersLoading" class="tab-loading">Yükleniyor...</div>
       <div v-else class="users-table-wrap">
         <table class="data-table">
@@ -677,6 +873,7 @@ onUnmounted(() => {
               <th>Rol</th>
               <th>Ülke</th>
               <th>Org</th>
+              <th v-if="auth.isSuperAdmin">{{ t('admin.capabilities.columnLabel') }}</th>
               <th>Kayıt</th>
               <th>İşlem</th>
             </tr>
@@ -711,6 +908,23 @@ onUnmounted(() => {
                   class="inline-input"
                   placeholder="org uuid"
                 />
+              </td>
+              <td v-if="auth.isSuperAdmin" class="capability-cell">
+                <label
+                  v-if="canHaveCapabilityGrants(u)"
+                  v-for="cap in CAPABILITIES"
+                  :key="cap"
+                  class="capability-toggle"
+                  :title="t('admin.capabilities.' + cap)"
+                >
+                  <input
+                    type="checkbox"
+                    :checked="hasGrantedCapability(u.id, cap)"
+                    @change="toggleCapability(u, cap)"
+                  />
+                  {{ t('admin.capabilities.' + cap + 'Short') }}
+                </label>
+                <span v-else class="muted">—</span>
               </td>
               <td class="muted">{{ formatDate(u.created_at) }}</td>
               <td>
@@ -865,7 +1079,11 @@ onUnmounted(() => {
             Başladı: {{ formatDate(d.started_at) }}
             <span v-if="d.ended_at"> · Bitti: {{ formatDate(d.ended_at) }}</span>
           </div>
-          <div v-if="d.summary" class="drill-summary">Süre: {{ d.summary.duration_min }} dk</div>
+          <div v-if="d.summary" class="drill-summary">
+            Süre: {{ d.summary.duration_min }} dk · Uyarı: {{ d.summary.alerts_issued ?? 0 }}
+            · {{ t('admin.drillResponseTime') }}: {{ d.summary.response_time_seconds != null ? Math.round(d.summary.response_time_seconds / 60) + ' dk' : t('admin.drillNoData') }}
+            · {{ t('admin.drillAckRate') }}: {{ d.summary.ack_rate ? d.summary.ack_rate.acknowledged + ' / ' + d.summary.ack_rate.sent : t('admin.drillNoData') }}
+          </div>
           <div v-if="canAdmin && d.status === 'active'" class="drill-actions">
             <button class="btn-end-drill" @click="endDrill(d)">⏹ Tatbikatı Bitir</button>
           </div>
@@ -1031,8 +1249,37 @@ onUnmounted(() => {
       <BoundaryUploadForm />
     </div>
 
-    <!-- ── Audit & Compliance tab (spec 007, super_admin only) ─────────────── -->
-    <div v-if="tab === 'audit' && auth.isSuperAdmin" class="tab-content audit-tab">
+    <!-- ── Contact Directory tab (spec 009) ─────────────────────────────────── -->
+    <div v-if="tab === 'contacts'" class="tab-content">
+      <ContactsPanel />
+    </div>
+
+    <!-- ── Dispatch monitor tab (spec 009) ──────────────────────────────────── -->
+    <div v-if="tab === 'dispatch'" class="tab-content">
+      <DispatchPanel />
+    </div>
+
+    <div v-if="tab === 'integrations'" class="tab-content">
+      <IntegrationsPanel />
+    </div>
+
+    <!-- ── Hazard Taxonomy tab (spec 010, super_admin or spec 018 capability grant) ── -->
+    <div v-if="tab === 'hazardTaxonomy' && hasCapability('hazard_taxonomy')" class="tab-content">
+      <HazardTaxonomyPanel />
+    </div>
+
+    <!-- ── SOP Repository tab (spec 011, super_admin or spec 018 capability grant) ─── -->
+    <div v-if="tab === 'sopRepository' && hasCapability('sop_repository')" class="tab-content">
+      <SopRepositoryPanel />
+    </div>
+
+    <!-- ── Map Layers tab (spec 012, super_admin or spec 018 capability grant) ──────── -->
+    <div v-if="tab === 'mapLayers' && hasCapability('map_layers')" class="tab-content">
+      <MapLayerRegistryPanel />
+    </div>
+
+    <!-- ── Audit & Compliance tab (spec 007, super_admin or spec 018 capability grant) ── -->
+    <div v-if="tab === 'audit' && hasCapability('audit')" class="tab-content audit-tab">
       <div class="audit-filters">
         <label class="audit-field">
           <span>{{ t('audit.filters.table') }}</span>
@@ -1133,6 +1380,30 @@ onUnmounted(() => {
         >
           →
         </button>
+      </div>
+
+      <!-- ── Geçmiş Raporlar (spec 019: scheduled compliance reports) ────── -->
+      <div class="compliance-reports-section">
+        <h4>{{ t('audit.reports.title') }}</h4>
+        <div v-if="complianceReportsLoading" class="tab-loading">{{ t('audit.loading') }}</div>
+        <div v-else-if="complianceReports.length === 0" class="tab-empty">{{ t('audit.reports.empty') }}</div>
+        <ul v-else class="compliance-reports-list">
+          <li v-for="report in complianceReports" :key="report.id" class="compliance-report-row">
+            <span class="compliance-report-period">
+              {{ formatDate(report.period_start) }} — {{ formatDate(report.period_end) }}
+            </span>
+            <span class="compliance-report-summary">
+              {{ t('audit.reports.integrity') }}:
+              <strong :class="report.summary.integrity_ok ? 'audit-notice-ok' : 'audit-notice-error'">
+                {{ report.summary.integrity_ok ? t('audit.reports.intact') : t('audit.reports.broken') }}
+              </strong>
+            </span>
+            <span class="compliance-report-actions">
+              <button class="btn-export" @click="downloadComplianceReport(report, 'csv')">{{ t('audit.export.csv') }}</button>
+              <button class="btn-export" @click="downloadComplianceReport(report, 'json')">{{ t('audit.export.json') }}</button>
+            </span>
+          </li>
+        </ul>
       </div>
 
       <!-- Single-record history panel -->
@@ -1339,6 +1610,42 @@ onUnmounted(() => {
 .row-actions {
   display: flex;
   gap: 6px;
+}
+.compliance-reports-section {
+  margin-top: 24px;
+  border-top: 1px solid rgba(148, 163, 184, 0.2);
+  padding-top: 16px;
+}
+.compliance-reports-list {
+  list-style: none;
+  padding: 0;
+  margin: 8px 0 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.compliance-report-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+  padding: 8px 0;
+}
+.compliance-report-period {
+  font-weight: 600;
+}
+.capability-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 0.75rem;
+}
+.capability-toggle {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+  cursor: pointer;
 }
 .btn-edit,
 .btn-revoke,

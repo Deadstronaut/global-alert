@@ -3,6 +3,7 @@ import { ref, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useAuthStore } from '@/stores/auth.js'
 import { supabase } from '@/services/api/config.js'
+import { parseExposureFile } from '@/utils/exposureFileParser.js'
 
 const { t } = useI18n()
 const auth = useAuthStore()
@@ -44,8 +45,7 @@ async function upload() {
   uploading.value = true
   error.value = null
   try {
-    const text = await form.value.file.text()
-    const geojson = JSON.parse(text)
+    const geojson = await parseExposureFile(form.value.file)
     const { data: result, error: invokeError } = await supabase.functions.invoke('upload-exposure-dataset', {
       body: {
         name: form.value.name,
@@ -93,7 +93,7 @@ onMounted(loadDatasets)
       </label>
       <label class="exposure-field">
         <span>{{ t('impact.exposure.file') }}</span>
-        <input type="file" accept=".json,.geojson" @change="onFileChange" />
+        <input type="file" accept=".json,.geojson,.zip" @change="onFileChange" />
       </label>
       <p v-if="error" class="exposure-error">{{ error }}</p>
       <button class="btn-upload" :disabled="uploading" @click="upload">

@@ -1,19 +1,34 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 import { useAuthStore } from '@/stores/auth.js'
+import { useHazardTypesStore } from '@/stores/hazardTypes.js'
+import { useSopDocumentsStore } from '@/stores/sopDocuments.js'
 import { supabase } from '@/services/api/config.js'
+import { nextStatuses, requiresAAR } from '@/utils/incidentStateMachine.js'
 
 const router = useRouter()
+const { t } = useI18n()
 
 const auth = useAuthStore()
+const hazardTypesStore = useHazardTypesStore()
+const sopDocumentsStore = useSopDocumentsStore()
 const incidents = ref([])
 const loading = ref(false)
 const showForm = ref(false)
 const submitting = ref(false)
 const error = ref(null)
 
-const HAZARD_TYPES = ['earthquake','wildfire','flood','drought','food_security','tsunami','cyclone','volcano','epidemic']
+// spec 011: which incident (by id) is currently prompting for after-action
+// notes before a monitoring -> closed transition, and the draft text typed
+// so far. Only one incident can have this prompt open at a time.
+const aarTargetId = ref(null)
+const aarNotes = ref('')
+
+// spec 010: sourced from the hazard taxonomy registry instead of a
+// hardcoded list, same reasoning as CapView.vue.
+const HAZARD_TYPES = computed(() => hazardTypesStore.activeHazardTypes)
 const SEVERITIES   = ['critical','high','moderate','low','minimal']
 
 const STATUS_LABELS = {
@@ -23,13 +38,6 @@ const STATUS_LABELS = {
 const STATUS_COLORS = {
   open: '#ef4444', in_progress: '#f59e0b',
   monitoring: '#60a5fa', closed: '#22c55e', archived: '#6b7280',
-}
-const TRANSITIONS = {
-  open:        ['in_progress'],
-  in_progress: ['monitoring','closed'],
-  monitoring:  ['closed'],
-  closed:      ['archived'],
-  archived:    [],
 }
 
 const form = ref({
@@ -75,17 +83,62 @@ async function submitIncident() {
   await loadIncidents()
 }
 
-async function transition(incident, newStatus) {
+// spec 011 FR-001/FR-002: the DB now enforces this via guard_incident_transition(),
+// but we still pre-validate client-side (nextStatuses()) so users are only ever
+// offered buttons for transitions the DB will actually accept, and so the AAR
+// prompt appears before a doomed request round-trips to the server (FR-010).
+function requestTransition(incident, newStatus) {
+  if (requiresAAR(incident.status, newStatus)) {
+    aarTargetId.value = incident.id
+    aarNotes.value = incident.post_event_notes || ''
+    return
+  }
+  transition(incident, newStatus)
+}
+
+function cancelAAR() {
+  aarTargetId.value = null
+  aarNotes.value = ''
+}
+
+function confirmAAR(incident) {
+  if (!aarNotes.value.trim()) return
+  transition(incident, 'closed', aarNotes.value)
+  cancelAAR()
+}
+
+async function transition(incident, newStatus, notes) {
   const patch = { status: newStatus }
-  if (newStatus === 'closed') patch.closed_at = new Date().toISOString()
+  if (newStatus === 'closed') {
+    patch.closed_at = new Date().toISOString()
+    if (notes !== undefined) patch.post_event_notes = notes
+  }
   const { error: err } = await supabase
     .from('incidents').update(patch).eq('id', incident.id)
-  if (err) { error.value = err.message; return }
+  if (err) {
+    // spec 011 FR-010: surface the guard trigger's specific rejection reason
+    // rather than a generic message.
+    if (err.message?.includes('aar_required')) {
+      error.value = t('incidentTracking.aarRequiredError')
+    } else if (err.message?.includes('invalid_incident_transition')) {
+      error.value = t('incidentTracking.invalidTransitionError')
+    } else {
+      error.value = err.message
+    }
+    return
+  }
   await loadIncidents()
 }
 
 function formatDate(iso) {
   return iso ? new Date(iso).toLocaleString('tr-TR') : '—'
+}
+
+// spec 011 FR-005: SOPs whose hazard_type_code matches this incident's
+// hazard_type, sourced from the global SOP repository (empty list is a
+// valid, harmless state per spec.md's Edge Cases).
+function linkedSops(incident) {
+  return sopDocumentsStore.sopsForHazardType(incident.hazard_type)
 }
 
 onMounted(loadIncidents)
@@ -116,7 +169,7 @@ onMounted(loadIncidents)
           <label class="form-field">
             <span>Tehlike Türü</span>
             <select v-model="form.hazard_type">
-              <option v-for="h in HAZARD_TYPES" :key="h" :value="h">{{ h }}</option>
+              <option v-for="h in HAZARD_TYPES" :key="h.code" :value="h.code">{{ h.display_name }}</option>
             </select>
           </label>
           <label class="form-field">
@@ -167,14 +220,44 @@ onMounted(loadIncidents)
         <p v-if="inc.description" class="inc-desc">{{ inc.description }}</p>
         <div v-if="inc.area_desc" class="inc-area">📍 {{ inc.area_desc }}</div>
         <div v-if="inc.response_plan" class="inc-plan">📋 {{ inc.response_plan }}</div>
+        <div v-if="inc.post_event_notes" class="inc-aar">
+          <strong>{{ t('incidentTracking.aarLabel') }}:</strong> {{ inc.post_event_notes }}
+        </div>
+        <div v-if="inc.linked_cap_id" class="inc-linked-cap">
+          <a href="#" @click.prevent="router.push({ name: 'cap', query: { draft: inc.linked_cap_id } })">
+            🔗 {{ t('incidentTracking.viewOriginatingAlert') }}
+          </a>
+        </div>
 
-        <div v-if="canCreate && TRANSITIONS[inc.status]?.length" class="inc-actions">
+        <div v-if="linkedSops(inc).length" class="inc-sops">
+          <strong class="inc-sops-title">{{ t('incidentTracking.linkedSops') }}</strong>
+          <ul>
+            <li v-for="sop in linkedSops(inc)" :key="sop.id">
+              <span>{{ sop.title }}</span>
+              <a v-if="sop.reference_url" :href="sop.reference_url" target="_blank" rel="noopener">↗</a>
+            </li>
+          </ul>
+        </div>
+
+        <div v-if="canCreate && aarTargetId === inc.id" class="aar-prompt">
+          <label class="form-field">
+            <span>{{ t('incidentTracking.aarPromptLabel') }}</span>
+            <textarea v-model="aarNotes" rows="3" :placeholder="t('incidentTracking.aarPromptPlaceholder')" />
+          </label>
+          <div class="aar-actions">
+            <button class="btn-transition" @click="cancelAAR">{{ t('incidentTracking.cancel') }}</button>
+            <button class="btn-submit" :disabled="!aarNotes.trim()" @click="confirmAAR(inc)">
+              {{ t('incidentTracking.confirmClose') }}
+            </button>
+          </div>
+        </div>
+        <div v-else-if="canCreate && nextStatuses(inc.status).length" class="inc-actions">
           <button
-            v-for="next in TRANSITIONS[inc.status]"
+            v-for="next in nextStatuses(inc.status)"
             :key="next"
             class="btn-transition"
             :style="{ borderColor: STATUS_COLORS[next] }"
-            @click="transition(inc, next)"
+            @click="requestTransition(inc, next)"
           >
             → {{ STATUS_LABELS[next] }}
           </button>
@@ -269,6 +352,26 @@ onMounted(loadIncidents)
 .inc-title  { font-size: 1rem; font-weight: 700; margin: 0 0 6px; }
 .inc-desc   { font-size: .82rem; color: var(--color-text-muted,#94a3b8); margin: 0 0 6px; line-height: 1.5; }
 .inc-area, .inc-plan { font-size: .78rem; color: #60a5fa; margin-bottom: 4px; }
+.inc-aar {
+  font-size: .78rem; color: var(--color-text-muted,#94a3b8);
+  background: rgba(255,255,255,.03); border-radius: 6px; padding: 8px 10px; margin: 6px 0;
+}
+.inc-linked-cap { font-size: .78rem; margin-bottom: 4px; }
+.inc-linked-cap a { color: #4da3ff; text-decoration: none; }
+.inc-linked-cap a:hover { text-decoration: underline; }
+.inc-sops {
+  font-size: .78rem; margin: 8px 0; padding: 8px 10px;
+  background: rgba(77,163,255,.06); border: 1px solid rgba(77,163,255,.2); border-radius: 8px;
+}
+.inc-sops-title { display: block; margin-bottom: 4px; color: #4da3ff; }
+.inc-sops ul { margin: 0; padding-left: 18px; }
+.inc-sops li { margin-bottom: 2px; }
+.inc-sops a { color: #4da3ff; margin-left: 6px; text-decoration: none; }
+.aar-prompt {
+  background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.12);
+  border-radius: 10px; padding: 12px; margin-top: 12px;
+}
+.aar-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 8px; }
 .inc-actions  { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
 .btn-transition {
   padding: 5px 12px; background: transparent; border: 1px solid;

@@ -1,13 +1,22 @@
 <script setup>
 import { ref, watch, computed } from 'vue'
 import { useAuthStore } from '@/stores/auth.js'
+import { useHazardTypesStore } from '@/stores/hazardTypes.js'
 
 const auth = useAuthStore()
 // Feature 002-source-scoping: a country_admin may only create/edit sources scoped to
 // their own country (enforced by RLS regardless — this just keeps the form honest).
 const scopeLocked = computed(() => !auth.isSuperAdmin)
 
-const HAZARD_TYPES = ['earthquake', 'wildfire', 'flood', 'drought', 'food_security']
+// spec 010: intersected with the hazard types data_sources.hazard_type's own
+// CHECK constraint permits (20260703120000_data_sources.sql) — a source can
+// only ever be routed to one of these 5 fetch-* functions today, regardless
+// of what's active in the broader taxonomy registry.
+const SOURCE_SUPPORTED_HAZARDS = ['earthquake', 'wildfire', 'flood', 'drought', 'food_security']
+const hazardTypesStore = useHazardTypesStore()
+const HAZARD_TYPES = computed(() =>
+  hazardTypesStore.activeHazardTypes.filter((h) => SOURCE_SUPPORTED_HAZARDS.includes(h.code)),
+)
 // Only "id"/"lat"/"lng"/"time" are required by validatePayload(); the rest are optional extras.
 const MAPPABLE_FIELDS = [
   { key: 'id', label: 'ID *' },
@@ -105,7 +114,7 @@ function submit() {
       </label>
       <label class="form-field"><span>Afet Tipi *</span>
         <select v-model="form.hazard_type">
-          <option v-for="t in HAZARD_TYPES" :key="t" :value="t">{{ t }}</option>
+          <option v-for="t in HAZARD_TYPES" :key="t.code" :value="t.code">{{ t.display_name }}</option>
         </select>
       </label>
       <label class="form-field"><span>Poll Aralığı (saniye) *</span>

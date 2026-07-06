@@ -3,6 +3,24 @@
  * Vue tarafındaki DisasterEvent.js ile birebir uyumlu
  */
 
+import { getCachedBreakpoints } from './hazardThresholdsCache.js';
+
+/**
+ * Pure evaluation of an ordered (ascending min_value) breakpoints array
+ * against a numeric value — a JS port of src/stores/hazardTypes.js's
+ * evaluateBreakpoints() (spec 016). Exported so normalizer.test.js can test
+ * it directly.
+ */
+export function evaluateBreakpoints(breakpoints, value) {
+  if (!Array.isArray(breakpoints) || breakpoints.length === 0) return 'low';
+  let result = 'low';
+  for (const bp of breakpoints) {
+    if (value >= bp.min_value) result = bp.severity;
+    else break;
+  }
+  return result;
+}
+
 const SEVERITY_MAP = {
   earthquake: (mag) => {
     if (mag >= 7.0) return 'critical';
@@ -67,7 +85,9 @@ export function normalize({
   extra = {},
 }) {
   const severityFn = SEVERITY_MAP[type] || (() => 'low');
-  const severity = severityFn(magnitude || 0);
+  const mag = magnitude || 0;
+  const customBreakpoints = getCachedBreakpoints(type);
+  const severity = customBreakpoints ? evaluateBreakpoints(customBreakpoints, mag) : severityFn(mag);
 
   return {
     id: String(id),

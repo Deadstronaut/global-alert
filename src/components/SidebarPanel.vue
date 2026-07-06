@@ -881,6 +881,12 @@ watch([rangeStartDate, rangeEndDate], ([start, end]) => {
             <button class="btn btn-ghost sidebar-action-btn" @click="router.push('/alerts/incidents')">
               🚨 Olay Takip
             </button>
+            <button class="btn btn-ghost sidebar-action-btn" @click="router.push('/shelters')">
+              🏠 Sığınaklar
+            </button>
+            <button class="btn btn-ghost sidebar-action-btn" @click="router.push('/hazards')">
+              🌋 Afet Ansiklopedisi
+            </button>
             <button v-if="canAccessAdmin" class="btn btn-ghost sidebar-action-btn" @click="router.push('/admin')">
               🛡️ Yönetim
             </button>

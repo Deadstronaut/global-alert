@@ -13,6 +13,12 @@ export const routes = [
       meta: { public: true }
     },
     {
+      path: '/portal',
+      name: 'public-portal',
+      component: () => import('@/views/PublicPortalView.vue'),
+      meta: { public: true }
+    },
+    {
       path: '/',
       name: 'home',
       component: () => import('@/views/HomeView.vue')
@@ -43,6 +49,26 @@ export const routes = [
       path: '/alerts/incidents',
       name: 'incidents',
       component: () => import('@/views/IncidentsView.vue'),
+    },
+    {
+      path: '/shelters',
+      name: 'shelters',
+      component: () => import('@/views/ShelterInfoView.vue'),
+      // spec 021 FR-008: shelter availability is life-safety information —
+      // no meta.roles, reachable by every authenticated role including
+      // viewer, same as /alerts/incidents above. The full CRUD management
+      // UI stays inside /admin (spec 004's tested viewer boundary is
+      // untouched); this route is read-only for accounts without manage
+      // access, matching SheltersPanel.vue's own canManage gate.
+    },
+    {
+      path: '/hazards',
+      name: 'hazards',
+      component: () => import('@/views/HazardEncyclopediaView.vue'),
+      // spec 024 FR-008: same pattern as /shelters above — reference/
+      // educational info, no meta.roles, reachable by every authenticated
+      // role including viewer. Parent-relationship editing stays inside
+      // /admin's Hazard Taxonomy tab (unchanged access control).
     },
     {
       path: '/admin',

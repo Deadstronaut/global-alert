@@ -67,6 +67,21 @@ export const useContactsStore = defineStore('contacts', () => {
     return updateContact(id, { is_active: true });
   }
 
+  // GDPR anonymization (spec 031, MHEWS-SD-CONTACT-06) — irreversible, unlike
+  // deactivate/reactivate above. Only touches contacts; dispatch_receipts and
+  // audit_log are never modified, so past dispatch/audit history stays
+  // intact. Once is_active=false, matchesContact() (dispatchMatching.ts)
+  // already excludes this contact from all future dispatches — no separate
+  // enforcement needed here.
+  async function anonymizeContact(id) {
+    return updateContact(id, {
+      email: null,
+      whatsapp_number: null,
+      full_name: '[anonymized]',
+      is_active: false,
+    });
+  }
+
   return {
     contacts,
     loading,
@@ -76,5 +91,6 @@ export const useContactsStore = defineStore('contacts', () => {
     updateContact,
     deactivateContact,
     reactivateContact,
+    anonymizeContact,
   };
 });

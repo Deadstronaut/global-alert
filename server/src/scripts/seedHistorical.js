@@ -7,6 +7,7 @@ dotenv.config({path: path.join(__dirname, '../../.env')});
 
 import {createClient} from '@supabase/supabase-js';
 import {randomUUID} from 'crypto';
+import {resolveCountryCode} from '../processors/geoCountry.js';
 
 const supabaseUrl = process.env.SUPABASE_URL;
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -73,6 +74,8 @@ async function seedUSGS() {
                     type = 'tsunami';
                 }
 
+                const lat = f.geometry?.coordinates?.[1] || 0;
+                const lng = f.geometry?.coordinates?.[0] || 0;
                 mapped.push({
                     id: `usgs-${f.id}`,
                     source: 'USGS',
@@ -80,11 +83,12 @@ async function seedUSGS() {
                     title: f.properties.title,
                     magnitude: f.properties.mag,
                     depth: f.geometry?.coordinates?.[2] || 0,
-                    lat: f.geometry?.coordinates?.[1] || 0,
-                    lng: f.geometry?.coordinates?.[0] || 0,
+                    lat,
+                    lng,
                     time: new Date(f.properties.time).toISOString(),
                     source_url: f.properties.url,
-                    severity: f.properties.mag >= 7.5 ? 'critical' : (f.properties.mag >= 6.5 ? 'high' : 'moderate')
+                    severity: f.properties.mag >= 7.5 ? 'critical' : (f.properties.mag >= 6.5 ? 'high' : 'moderate'),
+                    country_code: resolveCountryCode(lat, lng),
                 });
             }
             console.log(`- Fetched ${data.features.length} records for USGS year ${year}`);
@@ -142,6 +146,8 @@ async function seedGDACS() {
                     if (p.alertlevel === 'Orange') sev = 'high';
                     if (p.alertlevel === 'Green') sev = 'low';
 
+                    const lat = f.geometry?.coordinates?.[1] || 0;
+                    const lng = f.geometry?.coordinates?.[0] || 0;
                     mapped.push({
                         id: `gdacs-${p.eventid}-${p.episodeid}`,
                         source: 'GDACS',
@@ -149,11 +155,12 @@ async function seedGDACS() {
                         title: p.eventname || p.name,
                         magnitude: p.severitydata?.severity || null,
                         depth: null,
-                        lat: f.geometry?.coordinates?.[1] || 0,
-                        lng: f.geometry?.coordinates?.[0] || 0,
+                        lat,
+                        lng,
                         time: new Date(p.fromdate).toISOString(),
                         source_url: p.url?.link || `https://www.gdacs.org/report.aspx?eventtype=${p.eventtype}&eventid=${p.eventid}`,
-                        severity: sev
+                        severity: sev,
+                        country_code: resolveCountryCode(lat, lng),
                     });
                 }
             } catch (e) {

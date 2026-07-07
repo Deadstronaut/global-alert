@@ -96,6 +96,7 @@
         "npm:playwright@^1.60.0",
         "npm:prettier@3.8.1",
         "npm:puppeteer@^24.43.1",
+        "npm:shpjs@^6.2.0",
         "npm:three@~0.183.1",
         "npm:topojson-client@^3.1.0",
         "npm:vite@^8.0.8",

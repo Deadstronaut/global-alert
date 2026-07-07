@@ -86,13 +86,29 @@ Deno.serve(async (req) => {
     return json({ error: datasetError?.message ?? 'Failed to create exposure dataset' }, 500)
   }
 
-  let rows: Array<{ dataset_id: string; geom: string; metric_value: number; properties: Record<string, unknown> }>
+  let rows: Array<{
+    dataset_id: string
+    geom: string
+    metric_value: number
+    properties: Record<string, unknown>
+    asset_category: string | null
+    sector: string | null
+    admin_boundary_code: string | null
+  }>
   try {
     rows = features.map((feature) => ({
       dataset_id: dataset.id,
       geom: `SRID=4326;${geometryToWkt(feature.geometry as { type: string; coordinates: unknown })}`,
       metric_value: Number(feature.properties[metricPropertyName]),
       properties: feature.properties,
+      // spec 034 (US1/US3): optional tagging read straight from the
+      // GeoJSON feature's own properties, using fixed key names — no new
+      // upload-form fields, no schema/config change needed to add a value
+      // (hazard-agnostic/model-driven principle). Absent => null =>
+      // "unclassified" downstream (FR-003/FR-009).
+      asset_category: normalizeTagValue(feature.properties.asset_category),
+      sector: normalizeTagValue(feature.properties.sector),
+      admin_boundary_code: normalizeTagValue(feature.properties.admin_boundary_code),
     }))
   } catch (err) {
     await admin.from('exposure_datasets').delete().eq('id', dataset.id)
@@ -108,6 +124,16 @@ Deno.serve(async (req) => {
 
   return json({ datasetId: dataset.id, featureCount: features.length })
 })
+
+// Optional tagging properties (asset_category/sector/admin_boundary_code)
+// come from arbitrary user-uploaded GeoJSON — coerce anything non-string
+// (including empty string) to null rather than storing "undefined"/"[object
+// Object]" style garbage.
+function normalizeTagValue(value: unknown): string | null {
+  if (typeof value !== 'string') return null
+  const trimmed = value.trim()
+  return trimmed.length > 0 ? trimmed : null
+}
 
 // Minimal GeoJSON-geometry-to-WKT converter covering the geometry types
 // realistically produced by common GIS export tools (Point/Polygon/

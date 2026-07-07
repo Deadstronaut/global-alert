@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n'
 import { useAuthStore } from '@/stores/auth.js'
 import { supabase } from '@/services/api/config.js'
 import { parseExposureFile } from '@/utils/exposureFileParser.js'
+import DeletionJustificationModal from '@/components/admin/DeletionJustificationModal.vue'
 
 const { t } = useI18n()
 const auth = useAuthStore()
@@ -12,6 +13,11 @@ const datasets = ref([])
 const loading = ref(false)
 const error = ref(null)
 const uploading = ref(false)
+// spec 035 (US3/FR-008): exposure_datasets is the only table in the codebase
+// with a real hard-delete path today — routed through delete_with_justification()
+// instead of a direct .delete() call, so every deletion carries a mandatory
+// reason in the audit trail.
+const deletionTarget = ref(null)
 
 const form = ref({ name: '', description: '', metricPropertyName: '', file: null })
 
@@ -67,8 +73,20 @@ async function upload() {
   }
 }
 
-async function deleteDataset(dataset) {
-  await supabase.from('exposure_datasets').delete().eq('id', dataset.id)
+function requestDelete(dataset) {
+  deletionTarget.value = dataset
+}
+
+async function confirmDelete(justificationText) {
+  const dataset = deletionTarget.value
+  deletionTarget.value = null
+  if (!dataset) return
+  const { error: err } = await supabase.rpc('delete_with_justification', {
+    target_table: 'exposure_datasets',
+    target_id: dataset.id,
+    justification_text: justificationText,
+  })
+  if (err) error.value = err.message
   await loadDatasets()
 }
 
@@ -110,9 +128,16 @@ onMounted(loadDatasets)
           <strong>{{ d.name }}</strong>
           <span class="exposure-meta">{{ d.feature_count }} {{ t('impact.exposure.features') }}</span>
         </div>
-        <button class="btn-delete" @click="deleteDataset(d)">{{ t('impact.exposure.delete') }}</button>
+        <button class="btn-delete" @click="requestDelete(d)">{{ t('impact.exposure.delete') }}</button>
       </div>
     </div>
+
+    <DeletionJustificationModal
+      v-if="deletionTarget"
+      :target-label="deletionTarget.name"
+      @confirm="confirmDelete"
+      @cancel="deletionTarget = null"
+    />
   </div>
 </template>
 

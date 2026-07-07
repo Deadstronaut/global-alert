@@ -71,6 +71,14 @@ async function toggleActive(contact) {
   else await store.reactivateContact(contact.id)
 }
 
+// GDPR anonymization (spec 031, MHEWS-SD-CONTACT-06) — Super Admin-only,
+// irreversible, so a confirmation is required before calling the store.
+async function anonymize(contact) {
+  const confirmed = window.confirm(t('contacts.anonymizeConfirm', { name: contact.full_name }))
+  if (!confirmed) return
+  await store.anonymizeContact(contact.id)
+}
+
 async function onImportFile(e) {
   const file = e.target.files?.[0]
   if (!file) return
@@ -199,6 +207,7 @@ async function runImport() {
           <td class="row-actions">
             <button class="btn-link" @click="openEdit(c)">{{ t('contacts.edit') }}</button>
             <button class="btn-link" @click="toggleActive(c)">{{ c.is_active ? t('contacts.deactivate') : t('contacts.reactivate') }}</button>
+            <button v-if="auth.isSuperAdmin" class="btn-link btn-link-danger" @click="anonymize(c)">{{ t('contacts.anonymize') }}</button>
           </td>
         </tr>
         <tr v-if="!store.contacts.length"><td colspan="7" class="empty-row">{{ t('contacts.empty') }}</td></tr>
@@ -260,6 +269,7 @@ async function runImport() {
 .badge-ok { background: rgba(34,197,94,.15); color: #22c55e; }
 .row-actions { display: flex; gap: 10px; }
 .btn-link { background: none; border: none; color: #4aa3ff; cursor: pointer; font-size: .78rem; padding: 0; }
+.btn-link-danger { color: #ef4444; }
 .btn-submit { padding: 9px 22px; background: rgba(34,197,94,.2); border: 1px solid rgba(34,197,94,.4); border-radius: 8px; color: #22c55e; font-weight: 600; cursor: pointer; font-size: .85rem; }
 .btn-submit:disabled { opacity: .45; cursor: not-allowed; }
 .btn-submit:not(:disabled):hover { background: rgba(34,197,94,.3); }

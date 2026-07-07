@@ -256,7 +256,72 @@
       "empty": "No automatic reports have been generated yet.",
       "integrity": "Integrity",
       "intact": "Intact",
-      "broken": "Issue found"
+      "broken": "Issue found",
+      "checklistExport": "Checklist"
+    },
+    "incidentReports": {
+      "title": "Annual Incident Reports",
+      "empty": "No automatic incident reports have been generated yet.",
+      "total": "Total Incidents",
+      "falseAlarmRate": "False Alarm Rate"
+    },
+    "deadLetter": {
+      "title": "Pending Audit Entries",
+      "empty": "No pending entries.",
+      "count": "{count} entries awaiting retry.",
+      "retry": "Retry",
+      "result": "{succeeded} succeeded, {failed} failed."
+    },
+    "drillReports": {
+      "title": "Annual Drill Reports",
+      "empty": "No automatic drill report has been generated yet.",
+      "total": "Total Drills"
+    },
+    "retention": {
+      "title": "Data Retention Policies",
+      "category": "Category",
+      "days": "Retention (days)",
+      "action": "Action",
+      "action_archive": "Archive",
+      "action_delete": "Delete",
+      "empty": "No retention policies defined yet.",
+      "save": "Save",
+      "saving": "saving...",
+      "deleteWarningTitle": "This action is irreversible",
+      "deleteWarningBody": "\"Delete\" was selected — expired records will be permanently deleted, not archived. Continue?",
+      "cancel": "Cancel",
+      "confirmDelete": "I confirm, delete"
+    },
+    "deletion": {
+      "title": "Justification Required",
+      "justificationLabel": "Why are you deleting this record?",
+      "justificationPlaceholder": "Enter your reason...",
+      "cancel": "Cancel",
+      "confirm": "Delete"
+    },
+    "securityEvents": {
+      "title": "Security Events",
+      "action": "Event",
+      "table": "Table",
+      "recordId": "Record",
+      "time": "Time",
+      "empty": "No security events yet."
+    },
+    "securityConfig": {
+      "title": "Security Configuration Report",
+      "mfaPolicy": "MFA Policy",
+      "required": "required",
+      "notRequired": "not required",
+      "retentionPolicies": "Retention Policies",
+      "days": "days",
+      "noPolicies": "No policies defined",
+      "capabilityGrants": "Active Capability Grants",
+      "exportCsv": "CSV",
+      "exportJson": "JSON"
+    },
+    "evidence": {
+      "download": "Download Evidence Package",
+      "building": "building..."
     }
   },
   "impact": {
@@ -293,7 +358,16 @@
       "scenarioNamePlaceholder": "Scenario name...",
       "saveScenario": "Save Scenario",
       "savedScenarios": "Saved Scenarios",
-      "dataUnavailable": "referenced data no longer available"
+      "dataUnavailable": "referenced data no longer available",
+      "completenessLabel": "Data Completeness",
+      "completenessNoData": "no data",
+      "criticalInfrastructureTitle": "Critical Infrastructure",
+      "criticalInfrastructureEmpty": "No critical infrastructure in this area.",
+      "breakdownTitle": "Breakdown",
+      "breakdownBySector": "By Sector",
+      "breakdownByBoundary": "By Admin Boundary",
+      "breakdownEmpty": "No breakdown data.",
+      "unclassified": "unclassified"
     },
     "geocoding": {
       "placeholder": "Search a place or address...",
@@ -338,7 +412,9 @@
     "importing": "Importing...",
     "importButton": "📥 Import",
     "channels": "Channels",
-    "status": "Status"
+    "status": "Status",
+    "anonymize": "anonymize",
+    "anonymizeConfirm": "Are you sure you want to permanently and irreversibly remove {name}'s personal data (email, WhatsApp number)?"
   },
   "dispatch": {
     "panelTitle": "Dispatch Monitor",
@@ -353,7 +429,10 @@
     "statusQueued": "queued",
     "statusRunning": "running",
     "statusCompleted": "completed",
-    "statusFailed": "failed"
+    "statusFailed": "failed",
+    "viewImpactSnapshot": "view impact snapshot",
+    "hideImpactSnapshot": "hide",
+    "impactSnapshotUnavailable": "Impact data was not available at broadcast time."
   },
   "portal": {
     "title": "🌍 GEWS — Active Alerts",
@@ -444,7 +523,20 @@
     "sopDeactivate": "deactivate",
     "sopReactivate": "reactivate",
     "sopEmpty": "No SOP documents yet.",
-    "createIncidentFromAlert": "Create incident from this alert"
+    "createIncidentFromAlert": "Create incident from this alert",
+    "timeline": {
+      "button": "Timeline",
+      "created": "Created",
+      "statusChange": "status: {from} → {to}",
+      "updated": "Updated",
+      "loading": "Loading..."
+    },
+    "sopCategory": "Category",
+    "sopSearchPlaceholder": "Search by title...",
+    "sopAllCategories": "— all categories —",
+    "sopVersionHistory": "version history",
+    "sopVersionHistoryTitle": "\"{title}\" — Version History",
+    "sopNoVersionHistory": "No previous versions yet."
   },
   "mapLayers": {
     "tabLabel": "Map Layers",
@@ -484,7 +576,20 @@
       "map_layersShort": "Map Layers",
       "audit": "View Audit Log",
       "auditShort": "Audit"
-    }
+    },
+    "accessReview": {
+      "exportCsv": "Export CSV",
+      "exportJson": "Export JSON",
+      "lastLogin": "Last Login",
+      "lockStatus": "Lock Status",
+      "locked": "Locked",
+      "unlockAction": "Unlock"
+    },
+    "drillExportSummary": "Export Summary",
+    "drillLessonsLearned": "Lessons Learned Note",
+    "drillRelatedHazard": "Related Hazard Type (optional)",
+    "drillSaveFeedback": "Save",
+    "drillGoToThresholdEditor": "Go to Threshold Editor →"
   },
   "shelters": {
     "tabLabel": "Shelters",
@@ -518,7 +623,13 @@
     "nameRequired": "Name is required.",
     "noCountry": "Country is required.",
     "capacityTotalInvalid": "Total capacity must be a positive number.",
-    "occupancyExceedsCapacity": "Current occupancy cannot exceed total capacity."
+    "occupancyExceedsCapacity": "Current occupancy cannot exceed total capacity.",
+    "map": {
+      "toggleLabel": "Show/Hide Shelters",
+      "occupancy": "Occupancy",
+      "status": "Status",
+      "linkedIncident": "Linked to an incident"
+    }
   },
   "integrations": {
     "tabLabel": "Integrations",
@@ -538,5 +649,13 @@
     "noType": "Integration type is required.",
     "allFieldsRequired": "All fields are required.",
     "customFieldIncomplete": "A custom field must have both a name and a value."
+  },
+  "login": {
+    "accountLocked": "Your account has been temporarily locked due to too many failed login attempts. Try again after {until}, or ask an administrator to unlock it."
+  },
+  "assetCategory": {
+    "critical_infrastructure_health": "Health Facility",
+    "critical_infrastructure_education": "Education Facility",
+    "critical_infrastructure_emergency": "Emergency Service"
   }
 }

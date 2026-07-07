@@ -256,7 +256,72 @@
       "empty": "Henüz otomatik rapor üretilmedi.",
       "integrity": "Bütünlük",
       "intact": "Sağlam",
-      "broken": "Sorun bulundu"
+      "broken": "Sorun bulundu",
+      "checklistExport": "Kontrol Listesi"
+    },
+    "incidentReports": {
+      "title": "Yıllık Olay Raporları",
+      "empty": "Henüz otomatik olay raporu üretilmedi.",
+      "total": "Toplam Olay",
+      "falseAlarmRate": "Yanlış Alarm Oranı"
+    },
+    "deadLetter": {
+      "title": "Bekleyen Denetim Kayıtları",
+      "empty": "Bekleyen kayıt yok.",
+      "count": "{count} kayıt yeniden denemeyi bekliyor.",
+      "retry": "Tekrar Dene",
+      "result": "{succeeded} başarılı, {failed} başarısız."
+    },
+    "drillReports": {
+      "title": "Yıllık Tatbikat Raporları",
+      "empty": "Henüz otomatik tatbikat raporu üretilmedi.",
+      "total": "Toplam Tatbikat"
+    },
+    "retention": {
+      "title": "Veri Saklama Politikaları",
+      "category": "Kategori",
+      "days": "Saklama Süresi (gün)",
+      "action": "Eylem",
+      "action_archive": "Arşivle",
+      "action_delete": "Sil",
+      "empty": "Henüz saklama politikası tanımlanmadı.",
+      "save": "Kaydet",
+      "saving": "kaydediliyor...",
+      "deleteWarningTitle": "Bu işlem geri döndürülemez",
+      "deleteWarningBody": "\"Sil\" eylemi seçildi — süresi dolan kayıtlar kalıcı olarak silinecek, arşivlenmeyecek. Devam etmek istiyor musunuz?",
+      "cancel": "İptal",
+      "confirmDelete": "Onaylıyorum, sil"
+    },
+    "deletion": {
+      "title": "Silme Gerekçesi Gerekli",
+      "justificationLabel": "Bu kaydı neden siliyorsunuz?",
+      "justificationPlaceholder": "Gerekçenizi yazın...",
+      "cancel": "İptal",
+      "confirm": "Sil"
+    },
+    "securityEvents": {
+      "title": "Güvenlik Olayları",
+      "action": "Olay",
+      "table": "Tablo",
+      "recordId": "Kayıt",
+      "time": "Zaman",
+      "empty": "Henüz güvenlik olayı yok."
+    },
+    "securityConfig": {
+      "title": "Güvenlik Yapılandırması Raporu",
+      "mfaPolicy": "MFA Politikası",
+      "required": "zorunlu",
+      "notRequired": "zorunlu değil",
+      "retentionPolicies": "Saklama Politikaları",
+      "days": "gün",
+      "noPolicies": "Tanımlı politika yok",
+      "capabilityGrants": "Aktif Özel Yetkiler",
+      "exportCsv": "CSV",
+      "exportJson": "JSON"
+    },
+    "evidence": {
+      "download": "Kanıt Paketi İndir",
+      "building": "hazırlanıyor..."
     }
   },
   "impact": {
@@ -293,7 +358,16 @@
       "scenarioNamePlaceholder": "Senaryo adı...",
       "saveScenario": "Senaryoyu Kaydet",
       "savedScenarios": "Kaydedilmiş Senaryolar",
-      "dataUnavailable": "referans veri artık mevcut değil"
+      "dataUnavailable": "referans veri artık mevcut değil",
+      "completenessLabel": "Veri Tamlığı",
+      "completenessNoData": "veri yok",
+      "criticalInfrastructureTitle": "Kritik Altyapı",
+      "criticalInfrastructureEmpty": "Bu alanda kritik altyapı verisi yok.",
+      "breakdownTitle": "Kırılım",
+      "breakdownBySector": "Sektöre Göre",
+      "breakdownByBoundary": "İdari Sınıra Göre",
+      "breakdownEmpty": "Kırılım verisi yok.",
+      "unclassified": "sınıflandırılmamış"
     },
     "geocoding": {
       "placeholder": "Bir yer veya adres arayın...",
@@ -338,7 +412,9 @@
     "importing": "İçe aktarılıyor...",
     "importButton": "📥 İçe Aktar",
     "channels": "Kanallar",
-    "status": "Durum"
+    "status": "Durum",
+    "anonymize": "anonimleştir",
+    "anonymizeConfirm": "{name} adlı kişinin kişisel verilerini (e-posta, WhatsApp numarası) kalıcı ve geri döndürülemez şekilde kaldırmak istediğinize emin misiniz?"
   },
   "dispatch": {
     "panelTitle": "Dispatch İzleme",
@@ -353,7 +429,10 @@
     "statusQueued": "sırada",
     "statusRunning": "çalışıyor",
     "statusCompleted": "tamamlandı",
-    "statusFailed": "başarısız"
+    "statusFailed": "başarısız",
+    "viewImpactSnapshot": "etki anlık görüntüsü",
+    "hideImpactSnapshot": "gizle",
+    "impactSnapshotUnavailable": "Yayın anında impact verisi mevcut değildi."
   },
   "portal": {
     "title": "🌍 GEWS — Aktif Uyarılar",
@@ -444,7 +523,20 @@
     "sopDeactivate": "deaktive et",
     "sopReactivate": "aktive et",
     "sopEmpty": "Henüz SOP dokümanı eklenmedi.",
-    "createIncidentFromAlert": "Bu uyarıdan olay oluştur"
+    "createIncidentFromAlert": "Bu uyarıdan olay oluştur",
+    "timeline": {
+      "button": "Zaman Çizelgesi",
+      "created": "Oluşturuldu",
+      "statusChange": "durum: {from} → {to}",
+      "updated": "Güncellendi",
+      "loading": "Yükleniyor..."
+    },
+    "sopCategory": "Kategori",
+    "sopSearchPlaceholder": "Başlığa göre ara...",
+    "sopAllCategories": "— tüm kategoriler —",
+    "sopVersionHistory": "geçmiş sürümler",
+    "sopVersionHistoryTitle": "\"{title}\" — Geçmiş Sürümler",
+    "sopNoVersionHistory": "Henüz geçmiş sürüm yok."
   },
   "mapLayers": {
     "tabLabel": "Harita Katmanları",
@@ -484,7 +576,20 @@
       "map_layersShort": "Harita",
       "audit": "Audit görüntüleme",
       "auditShort": "Audit"
-    }
+    },
+    "accessReview": {
+      "exportCsv": "CSV Dışa Aktar",
+      "exportJson": "JSON Dışa Aktar",
+      "lastLogin": "Son Giriş",
+      "lockStatus": "Kilit Durumu",
+      "locked": "Kilitli",
+      "unlockAction": "Kilidi aç"
+    },
+    "drillExportSummary": "Özeti Dışa Aktar",
+    "drillLessonsLearned": "Ders Çıkarımı Notu",
+    "drillRelatedHazard": "İlgili Afet Tipi (isteğe bağlı)",
+    "drillSaveFeedback": "Kaydet",
+    "drillGoToThresholdEditor": "Eşik Düzenleyiciye Git →"
   },
   "shelters": {
     "tabLabel": "Sığınaklar",
@@ -518,7 +623,13 @@
     "nameRequired": "İsim zorunludur.",
     "noCountry": "Ülke zorunludur.",
     "capacityTotalInvalid": "Toplam kapasite pozitif bir sayı olmalıdır.",
-    "occupancyExceedsCapacity": "Mevcut doluluk toplam kapasiteyi geçemez."
+    "occupancyExceedsCapacity": "Mevcut doluluk toplam kapasiteyi geçemez.",
+    "map": {
+      "toggleLabel": "Sığınakları Göster/Gizle",
+      "occupancy": "Doluluk",
+      "status": "Durum",
+      "linkedIncident": "İlgili bir olaya bağlı"
+    }
   },
   "integrations": {
     "tabLabel": "Entegrasyonlar",
@@ -538,5 +649,13 @@
     "noType": "Entegrasyon türü zorunludur.",
     "allFieldsRequired": "Tüm alanlar zorunludur.",
     "customFieldIncomplete": "Özel alanın hem adı hem değeri dolu olmalıdır."
+  },
+  "login": {
+    "accountLocked": "Hesabınız çok sayıda başarısız giriş denemesi nedeniyle geçici olarak kilitlendi. {until} sonrasında tekrar deneyin veya bir yöneticiden kilidin açılmasını isteyin."
+  },
+  "assetCategory": {
+    "critical_infrastructure_health": "Sağlık Tesisi",
+    "critical_infrastructure_education": "Eğitim Kurumu",
+    "critical_infrastructure_emergency": "Acil Durum Hizmeti"
   }
 }

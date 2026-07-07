@@ -256,7 +256,72 @@
       "empty": "Автоматические отчёты ещё не создавались.",
       "integrity": "Целостность",
       "intact": "Не нарушена",
-      "broken": "Обнаружена проблема"
+      "broken": "Обнаружена проблема",
+      "checklistExport": "Контрольный Список"
+    },
+    "incidentReports": {
+      "title": "Годовые отчёты об инцидентах",
+      "empty": "Автоматические отчёты об инцидентах ещё не созданы.",
+      "total": "Всего инцидентов",
+      "falseAlarmRate": "Доля ложных тревог"
+    },
+    "deadLetter": {
+      "title": "Ожидающие записи аудита",
+      "empty": "Нет ожидающих записей.",
+      "count": "{count} записей ожидают повтора.",
+      "retry": "Повторить",
+      "result": "Успешно: {succeeded}, неудачно: {failed}."
+    },
+    "drillReports": {
+      "title": "Годовые Отчёты по Учениям",
+      "empty": "Автоматический отчёт по учениям ещё не создавался.",
+      "total": "Всего Учений"
+    },
+    "retention": {
+      "title": "Политики Хранения Данных",
+      "category": "Категория",
+      "days": "Хранение (дни)",
+      "action": "Действие",
+      "action_archive": "Архивировать",
+      "action_delete": "Удалить",
+      "empty": "Политики хранения ещё не определены.",
+      "save": "Сохранить",
+      "saving": "сохранение...",
+      "deleteWarningTitle": "Это действие необратимо",
+      "deleteWarningBody": "Выбрано \"Удалить\" — просроченные записи будут удалены безвозвратно, а не архивированы. Продолжить?",
+      "cancel": "Отмена",
+      "confirmDelete": "Подтверждаю, удалить"
+    },
+    "deletion": {
+      "title": "Требуется Обоснование",
+      "justificationLabel": "Почему вы удаляете эту запись?",
+      "justificationPlaceholder": "Укажите причину...",
+      "cancel": "Отмена",
+      "confirm": "Удалить"
+    },
+    "securityEvents": {
+      "title": "События Безопасности",
+      "action": "Событие",
+      "table": "Таблица",
+      "recordId": "Запись",
+      "time": "Время",
+      "empty": "Пока нет событий безопасности."
+    },
+    "securityConfig": {
+      "title": "Отчёт о Конфигурации Безопасности",
+      "mfaPolicy": "Политика MFA",
+      "required": "обязательно",
+      "notRequired": "не обязательно",
+      "retentionPolicies": "Политики Хранения",
+      "days": "дней",
+      "noPolicies": "Политики не определены",
+      "capabilityGrants": "Активные Специальные Разрешения",
+      "exportCsv": "CSV",
+      "exportJson": "JSON"
+    },
+    "evidence": {
+      "download": "Скачать Пакет Доказательств",
+      "building": "формирование..."
     }
   },
   "impact": {
@@ -293,7 +358,16 @@
       "scenarioNamePlaceholder": "Название сценария...",
       "saveScenario": "Сохранить сценарий",
       "savedScenarios": "Сохранённые сценарии",
-      "dataUnavailable": "связанные данные больше недоступны"
+      "dataUnavailable": "связанные данные больше недоступны",
+      "completenessLabel": "Полнота Данных",
+      "completenessNoData": "нет данных",
+      "criticalInfrastructureTitle": "Критическая Инфраструктура",
+      "criticalInfrastructureEmpty": "В этой зоне нет критической инфраструктуры.",
+      "breakdownTitle": "Разбивка",
+      "breakdownBySector": "По Сектору",
+      "breakdownByBoundary": "По Административной Границе",
+      "breakdownEmpty": "Нет данных разбивки.",
+      "unclassified": "без категории"
     },
     "geocoding": {
       "placeholder": "Поиск места или адреса...",
@@ -338,7 +412,9 @@
     "importing": "Импорт...",
     "importButton": "📥 Импортировать",
     "channels": "Каналы",
-    "status": "Статус"
+    "status": "Статус",
+    "anonymize": "анонимизировать",
+    "anonymizeConfirm": "Вы уверены, что хотите безвозвратно удалить личные данные (email, номер WhatsApp) контакта {name}?"
   },
   "dispatch": {
     "panelTitle": "Мониторинг Рассылки",
@@ -353,7 +429,10 @@
     "statusQueued": "в очереди",
     "statusRunning": "выполняется",
     "statusCompleted": "завершено",
-    "statusFailed": "ошибка"
+    "statusFailed": "ошибка",
+    "viewImpactSnapshot": "просмотр снимка воздействия",
+    "hideImpactSnapshot": "скрыть",
+    "impactSnapshotUnavailable": "Данные о воздействии были недоступны на момент трансляции."
   },
   "portal": {
     "title": "🌍 GEWS — Активные Оповещения",
@@ -444,7 +523,20 @@
     "sopDeactivate": "деактивировать",
     "sopReactivate": "активировать",
     "sopEmpty": "Документов СОП пока нет.",
-    "createIncidentFromAlert": "Создать инцидент из этого оповещения"
+    "createIncidentFromAlert": "Создать инцидент из этого оповещения",
+    "timeline": {
+      "button": "Хронология",
+      "created": "Создано",
+      "statusChange": "статус: {from} → {to}",
+      "updated": "Обновлено",
+      "loading": "Загрузка..."
+    },
+    "sopCategory": "Категория",
+    "sopSearchPlaceholder": "Поиск по названию...",
+    "sopAllCategories": "— все категории —",
+    "sopVersionHistory": "история версий",
+    "sopVersionHistoryTitle": "\"{title}\" — История Версий",
+    "sopNoVersionHistory": "Предыдущих версий пока нет."
   },
   "mapLayers": {
     "tabLabel": "Слои Карты",
@@ -484,7 +576,20 @@
       "map_layersShort": "Слои карты",
       "audit": "Просмотр журнала аудита",
       "auditShort": "Аудит"
-    }
+    },
+    "accessReview": {
+      "exportCsv": "Экспорт CSV",
+      "exportJson": "Экспорт JSON",
+      "lastLogin": "Последний вход",
+      "lockStatus": "Статус блокировки",
+      "locked": "Заблокировано",
+      "unlockAction": "Разблокировать"
+    },
+    "drillExportSummary": "Экспортировать Сводку",
+    "drillLessonsLearned": "Заметка о Извлечённых Уроках",
+    "drillRelatedHazard": "Связанный Тип Опасности (необязательно)",
+    "drillSaveFeedback": "Сохранить",
+    "drillGoToThresholdEditor": "Перейти к Редактору Порогов →"
   },
   "shelters": {
     "tabLabel": "Убежища",
@@ -518,7 +623,13 @@
     "nameRequired": "Название обязательно.",
     "noCountry": "Страна обязательна.",
     "capacityTotalInvalid": "Общая вместимость должна быть положительным числом.",
-    "occupancyExceedsCapacity": "Текущая заполненность не может превышать общую вместимость."
+    "occupancyExceedsCapacity": "Текущая заполненность не может превышать общую вместимость.",
+    "map": {
+      "toggleLabel": "Показать/Скрыть Убежища",
+      "occupancy": "Заполненность",
+      "status": "Статус",
+      "linkedIncident": "Связано с инцидентом"
+    }
   },
   "integrations": {
     "tabLabel": "Интеграции",
@@ -538,5 +649,13 @@
     "noType": "Тип интеграции обязателен.",
     "allFieldsRequired": "Все поля обязательны.",
     "customFieldIncomplete": "У пользовательского поля должны быть заполнены и имя, и значение."
+  },
+  "login": {
+    "accountLocked": "Ваша учётная запись временно заблокирована из-за слишком большого количества неудачных попыток входа. Повторите попытку после {until} или попросите администратора разблокировать её."
+  },
+  "assetCategory": {
+    "critical_infrastructure_health": "Медицинское Учреждение",
+    "critical_infrastructure_education": "Образовательное Учреждение",
+    "critical_infrastructure_emergency": "Экстренная Служба"
   }
 }

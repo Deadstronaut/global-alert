@@ -15,6 +15,11 @@ const receiptsByJob = ref({})
 const loading = ref(false)
 const error = ref(null)
 const retryingJobId = ref(null)
+// spec 034 (US2): impact_snapshots.cap_draft_id → job.cap_draft_id, keyed the
+// same way receiptsByJob is (RLS already scopes this to what the caller can
+// see, same as the tables above).
+const snapshotByCapDraft = ref({})
+const expandedJobId = ref(null)
 
 async function loadJobs() {
   loading.value = true
@@ -40,7 +45,28 @@ async function loadJobs() {
     }
     receiptsByJob.value = grouped
   }
+
+  const capDraftIds = [...new Set(jobs.value.map((j) => j.cap_draft_id).filter(Boolean))]
+  if (capDraftIds.length) {
+    const { data: snapshots } = await supabase
+      .from('impact_snapshots')
+      .select('cap_draft_id, data_available, snapshot_data, created_at')
+      .in('cap_draft_id', capDraftIds)
+      .order('created_at', { ascending: false })
+    const byCapDraft = {}
+    for (const s of snapshots ?? []) {
+      // Most-recent-first ordering above means the first row seen per
+      // cap_draft_id is kept (a cap_draft only ever broadcasts once in
+      // practice, but this guards against re-triggering).
+      byCapDraft[s.cap_draft_id] ??= s
+    }
+    snapshotByCapDraft.value = byCapDraft
+  }
   loading.value = false
+}
+
+function toggleSnapshot(jobId) {
+  expandedJobId.value = expandedJobId.value === jobId ? null : jobId
 }
 
 function hasFailedReceipts(jobId) {
@@ -81,36 +107,58 @@ onMounted(loadJobs)
       <thead>
         <tr>
           <th>{{ t('dispatch.alertColumn') }}</th><th>{{ t('dispatch.countryColumn') }}</th><th>{{ t('dispatch.statusColumn') }}</th>
-          <th>{{ t('dispatch.matchedColumn') }}</th><th>{{ t('dispatch.summaryColumn') }}</th><th></th>
+          <th>{{ t('dispatch.matchedColumn') }}</th><th>{{ t('dispatch.summaryColumn') }}</th><th></th><th></th>
         </tr>
       </thead>
       <tbody>
-        <tr v-for="job in jobs" :key="job.id">
-          <td>{{ job.cap_drafts?.title || '—' }} ({{ job.cap_drafts?.hazard_type }})</td>
-          <td>{{ (job.cap_drafts?.country_code || '—').toUpperCase() }}</td>
-          <td>
-            <span :class="['status-badge', `status-${job.status}`]">{{ t(`dispatch.status${job.status.charAt(0).toUpperCase()}${job.status.slice(1)}`) }}</span>
-          </td>
-          <td>{{ job.matched_contact_count }}</td>
-          <td>
-            <span v-if="receiptsByJob[job.id]">
-              {{ receiptsByJob[job.id].sent ?? 0 }} / {{ receiptsByJob[job.id].delivered ?? 0 }} /
-              {{ receiptsByJob[job.id].failed ?? 0 }} / {{ receiptsByJob[job.id].bounced ?? 0 }}
-            </span>
-            <span v-else>—</span>
-          </td>
-          <td>
-            <button
-              v-if="hasFailedReceipts(job.id)"
-              class="btn-retry"
-              :disabled="retryingJobId === job.id"
-              @click="retry(job)"
-            >
-              {{ retryingJobId === job.id ? t('dispatch.retrying') : t('dispatch.retryButton') }}
-            </button>
-          </td>
-        </tr>
-        <tr v-if="!jobs.length"><td colspan="6" class="empty-row">{{ t('dispatch.empty') }}</td></tr>
+        <template v-for="job in jobs" :key="job.id">
+          <tr>
+            <td>{{ job.cap_drafts?.title || '—' }} ({{ job.cap_drafts?.hazard_type }})</td>
+            <td>{{ (job.cap_drafts?.country_code || '—').toUpperCase() }}</td>
+            <td>
+              <span :class="['status-badge', `status-${job.status}`]">{{ t(`dispatch.status${job.status.charAt(0).toUpperCase()}${job.status.slice(1)}`) }}</span>
+            </td>
+            <td>{{ job.matched_contact_count }}</td>
+            <td>
+              <span v-if="receiptsByJob[job.id]">
+                {{ receiptsByJob[job.id].sent ?? 0 }} / {{ receiptsByJob[job.id].delivered ?? 0 }} /
+                {{ receiptsByJob[job.id].failed ?? 0 }} / {{ receiptsByJob[job.id].bounced ?? 0 }}
+              </span>
+              <span v-else>—</span>
+            </td>
+            <td>
+              <button
+                v-if="hasFailedReceipts(job.id)"
+                class="btn-retry"
+                :disabled="retryingJobId === job.id"
+                @click="retry(job)"
+              >
+                {{ retryingJobId === job.id ? t('dispatch.retrying') : t('dispatch.retryButton') }}
+              </button>
+            </td>
+            <td>
+              <button
+                v-if="snapshotByCapDraft[job.cap_draft_id]"
+                class="btn-link"
+                @click="toggleSnapshot(job.id)"
+              >
+                {{ expandedJobId === job.id ? t('dispatch.hideImpactSnapshot') : t('dispatch.viewImpactSnapshot') }}
+              </button>
+            </td>
+          </tr>
+          <tr v-if="expandedJobId === job.id && snapshotByCapDraft[job.cap_draft_id]" class="impact-snapshot-row">
+            <td colspan="7">
+              <div v-if="!snapshotByCapDraft[job.cap_draft_id].data_available" class="impact-notice">
+                {{ t('dispatch.impactSnapshotUnavailable') }}
+              </div>
+              <div v-else class="impact-snapshot-detail">
+                <span>{{ t('impact.panel.featuresCount', { count: snapshotByCapDraft[job.cap_draft_id].snapshot_data?.feature_count ?? 0 }) }}</span>
+                <span>{{ snapshotByCapDraft[job.cap_draft_id].snapshot_data?.total_value }}</span>
+              </div>
+            </td>
+          </tr>
+        </template>
+        <tr v-if="!jobs.length"><td colspan="7" class="empty-row">{{ t('dispatch.empty') }}</td></tr>
       </tbody>
     </table>
   </div>
@@ -131,4 +179,8 @@ onMounted(loadJobs)
 .btn-retry:disabled { opacity: .5; cursor: not-allowed; }
 .form-error { color: #ef4444; font-size: .8rem; margin-bottom: 10px; }
 .tab-loading { font-size: .82rem; color: var(--color-text-muted,#94a3b8); }
+.btn-link { background: none; border: none; color: #4aa3ff; cursor: pointer; font-size: .78rem; padding: 0; }
+.impact-snapshot-row td { padding: 10px; background: rgba(255,255,255,.03); }
+.impact-snapshot-detail { display: flex; gap: 16px; font-size: .8rem; color: #e2e8f0; }
+.impact-notice { padding: 8px 10px; border-radius: 8px; background: rgba(255,255,255,.06); font-size: .78rem; color: var(--color-text-muted,#94a3b8); }
 </style>

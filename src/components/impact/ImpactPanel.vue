@@ -25,6 +25,14 @@ const scenarios = ref([])
 const scenarioName = ref('')
 const loadedScenario = ref(null)
 
+// spec 034 (US1/US3/US4): critical infrastructure list, sector/boundary
+// breakdown, and data-completeness score, all derived from the same
+// dataset/point/radius as the main compute_zonal_stats analysis above.
+const criticalInfrastructure = ref(null) // null | [] | array | 'error'
+const breakdownType = ref('sector') // 'sector' | 'boundary'
+const breakdown = ref(null) // null | [] | array | 'error'
+const completeness = ref(null) // null | { ratio: number|null } | 'error'
+
 const canAnalyze = computed(() => auth.isSuperAdmin || ['country_admin', 'org_admin'].includes(auth.session?.role))
 
 const effectiveRadiusKm = computed(() => {
@@ -68,18 +76,59 @@ async function runAnalysis() {
   if (!props.selectedEvent || !selectedDatasetId.value) return
   analyzing.value = true
   result.value = null
-  const { data, error } = await supabase.rpc('compute_zonal_stats', {
+  criticalInfrastructure.value = null
+  breakdown.value = null
+  completeness.value = null
+  const rpcParams = {
     dataset_id: selectedDatasetId.value,
     center_lat: props.selectedEvent.lat,
     center_lng: props.selectedEvent.lng,
     radius_km: effectiveRadiusKm.value,
-  })
+  }
+  const { data, error } = await supabase.rpc('compute_zonal_stats', rpcParams)
   analyzing.value = false
   if (error) {
     result.value = 'error'
     return
   }
   result.value = data?.[0] ?? { total_value: 0, feature_count: 0 }
+  await Promise.all([
+    loadCriticalInfrastructure(rpcParams),
+    loadBreakdown(rpcParams),
+    loadCompleteness(rpcParams),
+  ])
+}
+
+async function loadCriticalInfrastructure(rpcParams) {
+  const { data, error } = await supabase.rpc('get_critical_infrastructure_features', rpcParams)
+  criticalInfrastructure.value = error ? 'error' : (data ?? [])
+}
+
+async function loadBreakdown(rpcParams) {
+  const fn = breakdownType.value === 'sector' ? 'compute_sector_breakdown' : 'compute_boundary_breakdown'
+  const { data, error } = await supabase.rpc(fn, rpcParams)
+  breakdown.value = error ? 'error' : (data ?? [])
+}
+
+async function loadCompleteness(rpcParams) {
+  const { data, error } = await supabase.rpc('compute_data_completeness', rpcParams)
+  if (error) {
+    completeness.value = 'error'
+    return
+  }
+  const row = data?.[0]
+  completeness.value = { ratio: row?.completeness_ratio ?? null }
+}
+
+async function switchBreakdownType(type) {
+  breakdownType.value = type
+  if (!props.selectedEvent || !selectedDatasetId.value || !result.value || result.value === 'error') return
+  await loadBreakdown({
+    dataset_id: selectedDatasetId.value,
+    center_lat: props.selectedEvent.lat,
+    center_lng: props.selectedEvent.lng,
+    radius_km: effectiveRadiusKm.value,
+  })
 }
 
 async function saveScenario() {
@@ -102,6 +151,11 @@ function loadScenario(scenario) {
   selectedDatasetId.value = scenario.exposure_dataset_id
   radiusOverride.value = scenario.radius_km_override
   result.value = scenario.result_snapshot
+  // A saved scenario only stores compute_zonal_stats' result_snapshot
+  // (spec 008); the derived US1/US3/US4 views require a fresh analysis run.
+  criticalInfrastructure.value = null
+  breakdown.value = null
+  completeness.value = null
 }
 
 function exportSummary(format) {
@@ -141,6 +195,9 @@ watch(() => props.selectedEvent, () => {
   result.value = null
   radiusOverride.value = null
   loadedScenario.value = null
+  criticalInfrastructure.value = null
+  breakdown.value = null
+  completeness.value = null
 })
 
 onMounted(() => {
@@ -189,11 +246,43 @@ onMounted(() => {
         <div v-else-if="result" class="impact-result">
           <div class="impact-result-value">{{ result.total_value }}</div>
           <div class="impact-result-label">{{ t('impact.panel.featuresCount', { count: result.feature_count }) }}</div>
+          <div v-if="completeness && completeness !== 'error'" class="impact-completeness">
+            {{ t('impact.panel.completenessLabel') }}:
+            <strong v-if="completeness.ratio !== null">{{ Math.round(completeness.ratio * 100) }}%</strong>
+            <strong v-else>{{ t('impact.panel.completenessNoData') }}</strong>
+          </div>
           <div class="impact-export-row">
             <button class="btn-export" @click="exportSummary('csv')">{{ t('impact.panel.exportCsv') }}</button>
             <button class="btn-export" @click="exportSummary('json')">{{ t('impact.panel.exportJson') }}</button>
             <button class="btn-export" @click="exportGeoJson">{{ t('impact.panel.exportGeoJson') }}</button>
           </div>
+        </div>
+
+        <div v-if="result && result !== 'error'" class="impact-critical">
+          <h5>{{ t('impact.panel.criticalInfrastructureTitle') }}</h5>
+          <div v-if="criticalInfrastructure === 'error'" class="impact-notice impact-notice-error">{{ t('impact.panel.error') }}</div>
+          <div v-else-if="!criticalInfrastructure || !criticalInfrastructure.length" class="impact-notice">{{ t('impact.panel.criticalInfrastructureEmpty') }}</div>
+          <ul v-else class="impact-critical-list">
+            <li v-for="f in criticalInfrastructure" :key="f.id">
+              {{ t('assetCategory.' + f.asset_category, f.asset_category) }} — {{ f.metric_value }}
+            </li>
+          </ul>
+        </div>
+
+        <div v-if="result && result !== 'error'" class="impact-breakdown">
+          <h5>{{ t('impact.panel.breakdownTitle') }}</h5>
+          <div class="impact-breakdown-toggle">
+            <button :class="{ active: breakdownType === 'sector' }" @click="switchBreakdownType('sector')">{{ t('impact.panel.breakdownBySector') }}</button>
+            <button :class="{ active: breakdownType === 'boundary' }" @click="switchBreakdownType('boundary')">{{ t('impact.panel.breakdownByBoundary') }}</button>
+          </div>
+          <div v-if="breakdown === 'error'" class="impact-notice impact-notice-error">{{ t('impact.panel.error') }}</div>
+          <div v-else-if="!breakdown || !breakdown.length" class="impact-notice">{{ t('impact.panel.breakdownEmpty') }}</div>
+          <ul v-else class="impact-breakdown-list">
+            <li v-for="g in breakdown" :key="g.group_key">
+              <span>{{ g.group_key === 'unclassified' ? t('impact.panel.unclassified') : g.group_key }}</span>
+              <span>{{ g.total_value }} ({{ g.feature_count }})</span>
+            </li>
+          </ul>
         </div>
 
         <div v-if="result && result !== 'error'" class="impact-save">
@@ -242,6 +331,7 @@ onMounted(() => {
 .impact-result { text-align: center; padding: 10px; background: rgba(34,197,94,.08); border-radius: 8px; margin-bottom: 10px; }
 .impact-result-value { font-size: 1.6rem; font-weight: 800; color: #22c55e; }
 .impact-result-label { font-size: .72rem; color: var(--color-text-muted, #94a3b8); }
+.impact-completeness { font-size: .72rem; color: var(--color-text-muted, #94a3b8); margin-top: 6px; }
 .impact-export-row { display: flex; gap: 6px; justify-content: center; margin-top: 8px; flex-wrap: wrap; }
 .btn-export {
   padding: 4px 10px; background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.15);
@@ -257,4 +347,14 @@ onMounted(() => {
 }
 .scenario-row:hover { background: rgba(255,255,255,.06); }
 .scenario-missing { color: #f97316; font-size: .7rem; }
+.impact-critical, .impact-breakdown { margin-bottom: 14px; }
+.impact-critical h5, .impact-breakdown h5 { margin: 0 0 8px; font-size: .8rem; }
+.impact-critical-list, .impact-breakdown-list { list-style: none; padding: 0; margin: 0; font-size: .78rem; display: flex; flex-direction: column; gap: 6px; }
+.impact-breakdown-list li { display: flex; justify-content: space-between; }
+.impact-breakdown-toggle { display: flex; gap: 6px; margin-bottom: 8px; }
+.impact-breakdown-toggle button {
+  flex: 1; padding: 5px 8px; background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.15);
+  border-radius: 6px; color: #e2e8f0; font-size: .72rem; cursor: pointer;
+}
+.impact-breakdown-toggle button.active { background: rgba(77,163,255,.2); border-color: rgba(77,163,255,.4); color: #4da3ff; }
 </style>

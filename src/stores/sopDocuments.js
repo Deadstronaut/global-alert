@@ -65,6 +65,19 @@ export const useSopDocumentsStore = defineStore('sopDocuments', () => {
     return updateSopDocument(id, { is_active: true });
   }
 
+  // spec 033 (MHEWS-FR-0275): read-only lookup of a SOP's archived versions —
+  // writes only ever happen via the archive_sop_document_version() trigger,
+  // never through this store.
+  async function fetchSopDocumentVersions(sopDocumentId) {
+    const { data, error: err } = await supabase
+      .from('sop_document_versions')
+      .select('*')
+      .eq('sop_document_id', sopDocumentId)
+      .order('archived_at', { ascending: false });
+    if (err) throw err;
+    return data ?? [];
+  }
+
   return {
     sopDocuments,
     loaded,
@@ -77,5 +90,6 @@ export const useSopDocumentsStore = defineStore('sopDocuments', () => {
     updateSopDocument,
     deactivateSopDocument,
     reactivateSopDocument,
+    fetchSopDocumentVersions,
   };
 });

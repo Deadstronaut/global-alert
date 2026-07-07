@@ -14,6 +14,7 @@ import BoundaryUploadForm from '@/components/admin/BoundaryUploadForm.vue'
 import { getRegionNames } from '@/data/boundaries/index.js'
 import { groupSourcesByScope } from '@/utils/sourceScope.js'
 import { rowsToCsv, rowsToJson, triggerDownload } from '@/lib/auditExport.js'
+import { buildComplianceChecklist, TEMPLATE_VERSION } from '@/services/complianceChecklist.js'
 import ExposureDatasetManager from '@/components/impact/ExposureDatasetManager.vue'
 import ContactsPanel from '@/components/admin/ContactsPanel.vue'
 import DispatchPanel from '@/components/admin/DispatchPanel.vue'
@@ -21,12 +22,17 @@ import IntegrationsPanel from '@/components/admin/IntegrationsPanel.vue'
 import HazardTaxonomyPanel from '@/components/admin/HazardTaxonomyPanel.vue'
 import SopRepositoryPanel from '@/components/admin/SopRepositoryPanel.vue'
 import MapLayerRegistryPanel from '@/components/admin/MapLayerRegistryPanel.vue'
+import RetentionPolicyPanel from '@/components/admin/RetentionPolicyPanel.vue'
+import SecurityEventsPanel from '@/components/admin/SecurityEventsPanel.vue'
+import SecurityConfigReportPanel from '@/components/admin/SecurityConfigReportPanel.vue'
 import { computeResponseTimeSeconds, computeAckRate } from '@/utils/drillMetrics.js'
+import { useHazardTypesStore } from '@/stores/hazardTypes.js'
 
 const router = useRouter()
 const { t } = useI18n()
 
 const auth = useAuthStore()
+const hazardTypesStore = useHazardTypesStore()
 const tab = ref('users') // 'users' | 'orgs' | 'drill' | 'sources' | 'manual' | 'csv' | 'boundaries' | 'contacts' | 'dispatch' | 'audit'
 
 async function handleLogout() {
@@ -50,6 +56,63 @@ const ROLES = ['super_admin', 'country_admin', 'org_admin', 'viewer']
 const CAPABILITIES = ['hazard_taxonomy', 'sop_repository', 'map_layers', 'audit']
 const capabilityGrants = ref({})
 const capabilityGrantError = ref(null)
+
+// spec 028: Access Review Report (super_admin only) — last-login + capability
+// summary per profile, sourced from get_access_review() so the same query
+// backs both the new table columns and the export button. Kept separate from
+// `users` (loadUsers()'s plain profiles select) since get_access_review()
+// doesn't return full_name/edit-relevant fields the existing table needs.
+const accessReview = ref([])
+const accessReviewError = ref(null)
+const accessReviewByProfileId = computed(() => {
+  const map = {}
+  for (const row of accessReview.value) map[row.profile_id] = row
+  return map
+})
+
+async function loadAccessReview() {
+  if (!auth.isSuperAdmin) return
+  accessReviewError.value = null
+  const { data, error } = await supabase.rpc('get_access_review')
+  if (error) accessReviewError.value = error.message
+  else accessReview.value = data || []
+}
+
+function isLocked(profileId) {
+  const row = accessReviewByProfileId.value[profileId]
+  return !!(row?.locked_until && new Date(row.locked_until) > new Date())
+}
+
+async function unlockUser(profileId) {
+  accessReviewError.value = null
+  try {
+    await supabase.rpc('unlock_profile', { p_profile_id: profileId }).then(({ error }) => {
+      if (error) throw error
+    })
+    await loadAccessReview()
+  } catch (err) {
+    accessReviewError.value = err.message ?? String(err)
+  }
+}
+
+function downloadAccessReview(format) {
+  const rows = accessReview.value.map((row) => ({
+    email: row.email,
+    role: row.role,
+    country_code: row.country_code,
+    org_id: row.org_id,
+    is_active: row.is_active,
+    capabilities: (row.capabilities || []).join(', '),
+    last_sign_in_at: row.last_sign_in_at || '',
+    locked: isLocked(row.profile_id),
+  }))
+  const stamp = new Date().toISOString().slice(0, 10)
+  if (format === 'csv') {
+    triggerDownload(rowsToCsv(rows), `erisim-inceleme-raporu-${stamp}.csv`, 'text/csv')
+  } else {
+    triggerDownload(rowsToJson(rows), `erisim-inceleme-raporu-${stamp}.json`, 'application/json')
+  }
+}
 
 async function loadCapabilityGrants() {
   if (!auth.isSuperAdmin) return
@@ -104,6 +167,7 @@ async function loadUsers() {
   else users.value = data || []
   usersLoading.value = false
   await loadCapabilityGrants()
+  await loadAccessReview()
 }
 
 async function saveUser() {
@@ -360,6 +424,52 @@ async function endDrill(drill) {
   await loadDrills()
 }
 
+// spec 032 (MHEWS-SD-DRILL-02): exports a single completed drill's summary,
+// same rowsToCsv/rowsToJson/triggerDownload call pattern as
+// downloadComplianceReport()/downloadIncidentReport() — "veri yok" (no data)
+// is preserved explicitly rather than silently rendered as 0/empty.
+function downloadDrillSummary(drill, format) {
+  const s = drill.summary ?? {}
+  const flatRows = [
+    { drill_id: drill.id, title: drill.title, key: 'duration_min', value: s.duration_min ?? null },
+    { drill_id: drill.id, title: drill.title, key: 'alerts_issued', value: s.alerts_issued ?? 0 },
+    { drill_id: drill.id, title: drill.title, key: 'response_time_seconds', value: s.response_time_seconds ?? t('admin.drillNoData') },
+    {
+      drill_id: drill.id,
+      title: drill.title,
+      key: 'ack_rate',
+      value: s.ack_rate ? `${s.ack_rate.acknowledged}/${s.ack_rate.sent}` : t('admin.drillNoData'),
+    },
+  ]
+  if (format === 'csv') {
+    triggerDownload(rowsToCsv(flatRows), `drill-summary-${drill.id}.csv`, 'text/csv')
+  } else {
+    triggerDownload(rowsToJson(flatRows), `drill-summary-${drill.id}.json`, 'application/json')
+  }
+}
+
+// spec 032 (After-Action Feedback Loop): saves an optional free-text
+// lessons-learned note plus an optional hazard-type association on a
+// completed drill — no new authorization path or audit mechanism needed,
+// drill_sessions' existing RLS policies and audit_drill_sessions trigger
+// already cover this UPDATE.
+const savingDrillFeedback = ref(null)
+
+async function saveDrillFeedback(drill, lessonsLearned, relatedHazardType) {
+  savingDrillFeedback.value = drill.id
+  const { error } = await supabase
+    .from('drill_sessions')
+    .update({ lessons_learned: lessonsLearned || null, related_hazard_type: relatedHazardType || null })
+    .eq('id', drill.id)
+  if (error) drillsError.value = error.message
+  else await loadDrills()
+  savingDrillFeedback.value = null
+}
+
+function goToHazardEditor() {
+  tab.value = 'hazardTaxonomy'
+}
+
 const canAdmin = computed(() => auth.isSuperAdmin || auth.session?.role === 'country_admin')
 
 // spec 018: a country_admin/org_admin granted one of the 4 named capabilities
@@ -603,13 +713,13 @@ async function loadComplianceReports() {
 // for the manual audit log export (FR-009 — no new export mechanism).
 function downloadComplianceReport(report, format) {
   const flatRows = [
-    { period_start: report.period_start, period_end: report.period_end, kind: 'integrity', key: 'integrity_ok', value: report.summary.integrity_ok },
-    { period_start: report.period_start, period_end: report.period_end, kind: 'integrity', key: 'broken_seq', value: report.summary.broken_seq },
+    { period_start: report.period_start, period_end: report.period_end, kind: 'integrity', key: 'integrity_ok', value: report.summary.integrity_ok, template_version: TEMPLATE_VERSION },
+    { period_start: report.period_start, period_end: report.period_end, kind: 'integrity', key: 'broken_seq', value: report.summary.broken_seq, template_version: TEMPLATE_VERSION },
     ...Object.entries(report.summary.by_action || {}).map(([action, count]) => ({
-      period_start: report.period_start, period_end: report.period_end, kind: 'by_action', key: action, value: count,
+      period_start: report.period_start, period_end: report.period_end, kind: 'by_action', key: action, value: count, template_version: TEMPLATE_VERSION,
     })),
     ...Object.entries(report.summary.by_table || {}).map(([table, count]) => ({
-      period_start: report.period_start, period_end: report.period_end, kind: 'by_table', key: table, value: count,
+      period_start: report.period_start, period_end: report.period_end, kind: 'by_table', key: table, value: count, template_version: TEMPLATE_VERSION,
     })),
   ]
   const stamp = report.period_start.slice(0, 10)
@@ -620,10 +730,154 @@ function downloadComplianceReport(report, format) {
   }
 }
 
+// spec 030 (MHEWS-FR-0067/FR-0071): exports a structured, per-criterion
+// compliance checklist derived from an existing compliance_reports row +
+// that period's audit_log_dead_letter rows. Read-only — no new writer, no
+// new authorization path (relies entirely on this route's existing Super
+// Admin guard + compliance_reports/audit_log_dead_letter's existing
+// super_admin-only RLS policies).
+async function downloadComplianceChecklist(report, format) {
+  const { data: deadLetterRows } = await supabase
+    .from('audit_log_dead_letter')
+    .select('id, failed_at')
+    .gte('failed_at', report.period_start)
+    .lt('failed_at', report.period_end)
+
+  const checklist = buildComplianceChecklist(report, deadLetterRows || [])
+  const flatRows = checklist.items.map((item) => ({
+    period_start: checklist.periodStart,
+    period_end: checklist.periodEnd,
+    criterion: item.criterion,
+    status: item.status,
+    evidence: JSON.stringify(item.evidence),
+    template_version: checklist.templateVersion,
+  }))
+  const stamp = report.period_start.slice(0, 10)
+  if (format === 'csv') {
+    triggerDownload(rowsToCsv(flatRows), `compliance-checklist-${stamp}.csv`, 'text/csv')
+  } else {
+    triggerDownload(rowsToJson(flatRows), `compliance-checklist-${stamp}.json`, 'application/json')
+  }
+}
+
+// spec 026: automatically generated yearly incident reports (count/severity/
+// hazard breakdown, avg time-to-close, false-alarm rate). Read-only here —
+// the only writer is the generate-incident-report Edge Function.
+const incidentReports = ref([])
+const incidentReportsLoading = ref(false)
+
+async function loadIncidentReports() {
+  incidentReportsLoading.value = true
+  const { data } = await supabase
+    .from('incident_reports')
+    .select('*')
+    .order('period_start', { ascending: false })
+  incidentReports.value = data || []
+  incidentReportsLoading.value = false
+}
+
+// Mirrors downloadComplianceReport() — reuses the same rowsToCsv/rowsToJson/
+// triggerDownload helpers, no new export mechanism (FR/plan.md's "reuse, don't
+// reinvent" rule for this subsection).
+function downloadIncidentReport(report, format) {
+  const flatRows = [
+    { period_start: report.period_start, period_end: report.period_end, kind: 'totals', key: 'total_incidents', value: report.summary.total_incidents },
+    { period_start: report.period_start, period_end: report.period_end, kind: 'totals', key: 'avg_time_to_close_hours', value: report.summary.avg_time_to_close_hours },
+    { period_start: report.period_start, period_end: report.period_end, kind: 'totals', key: 'false_alarm_rate', value: report.summary.false_alarm_rate },
+    ...Object.entries(report.summary.by_severity || {}).map(([severity, count]) => ({
+      period_start: report.period_start, period_end: report.period_end, kind: 'by_severity', key: severity, value: count,
+    })),
+    ...Object.entries(report.summary.by_hazard_type || {}).map(([hazardType, count]) => ({
+      period_start: report.period_start, period_end: report.period_end, kind: 'by_hazard_type', key: hazardType, value: count,
+    })),
+  ]
+  const stamp = report.period_start.slice(0, 10)
+  if (format === 'csv') {
+    triggerDownload(rowsToCsv(flatRows), `incident-report-${stamp}.csv`, 'text/csv')
+  } else {
+    triggerDownload(rowsToJson(flatRows), `incident-report-${stamp}.json`, 'application/json')
+  }
+}
+
+// spec 032: automatically generated yearly drill performance reports (total
+// drills, average response time, average ack rate, scenario breakdown).
+// Read-only here — the only writer is the generate-drill-report Edge
+// Function. Lives in the Denetim tab alongside the other scheduled reports
+// (compliance/incident), not the Tatbikat tab, matching the project's
+// existing "all auto-generated reports live in one place" convention.
+const drillReports = ref([])
+const drillReportsLoading = ref(false)
+
+async function loadDrillReports() {
+  drillReportsLoading.value = true
+  const { data } = await supabase
+    .from('drill_reports')
+    .select('*')
+    .order('period_start', { ascending: false })
+  drillReports.value = data || []
+  drillReportsLoading.value = false
+}
+
+// Same rowsToCsv/rowsToJson/triggerDownload call pattern as
+// downloadComplianceReport()/downloadIncidentReport() — a separate flatten
+// function because drill_reports' summary shape (total_drills/
+// avg_response_time_seconds/avg_ack_rate/by_scenario_type) differs
+// structurally from a single drill's summary (analysis finding F1).
+function downloadDrillReport(report, format) {
+  const flatRows = [
+    { period_start: report.period_start, period_end: report.period_end, kind: 'totals', key: 'total_drills', value: report.summary.total_drills },
+    { period_start: report.period_start, period_end: report.period_end, kind: 'totals', key: 'avg_response_time_seconds', value: report.summary.avg_response_time_seconds ?? t('admin.drillNoData') },
+    { period_start: report.period_start, period_end: report.period_end, kind: 'totals', key: 'avg_ack_rate', value: report.summary.avg_ack_rate ?? t('admin.drillNoData') },
+    ...Object.entries(report.summary.by_scenario_type || {}).map(([scenarioType, count]) => ({
+      period_start: report.period_start, period_end: report.period_end, kind: 'by_scenario_type', key: scenarioType, value: count,
+    })),
+  ]
+  const stamp = report.period_start.slice(0, 10)
+  if (format === 'csv') {
+    triggerDownload(rowsToCsv(flatRows), `drill-report-${stamp}.csv`, 'text/csv')
+  } else {
+    triggerDownload(rowsToJson(flatRows), `drill-report-${stamp}.json`, 'application/json')
+  }
+}
+
+// spec 029: audit writes that failed (never blocking the triggering
+// operation, per FR-001) are captured here for a Super Admin to inspect and
+// retry. Read-only fetch here — writes/deletes only happen via
+// flush_audit_dead_letter().
+const deadLetterCount = ref(0)
+const deadLetterFlushing = ref(false)
+const deadLetterResult = ref(null)
+
+async function loadDeadLetterCount() {
+  const { count } = await supabase
+    .from('audit_log_dead_letter')
+    .select('*', { count: 'exact', head: true })
+  deadLetterCount.value = count || 0
+}
+
+async function flushDeadLetter() {
+  deadLetterFlushing.value = true
+  deadLetterResult.value = null
+  try {
+    const { data, error } = await supabase.rpc('flush_audit_dead_letter')
+    if (error) throw error
+    const row = Array.isArray(data) ? data[0] : data
+    deadLetterResult.value = row
+    await loadDeadLetterCount()
+  } catch (err) {
+    auditError.value = err.message ?? String(err)
+  } finally {
+    deadLetterFlushing.value = false
+  }
+}
+
 function openAuditTab() {
   tab.value = 'audit'
   loadAuditLog()
   loadComplianceReports()
+  loadIncidentReports()
+  loadDrillReports()
+  loadDeadLetterCount()
 }
 
 function prevAuditPage() {
@@ -688,6 +942,7 @@ onMounted(() => {
   loadUsers()
   loadOrgs()
   loadDrills()
+  hazardTypesStore.fetchHazardTypes()
   sourcesStore.fetchSources()
   sourcesRefreshTimer = setInterval(() => sourcesStore.fetchSources(), FASTEST_POLL_MS)
   checkFeedServer()
@@ -863,6 +1118,11 @@ onUnmounted(() => {
       </Transition>
       <div v-if="usersError" class="tab-error">{{ usersError }}</div>
       <div v-if="capabilityGrantError" class="tab-error">{{ capabilityGrantError }}</div>
+      <div v-if="accessReviewError" class="tab-error">{{ accessReviewError }}</div>
+      <div v-if="auth.isSuperAdmin" class="access-review-export">
+        <button class="btn-export" @click="downloadAccessReview('csv')">{{ t('admin.accessReview.exportCsv') }}</button>
+        <button class="btn-export" @click="downloadAccessReview('json')">{{ t('admin.accessReview.exportJson') }}</button>
+      </div>
       <div v-if="usersLoading" class="tab-loading">Yükleniyor...</div>
       <div v-else class="users-table-wrap">
         <table class="data-table">
@@ -874,6 +1134,8 @@ onUnmounted(() => {
               <th>Ülke</th>
               <th>Org</th>
               <th v-if="auth.isSuperAdmin">{{ t('admin.capabilities.columnLabel') }}</th>
+              <th v-if="auth.isSuperAdmin">{{ t('admin.accessReview.lastLogin') }}</th>
+              <th v-if="auth.isSuperAdmin">{{ t('admin.accessReview.lockStatus') }}</th>
               <th>Kayıt</th>
               <th>İşlem</th>
             </tr>
@@ -926,11 +1188,28 @@ onUnmounted(() => {
                 </label>
                 <span v-else class="muted">—</span>
               </td>
+              <td v-if="auth.isSuperAdmin" class="muted">
+                {{ accessReviewByProfileId[u.id]?.last_sign_in_at ? formatDate(accessReviewByProfileId[u.id].last_sign_in_at) : '—' }}
+              </td>
+              <td v-if="auth.isSuperAdmin">
+                <span v-if="isLocked(u.id)" class="lock-badge" :title="accessReviewByProfileId[u.id]?.locked_until">
+                  🔒 {{ t('admin.accessReview.locked') }}
+                </span>
+                <span v-else class="muted">—</span>
+              </td>
               <td class="muted">{{ formatDate(u.created_at) }}</td>
               <td>
                 <div v-if="editingUser?.id !== u.id" class="row-actions">
                   <button v-if="canAdmin" class="btn-edit" @click="editingUser = { ...u }">
                     ✏️
+                  </button>
+                  <button
+                    v-if="auth.isSuperAdmin && isLocked(u.id)"
+                    class="btn-reactivate"
+                    @click="unlockUser(u.id)"
+                    :title="t('admin.accessReview.unlockAction')"
+                  >
+                    🔓
                   </button>
                   <button
                     v-if="canAdmin && u.role !== 'viewer'"
@@ -1086,6 +1365,29 @@ onUnmounted(() => {
           </div>
           <div v-if="canAdmin && d.status === 'active'" class="drill-actions">
             <button class="btn-end-drill" @click="endDrill(d)">⏹ Tatbikatı Bitir</button>
+          </div>
+          <div v-if="d.status === 'completed'" class="drill-actions">
+            <button class="btn-export" @click="downloadDrillSummary(d, 'csv')">{{ t('admin.drillExportSummary') }} (CSV)</button>
+            <button class="btn-export" @click="downloadDrillSummary(d, 'json')">{{ t('admin.drillExportSummary') }} (JSON)</button>
+          </div>
+          <div v-if="canAdmin && d.status === 'completed'" class="drill-feedback">
+            <label>
+              <span>{{ t('admin.drillLessonsLearned') }}</span>
+              <textarea v-model="d.lessons_learned" rows="2"></textarea>
+            </label>
+            <label>
+              <span>{{ t('admin.drillRelatedHazard') }}</span>
+              <select v-model="d.related_hazard_type">
+                <option :value="null">—</option>
+                <option v-for="h in hazardTypesStore.hazardTypes" :key="h.code" :value="h.code">{{ h.display_name }}</option>
+              </select>
+            </label>
+            <button
+              class="btn-export"
+              :disabled="savingDrillFeedback === d.id"
+              @click="saveDrillFeedback(d, d.lessons_learned, d.related_hazard_type)"
+            >{{ t('admin.drillSaveFeedback') }}</button>
+            <a v-if="d.related_hazard_type" href="#" class="btn-export" @click.prevent="goToHazardEditor">{{ t('admin.drillGoToThresholdEditor') }}</a>
           </div>
         </div>
       </div>
@@ -1382,6 +1684,21 @@ onUnmounted(() => {
         </button>
       </div>
 
+      <!-- ── Bekleyen Denetim Kayıtları (spec 029: audit write resilience) ── -->
+      <div class="compliance-reports-section">
+        <h4>{{ t('audit.deadLetter.title') }}</h4>
+        <p v-if="deadLetterCount === 0" class="tab-empty">{{ t('audit.deadLetter.empty') }}</p>
+        <div v-else class="dead-letter-row">
+          <span>{{ t('audit.deadLetter.count', { count: deadLetterCount }) }}</span>
+          <button class="btn-export" :disabled="deadLetterFlushing" @click="flushDeadLetter">
+            {{ deadLetterFlushing ? t('audit.loading') : t('audit.deadLetter.retry') }}
+          </button>
+        </div>
+        <p v-if="deadLetterResult" class="tab-empty">
+          {{ t('audit.deadLetter.result', { succeeded: deadLetterResult.succeeded, failed: deadLetterResult.failed }) }}
+        </p>
+      </div>
+
       <!-- ── Geçmiş Raporlar (spec 019: scheduled compliance reports) ────── -->
       <div class="compliance-reports-section">
         <h4>{{ t('audit.reports.title') }}</h4>
@@ -1401,9 +1718,68 @@ onUnmounted(() => {
             <span class="compliance-report-actions">
               <button class="btn-export" @click="downloadComplianceReport(report, 'csv')">{{ t('audit.export.csv') }}</button>
               <button class="btn-export" @click="downloadComplianceReport(report, 'json')">{{ t('audit.export.json') }}</button>
+              <button class="btn-export" @click="downloadComplianceChecklist(report, 'csv')">{{ t('audit.reports.checklistExport') }} (CSV)</button>
+              <button class="btn-export" @click="downloadComplianceChecklist(report, 'json')">{{ t('audit.reports.checklistExport') }} (JSON)</button>
             </span>
           </li>
         </ul>
+      </div>
+
+      <!-- ── Yıllık Olay Raporları (spec 026: scheduled incident reports) ── -->
+      <div class="compliance-reports-section">
+        <h4>{{ t('audit.incidentReports.title') }}</h4>
+        <div v-if="incidentReportsLoading" class="tab-loading">{{ t('audit.loading') }}</div>
+        <div v-else-if="incidentReports.length === 0" class="tab-empty">{{ t('audit.incidentReports.empty') }}</div>
+        <ul v-else class="compliance-reports-list">
+          <li v-for="report in incidentReports" :key="report.id" class="compliance-report-row">
+            <span class="compliance-report-period">
+              {{ formatDate(report.period_start) }} — {{ formatDate(report.period_end) }}
+            </span>
+            <span class="compliance-report-summary">
+              {{ t('audit.incidentReports.total') }}: <strong>{{ report.summary.total_incidents }}</strong>
+              · {{ t('audit.incidentReports.falseAlarmRate') }}:
+              <strong>{{ report.summary.false_alarm_rate != null ? Math.round(report.summary.false_alarm_rate * 100) + '%' : '—' }}</strong>
+            </span>
+            <span class="compliance-report-actions">
+              <button class="btn-export" @click="downloadIncidentReport(report, 'csv')">{{ t('audit.export.csv') }}</button>
+              <button class="btn-export" @click="downloadIncidentReport(report, 'json')">{{ t('audit.export.json') }}</button>
+            </span>
+          </li>
+        </ul>
+      </div>
+
+      <!-- ── Yıllık Tatbikat Raporları (spec 032: scheduled drill reports) ── -->
+      <div class="compliance-reports-section">
+        <h4>{{ t('audit.drillReports.title') }}</h4>
+        <div v-if="drillReportsLoading" class="tab-loading">{{ t('audit.loading') }}</div>
+        <div v-else-if="drillReports.length === 0" class="tab-empty">{{ t('audit.drillReports.empty') }}</div>
+        <ul v-else class="compliance-reports-list">
+          <li v-for="report in drillReports" :key="report.id" class="compliance-report-row">
+            <span class="compliance-report-period">
+              {{ formatDate(report.period_start) }} — {{ formatDate(report.period_end) }}
+            </span>
+            <span class="compliance-report-summary">
+              {{ t('audit.drillReports.total') }}: <strong>{{ report.summary.total_drills }}</strong>
+              · {{ t('admin.drillResponseTime') }}:
+              <strong>{{ report.summary.avg_response_time_seconds != null ? Math.round(report.summary.avg_response_time_seconds / 60) + ' dk' : t('admin.drillNoData') }}</strong>
+            </span>
+            <span class="compliance-report-actions">
+              <button class="btn-export" @click="downloadDrillReport(report, 'csv')">{{ t('audit.export.csv') }}</button>
+              <button class="btn-export" @click="downloadDrillReport(report, 'json')">{{ t('audit.export.json') }}</button>
+            </span>
+          </li>
+        </ul>
+      </div>
+
+      <!-- ── spec 035: Retention policies, security events, security config report ── -->
+      <div class="compliance-reports-section">
+        <RetentionPolicyPanel />
+      </div>
+      <div class="compliance-reports-section">
+        <SecurityEventsPanel />
+      </div>
+      <div class="compliance-reports-section">
+        <SecurityConfigReportPanel />
       </div>
 
       <!-- Single-record history panel -->
@@ -1634,6 +2010,13 @@ onUnmounted(() => {
 .compliance-report-period {
   font-weight: 600;
 }
+.dead-letter-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+  padding: 8px 0;
+}
 .capability-cell {
   display: flex;
   flex-direction: column;
@@ -1780,6 +2163,31 @@ onUnmounted(() => {
 }
 .drill-actions {
   margin-top: 10px;
+}
+.drill-feedback {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.drill-feedback label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 0.78rem;
+  color: var(--color-text-muted, #94a3b8);
+}
+.drill-feedback textarea,
+.drill-feedback select {
+  background: #1e2330;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 8px;
+  padding: 7px 10px;
+  color: #e2e8f0;
+  font-size: 0.82rem;
+  color-scheme: dark;
 }
 .btn-end-drill {
   padding: 7px 16px;
@@ -2031,6 +2439,16 @@ onUnmounted(() => {
 .btn-verify:hover,
 .btn-history:hover {
   background: rgba(77, 163, 255, 0.25);
+}
+.access-review-export {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.lock-badge {
+  color: #ef4444;
+  font-size: 0.78rem;
+  font-weight: 600;
 }
 .btn-verify:disabled {
   opacity: 0.5;

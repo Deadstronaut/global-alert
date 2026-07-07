@@ -8,6 +8,9 @@ import { useHazardTypesStore } from '@/stores/hazardTypes.js'
 import { supabase } from '@/services/api/config.js'
 import { allowedTransitions, isDraftCompleteForApproval, canUserActOnDraft } from '@/lib/capStateMachine.js'
 import { generateCapXml, generateCapJson } from '@/lib/capExport.js'
+import { buildEvidencePackageManifest } from '@/lib/evidencePackage.js'
+import { rowsToCsv } from '@/lib/auditExport.js'
+import JSZip from 'jszip'
 
 const router = useRouter()
 const { t } = useI18n()
@@ -256,6 +259,58 @@ async function exportCapJson(draft) {
   triggerDownload(`cap-${draft.id}.json`, JSON.stringify(generateCapJson(draft, superseded), null, 2), 'application/json')
 }
 
+// spec 035 (US2/FR-005-007): CAP XML + dispatch receipts + related audit_log
+// rows bundled into a single downloadable .zip — only meaningful once a
+// draft has actually reached recipients (same broadcast_at gate as the CAP
+// XML/JSON export above).
+const buildingEvidenceFor = ref(null)
+
+async function downloadEvidencePackage(draft) {
+  if (!draft.broadcast_at) return
+  buildingEvidenceFor.value = draft.id
+  try {
+    const superseded = await fetchSupersededDraft(draft)
+    const xml = generateCapXml(draft, superseded)
+
+    const { data: receipts } = await supabase
+      .from('dispatch_receipts')
+      .select('*, dispatch_jobs!inner(cap_draft_id)')
+      .eq('dispatch_jobs.cap_draft_id', draft.id)
+    const { data: auditRows } = await supabase
+      .from('audit_log')
+      .select('*')
+      .eq('table_name', 'cap_drafts')
+      .eq('record_id', draft.id)
+
+    const zip = new JSZip()
+    zip.file('alert.xml', xml)
+    zip.file('receipts.csv', rowsToCsv(receipts ?? []))
+    zip.file('audit-log.csv', rowsToCsv(auditRows ?? []))
+    zip.file(
+      'manifest.json',
+      JSON.stringify(
+        buildEvidencePackageManifest({
+          capDraftId: draft.id,
+          receiptCount: receipts?.length ?? 0,
+          auditLogCount: auditRows?.length ?? 0,
+        }),
+        null,
+        2,
+      ),
+    )
+
+    const blob = await zip.generateAsync({ type: 'blob' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `evidence-package-${draft.id}.zip`
+    a.click()
+    URL.revokeObjectURL(url)
+  } finally {
+    buildingEvidenceFor.value = null
+  }
+}
+
 onMounted(loadDrafts)
 </script>
 
@@ -424,6 +479,13 @@ onMounted(loadDrafts)
         <div v-if="draft.broadcast_at" class="draft-cap-export">
           <button class="btn-transition" @click="exportCapXml(draft)">📄 {{ t('cap.exportXml') }}</button>
           <button class="btn-transition" @click="exportCapJson(draft)">🗂️ {{ t('cap.exportJson') }}</button>
+          <button
+            class="btn-transition"
+            :disabled="buildingEvidenceFor === draft.id"
+            @click="downloadEvidencePackage(draft)"
+          >
+            📦 {{ buildingEvidenceFor === draft.id ? t('audit.evidence.building') : t('audit.evidence.download') }}
+          </button>
         </div>
         <div v-if="draft.rejection_reason" class="draft-reason">{{ t('cap.history.rejectionReason') }}: {{ draft.rejection_reason }}</div>
         <div v-if="draft.cancellation_reason" class="draft-reason">{{ t('cap.history.cancellationReason') }}: {{ draft.cancellation_reason }}</div>

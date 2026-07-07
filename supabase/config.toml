@@ -7,6 +7,13 @@ enabled = true
 verify_jwt = false
 entrypoint = "./functions/ack-dispatch/index.ts"
 
+# spec 031: same rationale as ack-dispatch — a one-click unsubscribe link
+# clicked directly from an email client, no bearer token available.
+[functions.unsubscribe]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/unsubscribe/index.ts"
+
 [functions.generate-compliance-report]
 enabled = true
 verify_jwt = true

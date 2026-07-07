@@ -33,6 +33,13 @@ export const useUIStore = defineStore('ui', () => {
     const showHeatmap = computed(() => mapMode.value === 'heatmap');
     const showHexbins = computed(() => mapMode.value === 'hexagon');
 
+    // Shelter map layer visibility (spec 027) — independent of mapMode, always
+    // relevant regardless of visualization mode
+    const showShelters = ref(true);
+    function toggleShelters() {
+        showShelters.value = !showShelters.value;
+    }
+
     function applyThemeAttrs() {
         const theme = highContrast.value ? 'high-contrast' : (darkMode.value ? 'dark' : 'light');
         document.documentElement.setAttribute('data-theme', theme);
@@ -116,6 +123,8 @@ export const useUIStore = defineStore('ui', () => {
         mapMode,
         showHeatmap,
         showHexbins,
+        showShelters,
+        toggleShelters,
         transitionToMap,
         transitionToGlobe,
         selectDisaster,

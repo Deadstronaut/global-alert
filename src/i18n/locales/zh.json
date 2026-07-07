@@ -256,7 +256,72 @@
       "empty": "尚未生成自动报告。",
       "integrity": "完整性",
       "intact": "完好",
-      "broken": "发现问题"
+      "broken": "发现问题",
+      "checklistExport": "检查清单"
+    },
+    "incidentReports": {
+      "title": "年度事件报告",
+      "empty": "尚未生成自动事件报告。",
+      "total": "事件总数",
+      "falseAlarmRate": "误报率"
+    },
+    "deadLetter": {
+      "title": "待处理审计记录",
+      "empty": "没有待处理的记录。",
+      "count": "{count} 条记录等待重试。",
+      "retry": "重试",
+      "result": "成功 {succeeded} 条，失败 {failed} 条。"
+    },
+    "drillReports": {
+      "title": "年度演习报告",
+      "empty": "尚未生成自动演习报告。",
+      "total": "演习总数"
+    },
+    "retention": {
+      "title": "数据保留策略",
+      "category": "类别",
+      "days": "保留天数",
+      "action": "操作",
+      "action_archive": "归档",
+      "action_delete": "删除",
+      "empty": "尚未定义保留策略。",
+      "save": "保存",
+      "saving": "保存中...",
+      "deleteWarningTitle": "此操作不可逆",
+      "deleteWarningBody": "已选择\"删除\" —— 过期记录将被永久删除,不会归档。是否继续?",
+      "cancel": "取消",
+      "confirmDelete": "确认删除"
+    },
+    "deletion": {
+      "title": "需要理由",
+      "justificationLabel": "您为什么要删除此记录?",
+      "justificationPlaceholder": "请输入原因...",
+      "cancel": "取消",
+      "confirm": "删除"
+    },
+    "securityEvents": {
+      "title": "安全事件",
+      "action": "事件",
+      "table": "表",
+      "recordId": "记录",
+      "time": "时间",
+      "empty": "尚无安全事件。"
+    },
+    "securityConfig": {
+      "title": "安全配置报告",
+      "mfaPolicy": "MFA 策略",
+      "required": "必需",
+      "notRequired": "非必需",
+      "retentionPolicies": "保留策略",
+      "days": "天",
+      "noPolicies": "未定义策略",
+      "capabilityGrants": "当前生效的特殊权限",
+      "exportCsv": "CSV",
+      "exportJson": "JSON"
+    },
+    "evidence": {
+      "download": "下载证据包",
+      "building": "生成中..."
     }
   },
   "impact": {
@@ -293,7 +358,16 @@
       "scenarioNamePlaceholder": "情景名称...",
       "saveScenario": "保存情景",
       "savedScenarios": "已保存的情景",
-      "dataUnavailable": "引用的数据已不可用"
+      "dataUnavailable": "引用的数据已不可用",
+      "completenessLabel": "数据完整度",
+      "completenessNoData": "无数据",
+      "criticalInfrastructureTitle": "关键基础设施",
+      "criticalInfrastructureEmpty": "该区域没有关键基础设施数据。",
+      "breakdownTitle": "细分",
+      "breakdownBySector": "按行业",
+      "breakdownByBoundary": "按行政边界",
+      "breakdownEmpty": "没有细分数据。",
+      "unclassified": "未分类"
     },
     "geocoding": {
       "placeholder": "搜索地点或地址...",
@@ -338,7 +412,9 @@
     "importing": "正在导入...",
     "importButton": "📥 导入",
     "channels": "渠道",
-    "status": "状态"
+    "status": "状态",
+    "anonymize": "匿名化",
+    "anonymizeConfirm": "您确定要永久且不可逆地删除 {name} 的个人数据(电子邮件、WhatsApp 号码)吗?"
   },
   "dispatch": {
     "panelTitle": "发送监控",
@@ -353,7 +429,10 @@
     "statusQueued": "排队中",
     "statusRunning": "进行中",
     "statusCompleted": "已完成",
-    "statusFailed": "失败"
+    "statusFailed": "失败",
+    "viewImpactSnapshot": "查看影响快照",
+    "hideImpactSnapshot": "隐藏",
+    "impactSnapshotUnavailable": "广播时影响数据不可用。"
   },
   "portal": {
     "title": "🌍 GEWS — 当前警报",
@@ -444,7 +523,20 @@
     "sopDeactivate": "停用",
     "sopReactivate": "启用",
     "sopEmpty": "尚无SOP文档。",
-    "createIncidentFromAlert": "从此警报创建事件"
+    "createIncidentFromAlert": "从此警报创建事件",
+    "timeline": {
+      "button": "时间线",
+      "created": "已创建",
+      "statusChange": "状态：{from} → {to}",
+      "updated": "已更新",
+      "loading": "加载中..."
+    },
+    "sopCategory": "分类",
+    "sopSearchPlaceholder": "按标题搜索...",
+    "sopAllCategories": "— 所有分类 —",
+    "sopVersionHistory": "版本历史",
+    "sopVersionHistoryTitle": "\"{title}\" — 版本历史",
+    "sopNoVersionHistory": "尚无历史版本。"
   },
   "mapLayers": {
     "tabLabel": "地图图层",
@@ -484,7 +576,20 @@
       "map_layersShort": "图层",
       "audit": "查看审计日志",
       "auditShort": "审计"
-    }
+    },
+    "accessReview": {
+      "exportCsv": "导出CSV",
+      "exportJson": "导出JSON",
+      "lastLogin": "最后登录",
+      "lockStatus": "锁定状态",
+      "locked": "已锁定",
+      "unlockAction": "解锁"
+    },
+    "drillExportSummary": "导出摘要",
+    "drillLessonsLearned": "经验教训记录",
+    "drillRelatedHazard": "相关灾害类型(可选)",
+    "drillSaveFeedback": "保存",
+    "drillGoToThresholdEditor": "前往阈值编辑器 →"
   },
   "shelters": {
     "tabLabel": "避难所",
@@ -518,7 +623,13 @@
     "nameRequired": "名称为必填项。",
     "noCountry": "国家为必填项。",
     "capacityTotalInvalid": "总容量必须为正数。",
-    "occupancyExceedsCapacity": "当前占用人数不能超过总容量。"
+    "occupancyExceedsCapacity": "当前占用人数不能超过总容量。",
+    "map": {
+      "toggleLabel": "显示/隐藏避难所",
+      "occupancy": "占用情况",
+      "status": "状态",
+      "linkedIncident": "已关联事件"
+    }
   },
   "integrations": {
     "tabLabel": "集成",
@@ -538,5 +649,13 @@
     "noType": "集成类型为必填项。",
     "allFieldsRequired": "所有字段均为必填项。",
     "customFieldIncomplete": "自定义字段必须同时填写名称和值。"
+  },
+  "login": {
+    "accountLocked": "由于登录失败次数过多，您的账户已被暂时锁定。请在 {until} 之后重试，或请管理员为您解锁。"
+  },
+  "assetCategory": {
+    "critical_infrastructure_health": "卫生设施",
+    "critical_infrastructure_education": "教育机构",
+    "critical_infrastructure_emergency": "应急服务"
   }
 }

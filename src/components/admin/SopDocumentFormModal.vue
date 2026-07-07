@@ -5,6 +5,7 @@ import { useHazardTypesStore } from '@/stores/hazardTypes.js'
 
 const props = defineProps({
   sopDocument: { type: Object, default: null }, // null = create mode
+  existingCategories: { type: Array, default: () => [] }, // spec 033: suggestions for the category datalist
 })
 const emit = defineEmits(['save', 'cancel'])
 
@@ -13,6 +14,7 @@ const hazardTypesStore = useHazardTypesStore()
 
 const title = ref('')
 const hazardTypeCode = ref('')
+const category = ref('')
 const bodyContent = ref('')
 const referenceUrl = ref('')
 const saving = ref(false)
@@ -23,6 +25,7 @@ watch(
   (s) => {
     title.value = s?.title ?? ''
     hazardTypeCode.value = s?.hazard_type_code ?? hazardTypesStore.activeHazardTypes[0]?.code ?? ''
+    category.value = s?.category ?? ''
     bodyContent.value = s?.body_content ?? ''
     referenceUrl.value = s?.reference_url ?? ''
     error.value = null
@@ -43,6 +46,7 @@ function save() {
   emit('save', {
     title: title.value.trim(),
     hazard_type_code: hazardTypeCode.value,
+    category: category.value.trim() || null,
     body_content: bodyContent.value.trim() || null,
     reference_url: referenceUrl.value.trim() || null,
   })
@@ -63,6 +67,12 @@ function save() {
           <select v-model="hazardTypeCode">
             <option v-for="h in hazardTypesStore.activeHazardTypes" :key="h.code" :value="h.code">{{ h.display_name }}</option>
           </select>
+        </label>
+        <label class="form-field span-2"><span>{{ t('incidentTracking.sopCategory') }}</span>
+          <input v-model="category" list="sop-category-suggestions" />
+          <datalist id="sop-category-suggestions">
+            <option v-for="c in existingCategories" :key="c" :value="c" />
+          </datalist>
         </label>
         <label class="form-field span-2"><span>{{ t('incidentTracking.sopBodyContent') }}</span>
           <textarea v-model="bodyContent" rows="4" />

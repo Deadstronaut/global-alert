@@ -55,7 +55,7 @@ Data Ingestion & Monitoring     0/66    %100        Orta       Tamamlandı (2026
                                                                (T006 tamamlandı) — GDACS artık
                                                                canlı sistemde aktif.
 
-Impact Analysis (Map Viz)      8/53     ~%85        Orta–Zor   Tamamlandı (2026-07-06,
+Impact Analysis (Map Viz)      4/53     ~%92        Orta–Zor   Tamamlandı (2026-07-06,
                                                                spec 008, tam kapsam):
                                                                PostGIS extension, GeoJSON
                                                                exposure dataset yükleme,
@@ -92,6 +92,34 @@ Tamamlandı (2026-07-06, spec 023): "Shapefile yükleme"
                                                                bilinçli kapsam dışı (mevcut
                                                                WGS84 doğrulaması zaten
                                                                reddediyor).
+Tamamlandı (2026-07-07, spec 034): PRD'de açıkça yer alan ama
+                                                               daha önce hiç yapılmamış 4 HIGH
+                                                               öncelikli gereksinim kapatıldı —
+                                                               (1) kritik altyapı etiketleme
+                                                               (asset_category/sector/
+                                                               admin_boundary_code kolonları,
+                                                               get_critical_infrastructure_
+                                                               features() RPC'si ile panelde
+                                                               ayrı liste), (2) CAP yayınında
+                                                               (status=broadcast) impact
+                                                               snapshot arşivleme (yeni
+                                                               impact_snapshots tablosu +
+                                                               archive_impact_snapshot()
+                                                               SECURITY DEFINER trigger,
+                                                               DispatchPanel.vue'da görünüm),
+                                                               (3) sektörel/idari sınır
+                                                               agregasyonu (compute_sector_
+                                                               breakdown()/compute_boundary_
+                                                               breakdown(), compute_zonal_stats()
+                                                               hiç değişmedi), (4) veri tamlığı
+                                                               skoru (compute_data_completeness(),
+                                                               0 varlıkta "veri yok" gösteriyor).
+                                                               Migration canlıya uygulanması
+                                                               kullanıcı onayı bekliyor. Kalan:
+                                                               ağırlıklı zafiyet endeksleri +
+                                                               olasılıksal simülasyon + varlık
+                                                               bağımlılık grafiği (Risk &
+                                                               Scenario Modeling modülüne ait).
 
 Alert Authoring / CAP           0/67    %100        Orta       Tamamlandı (2026-07-06,
                                                                spec 006 + spec 014): cap_drafts +
@@ -122,7 +150,7 @@ Alert Authoring / CAP           0/67    %100        Orta       Tamamlandı (2026
                                                                Migration canlıya uygulanması
                                                                kullanıcı onayı bekliyor.
 
-Dissemination                  30/65    ~%54        Orta       Tamamlandı (2026-07-06,
+Dissemination                  16/65    ~%75        Orta       Tamamlandı (2026-07-06,
                                                                spec 009): contact directory
                                                                (super_admin/country_admin/
                                                                org_admin scoped CRUD + CSV
@@ -164,8 +192,7 @@ Dissemination                  30/65    ~%54        Orta       Tamamlandı (2026
                                                                Kalan: gerçek WhatsApp API, tam
                                                                polygon/PostGIS geofencing, community
                                                                hazard reporting + NLP/LLM
-                                                               kategorileştirme, harita üzerinde
-                                                               sığınak gösterimi (ayrı takip işi),
+                                                               kategorileştirme,
                                                                Public Portal'a sığınak bilgisi
                                                                eklenmesi (müşterinin kendisi
                                                                ekleyecek, bu projede planlanmıyor),
@@ -202,8 +229,143 @@ Tamamlandı (2026-07-06, spec 021): "shelter management dashboard"
                                                                (ikincisi müşterinin kendi ekleyeceği
                                                                belirtildi). Migration canlıya
                                                                uygulanması kullanıcı onayı bekliyor.
+Tamamlandı (2026-07-07, spec 027): "haritada sığınak gösterimi"
+                                                               kalemi kapatıldı — ana harita
+                                                               görünümüne (MapView.vue, MapLibre GL
+                                                               JS) mevcut disaster-event marker
+                                                               desenine (updateMarkers()/
+                                                               clearMarkers()) paralel ama ayrı bir
+                                                               sığınak marker katmanı
+                                                               (updateShelterMarkers()/
+                                                               clearShelterMarkers()) eklendi;
+                                                               sadece aktif + koordinatlı sığınaklar
+                                                               gösteriliyor, durum bazlı renk
+                                                               kodlaması (açık=yeşil/dolu=turuncu/
+                                                               kapalı=gri, getShelterMarkerColor()
+                                                               saf fonksiyonu test edildi), popup'ta
+                                                               ad/doluluk/durum/bağlı-olay bilgisi,
+                                                               zoom-seviyesine bağlı gizleme
+                                                               kuralına TABİ DEĞİL (disaster
+                                                               event'lerden farklı olarak — sığınak
+                                                               konumu her zaman can güvenliği
+                                                               açısından ilgili bilgi),
+                                                               uiStore.showShelters ile göster/gizle
+                                                               toggle'ı. Migration/Edge Function
+                                                               İÇERMEYEN, tamamen frontend-only bir
+                                                               spec — mevcut shelters RLS'i (viewer
+                                                               dahil her signed-in rol) hiç
+                                                               değişmeden aynen kullanıldı.
+Tamamlandı (2026-07-07, spec 031): PRD'de açıkça yer alan
+                                                               ama daha önce hiç yapılmamış 5 HIGH
+                                                               öncelikli gereksinim kapatıldı — (1)
+                                                               MHEWS-FR-0287/SD-EMAIL-02 (e-posta dil
+                                                               lokalizasyonu): resolveLocalizedContent()
+                                                               saf fonksiyonu, cap_drafts.translations'ı
+                                                               (zaten mevcut JSONB) alıcının
+                                                               preferred_language'ına göre kullanıyor,
+                                                               çeviri yoksa orijinal dile düşüyor. (2)
+                                                               MHEWS-SD-EMAIL-04 (unsubscribe): yeni
+                                                               unsubscribe Edge Function'ı (ack-
+                                                               dispatch'in kopyası, anon-callable) —
+                                                               mevcut contacts.email_opt_in'i (zaten
+                                                               vardı, matchesContact() zaten kontrol
+                                                               ediyordu) false yapıyor, whatsapp_opt_in'e
+                                                               dokunmuyor. (3) MHEWS-FR-0119 (otomatik/
+                                                               backoff'lu retry): dispatch-alert'e yeni
+                                                               servis-rolü-only Mode C (auto_retry),
+                                                               pg_cron ile 15 dakikada bir tetikleniyor,
+                                                               shouldAutoRetryNow() saf fonksiyonu ile
+                                                               artan aralıklarla (15/30/60/120dk)
+                                                               azami 4 deneme; manuel "Tekrar Dene"
+                                                               artık otomatik sayacı sıfırlıyor
+                                                               (FR-008). (4) MHEWS-FR-0066 (admin
+                                                               bildirimi): tüm otomatik denemeleri
+                                                               tükenmiş ve hiçbir alıcıya ulaşmamış bir
+                                                               dispatch job'ı için ilgili ülke/org
+                                                               yöneticisine bir kez bildirim e-postası,
+                                                               dispatch_jobs.admin_notified_at ile
+                                                               tekrar bildirim engelleniyor. (5) MHEWS-
+                                                               SD-CONTACT-06 (GDPR anonimizasyonu):
+                                                               contacts.js'e anonymizeContact(),
+                                                               ContactsPanel.vue'ya Super Admin-only
+                                                               "Anonimleştir" aksiyonu — PII'yi NULL'a
+                                                               çeviriyor, geçmiş dispatch/audit
+                                                               kayıtlarını bozmuyor. Tek migration: 2
+                                                               yeni kolon (dispatch_receipts.
+                                                               last_attempted_at, dispatch_jobs.
+                                                               admin_notified_at) + chk_contact_
+                                                               has_channel constraint'inin
+                                                               anonimleştirilmiş contact'lara istisna
+                                                               tanıması + pg_cron job kaydı. Migration
+                                                               canlıya uygulanması kullanıcı onayı
+                                                               bekliyor.
 
-Incident Tracking               6/28    ~%79        Orta       Tamamlandı (2026-07-06,
+Incident Tracking               1/28    ~%93        Orta       Tamamlandı (2026-07-08,
+                                                               spec 026): "timeline playback",
+                                                               "otomatik/yıllık rapor üretimi" ve
+                                                               "false-alarm-rate metrikleri"
+                                                               kalemleri kapatıldı — audit_log'dan
+                                                               (zaten var olan, incidents için
+                                                               loglanan) get_incident_timeline()
+                                                               SECURITY DEFINER fonksiyonuyla
+                                                               kronolojik olay geçmişi yeniden
+                                                               inşa ediliyor, yetkilendirmesi
+                                                               incidents'ın mevcut 3 RLS
+                                                               policy'siyle (super_admin/country_
+                                                               admin/org_admin/viewer) birebir
+                                                               aynı (audit_log'un kendisi sadece
+                                                               super_admin'e açık, bu fonksiyon
+                                                               dar kapsamlı bir istisna açıyor).
+                                                               Ayrıca yeni incident_reports
+                                                               tablosu + generate-incident-report
+                                                               Edge Function — spec 019'un
+                                                               compliance_reports (pg_net+pg_cron+
+                                                               Vault) deseninin birebir aynısı,
+                                                               yıllık (1 Ocak) otomatik çalışıyor:
+                                                               toplam olay sayısı, severity/hazard
+                                                               dağılımı, ortalama açık kalma
+                                                               süresi, ve false-alarm-rate
+                                                               (incidents.linked_cap_id üzerinden
+                                                               cap_drafts.status='false_alarm'
+                                                               join'i — sadece bağlı ve sonuca
+                                                               ulaşmış olaylar paydaya giriyor).
+                                                               AdminView'ın Denetim sekmesine
+                                                               "Yıllık Olay Raporları" alt bölümü
+                                                               eklendi, mevcut export mekanizmaları
+                                                               yeniden kullanıldı. Migration +
+                                                               Edge Function deploy'u canlıya
+                                                               uygulanması kullanıcı onayı
+                                                               bekliyor.
+Tamamlandı (2026-07-07, spec 033): PRD'de açıkça yer alan
+                                                               ama daha önce hiç yapılmamış SOP
+                                                               Repository gereksinimleri kapatıldı
+                                                               — (1) MHEWS-FR-0184 (kategori +
+                                                               arama): sop_documents'a isteğe bağlı
+                                                               category kolonu, panelde kategori
+                                                               filtresi + başlık araması (client-
+                                                               side, filterSopDocuments() saf
+                                                               fonksiyonu, full-text search
+                                                               altyapısı gerektirmeden). (2) MHEWS-
+                                                               FR-0275 (sürüm geçmişi): yeni
+                                                               sop_document_versions tablosu
+                                                               (append-only, salt-okunur) +
+                                                               archive_sop_document_version()
+                                                               BEFORE UPDATE trigger'ı — bir SOP'un
+                                                               başlığı/içeriği/referans linki
+                                                               değiştiğinde önceki hâli otomatik
+                                                               arşivleniyor, sadece is_active
+                                                               değişimi yeni sürüm oluşturmuyor;
+                                                               panelde "Geçmiş Sürümler" görünümü
+                                                               eklendi (rollback YOK, sadece
+                                                               görüntüleme). Migration canlıya
+                                                               uygulanması kullanıcı onayı bekliyor.
+                                                               Kalan: LLM SOP asistanı (yeni AI/LLM
+                                                               altyapısı gerektiriyor, proje şu an
+                                                               hiç yok — bilinçli olarak ayrı
+                                                               iterasyona bırakıldı), drill/exercise
+                                                               simulation (ayrı modül, spec 032'de
+                                                               zaten ele alındı).
+Tamamlandı (2026-07-06,
                                                                spec 011): incidents tablosu
                                                                ve IncidentsView.vue zaten
                                                                vardı (tahminden ileri) — bu
@@ -228,7 +390,7 @@ Incident Tracking               6/28    ~%79        Orta       Tamamlandı (2026
                                                                Migration canlıya uygulanması
                                                                kullanıcı onayı bekliyor.
 
-Administration & Access        3/21     ~%86        Kolay      Tamamlandı (2026-07-06,
+Administration & Access        1/21     ~%95        Kolay      Tamamlandı (2026-07-06,
                                                                spec 004): /admin rotasına
                                                                rol bazlı guard, country_admin/
                                                                org_admin için gerçek profiles
@@ -281,12 +443,53 @@ Administration & Access        3/21     ~%86        Kolay      Tamamlandı (2026
                                                                DB trigger'ıyla engelleniyor).
                                                                Migration canlıya uygulanması
                                                                kullanıcı onayı bekliyor.
+Tamamlandı (2026-07-07, spec 028): PRD'nin (docs/mhewsprd.md)
+                                                               standartlaştırılmış gereksinim
+                                                               listesinde açıkça yer alan ama
+                                                               daha önce hiç yapılmamış iki kalem
+                                                               kapatıldı — (1) Erişim İnceleme
+                                                               Raporu: yeni get_access_review()
+                                                               SECURITY DEFINER fonksiyonu
+                                                               (super_admin-only), profiles +
+                                                               profile_capability_grants +
+                                                               auth.users.last_sign_in_at'ı canlı
+                                                               olarak birleştirip mevcut
+                                                               Kullanıcılar admin panelinde yeni
+                                                               "Son Giriş"/"Kilit Durumu"
+                                                               kolonları + CSV/JSON export butonu
+                                                               olarak sunuluyor (yeni tablo/
+                                                               pg_cron yok, canlı sorgu —
+                                                               compliance/incident report'lardan
+                                                               bilinçli olarak farklı bir desen,
+                                                               "şu anki durum"u gösteriyor,
+                                                               tarihsel bir anlık görüntü
+                                                               değil). (2) Hesap Kilitleme (NIST
+                                                               SP 800-63B referanslı):
+                                                               profiles'a
+                                                               failed_login_attempts/
+                                                               locked_until kolonları, anon-
+                                                               callable record_failed_login()
+                                                               (hesap var/yok bilgisini asla ifşa
+                                                               etmiyor), auth.js'in login()
+                                                               akışına eklenen post-auth kilit
+                                                               kontrolü (Supabase Auth'un kendi
+                                                               signInWithPassword mekanizması hiç
+                                                               değiştirilmedi, mevcut is_active
+                                                               askıya alma deseninin aynısı
+                                                               izlendi) — 5 ardışık başarısız
+                                                               denemeden sonra 15 dakika kilit,
+                                                               süre dolunca otomatik açılma,
+                                                               super_admin manuel "Kilidi Aç"
+                                                               butonu. Migration canlıya
+                                                               uygulanması kullanıcı onayı
+                                                               bekliyor.
                                                                Kalan: tam yapılandırılabilir
                                                                rol/izin sistemi (rollerin
                                                                kendisini değiştirme) — bilinçli
                                                                olarak kapsam dışı bırakıldı,
                                                                riski çok yüksek bulunup
-                                                               reddedildi.
+                                                               reddedildi, spec 028'den
+                                                               etkilenmedi.
 
 Hazard Taxonomy Admin          0/21     %100        Orta       Tamamlandı (2026-07-07,
                                                                spec 024): modülün son 2 kalemi
@@ -386,7 +589,7 @@ Hazard Taxonomy Admin          0/21     %100        Orta       Tamamlandı (2026
                                                                gibi). Migration canlıya uygulanması
                                                                kullanıcı onayı bekliyor.
 
-Audit & Compliance             41/59    ~%31        Orta–Zor   Tamamlandı (2026-07-06,
+Audit & Compliance             30/59    ~%49        Orta–Zor   Tamamlandı (2026-07-06,
                                                                spec 007): audit_log zaten
                                                                vardı ama görünür arayüzü
                                                                yoktu — super_admin'e özel
@@ -423,8 +626,99 @@ Audit & Compliance             41/59    ~%31        Orta–Zor   Tamamlandı (20
                                                                için ayrı bir doğrulama adımı var.
                                                                Migration + Edge Function deploy
                                                                canlıya uygulanması kullanıcı
-                                                               onayı bekliyor. Kalan: PDF kanıt
-                                                               paketleri + MinIO/S3 (bilinçli
+                                                               onayı bekliyor.
+Tamamlandı (2026-07-07, spec 029): PRD'nin M9 modülünde
+                                                               (docs/mhewsprd.md) açıkça yer alan
+                                                               ama daha önce hiç yapılmamış iki
+                                                               CRITICAL/S1 gereksinim kapatıldı —
+                                                               (1) MHEWS-FC-ERR-09 (audit yazma
+                                                               hatası dayanıklılığı):
+                                                               log_table_change() trigger
+                                                               fonksiyonu her INSERT INTO
+                                                               audit_log çağrısını EXCEPTION WHEN
+                                                               OTHERS ile sarmalayacak şekilde
+                                                               güncellendi (plain CREATE OR
+                                                               REPLACE, ~20 tabloya bağlı mevcut
+                                                               trigger'lara dokunulmadan — DROP+
+                                                               CASCADE'in tüm bu trigger'ları
+                                                               sileceği ilk taslakta fark edilip
+                                                               düzeltildi), yazma başarısız
+                                                               olursa yeni audit_log_dead_letter
+                                                               tablosuna düşer, asıl işlem hiçbir
+                                                               zaman engellenmez; Denetim
+                                                               sekmesine "Bekleyen Denetim
+                                                               Kayıtları" alt bölümü +
+                                                               super_admin'in
+                                                               flush_audit_dead_letter() ile
+                                                               manuel tekrar deneyebildiği bir
+                                                               buton eklendi. (2) MHEWS-FC-OUV-06
+                                                               (tamlık doğrulaması): audit_log'a
+                                                               yeni bir CHECK constraint —
+                                                               kaynağa bağlı olaylar (INSERT/
+                                                               UPDATE/DELETE) için tablo/kayıt
+                                                               bilgisi zorunlu, LOGIN/EXPORT gibi
+                                                               kaynak-bağımsız olaylar muaf.
+                                                               Mevcut audit_log şeması/RLS'i/
+                                                               hash-zinciri hiç değişmedi
+                                                               (tamamen additive). Migration
+                                                               canlıya uygulanması kullanıcı
+                                                               onayı bekliyor.
+Tamamlandı (2026-07-07, spec 030): PRD'de açıkça yer alan
+                                                               ama daha önce hiç yapılmamış iki
+                                                               MEDIUM/S1-S2 gereksinim kapatıldı —
+                                                               (1) MHEWS-FR-0067 (yapılandırılmış
+                                                               kontrol listesi export'u): yeni saf
+                                                               buildComplianceChecklist()
+                                                               fonksiyonu, mevcut bir
+                                                               compliance_reports kaydı + o
+                                                               dönemin audit_log_dead_letter
+                                                               satırlarından 4 maddelik (rapor
+                                                               zamanında üretildi mi / hash-
+                                                               zinciri doğrulandı mı / bekleyen
+                                                               dead-letter var mı / tamlık kuralı
+                                                               etkin mi) karşılandı/karşılanmadı/
+                                                               belirlenemedi durumlu bir kontrol
+                                                               listesi türetiyor; Denetim
+                                                               sekmesine "Kontrol Listesi" export
+                                                               butonu eklendi (mevcut CSV/JSON
+                                                               export mekanizması yeniden
+                                                               kullanıldı, migration YOK). (2)
+                                                               MHEWS-FR-0071 (export şablon
+                                                               versiyonlama): sabit bir
+                                                               TEMPLATE_VERSION = 'v1' hem yeni
+                                                               kontrol listesi export'una hem
+                                                               mevcut compliance-report CSV/JSON
+                                                               export'una eklendi. Tamamen
+                                                               frontend/service-layer, sıfır şema
+                                                               değişikliği, sıfır migration.
+Tamamlandı (2026-07-07, spec 035): PRD'de açıkça yer alan
+                                                               ama daha önce hiç yapılmamış 3 HIGH
+                                                               + 2 MEDIUM gereksinim kapatıldı —
+                                                               (1) yapılandırılabilir veri saklama
+                                                               (retention_policies tablosu,
+                                                               kategori bazlı süre + arşivle/sil
+                                                               eylemi, günlük pg_cron), audit_log'un
+                                                               append-only RLS kısıtı HİÇ
+                                                               gevşetilmedi (silme sadece tablo-
+                                                               sahibi SECURITY DEFINER fonksiyon
+                                                               yoluyla, kendi kendini loglayarak),
+                                                               (2) Evidence Package export (jszip
+                                                               ile CAP XML + alım kayıtları +
+                                                               audit_log tek bir .zip'te), (3)
+                                                               kontrollü/gerekçeli silme
+                                                               (delete_with_justification() RPC'si,
+                                                               şimdilik sadece exposure_datasets —
+                                                               projede gerçek hard-delete olan tek
+                                                               tablo), (4) güvenlik olayı günlüğü
+                                                               (audit_log.event_category, hesap
+                                                               kilitlenmesi security_event olarak
+                                                               işaretleniyor), (5) güvenlik
+                                                               yapılandırması raporu
+                                                               (get_security_config_report(),
+                                                               get_access_review() deseniyle aynı).
+                                                               Migration canlıya uygulanması
+                                                               kullanıcı onayı bekliyor. Kalan: PDF
+                                                               kanıt paketleri + MinIO/S3 (bilinçli
                                                                kapsam dışı), AI/LLM denetim
                                                                alanları (henüz AI pipeline yok),
                                                                yapılandırılabilir raporlama
@@ -526,7 +820,7 @@ Risk & Scenario Modeling       11/11    %0          Çok Zor    Simulation engin
                                                                PostGIS spatial,
                                                                asset graph
 
-Preparedness, Drill & Response  1/3    ~%67         Orta       Tamamlandı (2026-07-06,
+Preparedness, Drill & Response  0/3    ~%80         Orta       Tamamlandı (2026-07-06,
                                                                spec 013): drill_sessions
                                                                tablosu ve tatbikat başlat/
                                                                bitir CRUD'u zaten vardı —
@@ -567,8 +861,46 @@ Preparedness, Drill & Response  1/3    ~%67         Orta       Tamamlandı (2026
                                                                Migration canlıya uygulanması ve
                                                                ack-dispatch Edge Function deploy'u
                                                                (verify_jwt=false ile) kullanıcı
-                                                               onayı bekliyor. Kalan: simüle
-                                                               tehlike enjeksiyonu (ayrı, daha
-                                                               büyük bir iterasyon).
+                                                               onayı bekliyor.
+Tamamlandı (2026-07-07, spec 032): PRD'de açıkça yer alan
+                                                               ama daha önce hiç yapılmamış 3
+                                                               gereksinim kapatıldı — (1) MHEWS-
+                                                               SD-DRILL-02 (tatbikat özeti
+                                                               export'u): mevcut audit/compliance
+                                                               export desenini izleyen
+                                                               downloadDrillSummary(), tamamlanmış
+                                                               bir tatbikatın süre/uyarı sayısı/
+                                                               tepki süresi/onay oranını CSV/JSON
+                                                               olarak indiriyor, veri yoksa açıkça
+                                                               "veri yok" gösteriyor. (2) MHEWS-
+                                                               FR-0033 (yıllık tatbikat performans
+                                                               raporu): yeni drill_reports tablosu
+                                                               (spec 026'nın incident_reports'unun
+                                                               birebir yapısal ikizi) +
+                                                               generate-drill-report Edge Function,
+                                                               pg_cron ile yıllık (1 Ocak) otomatik
+                                                               çalışıyor — toplam tatbikat sayısı,
+                                                               ortalama tepki süresi/onay oranı
+                                                               (veri olmayan tatbikatlar
+                                                               ortalamadan hariç tutuluyor, sıfır
+                                                               sayılmıyor), senaryo tipine göre
+                                                               dağılım; Denetim sekmesine "Yıllık
+                                                               Tatbikat Raporları" alt bölümü
+                                                               eklendi. (3) "After-Action Feedback
+                                                               Loop": drill_sessions'a
+                                                               lessons_learned/related_hazard_type
+                                                               (mevcut hazard_types'a FK) kolonları,
+                                                               tamamlanmış tatbikat kartlarına
+                                                               ders-çıkarımı notu + isteğe bağlı
+                                                               afet tipi ilişkilendirmesi + mevcut
+                                                               Hazard Taxonomy eşik düzenleyicisine
+                                                               tek tıkla geçiş bağlantısı eklendi
+                                                               (otomatik kalibrasyon YOK, insan-
+                                                               onaylı bağlantı, YAGNI). Migration
+                                                               canlıya uygulanması ve generate-
+                                                               drill-report Edge Function deploy'u
+                                                               kullanıcı onayı bekliyor. Kalan:
+                                                               simüle tehlike enjeksiyonu (ayrı,
+                                                               daha büyük bir iterasyon).
 ─────────────────────────────────────────────────────────────────────────────────
-TOPLAM                        149/446   ~%67
+TOPLAM                        125/446   ~%72

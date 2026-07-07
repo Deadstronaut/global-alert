@@ -256,7 +256,72 @@
       "empty": "لم يتم إنشاء أي تقارير تلقائية بعد.",
       "integrity": "السلامة",
       "intact": "سليمة",
-      "broken": "تم العثور على مشكلة"
+      "broken": "تم العثور على مشكلة",
+      "checklistExport": "قائمة التحقق"
+    },
+    "incidentReports": {
+      "title": "التقارير السنوية للحوادث",
+      "empty": "لم يتم إنشاء أي تقارير تلقائية للحوادث بعد.",
+      "total": "إجمالي الحوادث",
+      "falseAlarmRate": "معدل الإنذارات الكاذبة"
+    },
+    "deadLetter": {
+      "title": "سجلات التدقيق المعلقة",
+      "empty": "لا توجد سجلات معلقة.",
+      "count": "{count} سجلات في انتظار إعادة المحاولة.",
+      "retry": "إعادة المحاولة",
+      "result": "نجح {succeeded}، فشل {failed}."
+    },
+    "drillReports": {
+      "title": "التقارير السنوية للتدريبات",
+      "empty": "لم يتم إنشاء أي تقرير تدريب تلقائي بعد.",
+      "total": "إجمالي التدريبات"
+    },
+    "retention": {
+      "title": "سياسات الاحتفاظ بالبيانات",
+      "category": "الفئة",
+      "days": "مدة الاحتفاظ (أيام)",
+      "action": "الإجراء",
+      "action_archive": "أرشفة",
+      "action_delete": "حذف",
+      "empty": "لم يتم تحديد سياسات احتفاظ بعد.",
+      "save": "حفظ",
+      "saving": "جارٍ الحفظ...",
+      "deleteWarningTitle": "هذا الإجراء لا يمكن التراجع عنه",
+      "deleteWarningBody": "تم اختيار \"حذف\" — سيتم حذف السجلات المنتهية نهائيًا، دون أرشفة. هل تريد المتابعة؟",
+      "cancel": "إلغاء",
+      "confirmDelete": "أؤكد، احذف"
+    },
+    "deletion": {
+      "title": "التبرير مطلوب",
+      "justificationLabel": "لماذا تحذف هذا السجل؟",
+      "justificationPlaceholder": "اكتب السبب...",
+      "cancel": "إلغاء",
+      "confirm": "حذف"
+    },
+    "securityEvents": {
+      "title": "أحداث الأمان",
+      "action": "الحدث",
+      "table": "الجدول",
+      "recordId": "السجل",
+      "time": "الوقت",
+      "empty": "لا توجد أحداث أمان بعد."
+    },
+    "securityConfig": {
+      "title": "تقرير تكوين الأمان",
+      "mfaPolicy": "سياسة المصادقة الثنائية",
+      "required": "مطلوب",
+      "notRequired": "غير مطلوب",
+      "retentionPolicies": "سياسات الاحتفاظ",
+      "days": "أيام",
+      "noPolicies": "لا توجد سياسات محددة",
+      "capabilityGrants": "الصلاحيات الخاصة النشطة",
+      "exportCsv": "CSV",
+      "exportJson": "JSON"
+    },
+    "evidence": {
+      "download": "تنزيل حزمة الأدلة",
+      "building": "جارٍ الإنشاء..."
     }
   },
   "impact": {
@@ -293,7 +358,16 @@
       "scenarioNamePlaceholder": "اسم السيناريو...",
       "saveScenario": "حفظ السيناريو",
       "savedScenarios": "السيناريوهات المحفوظة",
-      "dataUnavailable": "البيانات المرجعية لم تعد متوفرة"
+      "dataUnavailable": "البيانات المرجعية لم تعد متوفرة",
+      "completenessLabel": "اكتمال البيانات",
+      "completenessNoData": "لا توجد بيانات",
+      "criticalInfrastructureTitle": "البنية التحتية الحرجة",
+      "criticalInfrastructureEmpty": "لا توجد بنية تحتية حرجة في هذه المنطقة.",
+      "breakdownTitle": "التوزيع",
+      "breakdownBySector": "حسب القطاع",
+      "breakdownByBoundary": "حسب الحدود الإدارية",
+      "breakdownEmpty": "لا توجد بيانات توزيع.",
+      "unclassified": "غير مصنف"
     },
     "geocoding": {
       "placeholder": "ابحث عن مكان أو عنوان...",
@@ -338,7 +412,9 @@
     "importing": "جارٍ الاستيراد...",
     "importButton": "📥 استيراد",
     "channels": "القنوات",
-    "status": "الحالة"
+    "status": "الحالة",
+    "anonymize": "إخفاء الهوية",
+    "anonymizeConfirm": "هل أنت متأكد من أنك تريد إزالة البيانات الشخصية (البريد الإلكتروني، رقم واتساب) الخاصة بـ {name} بشكل دائم ولا رجعة فيه؟"
   },
   "dispatch": {
     "panelTitle": "مراقبة الإرسال",
@@ -353,7 +429,10 @@
     "statusQueued": "في الانتظار",
     "statusRunning": "قيد التنفيذ",
     "statusCompleted": "مكتمل",
-    "statusFailed": "فشل"
+    "statusFailed": "فشل",
+    "viewImpactSnapshot": "عرض لقطة التأثير",
+    "hideImpactSnapshot": "إخفاء",
+    "impactSnapshotUnavailable": "لم تكن بيانات التأثير متوفرة وقت البث."
   },
   "portal": {
     "title": "🌍 GEWS — التنبيهات النشطة",
@@ -444,7 +523,20 @@
     "sopDeactivate": "إلغاء التفعيل",
     "sopReactivate": "إعادة التفعيل",
     "sopEmpty": "لا توجد مستندات إجراءات بعد.",
-    "createIncidentFromAlert": "إنشاء حادث من هذا التنبيه"
+    "createIncidentFromAlert": "إنشاء حادث من هذا التنبيه",
+    "timeline": {
+      "button": "الجدول الزمني",
+      "created": "تم الإنشاء",
+      "statusChange": "الحالة: {from} ← {to}",
+      "updated": "تم التحديث",
+      "loading": "جارٍ التحميل..."
+    },
+    "sopCategory": "الفئة",
+    "sopSearchPlaceholder": "البحث حسب العنوان...",
+    "sopAllCategories": "— جميع الفئات —",
+    "sopVersionHistory": "سجل الإصدارات",
+    "sopVersionHistoryTitle": "\"{title}\" — سجل الإصدارات",
+    "sopNoVersionHistory": "لا توجد إصدارات سابقة بعد."
   },
   "mapLayers": {
     "tabLabel": "طبقات الخريطة",
@@ -484,7 +576,20 @@
       "map_layersShort": "الطبقات",
       "audit": "عرض سجل التدقيق",
       "auditShort": "التدقيق"
-    }
+    },
+    "accessReview": {
+      "exportCsv": "تصدير CSV",
+      "exportJson": "تصدير JSON",
+      "lastLogin": "آخر تسجيل دخول",
+      "lockStatus": "حالة القفل",
+      "locked": "مقفل",
+      "unlockAction": "إلغاء القفل"
+    },
+    "drillExportSummary": "تصدير الملخص",
+    "drillLessonsLearned": "ملاحظة الدروس المستفادة",
+    "drillRelatedHazard": "نوع الخطر المرتبط (اختياري)",
+    "drillSaveFeedback": "حفظ",
+    "drillGoToThresholdEditor": "الانتقال إلى محرر العتبات ←"
   },
   "shelters": {
     "tabLabel": "الملاجئ",
@@ -518,7 +623,13 @@
     "nameRequired": "الاسم مطلوب.",
     "noCountry": "الدولة مطلوبة.",
     "capacityTotalInvalid": "يجب أن تكون السعة الإجمالية رقمًا موجبًا.",
-    "occupancyExceedsCapacity": "لا يمكن أن يتجاوز الإشغال الحالي السعة الإجمالية."
+    "occupancyExceedsCapacity": "لا يمكن أن يتجاوز الإشغال الحالي السعة الإجمالية.",
+    "map": {
+      "toggleLabel": "إظهار/إخفاء الملاجئ",
+      "occupancy": "الإشغال",
+      "status": "الحالة",
+      "linkedIncident": "مرتبط بحادثة"
+    }
   },
   "integrations": {
     "tabLabel": "التكاملات",
@@ -538,5 +649,13 @@
     "noType": "نوع التكامل مطلوب.",
     "allFieldsRequired": "جميع الحقول مطلوبة.",
     "customFieldIncomplete": "يجب أن يحتوي الحقل المخصص على اسم وقيمة معًا."
+  },
+  "login": {
+    "accountLocked": "تم قفل حسابك مؤقتًا بسبب كثرة محاولات تسجيل الدخول الفاشلة. حاول مرة أخرى بعد {until}، أو اطلب من المسؤول إلغاء القفل."
+  },
+  "assetCategory": {
+    "critical_infrastructure_health": "منشأة صحية",
+    "critical_infrastructure_education": "مؤسسة تعليمية",
+    "critical_infrastructure_emergency": "خدمة طوارئ"
   }
 }

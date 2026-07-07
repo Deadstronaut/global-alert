@@ -19,10 +19,13 @@ import 'maplibre-gl/dist/maplibre-gl.css'
 import ImpactPanel from '@/components/impact/ImpactPanel.vue'
 import GeocodingSearch from '@/components/impact/GeocodingSearch.vue'
 import { useMapLayersStore } from '@/stores/mapLayers.js'
+import { useSheltersStore, occupancyPercentage } from '@/stores/shelters.js'
+import { getShelterMarkerColor, getShelterMarkerIcon } from '@/services/shelterMarkerStyle.js'
 
 // spec 012: OGC WMS/WFS map layer registry — admin-registered external
 // overlays rendered live on this map (never stored/normalized, FR-008).
 const mapLayersStore = useMapLayersStore()
+const sheltersStore = useSheltersStore()
 const layerVisibility = ref({}) // { [layerId]: boolean }
 const layerOpacity = ref({}) // { [layerId]: number 0..1 }
 const DEFAULT_LAYER_OPACITY = 0.7
@@ -191,6 +194,7 @@ let map = null
 let mapLoaded = false
 let styleLoadVersion = 0
 let markerObjects = []
+let shelterMarkerObjects = []
 let userMarkerObj = null
 const styleCache = {}
 let hexWorker = null
@@ -981,6 +985,7 @@ function initMap() {
     addSourcesAndLayers()
     brightenDarkLabels()
     updateMarkers()
+    updateShelterMarkers()
     updateHeatmap()
     updateHexbins()
     updateUserMarker()
@@ -1181,6 +1186,71 @@ function updateViewportGrid() {
 function clearMarkers() {
   markerObjects.forEach((m) => m.remove())
   markerObjects = []
+}
+
+// Shelter marker layer (spec 027) — parallel to the disaster-event marker
+// functions above, but deliberately NOT subject to the zoom-based hide rule
+// those follow (FR-005): shelter locations are always safety-relevant, not
+// an aggregated density signal like hexbin/heatmap mode.
+function clearShelterMarkers() {
+  shelterMarkerObjects.forEach((m) => m.remove())
+  shelterMarkerObjects = []
+}
+
+function formatShelterStatusLabel(status) {
+  if (status === 'open' || status === 'full' || status === 'closed') {
+    return t(`shelters.statusOptions.${status}`)
+  }
+  return status
+}
+
+function updateShelterMarkers() {
+  if (!map || !mapLoaded) return
+
+  clearShelterMarkers()
+
+  if (!uiStore.showShelters) return
+
+  sheltersStore.shelters
+    .filter((shelter) => shelter.is_active && shelter.lat != null && shelter.lng != null)
+    .forEach((shelter) => {
+      const color = getShelterMarkerColor(shelter.status)
+
+      const el = document.createElement('div')
+      el.className = 'shelter-marker'
+      el.innerHTML = `
+        <div class="shelter-marker-dot" style="background:${color};box-shadow:0 0 10px ${color};">
+          <span class="shelter-marker-icon">${getShelterMarkerIcon()}</span>
+        </div>
+      `
+
+      const pct = occupancyPercentage(shelter)
+      const linkedNote = shelter.linked_incident_id
+        ? `<p class="shelter-popup-linked">${t('shelters.map.linkedIncident') || 'İlgili bir olaya bağlı'}</p>`
+        : ''
+
+      const popup = new maplibregl.Popup({ offset: 12, className: 'modern-popup-container' }).setHTML(
+        `
+        <div class="shelter-popup-modern" style="--severity-color: ${color};">
+          <div class="popup-body">
+            <h4 class="popup-title">${shelter.name}</h4>
+            <div class="popup-metrics">
+              <span><b>${t('shelters.map.occupancy') || 'Doluluk'}:</b> ${shelter.capacity_occupied ?? 0}/${shelter.capacity_total ?? 0} (%${pct})</span>
+              <span><b>${t('shelters.map.status') || 'Durum'}:</b> ${formatShelterStatusLabel(shelter.status)}</span>
+            </div>
+            ${linkedNote}
+          </div>
+        </div>
+      `,
+      )
+
+      const marker = new maplibregl.Marker({ element: el, anchor: 'center' })
+        .setLngLat([shelter.lng, shelter.lat])
+        .setPopup(popup)
+        .addTo(map)
+
+      shelterMarkerObjects.push(marker)
+    })
 }
 
 function formatPopupDetails(event) {
@@ -1410,6 +1480,7 @@ async function applyBaseStyle() {
       if (selF) setFocusMode(true, selF)
     }
     updateMarkers()
+    updateShelterMarkers()
     updateHeatmap()
     updateHexbins()
     updateUserMarker()
@@ -1489,6 +1560,22 @@ watch(
   { deep: true },
 )
 
+// spec 027 (US2): toggling the shelter layer visibility shows/hides markers
+// instantly without re-fetching
+watch(
+  () => uiStore.showShelters,
+  () => {
+    updateShelterMarkers()
+  },
+)
+
+watch(
+  () => sheltersStore.shelters,
+  () => {
+    updateShelterMarkers()
+  },
+)
+
 // Dark/light mode UI değişikliği harita stilini ETKİLEMEZ
 // Harita stili sadece layer switcher butonuyla değişir
 
@@ -1514,6 +1601,10 @@ onMounted(() => {
   // deactivated by an admin is absent from the panel on this map's next
   // mount, even if App.vue's boot-time fetch is stale from an earlier session.
   mapLayersStore.fetchMapLayers()
+  // spec 027: shelters are fetched here too (idempotent-safe, same rationale
+  // as the map_layers re-fetch above); updateShelterMarkers() is invoked from
+  // initMap()'s style-load handlers once the map itself is ready.
+  sheltersStore.fetchShelters().then(() => updateShelterMarkers())
   requestAnimationFrame(function tryInit() {
     if (!mapContainer.value) return
     const { offsetWidth, offsetHeight } = mapContainer.value
@@ -1528,6 +1619,7 @@ onMounted(() => {
 onBeforeUnmount(() => {
   window.removeEventListener('keydown', handleMapModeKey)
   clearMarkers()
+  clearShelterMarkers()
   if (userMarkerObj) {
     userMarkerObj.remove()
     userMarkerObj = null
@@ -1638,6 +1730,14 @@ onBeforeUnmount(() => {
         />
       </div>
     </div>
+
+    <!-- Shelter map layer toggle (spec 027) — always visible, independent of WMS/WFS layers -->
+    <div class="shelters-layer-panel">
+      <label class="map-layer-toggle">
+        <input type="checkbox" :checked="uiStore.showShelters" @change="uiStore.toggleShelters()" />
+        <span>{{ t('shelters.map.toggleLabel') }}</span>
+      </label>
+    </div>
   </div>
 </template>
 
@@ -1674,6 +1774,31 @@ onBeforeUnmount(() => {
 .map-layer-toggle { display: flex; align-items: center; gap: 6px; cursor: pointer; }
 .map-layer-type { margin-left: auto; font-size: .68rem; color: var(--color-text-muted,#94a3b8); }
 .map-layer-opacity { width: 100%; margin-top: 4px; }
+
+.shelters-layer-panel {
+  position: absolute;
+  top: 16px;
+  left: 16px;
+  z-index: 5;
+  background: rgba(15,17,23,.9);
+  border: 1px solid rgba(255,255,255,.12);
+  border-radius: 10px;
+  padding: 10px 12px;
+  color: #e2e8f0;
+  font-size: .8rem;
+}
+
+.shelter-marker-dot {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+.shelter-marker-icon { font-size: .85rem; line-height: 1; }
+.shelter-popup-linked { margin: 6px 0 0; font-size: .75rem; color: var(--color-text-muted,#94a3b8); }
 
 .zoom-indicator {
   position: absolute;

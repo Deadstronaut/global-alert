@@ -62,9 +62,37 @@ export const useAuthStore = defineStore('auth', () => {
     authError.value = null;
     const { data, error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) {
+      // spec 028 FR-004: count this failed attempt against the account
+      // (anon-callable, silently no-ops if the email doesn't match any
+      // profile — never reveals account existence). Failure here must never
+      // block surfacing the original auth error to the user.
+      await supabase.rpc('record_failed_login', { p_email: email }).catch(() => {});
       authError.value = error.message;
       throw error;
     }
+
+    // spec 028 FR-005: a locked account rejects login even with the correct
+    // password. Checked via the caller's own profile row (readable regardless
+    // of lock/suspension state, per the existing users_read_own_profile RLS
+    // policy), immediately after password verification but before any other
+    // session-completing step (MFA challenge, profile load).
+    const { data: own } = await supabase
+      .from('profiles')
+      .select('locked_until')
+      .eq('id', data.user.id)
+      .maybeSingle();
+    if (own?.locked_until && new Date(own.locked_until) > new Date()) {
+      await supabase.auth.signOut();
+      const lockedError = new Error('account_locked');
+      lockedError.lockedUntil = own.locked_until;
+      authError.value = lockedError.message;
+      throw lockedError;
+    }
+
+    // spec 028 FR-006: a successful password check resets the failed-attempt
+    // counter, whether or not an MFA challenge is still pending below.
+    await supabase.rpc('clear_own_login_lock').catch(() => {});
+
     // Password alone is not enough once a second factor is enrolled (spec 005
     // FR-003) — signInWithPassword already succeeds and issues a valid aal1
     // session either way; withholding profile load/session completion here is

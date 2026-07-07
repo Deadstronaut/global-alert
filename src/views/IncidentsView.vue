@@ -26,6 +26,14 @@ const error = ref(null)
 const aarTargetId = ref(null)
 const aarNotes = ref('')
 
+// spec 026: which incident's timeline is currently expanded (only one open
+// at a time, mirroring aarTargetId's single-open pattern), and a cache of
+// already-fetched timeline rows keyed by incident id so re-toggling open
+// doesn't re-fetch.
+const timelineOpenId = ref(null)
+const timelineEntries = ref({})
+const timelineError = ref(null)
+
 // spec 010: sourced from the hazard taxonomy registry instead of a
 // hardcoded list, same reasoning as CapView.vue.
 const HAZARD_TYPES = computed(() => hazardTypesStore.activeHazardTypes)
@@ -134,6 +142,34 @@ function formatDate(iso) {
   return iso ? new Date(iso).toLocaleString('tr-TR') : '—'
 }
 
+// spec 026 FR-001/FR-002: get_incident_timeline() enforces its own
+// authorization mirroring incidents' RLS — a rejected call surfaces here via
+// the standard error.value pattern rather than silently showing nothing.
+async function toggleTimeline(incident) {
+  if (timelineOpenId.value === incident.id) {
+    timelineOpenId.value = null
+    return
+  }
+  timelineOpenId.value = incident.id
+  timelineError.value = null
+  if (timelineEntries.value[incident.id]) return
+  const { data, error: err } = await supabase.rpc('get_incident_timeline', { p_incident_id: incident.id })
+  if (err) {
+    timelineError.value = err.message
+    return
+  }
+  timelineEntries.value = { ...timelineEntries.value, [incident.id]: data ?? [] }
+}
+
+// spec 026 contracts/incident-timeline-reports.md client-side rendering rule.
+function describeTimelineEntry(entry) {
+  if (!entry.old_data) return t('incidentTracking.timeline.created')
+  if (entry.old_data.status !== entry.new_data?.status) {
+    return t('incidentTracking.timeline.statusChange', { from: entry.old_data.status, to: entry.new_data?.status })
+  }
+  return t('incidentTracking.timeline.updated')
+}
+
 // spec 011 FR-005: SOPs whose hazard_type_code matches this incident's
 // hazard_type, sourced from the global SOP repository (empty list is a
 // valid, harmless state per spec.md's Edge Cases).
@@ -227,6 +263,20 @@ onMounted(loadIncidents)
           <a href="#" @click.prevent="router.push({ name: 'cap', query: { draft: inc.linked_cap_id } })">
             🔗 {{ t('incidentTracking.viewOriginatingAlert') }}
           </a>
+        </div>
+
+        <button class="btn-timeline" @click="toggleTimeline(inc)">
+          🕐 {{ t('incidentTracking.timeline.button') }}
+        </button>
+        <div v-if="timelineOpenId === inc.id" class="inc-timeline">
+          <p v-if="timelineError" class="form-error">{{ timelineError }}</p>
+          <ul v-else-if="timelineEntries[inc.id]?.length">
+            <li v-for="(entry, idx) in timelineEntries[inc.id]" :key="idx">
+              <span>{{ describeTimelineEntry(entry) }}</span>
+              <span class="timeline-date">{{ formatDate(entry.created_at) }}</span>
+            </li>
+          </ul>
+          <p v-else class="tab-loading">{{ t('incidentTracking.timeline.loading') }}</p>
         </div>
 
         <div v-if="linkedSops(inc).length" class="inc-sops">
@@ -356,6 +406,18 @@ onMounted(loadIncidents)
   font-size: .78rem; color: var(--color-text-muted,#94a3b8);
   background: rgba(255,255,255,.03); border-radius: 6px; padding: 8px 10px; margin: 6px 0;
 }
+.btn-timeline {
+  background: none; border: 1px solid rgba(255,255,255,.15); border-radius: 6px;
+  color: var(--color-text-muted,#94a3b8); font-size: .72rem; padding: 4px 10px;
+  cursor: pointer; margin: 6px 0;
+}
+.btn-timeline:hover { background: rgba(255,255,255,.06); }
+.inc-timeline {
+  background: rgba(255,255,255,.03); border-radius: 8px; padding: 8px 10px; margin-bottom: 8px;
+}
+.inc-timeline ul { margin: 0; padding-left: 18px; font-size: .78rem; color: #cbd5e1; }
+.inc-timeline li { display: flex; justify-content: space-between; gap: 10px; margin-bottom: 4px; }
+.timeline-date { color: var(--color-text-muted,#94a3b8); font-size: .72rem; white-space: nowrap; }
 .inc-linked-cap { font-size: .78rem; margin-bottom: 4px; }
 .inc-linked-cap a { color: #4da3ff; text-decoration: none; }
 .inc-linked-cap a:hover { text-decoration: underline; }

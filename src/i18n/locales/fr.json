@@ -256,7 +256,72 @@
       "empty": "Aucun rapport automatique n'a encore été généré.",
       "integrity": "Intégrité",
       "intact": "Intacte",
-      "broken": "Problème détecté"
+      "broken": "Problème détecté",
+      "checklistExport": "Liste de Contrôle"
+    },
+    "incidentReports": {
+      "title": "Rapports Annuels d'Incidents",
+      "empty": "Aucun rapport automatique d'incidents n'a encore été généré.",
+      "total": "Total d'Incidents",
+      "falseAlarmRate": "Taux de Fausses Alertes"
+    },
+    "deadLetter": {
+      "title": "Entrées d'Audit en Attente",
+      "empty": "Aucune entrée en attente.",
+      "count": "{count} entrées en attente de nouvelle tentative.",
+      "retry": "Réessayer",
+      "result": "{succeeded} réussies, {failed} échouées."
+    },
+    "drillReports": {
+      "title": "Rapports Annuels d'Exercices",
+      "empty": "Aucun rapport automatique d'exercice n'a encore été généré.",
+      "total": "Total d'Exercices"
+    },
+    "retention": {
+      "title": "Politiques de Rétention des Données",
+      "category": "Catégorie",
+      "days": "Rétention (jours)",
+      "action": "Action",
+      "action_archive": "Archiver",
+      "action_delete": "Supprimer",
+      "empty": "Aucune politique de rétention définie.",
+      "save": "Enregistrer",
+      "saving": "enregistrement...",
+      "deleteWarningTitle": "Cette action est irréversible",
+      "deleteWarningBody": "\"Supprimer\" a été sélectionné — les enregistrements expirés seront définitivement supprimés, non archivés. Continuer ?",
+      "cancel": "Annuler",
+      "confirmDelete": "Je confirme, supprimer"
+    },
+    "deletion": {
+      "title": "Justification Requise",
+      "justificationLabel": "Pourquoi supprimez-vous cet enregistrement ?",
+      "justificationPlaceholder": "Indiquez votre raison...",
+      "cancel": "Annuler",
+      "confirm": "Supprimer"
+    },
+    "securityEvents": {
+      "title": "Événements de Sécurité",
+      "action": "Événement",
+      "table": "Table",
+      "recordId": "Enregistrement",
+      "time": "Heure",
+      "empty": "Aucun événement de sécurité pour l'instant."
+    },
+    "securityConfig": {
+      "title": "Rapport de Configuration de Sécurité",
+      "mfaPolicy": "Politique MFA",
+      "required": "requis",
+      "notRequired": "non requis",
+      "retentionPolicies": "Politiques de Rétention",
+      "days": "jours",
+      "noPolicies": "Aucune politique définie",
+      "capabilityGrants": "Autorisations Spéciales Actives",
+      "exportCsv": "CSV",
+      "exportJson": "JSON"
+    },
+    "evidence": {
+      "download": "Télécharger le Paquet de Preuves",
+      "building": "génération..."
     }
   },
   "impact": {
@@ -293,7 +358,16 @@
       "scenarioNamePlaceholder": "Nom du scénario...",
       "saveScenario": "Enregistrer le Scénario",
       "savedScenarios": "Scénarios Enregistrés",
-      "dataUnavailable": "les données référencées ne sont plus disponibles"
+      "dataUnavailable": "les données référencées ne sont plus disponibles",
+      "completenessLabel": "Intégrité des Données",
+      "completenessNoData": "aucune donnée",
+      "criticalInfrastructureTitle": "Infrastructures Critiques",
+      "criticalInfrastructureEmpty": "Aucune infrastructure critique dans cette zone.",
+      "breakdownTitle": "Ventilation",
+      "breakdownBySector": "Par Secteur",
+      "breakdownByBoundary": "Par Limite Administrative",
+      "breakdownEmpty": "Aucune donnée de ventilation.",
+      "unclassified": "non classé"
     },
     "geocoding": {
       "placeholder": "Rechercher un lieu ou une adresse...",
@@ -338,7 +412,9 @@
     "importing": "Importation...",
     "importButton": "📥 Importer",
     "channels": "Canaux",
-    "status": "Statut"
+    "status": "Statut",
+    "anonymize": "anonymiser",
+    "anonymizeConfirm": "Êtes-vous sûr de vouloir supprimer définitivement et irréversiblement les données personnelles (e-mail, numéro WhatsApp) de {name} ?"
   },
   "dispatch": {
     "panelTitle": "Suivi des Envois",
@@ -353,7 +429,10 @@
     "statusQueued": "en attente",
     "statusRunning": "en cours",
     "statusCompleted": "terminé",
-    "statusFailed": "échoué"
+    "statusFailed": "échoué",
+    "viewImpactSnapshot": "voir l'instantané d'impact",
+    "hideImpactSnapshot": "masquer",
+    "impactSnapshotUnavailable": "Les données d'impact n'étaient pas disponibles au moment de la diffusion."
   },
   "portal": {
     "title": "🌍 GEWS — Alertes Actives",
@@ -444,7 +523,20 @@
     "sopDeactivate": "désactiver",
     "sopReactivate": "réactiver",
     "sopEmpty": "Aucun document SOP pour le moment.",
-    "createIncidentFromAlert": "Créer un incident à partir de cette alerte"
+    "createIncidentFromAlert": "Créer un incident à partir de cette alerte",
+    "timeline": {
+      "button": "Chronologie",
+      "created": "Créé",
+      "statusChange": "statut : {from} → {to}",
+      "updated": "Mis à jour",
+      "loading": "Chargement..."
+    },
+    "sopCategory": "Catégorie",
+    "sopSearchPlaceholder": "Rechercher par titre...",
+    "sopAllCategories": "— toutes les catégories —",
+    "sopVersionHistory": "historique des versions",
+    "sopVersionHistoryTitle": "\"{title}\" — Historique des Versions",
+    "sopNoVersionHistory": "Aucune version précédente pour l'instant."
   },
   "mapLayers": {
     "tabLabel": "Couches de Carte",
@@ -484,7 +576,20 @@
       "map_layersShort": "Couches",
       "audit": "Voir le Journal d'Audit",
       "auditShort": "Audit"
-    }
+    },
+    "accessReview": {
+      "exportCsv": "Exporter CSV",
+      "exportJson": "Exporter JSON",
+      "lastLogin": "Dernière Connexion",
+      "lockStatus": "État du Verrouillage",
+      "locked": "Verrouillé",
+      "unlockAction": "Déverrouiller"
+    },
+    "drillExportSummary": "Exporter le Résumé",
+    "drillLessonsLearned": "Note de Leçons Apprises",
+    "drillRelatedHazard": "Type de Risque Associé (facultatif)",
+    "drillSaveFeedback": "Enregistrer",
+    "drillGoToThresholdEditor": "Aller à l'Éditeur de Seuils →"
   },
   "shelters": {
     "tabLabel": "Abris",
@@ -518,7 +623,13 @@
     "nameRequired": "Le nom est requis.",
     "noCountry": "Le pays est requis.",
     "capacityTotalInvalid": "La capacité totale doit être un nombre positif.",
-    "occupancyExceedsCapacity": "L'occupation actuelle ne peut pas dépasser la capacité totale."
+    "occupancyExceedsCapacity": "L'occupation actuelle ne peut pas dépasser la capacité totale.",
+    "map": {
+      "toggleLabel": "Afficher/Masquer les Abris",
+      "occupancy": "Occupation",
+      "status": "Statut",
+      "linkedIncident": "Lié à un incident"
+    }
   },
   "integrations": {
     "tabLabel": "Intégrations",
@@ -538,5 +649,13 @@
     "noType": "Le type d'intégration est requis.",
     "allFieldsRequired": "Tous les champs sont obligatoires.",
     "customFieldIncomplete": "Un champ personnalisé doit avoir un nom et une valeur."
+  },
+  "login": {
+    "accountLocked": "Votre compte a été temporairement verrouillé en raison de trop nombreuses tentatives de connexion échouées. Réessayez après {until}, ou demandez à un administrateur de le déverrouiller."
+  },
+  "assetCategory": {
+    "critical_infrastructure_health": "Établissement de Santé",
+    "critical_infrastructure_education": "Établissement Éducatif",
+    "critical_infrastructure_emergency": "Service d'Urgence"
   }
 }

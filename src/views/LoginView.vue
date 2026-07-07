@@ -56,7 +56,14 @@ async function handleLogin() {
     }
     goToApp(result)
   } catch (err) {
-    error.value = err.message ?? 'Giriş başarısız'
+    // spec 028 FR-005: a distinct, actionable message for a locked account
+    // rather than a generic auth-error passthrough.
+    if (err.message === 'account_locked') {
+      const until = err.lockedUntil ? new Date(err.lockedUntil).toLocaleTimeString() : ''
+      error.value = t('login.accountLocked', { until })
+    } else {
+      error.value = err.message ?? 'Giriş başarısız'
+    }
   } finally {
     loading.value = false
   }

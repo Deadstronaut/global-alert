@@ -71,6 +71,15 @@ export const routes = [
       // /admin's Hazard Taxonomy tab (unchanged access control).
     },
     {
+      path: '/report',
+      name: 'report-hazard',
+      component: () => import('@/views/ReportHazardView.vue'),
+      // spec 036 FR-001: the submission form itself must be reachable with
+      // NO login at all (an anonymous citizen), same as /portal above —
+      // meta.public bypasses the base !auth.isLoggedIn redirect entirely.
+      meta: { public: true }
+    },
+    {
       path: '/admin',
       name: 'admin',
       component: () => import('@/views/AdminView.vue'),

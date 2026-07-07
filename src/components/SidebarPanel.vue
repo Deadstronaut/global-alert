@@ -887,6 +887,9 @@ watch([rangeStartDate, rangeEndDate], ([start, end]) => {
             <button class="btn btn-ghost sidebar-action-btn" @click="router.push('/hazards')">
               🌋 Afet Ansiklopedisi
             </button>
+            <button class="btn btn-ghost sidebar-action-btn" @click="router.push('/report')">
+              📢 {{ t('communityReport.form.title') }}
+            </button>
             <button v-if="canAccessAdmin" class="btn btn-ghost sidebar-action-btn" @click="router.push('/admin')">
               🛡️ Yönetim
             </button>

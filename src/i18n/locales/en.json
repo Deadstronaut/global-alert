@@ -631,6 +631,81 @@
       "linkedIncident": "Linked to an incident"
     }
   },
+  "communityReport": {
+    "form": {
+      "title": "Submit a Hazard Report",
+      "hazardType": "Hazard Type",
+      "hazardTypePlaceholder": "Select a type",
+      "description": "Description",
+      "descriptionPlaceholder": "Briefly describe what you observed",
+      "lat": "Latitude",
+      "lng": "Longitude",
+      "useMyLocation": "Use my location",
+      "photo": "Photo (optional)",
+      "photoHint": "JPEG/PNG/WebP, up to 5MB",
+      "submit": "Submit",
+      "submitting": "Submitting…",
+      "successMessage": "Your report has been received for review. Thank you.",
+      "errorHazardType": "You must select a hazard type.",
+      "errorDescription": "Description is required.",
+      "errorLocation": "Location is required.",
+      "errorPhotoType": "Unsupported file type (JPEG/PNG/WebP only).",
+      "errorPhotoSize": "File is too large (5MB max).",
+      "errorGeneric": "Something went wrong while submitting, please try again."
+    },
+    "moderation": {
+      "tabLabel": "Community Reports",
+      "queueEmpty": "No pending reports.",
+      "approve": "Approve",
+      "reject": "Reject",
+      "rejectReasonLabel": "Rejection reason",
+      "rejectReasonRequired": "You must provide a reason to reject.",
+      "assignOrg": "Assign to organization (optional)",
+      "assignOrgNone": "— no assignment —",
+      "submittedAt": "Submitted at",
+      "viewPhoto": "View photo"
+    },
+    "map": {
+      "toggleLabel": "Show/Hide Community Reports",
+      "popupHazardType": "Type",
+      "popupDescription": "Description",
+      "popupSubmittedAt": "Submitted at",
+      "clusterCount": "reports"
+    },
+    "incidentLink": {
+      "sectionTitle": "Related Community Reports",
+      "linkButton": "Link to Incident",
+      "linkedReports": "Linked reports",
+      "noLinkedReports": "No linked reports.",
+      "pickIncident": "Select an incident"
+    },
+    "assigned": {
+      "tabLabel": "Reports Assigned to Me",
+      "empty": "No reports assigned to you.",
+      "assignedOrg": "Assigned Organization"
+    }
+  },
+  "drillInjection": {
+    "form": {
+      "toggleButton": "Inject Event",
+      "hazardType": "Hazard Type",
+      "hazardTypePlaceholder": "Select a type",
+      "lat": "Latitude",
+      "lng": "Longitude",
+      "severity": "Severity",
+      "description": "Description",
+      "submit": "Inject"
+    },
+    "map": {
+      "badge": "🎯 DRILL",
+      "hazardType": "Type",
+      "severity": "Severity",
+      "description": "Description"
+    },
+    "remove": {
+      "action": "Remove"
+    }
+  },
   "integrations": {
     "tabLabel": "Integrations",
     "countryCodePlaceholder": "XX",

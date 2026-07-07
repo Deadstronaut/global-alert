@@ -150,7 +150,7 @@ Alert Authoring / CAP           0/67    %100        Orta       Tamamlandı (2026
                                                                Migration canlıya uygulanması
                                                                kullanıcı onayı bekliyor.
 
-Dissemination                  16/65    ~%75        Orta       Tamamlandı (2026-07-06,
+Dissemination                  8/65     ~%88        Orta       Tamamlandı (2026-07-06,
                                                                spec 009): contact directory
                                                                (super_admin/country_admin/
                                                                org_admin scoped CRUD + CSV
@@ -299,6 +299,54 @@ Tamamlandı (2026-07-07, spec 031): PRD'de açıkça yer alan
                                                                tanıması + pg_cron job kaydı. Migration
                                                                canlıya uygulanması kullanıcı onayı
                                                                bekliyor.
+Tamamlandı (2026-07-07, spec 036): "community hazard
+                                                               reporting" boşluğu kapatıldı — yeni
+                                                               herkese açık, kimlik doğrulaması
+                                                               gerektirmeyen /report sayfası (geo-
+                                                               tagged açıklama + afet tipi + isteğe
+                                                               bağlı tek fotoğraf), yeni submit-
+                                                               community-report Edge Function'ı (tek
+                                                               yazma yolu, service-role; ülke kodunu
+                                                               mevcut bbox-tabanlı resolveCountryCode()
+                                                               'un yeni bir Deno portuyla server-side
+                                                               belirliyor, client spoofing riski yok),
+                                                               yeni community_reports tablosu +
+                                                               incidents/cap_drafts ile aynı guard-
+                                                               trigger deseninde durum makinesi
+                                                               (pending→approved/rejected→archived,
+                                                               red için zorunlu gerekçe). Moderasyon
+                                                               (onay/red) yalnızca country_admin/
+                                                               super_admin'de; onay anında/sonrasında
+                                                               bir organizasyona (assigned_org_id)
+                                                               atama isteğe bağlı — o organizasyonun
+                                                               org_admin'i yalnızca kendisine
+                                                               atanmış onaylı bildirimleri salt-okunur
+                                                               görebiliyor (org_admin'in hiçbir zaman
+                                                               onay/red yetkisi yok — kapsam
+                                                               netleştirmesi proje sahibiyle
+                                                               yapıldı). Onaylı bildirimler
+                                                               MapView.vue'da MapLibre'nin native
+                                                               cluster özelliğiyle (disaster-event
+                                                               marker'larından bağımsız ayrı bir
+                                                               katman) gösteriliyor; incident'a
+                                                               bağlama (audit_log otomatik) da
+                                                               eklendi. Otomatik NLP/LLM
+                                                               kategorileştirme (MHEWS-FR-0004/0112/
+                                                               0212, MHEWS-SD-FEEDBACK-02) bilinçli
+                                                               olarak kapsam dışı bırakıldı (projede
+                                                               henüz AI/LLM altyapısı yok) —
+                                                               moderatör afet tipini manuel atıyor.
+                                                               Migration + Edge Function deploy'u
+                                                               kullanıcı onayı bekliyor. Kalan: gerçek
+                                                               WhatsApp API, tam polygon/PostGIS
+                                                               geofencing, NLP/LLM kategorileştirme,
+                                                               ses eki, zamanlanmış coğrafi küme özet
+                                                               raporu, canlı SSE bildirim akışı,
+                                                               Public Portal'a sığınak bilgisi
+                                                               eklenmesi (müşterinin kendisi
+                                                               ekleyecek, bu projede planlanmıyor),
+                                                               public self-registration (bilinçli
+                                                               kapsam dışı).
 
 Incident Tracking               1/28    ~%93        Orta       Tamamlandı (2026-07-08,
                                                                spec 026): "timeline playback",
@@ -820,7 +868,7 @@ Risk & Scenario Modeling       11/11    %0          Çok Zor    Simulation engin
                                                                PostGIS spatial,
                                                                asset graph
 
-Preparedness, Drill & Response  0/3    ~%80         Orta       Tamamlandı (2026-07-06,
+Preparedness, Drill & Response  0/3    ~%95         Orta       Tamamlandı (2026-07-06,
                                                                spec 013): drill_sessions
                                                                tablosu ve tatbikat başlat/
                                                                bitir CRUD'u zaten vardı —
@@ -899,8 +947,122 @@ Tamamlandı (2026-07-07, spec 032): PRD'de açıkça yer alan
                                                                onaylı bağlantı, YAGNI). Migration
                                                                canlıya uygulanması ve generate-
                                                                drill-report Edge Function deploy'u
-                                                               kullanıcı onayı bekliyor. Kalan:
-                                                               simüle tehlike enjeksiyonu (ayrı,
-                                                               daha büyük bir iterasyon).
+                                                               kullanıcı onayı bekliyor.
+Tamamlandı (2026-07-07, spec 037): modülün son kalemi
+                                                               (MHEWS-FR-0149, daha önce "ayrı, daha
+                                                               büyük bir iterasyon" olarak
+                                                               ertelenmişti) kapatıldı — aktif bir
+                                                               tatbikat sırasında yetkili kullanıcı
+                                                               (country_admin/org_admin/super_admin,
+                                                               tatbikat başlatma/durdurma yetkisiyle
+                                                               birebir aynı) yeni, tamamen ayrı bir
+                                                               drill_injected_events tablosuna simüle
+                                                               tehlike olayları enjekte edebiliyor
+                                                               (gerçek earthquake/wildfire/vb.
+                                                               tablolarına veya fetch-*/normalize
+                                                               boru hattına hiç karışmıyor —
+                                                               Principle IV). Enjekte olaylar
+                                                               haritada updateShelterMarkers() ile
+                                                               aynı DOM-marker deseninde, her zaman
+                                                               görünür kaldırılamaz bir "🎯 TATBİKAT"
+                                                               rozetiyle (CapView.vue'nun mevcut
+                                                               is_exercise rozet dilinin birebir
+                                                               aynısı) gösteriliyor; RLS'in
+                                                               authenticated_read_active_drill_events
+                                                               politikası tatbikat completed olur
+                                                               olmaz olayları otomatik gizliyor
+                                                               (kayıt silinmiyor, denetim amaçlı
+                                                               kalıyor). CapView.vue'nun mevcut
+                                                               "tespit edilen olaydan taslak
+                                                               oluştur" akışı (source_event_id,
+                                                               startFromEvent()) hiç değiştirilmeden,
+                                                               enjekte olaylar bu akışa normalize
+                                                               edilerek besleniyor — ortaya çıkan
+                                                               taslak mevcut is_exercise otomatik-
+                                                               işaretleme trigger'ı (spec 013)
+                                                               sayesinde gerçek dispatch'i asla
+                                                               tetiklemiyor. Migration canlıya
+                                                               uygulanması kullanıcı onayı bekliyor.
+                                                               Kalan: zamanlanmış/çok adımlı senaryo
+                                                               dizileri (bilinçli kapsam dışı, YAGNI).
 ─────────────────────────────────────────────────────────────────────────────────
-TOPLAM                        125/446   ~%72
+TOPLAM                        119/446   ~%76
+
+═══════════════════════════════════════════════════════════════════════════════
+NOT: GERÇEK VERİ / DIŞ KAYNAK GEREKTİREN, MOCK/TEST ORTAMINDA TAM
+DOĞRULANAMAYAN KALEMLER (2026-07-07 itibarıyla)
+═══════════════════════════════════════════════════════════════════════════════
+Bu liste "kod yazılabilir ama anlamlı şekilde çalıştığı ancak gerçek dış veri/
+altyapı/hesap bağlandığında görülebilir" kalemleri topluyor. Amaç: proje
+kapsamı planlanırken unutulmasınlar, müşteriye/yönetime bu net ayrım
+gösterilebilsin.
+
+1. Forecasting & Nowcasting Engine (PRD modülü, şu an %0)
+   - Gerçek bir NWP/ensemble/ML forecast kaynağı olmadan "Model Registry" ve
+     "Scenario Execution Engine" kayıt tutmaktan öteye geçemez; anlamlı
+     forecast grid/track verisi ancak gerçek bir meteoroloji/afet modeli
+     API'siyle (veya en az gerçekçi tarihsel veri seti) test edilebilir.
+   - Ayrı bir ML servisi + Python pipeline + model registry altyapısı
+     gerektiriyor — mevcut Supabase/Deno/Vue stack'inin dışında yeni bir
+     bileşen sınıfı.
+
+2. Risk & Scenario Modeling (PRD modülü, şu an %0)
+   - Scenario Execution Engine, Forecasting modülünün ürettiği gerçek
+     forecast çıktısına bağımlı — o olmadan sadece "senaryo şablonu" CRUD'u
+     yapılabilir, gerçek simülasyon çalıştırılamaz.
+   - Ağırlıklı zafiyet endeksleri + olasılıksal simülasyon + varlık bağımlılık
+     grafiği (Impact Analysis modülünün spec 034'te bilinçli olarak bu
+     modüle bırakılan kalanı) — gerçek/gerçekçi exposure+vulnerability veri
+     seti gerektirir, sentetik/test verisiyle sonuçlar anlamsız kalır.
+
+3. WhatsApp gerçek Meta Cloud API entegrasyonu (Dissemination, Integration &
+   API Gateway)
+   - spec 019/022/025 kimlik bilgisi yönetimini (Vault'a yazma) tamamladı,
+     ama dispatch-alert'teki adapter hâlâ mock — gerçek mesaj gönderimi ve
+     inbound delivery-receipt webhook'u ancak gerçek bir WhatsApp Business
+     hesabı + onaylı numara ile test edilebilir.
+
+4. Tam polygon/PostGIS tabanlı coğrafi hedefleme (geofencing)
+   - Dissemination (spec 015) ve Community Hazard Reporting (spec 036)
+     kalanı olarak defalarca ertelendi; şu an sadece region_code (bölge
+     kodu) seviyesinde eşleştirme var. Gerçek polygon/geofence testi gerçek
+     saha sınırları (idari/coğrafi) verisi ister.
+
+5. NLP/LLM kategorileştirme
+   - Community Hazard Reporting (MHEWS-FR-0004/0112/0212) — moderatör şu an
+     afet tipini elle atıyor.
+   - SOP Repository — "LLM SOP asistanı" (Incident Tracking spec 033'te
+     bilinçli kapsam dışı bırakıldı).
+   - İkisi de projede henüz var olmayan bir AI/LLM altyapısı (API key,
+     prompt pipeline, maliyet) gerektiriyor.
+
+6. Evidence Packaging — PDF + nesne depolama (Audit & Compliance spec 035
+   kalanı)
+   - Şu an sadece .zip (jszip) içinde CAP XML + JSON. PDF üretimi ve
+     MinIO/S3 gibi bir object storage entegrasyonu gerçek bir depolama
+     hesabı/bütçesi gerektiriyor.
+
+7. Community Hazard Reporting — kalan kalemler (spec 036 notunda listeli)
+   - Ses eki desteği (audio depolama)
+   - Zamanlanmış coğrafi küme özet raporu
+   - Canlı SSE bildirim akışı
+   Bunların üçü de teknik olarak yapılabilir ama gerçek kullanım hacmi
+   (çok sayıda eşzamanlı rapor, gerçek coğrafi kümelenme) olmadan
+   faydası/performansı test edilemez.
+
+8. Shapefile reprojeksiyon (spec 023 kalanı)
+   - WGS84 dışı projeksiyonlu shapefile desteği bilinçli kapsam dışı;
+     gerçek müşteri verisiyle (çoğu ulusal kadastro sistemi yerel
+     projeksiyon kullanır) karşılaşınca öncelik değişebilir.
+
+9. Zamanlanmış/çok adımlı tatbikat senaryo dizileri (spec 037 kalanı)
+   - Şu an tek seferlik olay enjeksiyonu var; çok adımlı senaryo (ör. önce
+     deprem, 2 saat sonra artçı, 6 saat sonra sel) gerçek bir tatbikat
+     planlama ihtiyacı ortaya çıkınca değerlendirilmeli.
+
+GENEL DEĞERLENDİRME: Yukarıdaki 1-2 numaralı kalemler (Forecasting/AI ve
+Risk & Scenario Modeling) projedeki tek "gerçek yeni motor" gerektiren
+büyük modüller — geri kalan proje "form + workflow + RLS + registry"
+seviyesinde tamamlanabilir/tamamlandı. 3-9 arası kalemler ise mevcut
+modüllerin içinde "gerçek hesap/gerçek veri/gerçek ölçek" ile ortaya
+çıkacak ince kalanlar.

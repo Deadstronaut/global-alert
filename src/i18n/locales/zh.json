@@ -631,6 +631,81 @@
       "linkedIncident": "已关联事件"
     }
   },
+  "communityReport": {
+    "form": {
+      "title": "提交灾害报告",
+      "hazardType": "灾害类型",
+      "hazardTypePlaceholder": "选择类型",
+      "description": "描述",
+      "descriptionPlaceholder": "简要描述您观察到的情况",
+      "lat": "纬度",
+      "lng": "经度",
+      "useMyLocation": "使用我的位置",
+      "photo": "照片（可选）",
+      "photoHint": "JPEG/PNG/WebP，最大5MB",
+      "submit": "提交",
+      "submitting": "提交中…",
+      "successMessage": "您的报告已收到并等待审核。谢谢。",
+      "errorHazardType": "必须选择灾害类型。",
+      "errorDescription": "描述为必填项。",
+      "errorLocation": "位置为必填项。",
+      "errorPhotoType": "不支持的文件类型（仅限JPEG/PNG/WebP）。",
+      "errorPhotoSize": "文件过大（最大5MB）。",
+      "errorGeneric": "提交时发生错误，请重试。"
+    },
+    "moderation": {
+      "tabLabel": "民众报告",
+      "queueEmpty": "没有待审核的报告。",
+      "approve": "批准",
+      "reject": "拒绝",
+      "rejectReasonLabel": "拒绝理由",
+      "rejectReasonRequired": "拒绝时必须提供理由。",
+      "assignOrg": "分配给组织（可选）",
+      "assignOrgNone": "— 未分配 —",
+      "submittedAt": "提交时间",
+      "viewPhoto": "查看照片"
+    },
+    "map": {
+      "toggleLabel": "显示/隐藏民众报告",
+      "popupHazardType": "类型",
+      "popupDescription": "描述",
+      "popupSubmittedAt": "提交时间",
+      "clusterCount": "条报告"
+    },
+    "incidentLink": {
+      "sectionTitle": "相关民众报告",
+      "linkButton": "关联到事件",
+      "linkedReports": "已关联报告",
+      "noLinkedReports": "无关联报告。",
+      "pickIncident": "选择一个事件"
+    },
+    "assigned": {
+      "tabLabel": "分配给我的报告",
+      "empty": "没有分配给您的报告。",
+      "assignedOrg": "分配的组织"
+    }
+  },
+  "drillInjection": {
+    "form": {
+      "toggleButton": "注入事件",
+      "hazardType": "灾害类型",
+      "hazardTypePlaceholder": "选择类型",
+      "lat": "纬度",
+      "lng": "经度",
+      "severity": "严重程度",
+      "description": "描述",
+      "submit": "注入"
+    },
+    "map": {
+      "badge": "🎯 演习",
+      "hazardType": "类型",
+      "severity": "严重程度",
+      "description": "描述"
+    },
+    "remove": {
+      "action": "移除"
+    }
+  },
   "integrations": {
     "tabLabel": "集成",
     "countryCodePlaceholder": "XX",

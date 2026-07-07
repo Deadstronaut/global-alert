@@ -631,6 +631,81 @@
       "linkedIncident": "Vinculado a un incidente"
     }
   },
+  "communityReport": {
+    "form": {
+      "title": "Enviar un reporte de peligro",
+      "hazardType": "Tipo de peligro",
+      "hazardTypePlaceholder": "Seleccione un tipo",
+      "description": "Descripción",
+      "descriptionPlaceholder": "Describa brevemente lo que observó",
+      "lat": "Latitud",
+      "lng": "Longitud",
+      "useMyLocation": "Usar mi ubicación",
+      "photo": "Foto (opcional)",
+      "photoHint": "JPEG/PNG/WebP, hasta 5MB",
+      "submit": "Enviar",
+      "submitting": "Enviando…",
+      "successMessage": "Su reporte ha sido recibido para revisión. Gracias.",
+      "errorHazardType": "Debe seleccionar un tipo de peligro.",
+      "errorDescription": "La descripción es obligatoria.",
+      "errorLocation": "La ubicación es obligatoria.",
+      "errorPhotoType": "Tipo de archivo no soportado (solo JPEG/PNG/WebP).",
+      "errorPhotoSize": "El archivo es demasiado grande (máximo 5MB).",
+      "errorGeneric": "Ocurrió un error al enviar, por favor intente de nuevo."
+    },
+    "moderation": {
+      "tabLabel": "Reportes Comunitarios",
+      "queueEmpty": "No hay reportes pendientes.",
+      "approve": "Aprobar",
+      "reject": "Rechazar",
+      "rejectReasonLabel": "Motivo de rechazo",
+      "rejectReasonRequired": "Debe indicar un motivo para rechazar.",
+      "assignOrg": "Asignar a organización (opcional)",
+      "assignOrgNone": "— sin asignar —",
+      "submittedAt": "Enviado el",
+      "viewPhoto": "Ver foto"
+    },
+    "map": {
+      "toggleLabel": "Mostrar/Ocultar Reportes Comunitarios",
+      "popupHazardType": "Tipo",
+      "popupDescription": "Descripción",
+      "popupSubmittedAt": "Enviado el",
+      "clusterCount": "reportes"
+    },
+    "incidentLink": {
+      "sectionTitle": "Reportes Comunitarios Relacionados",
+      "linkButton": "Vincular a Incidente",
+      "linkedReports": "Reportes vinculados",
+      "noLinkedReports": "Sin reportes vinculados.",
+      "pickIncident": "Seleccione un incidente"
+    },
+    "assigned": {
+      "tabLabel": "Reportes Asignados a Mí",
+      "empty": "No tiene reportes asignados.",
+      "assignedOrg": "Organización Asignada"
+    }
+  },
+  "drillInjection": {
+    "form": {
+      "toggleButton": "Inyectar Evento",
+      "hazardType": "Tipo de Peligro",
+      "hazardTypePlaceholder": "Seleccione un tipo",
+      "lat": "Latitud",
+      "lng": "Longitud",
+      "severity": "Severidad",
+      "description": "Descripción",
+      "submit": "Inyectar"
+    },
+    "map": {
+      "badge": "🎯 SIMULACRO",
+      "hazardType": "Tipo",
+      "severity": "Severidad",
+      "description": "Descripción"
+    },
+    "remove": {
+      "action": "Eliminar"
+    }
+  },
   "integrations": {
     "tabLabel": "Integraciones",
     "countryCodePlaceholder": "XX",

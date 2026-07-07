@@ -25,14 +25,18 @@ import MapLayerRegistryPanel from '@/components/admin/MapLayerRegistryPanel.vue'
 import RetentionPolicyPanel from '@/components/admin/RetentionPolicyPanel.vue'
 import SecurityEventsPanel from '@/components/admin/SecurityEventsPanel.vue'
 import SecurityConfigReportPanel from '@/components/admin/SecurityConfigReportPanel.vue'
+import CommunityReportsPanel from '@/components/admin/CommunityReportsPanel.vue'
+import AssignedCommunityReportsPanel from '@/components/admin/AssignedCommunityReportsPanel.vue'
 import { computeResponseTimeSeconds, computeAckRate } from '@/utils/drillMetrics.js'
 import { useHazardTypesStore } from '@/stores/hazardTypes.js'
+import { useDrillInjectedEventsStore } from '@/stores/drillInjectedEvents.js'
 
 const router = useRouter()
 const { t } = useI18n()
 
 const auth = useAuthStore()
 const hazardTypesStore = useHazardTypesStore()
+const drillInjectedEventsStore = useDrillInjectedEventsStore()
 const tab = ref('users') // 'users' | 'orgs' | 'drill' | 'sources' | 'manual' | 'csv' | 'boundaries' | 'contacts' | 'dispatch' | 'audit'
 
 async function handleLogout() {
@@ -424,6 +428,55 @@ async function endDrill(drill) {
   await loadDrills()
 }
 
+// spec 037 (US1): simulated hazard injection for an active drill. One shared
+// form, keyed by which drill card currently has it open (mirrors the
+// single-open pattern used elsewhere in this file, e.g. showDrillForm).
+const SEVERITIES = ['critical', 'high', 'moderate', 'low', 'minimal']
+const injectingForDrillId = ref(null)
+const drillInjectionForm = ref({ hazard_type: '', lat: '', lng: '', severity: 'moderate', description: '' })
+const injectingEvent = ref(false)
+const drillInjectedEventsByDrill = ref({})
+
+function toggleDrillInjectionForm(drill) {
+  if (injectingForDrillId.value === drill.id) {
+    injectingForDrillId.value = null
+    return
+  }
+  injectingForDrillId.value = drill.id
+  drillInjectionForm.value = { hazard_type: '', lat: '', lng: '', severity: 'moderate', description: '' }
+  loadDrillInjectedEvents(drill.id)
+}
+
+async function loadDrillInjectedEvents(drillId) {
+  const data = await drillInjectedEventsStore.fetchForActiveDrill(drillId)
+  drillInjectedEventsByDrill.value = { ...drillInjectedEventsByDrill.value, [drillId]: data }
+}
+
+async function submitDrillInjection(drill) {
+  injectingEvent.value = true
+  const result = await drillInjectedEventsStore.injectEvent({
+    drill_session_id: drill.id,
+    country_code: drill.country_code,
+    hazard_type: drillInjectionForm.value.hazard_type,
+    lat: Number(drillInjectionForm.value.lat),
+    lng: Number(drillInjectionForm.value.lng),
+    severity: drillInjectionForm.value.severity,
+    description: drillInjectionForm.value.description,
+  })
+  injectingEvent.value = false
+  if (!result.success) return
+  drillInjectionForm.value = { hazard_type: '', lat: '', lng: '', severity: 'moderate', description: '' }
+  await loadDrillInjectedEvents(drill.id)
+}
+
+// spec 037 (US3, FR-009): manual removal before a drill ends — independent
+// of the RLS-driven auto-hide that happens once a drill is 'completed'.
+async function removeDrillInjectedEvent(drillId, eventId) {
+  const result = await drillInjectedEventsStore.removeEvent(eventId)
+  if (!result.success) return
+  await loadDrillInjectedEvents(drillId)
+}
+
 // spec 032 (MHEWS-SD-DRILL-02): exports a single completed drill's summary,
 // same rowsToCsv/rowsToJson/triggerDownload call pattern as
 // downloadComplianceReport()/downloadIncidentReport() — "veri yok" (no data)
@@ -471,6 +524,10 @@ function goToHazardEditor() {
 }
 
 const canAdmin = computed(() => auth.isSuperAdmin || auth.session?.role === 'country_admin')
+
+// spec 036 (US5): org_admin's own read-only "assigned to me" tab — distinct
+// from canAdmin's country_admin/super_admin moderation tab above.
+const isOrgAdmin = computed(() => auth.session?.role === 'org_admin')
 
 // spec 018: a country_admin/org_admin granted one of the 4 named capabilities
 // gets the same access as super_admin for that specific admin area only —
@@ -1055,6 +1112,20 @@ onUnmounted(() => {
       >
         📊 {{ t('impact.exposure.tabLabel') }}
       </button>
+      <button
+        v-if="canAdmin"
+        :class="['tab', { active: tab === 'communityReports' }]"
+        @click="tab = 'communityReports'"
+      >
+        📢 {{ t('communityReport.moderation.tabLabel') }}
+      </button>
+      <button
+        v-if="isOrgAdmin"
+        :class="['tab', { active: tab === 'assignedCommunityReports' }]"
+        @click="tab = 'assignedCommunityReports'"
+      >
+        📢 {{ t('communityReport.assigned.tabLabel') }}
+      </button>
     </div>
 
     <!-- ── Users tab ─────────────────────────────────────────────────────── -->
@@ -1365,7 +1436,54 @@ onUnmounted(() => {
           </div>
           <div v-if="canAdmin && d.status === 'active'" class="drill-actions">
             <button class="btn-end-drill" @click="endDrill(d)">⏹ Tatbikatı Bitir</button>
+            <button class="btn-export" @click="toggleDrillInjectionForm(d)">
+              🎯 {{ t('drillInjection.form.toggleButton') }}
+            </button>
           </div>
+
+          <!-- spec 037: simulated hazard injection, active drills only -->
+          <div v-if="canAdmin && injectingForDrillId === d.id" class="drill-injection-form">
+            <label class="form-field">
+              <span>{{ t('drillInjection.form.hazardType') }}</span>
+              <select v-model="drillInjectionForm.hazard_type">
+                <option value="" disabled>{{ t('drillInjection.form.hazardTypePlaceholder') }}</option>
+                <option v-for="h in hazardTypesStore.activeHazardTypes" :key="h.code" :value="h.code">{{ h.display_name }}</option>
+              </select>
+            </label>
+            <div class="form-grid">
+              <label class="form-field">
+                <span>{{ t('drillInjection.form.lat') }}</span>
+                <input v-model="drillInjectionForm.lat" type="number" step="any" />
+              </label>
+              <label class="form-field">
+                <span>{{ t('drillInjection.form.lng') }}</span>
+                <input v-model="drillInjectionForm.lng" type="number" step="any" />
+              </label>
+            </div>
+            <label class="form-field">
+              <span>{{ t('drillInjection.form.severity') }}</span>
+              <select v-model="drillInjectionForm.severity">
+                <option v-for="s in SEVERITIES" :key="s" :value="s">{{ s }}</option>
+              </select>
+            </label>
+            <label class="form-field">
+              <span>{{ t('drillInjection.form.description') }}</span>
+              <textarea v-model="drillInjectionForm.description" rows="2"></textarea>
+            </label>
+            <button :disabled="injectingEvent" @click="submitDrillInjection(d)">
+              {{ t('drillInjection.form.submit') }}
+            </button>
+
+            <ul v-if="drillInjectedEventsByDrill[d.id]?.length" class="drill-injected-list">
+              <li v-for="ev in drillInjectedEventsByDrill[d.id]" :key="ev.id">
+                <span>🎯 {{ ev.hazard_type }} — {{ ev.description }}</span>
+                <button class="btn-export" @click="removeDrillInjectedEvent(d.id, ev.id)">
+                  {{ t('drillInjection.remove.action') }}
+                </button>
+              </li>
+            </ul>
+          </div>
+
           <div v-if="d.status === 'completed'" class="drill-actions">
             <button class="btn-export" @click="downloadDrillSummary(d, 'csv')">{{ t('admin.drillExportSummary') }} (CSV)</button>
             <button class="btn-export" @click="downloadDrillSummary(d, 'json')">{{ t('admin.drillExportSummary') }} (JSON)</button>
@@ -1807,6 +1925,16 @@ onUnmounted(() => {
     <!-- ── Exposure Datasets tab (spec 008) ─────────────────────────────────── -->
     <div v-if="tab === 'exposure' && canAdmin" class="tab-content">
       <ExposureDatasetManager />
+    </div>
+
+    <!-- ── Community Reports moderation tab (spec 036) ──────────────────────── -->
+    <div v-if="tab === 'communityReports' && canAdmin" class="tab-content">
+      <CommunityReportsPanel />
+    </div>
+
+    <!-- ── org_admin's read-only assigned-reports tab (spec 036, US5) ───────── -->
+    <div v-if="tab === 'assignedCommunityReports' && isOrgAdmin" class="tab-content">
+      <AssignedCommunityReportsPanel />
     </div>
   </div>
 </template>

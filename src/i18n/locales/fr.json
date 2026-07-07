@@ -631,6 +631,81 @@
       "linkedIncident": "Lié à un incident"
     }
   },
+  "communityReport": {
+    "form": {
+      "title": "Envoyer un signalement de danger",
+      "hazardType": "Type de danger",
+      "hazardTypePlaceholder": "Sélectionnez un type",
+      "description": "Description",
+      "descriptionPlaceholder": "Décrivez brièvement ce que vous avez observé",
+      "lat": "Latitude",
+      "lng": "Longitude",
+      "useMyLocation": "Utiliser ma position",
+      "photo": "Photo (facultatif)",
+      "photoHint": "JPEG/PNG/WebP, 5 Mo maximum",
+      "submit": "Envoyer",
+      "submitting": "Envoi en cours…",
+      "successMessage": "Votre signalement a été reçu pour examen. Merci.",
+      "errorHazardType": "Vous devez sélectionner un type de danger.",
+      "errorDescription": "La description est obligatoire.",
+      "errorLocation": "La position est obligatoire.",
+      "errorPhotoType": "Type de fichier non pris en charge (JPEG/PNG/WebP uniquement).",
+      "errorPhotoSize": "Fichier trop volumineux (5 Mo maximum).",
+      "errorGeneric": "Une erreur s'est produite lors de l'envoi, veuillez réessayer."
+    },
+    "moderation": {
+      "tabLabel": "Signalements Communautaires",
+      "queueEmpty": "Aucun signalement en attente.",
+      "approve": "Approuver",
+      "reject": "Rejeter",
+      "rejectReasonLabel": "Motif du rejet",
+      "rejectReasonRequired": "Vous devez indiquer un motif pour rejeter.",
+      "assignOrg": "Assigner à une organisation (facultatif)",
+      "assignOrgNone": "— aucune assignation —",
+      "submittedAt": "Envoyé le",
+      "viewPhoto": "Voir la photo"
+    },
+    "map": {
+      "toggleLabel": "Afficher/Masquer les Signalements Communautaires",
+      "popupHazardType": "Type",
+      "popupDescription": "Description",
+      "popupSubmittedAt": "Envoyé le",
+      "clusterCount": "signalements"
+    },
+    "incidentLink": {
+      "sectionTitle": "Signalements Communautaires Liés",
+      "linkButton": "Lier à un Incident",
+      "linkedReports": "Signalements liés",
+      "noLinkedReports": "Aucun signalement lié.",
+      "pickIncident": "Sélectionnez un incident"
+    },
+    "assigned": {
+      "tabLabel": "Signalements qui me sont assignés",
+      "empty": "Aucun signalement ne vous est assigné.",
+      "assignedOrg": "Organisation Assignée"
+    }
+  },
+  "drillInjection": {
+    "form": {
+      "toggleButton": "Injecter un Événement",
+      "hazardType": "Type de Danger",
+      "hazardTypePlaceholder": "Sélectionnez un type",
+      "lat": "Latitude",
+      "lng": "Longitude",
+      "severity": "Gravité",
+      "description": "Description",
+      "submit": "Injecter"
+    },
+    "map": {
+      "badge": "🎯 EXERCICE",
+      "hazardType": "Type",
+      "severity": "Gravité",
+      "description": "Description"
+    },
+    "remove": {
+      "action": "Supprimer"
+    }
+  },
   "integrations": {
     "tabLabel": "Intégrations",
     "countryCodePlaceholder": "XX",

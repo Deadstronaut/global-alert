@@ -5,6 +5,7 @@ import { useI18n } from 'vue-i18n'
 import { useAuthStore } from '@/stores/auth.js'
 import { useDisasterStore } from '@/stores/disaster.js'
 import { useHazardTypesStore } from '@/stores/hazardTypes.js'
+import { useDrillInjectedEventsStore } from '@/stores/drillInjectedEvents.js'
 import { supabase } from '@/services/api/config.js'
 import { allowedTransitions, isDraftCompleteForApproval, canUserActOnDraft } from '@/lib/capStateMachine.js'
 import { generateCapXml, generateCapJson } from '@/lib/capExport.js'
@@ -18,6 +19,7 @@ const { t } = useI18n()
 const auth = useAuthStore()
 const disaster = useDisasterStore()
 const hazardTypesStore = useHazardTypesStore()
+const drillInjectedEventsStore = useDrillInjectedEventsStore()
 
 const drafts = ref([])
 const loading = ref(false)
@@ -66,7 +68,27 @@ const canCreate = computed(() =>
   auth.isSuperAdmin || ['country_admin','org_admin'].includes(auth.session?.role)
 )
 
-const detectedEvents = computed(() => disaster.allEvents?.value ?? disaster.allEvents ?? [])
+// spec 037 (US4, research.md Decision 5): when the caller's country has an
+// active drill, its injected events are folded into the same picker,
+// normalized to the shape startFromEvent() already expects — startFromEvent()
+// itself is unchanged, and the resulting draft's is_exercise auto-flagging
+// (spec 013's existing trigger) is untouched by this addition.
+const detectedEvents = computed(() => {
+  const realEvents = disaster.allEvents?.value ?? disaster.allEvents ?? []
+  const injectedEvents = drillInjectedEventsStore.events.map((ev) =>
+    drillInjectedEventsStore.normalizeForEventPicker(ev)
+  )
+  return [...injectedEvents, ...realEvents]
+})
+
+async function loadActiveDrillEventsForPicker() {
+  const countryCode = auth.isSuperAdmin ? null : (auth.countryCode || null)
+  let query = supabase.from('drill_sessions').select('id').eq('status', 'active').limit(1)
+  if (countryCode) query = query.eq('country_code', countryCode)
+  const { data } = await query
+  const activeDrillId = data?.[0]?.id
+  if (activeDrillId) await drillInjectedEventsStore.fetchForActiveDrill(activeDrillId)
+}
 
 const visibleDrafts = computed(() => {
   const statuses = activeTab.value === 'active' ? ACTIVE_STATUSES : HISTORY_STATUSES
@@ -311,7 +333,10 @@ async function downloadEvidencePackage(draft) {
   }
 }
 
-onMounted(loadDrafts)
+onMounted(() => {
+  loadDrafts()
+  loadActiveDrillEventsForPicker()
+})
 </script>
 
 <template>

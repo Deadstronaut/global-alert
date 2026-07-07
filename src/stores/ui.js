@@ -40,6 +40,13 @@ export const useUIStore = defineStore('ui', () => {
         showShelters.value = !showShelters.value;
     }
 
+    // Community report map layer visibility (spec 036) — same independent,
+    // always-relevant-regardless-of-mapMode pattern as showShelters above.
+    const showCommunityReports = ref(true);
+    function toggleCommunityReports() {
+        showCommunityReports.value = !showCommunityReports.value;
+    }
+
     function applyThemeAttrs() {
         const theme = highContrast.value ? 'high-contrast' : (darkMode.value ? 'dark' : 'light');
         document.documentElement.setAttribute('data-theme', theme);
@@ -125,6 +132,8 @@ export const useUIStore = defineStore('ui', () => {
         showHexbins,
         showShelters,
         toggleShelters,
+        showCommunityReports,
+        toggleCommunityReports,
         transitionToMap,
         transitionToGlobe,
         selectDisaster,

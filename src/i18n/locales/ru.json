@@ -631,6 +631,81 @@
       "linkedIncident": "Связано с инцидентом"
     }
   },
+  "communityReport": {
+    "form": {
+      "title": "Отправить сообщение об опасности",
+      "hazardType": "Тип опасности",
+      "hazardTypePlaceholder": "Выберите тип",
+      "description": "Описание",
+      "descriptionPlaceholder": "Кратко опишите, что вы наблюдали",
+      "lat": "Широта",
+      "lng": "Долгота",
+      "useMyLocation": "Использовать моё местоположение",
+      "photo": "Фото (необязательно)",
+      "photoHint": "JPEG/PNG/WebP, до 5МБ",
+      "submit": "Отправить",
+      "submitting": "Отправка…",
+      "successMessage": "Ваше сообщение принято на рассмотрение. Спасибо.",
+      "errorHazardType": "Необходимо выбрать тип опасности.",
+      "errorDescription": "Описание обязательно.",
+      "errorLocation": "Местоположение обязательно.",
+      "errorPhotoType": "Неподдерживаемый тип файла (только JPEG/PNG/WebP).",
+      "errorPhotoSize": "Файл слишком большой (максимум 5МБ).",
+      "errorGeneric": "Произошла ошибка при отправке, попробуйте снова."
+    },
+    "moderation": {
+      "tabLabel": "Сообщения от граждан",
+      "queueEmpty": "Нет ожидающих сообщений.",
+      "approve": "Одобрить",
+      "reject": "Отклонить",
+      "rejectReasonLabel": "Причина отклонения",
+      "rejectReasonRequired": "Необходимо указать причину отклонения.",
+      "assignOrg": "Назначить организации (необязательно)",
+      "assignOrgNone": "— без назначения —",
+      "submittedAt": "Отправлено",
+      "viewPhoto": "Просмотреть фото"
+    },
+    "map": {
+      "toggleLabel": "Показать/Скрыть сообщения от граждан",
+      "popupHazardType": "Тип",
+      "popupDescription": "Описание",
+      "popupSubmittedAt": "Отправлено",
+      "clusterCount": "сообщений"
+    },
+    "incidentLink": {
+      "sectionTitle": "Связанные сообщения от граждан",
+      "linkButton": "Связать с инцидентом",
+      "linkedReports": "Связанные сообщения",
+      "noLinkedReports": "Нет связанных сообщений.",
+      "pickIncident": "Выберите инцидент"
+    },
+    "assigned": {
+      "tabLabel": "Назначенные мне сообщения",
+      "empty": "Вам не назначено ни одного сообщения.",
+      "assignedOrg": "Назначенная организация"
+    }
+  },
+  "drillInjection": {
+    "form": {
+      "toggleButton": "Внедрить событие",
+      "hazardType": "Тип опасности",
+      "hazardTypePlaceholder": "Выберите тип",
+      "lat": "Широта",
+      "lng": "Долгота",
+      "severity": "Серьёзность",
+      "description": "Описание",
+      "submit": "Внедрить"
+    },
+    "map": {
+      "badge": "🎯 УЧЕНИЯ",
+      "hazardType": "Тип",
+      "severity": "Серьёзность",
+      "description": "Описание"
+    },
+    "remove": {
+      "action": "Удалить"
+    }
+  },
   "integrations": {
     "tabLabel": "Интеграции",
     "countryCodePlaceholder": "XX",

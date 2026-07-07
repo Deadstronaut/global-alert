@@ -1,0 +1,469 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MHEWS — İş Planı Durum Raporu</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0a0d12;
+    --panel:#11151c;
+    --panel-2:#161b24;
+    --line:#232a35;
+    --text:#e7ebf1;
+    --text-dim:#8b95a6;
+    --text-faint:#5b6474;
+    --amber:#e8a33d;
+    --amber-dim:#5c4a26;
+    --teal:#3ecf9a;
+    --teal-dim:#1c4a3c;
+    --red:#e05a5a;
+    --red-dim:#4a2323;
+    --mono:'IBM Plex Mono',monospace;
+    --sans:'IBM Plex Sans',sans-serif;
+  }
+  *{box-sizing:border-box;}
+  html{scroll-behavior:smooth;}
+  body{
+    margin:0;
+    background:var(--bg);
+    color:var(--text);
+    font-family:var(--sans);
+    line-height:1.5;
+    -webkit-font-smoothing:antialiased;
+  }
+  body::before{
+    content:"";
+    position:fixed;inset:0;
+    background-image:
+      radial-gradient(circle at 15% 10%, rgba(232,163,61,0.06), transparent 40%),
+      radial-gradient(circle at 85% 0%, rgba(62,207,154,0.05), transparent 40%);
+    pointer-events:none;
+    z-index:0;
+  }
+  .wrap{max-width:1080px;margin:0 auto;padding:56px 24px 96px;position:relative;z-index:1;}
+
+  /* ---- header ---- */
+  header{margin-bottom:48px;}
+  .eyebrow{
+    font-family:var(--mono);
+    font-size:12px;
+    letter-spacing:.14em;
+    text-transform:uppercase;
+    color:var(--amber);
+    display:flex;align-items:center;gap:10px;
+    margin-bottom:14px;
+  }
+  .eyebrow .dot{width:7px;height:7px;border-radius:50%;background:var(--amber);box-shadow:0 0 8px var(--amber);animation:pulse 2.4s ease-in-out infinite;}
+  @keyframes pulse{0%,100%{opacity:1;}50%{opacity:.35;}}
+  h1{
+    font-family:var(--sans);
+    font-weight:700;
+    font-size:clamp(28px,4vw,42px);
+    letter-spacing:-0.02em;
+    margin:0 0 10px;
+  }
+  .sub{color:var(--text-dim);font-size:15px;max-width:640px;}
+  .sub b{color:var(--text);font-weight:600;}
+  .meta-row{
+    display:flex;flex-wrap:wrap;gap:10px;margin-top:22px;
+  }
+  .meta-chip{
+    font-family:var(--mono);font-size:12px;color:var(--text-dim);
+    background:var(--panel);border:1px solid var(--line);
+    padding:6px 12px;border-radius:20px;
+  }
+
+  /* ---- headline stat ---- */
+  .headline{
+    display:grid;
+    grid-template-columns:auto 1fr;
+    gap:32px;
+    align-items:center;
+    background:linear-gradient(155deg,var(--panel),var(--panel-2));
+    border:1px solid var(--line);
+    border-radius:16px;
+    padding:32px;
+    margin-bottom:40px;
+  }
+  .ring-wrap{position:relative;width:150px;height:150px;flex-shrink:0;}
+  .ring-wrap svg{transform:rotate(-90deg);}
+  .ring-bg{fill:none;stroke:var(--line);stroke-width:10;}
+  .ring-fg{fill:none;stroke:var(--teal);stroke-width:10;stroke-linecap:round;
+    stroke-dasharray:408.4; transition:stroke-dashoffset 1.2s cubic-bezier(.4,0,.2,1);}
+  .ring-label{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;}
+  .ring-label .pct{font-family:var(--mono);font-size:32px;font-weight:700;color:var(--teal);}
+  .ring-label .cap{font-family:var(--mono);font-size:11px;color:var(--text-faint);letter-spacing:.06em;}
+  .headline-detail h2{margin:0 0 6px;font-size:19px;font-weight:600;}
+  .headline-detail p{margin:0 0 16px;color:var(--text-dim);font-size:14px;max-width:520px;}
+  .headline-figures{display:flex;gap:28px;flex-wrap:wrap;}
+  .fig{font-family:var(--mono);}
+  .fig .n{font-size:22px;font-weight:700;color:var(--text);}
+  .fig .l{font-size:11px;color:var(--text-faint);text-transform:uppercase;letter-spacing:.06em;}
+
+  /* ---- section titles ---- */
+  section{margin-bottom:52px;}
+  .sec-head{display:flex;align-items:baseline;justify-content:space-between;gap:16px;margin-bottom:6px;flex-wrap:wrap;}
+  .sec-head h2{font-size:20px;margin:0;font-weight:700;letter-spacing:-.01em;}
+  .sec-tag{font-family:var(--mono);font-size:12px;color:var(--text-faint);}
+  .sec-desc{color:var(--text-dim);font-size:14px;margin:6px 0 22px;max-width:680px;}
+
+  /* ---- module cards ---- */
+  .module-grid{display:flex;flex-direction:column;gap:10px;}
+  .module{
+    background:var(--panel);
+    border:1px solid var(--line);
+    border-radius:12px;
+    padding:18px 20px;
+    display:grid;
+    grid-template-columns:1fr auto;
+    gap:6px 20px;
+    transition:border-color .2s;
+  }
+  .module:hover{border-color:#33404f;}
+  .module.done{border-left:3px solid var(--teal);}
+  .module.blocked{border-left:3px solid var(--red);}
+  .module.progress{border-left:3px solid var(--amber);}
+  .m-top{display:flex;align-items:center;gap:10px;grid-column:1/2;}
+  .m-name{font-weight:600;font-size:15px;}
+  .m-date{font-family:var(--mono);font-size:11px;color:var(--text-faint);}
+  .m-stat{grid-column:2/3;text-align:right;font-family:var(--mono);}
+  .m-stat .pct{font-size:16px;font-weight:700;}
+  .m-stat .frac{font-size:11px;color:var(--text-faint);display:block;}
+  .m-bar-row{grid-column:1/3;}
+  .bar-track{height:6px;background:var(--panel-2);border-radius:4px;overflow:hidden;margin:8px 0 8px;}
+  .bar-fill{height:100%;border-radius:4px;width:0;transition:width 1s cubic-bezier(.4,0,.2,1);}
+  .bar-fill.done{background:var(--teal);}
+  .bar-fill.progress{background:var(--amber);}
+  .bar-fill.blocked{background:var(--red);}
+  .m-desc{grid-column:1/3;font-size:13px;color:var(--text-dim);line-height:1.55;}
+  .m-remaining{margin-top:6px;font-size:12.5px;color:var(--text-faint);}
+  .m-remaining b{color:var(--amber);font-weight:600;}
+  .badge{
+    font-family:var(--mono);font-size:10px;letter-spacing:.04em;
+    padding:2px 8px;border-radius:20px;text-transform:uppercase;font-weight:600;
+  }
+  .badge.done{background:var(--teal-dim);color:var(--teal);}
+  .badge.progress{background:var(--amber-dim);color:var(--amber);}
+  .badge.blocked{background:var(--red-dim);color:var(--red);}
+
+  /* subtotal row */
+  .subtotal{
+    display:flex;justify-content:space-between;align-items:center;
+    padding:14px 20px;margin-top:4px;
+    border-top:1px dashed var(--line);
+    font-family:var(--mono);font-size:13px;color:var(--text-dim);
+  }
+  .subtotal b{color:var(--text);font-size:15px;}
+
+  /* ---- changelog ---- */
+  .changelog{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:22px 24px;}
+  .change-item{display:grid;grid-template-columns:120px 1fr;gap:16px;padding:14px 0;border-bottom:1px solid var(--line);}
+  .change-item:last-child{border-bottom:none;padding-bottom:0;}
+  .change-item:first-child{padding-top:0;}
+  .change-mod{font-family:var(--mono);font-size:12px;color:var(--amber);font-weight:600;line-height:1.5;}
+  .change-delta{font-family:var(--mono);font-size:13px;color:var(--text);margin-bottom:4px;}
+  .change-delta .arrow{color:var(--text-faint);margin:0 6px;}
+  .change-why{font-size:13.5px;color:var(--text-dim);}
+
+  /* ---- risk list ---- */
+  .risk-note{
+    background:linear-gradient(155deg,rgba(224,90,90,.07),rgba(224,90,90,.02));
+    border:1px solid var(--red-dim);
+    border-radius:12px;padding:22px 24px;margin-bottom:18px;
+  }
+  .risk-note p{font-size:13.5px;color:var(--text-dim);margin:0 0 4px;}
+  .risk-list{display:flex;flex-direction:column;gap:2px;}
+  .risk-item{
+    display:grid;grid-template-columns:28px 1fr;gap:14px;
+    padding:14px 4px;border-bottom:1px solid var(--line);
+  }
+  .risk-item:last-child{border-bottom:none;}
+  .risk-num{font-family:var(--mono);color:var(--red);font-weight:700;font-size:14px;}
+  .risk-title{font-weight:600;font-size:14px;margin-bottom:4px;}
+  .risk-body{font-size:13.5px;color:var(--text-dim);}
+
+  /* ---- QA callout ---- */
+  .qa-box{
+    background:var(--panel);border:1px solid var(--amber-dim);border-radius:12px;
+    padding:20px 24px;display:flex;gap:16px;align-items:flex-start;
+  }
+  .qa-icon{
+    width:34px;height:34px;flex-shrink:0;border-radius:8px;background:var(--amber-dim);
+    display:flex;align-items:center;justify-content:center;font-family:var(--mono);color:var(--amber);font-weight:700;
+  }
+  .qa-box h3{margin:0 0 6px;font-size:14.5px;}
+  .qa-box p{margin:0;font-size:13.5px;color:var(--text-dim);}
+  .qa-box code{font-family:var(--mono);background:var(--panel-2);padding:1px 6px;border-radius:4px;color:var(--amber);font-size:12.5px;}
+
+  footer{margin-top:60px;padding-top:24px;border-top:1px solid var(--line);
+    font-family:var(--mono);font-size:11.5px;color:var(--text-faint);
+    display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px;}
+
+  @media (max-width:640px){
+    .headline{grid-template-columns:1fr;text-align:center;}
+    .ring-wrap{margin:0 auto;}
+    .headline-figures{justify-content:center;}
+    .change-item{grid-template-columns:1fr;}
+    .m-stat{text-align:left;}
+    .module{grid-template-columns:1fr;}
+    .m-stat{grid-column:1/2;}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div class="eyebrow"><span class="dot"></span>global-alert-spec-kit · MHEWS</div>
+    <h1>İş Planı Durum Raporu</h1>
+    <p class="sub">12 modül, <b>446 gereksinim kalemi</b>. Aşağıdaki tablo <code style="font-family:var(--mono);color:var(--text)">iş_planı_istereler.txt</code> dosyasındaki en güncel spec kayıtlarına göre hazırlandı ve MVP / Post-PoC ayrımını korur.</p>
+    <div class="meta-row">
+      <span class="meta-chip">Son güncelleme: 2026-07-08 (spec 038, Incident Tracking)</span>
+      <span class="meta-chip">Migration'lar canlıya uygulama onayı bekliyor</span>
+    </div>
+  </header>
+
+  <div class="headline">
+    <div class="ring-wrap">
+      <svg width="150" height="150" viewBox="0 0 150 150">
+        <circle class="ring-bg" cx="75" cy="75" r="65"></circle>
+        <circle class="ring-fg" id="ringFg" cx="75" cy="75" r="65" stroke-dashoffset="408.4"></circle>
+      </svg>
+      <div class="ring-label"><span class="pct" id="ringPct">0%</span><span class="cap">TAMAMLANDI</span></div>
+    </div>
+    <div class="headline-detail">
+      <h2>Genel toplam — 12 modül, 446 madde</h2>
+      <p>MVP çekirdeği (Post-PoC işaretlenmeyen 6 modül) ile Post-PoC kapsamındaki 6 modülün toplamı. Kalan kalemlerin büyük kısmı "migration canlıya uygulama onayı" bekliyor; kod seviyesinde tamamlanmış.</p>
+      <div class="headline-figures">
+        <div class="fig"><div class="n">104</div><div class="l">kalan madde</div></div>
+        <div class="fig"><div class="n">342</div><div class="l">tamamlandı</div></div>
+        <div class="fig"><div class="n">~77%</div><div class="l">tamamlanma oranı</div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MVP -->
+  <section id="mvp">
+    <div class="sec-head">
+      <h2>MVP Çekirdeği</h2>
+      <span class="sec-tag">6 modül · 299 madde</span>
+    </div>
+    <p class="sec-desc">Post-PoC işaretlenmeyen, ürünün ilk canlıya çıkış kapsamındaki modüller.</p>
+    <div class="module-grid" id="mvpGrid"></div>
+    <div class="subtotal"><span>Toplam MVP</span><b id="mvpSubtotal">—</b></div>
+  </section>
+
+  <!-- Post-PoC -->
+  <section id="postpoc">
+    <div class="sec-head">
+      <h2>Post-PoC Kapsamı</h2>
+      <span class="sec-tag">6 modül · 147 madde</span>
+    </div>
+    <p class="sec-desc">MVP sonrası iterasyona bırakılmış, çoğunlukla yeni bir motor/altyapı gerektiren modüller.</p>
+    <div class="module-grid" id="postpocGrid"></div>
+    <div class="subtotal"><span>Toplam Post-PoC</span><b id="postpocSubtotal">—</b></div>
+  </section>
+
+  <!-- Changelog -->
+  <section id="changelog">
+    <div class="sec-head">
+      <h2>Son görüntüden bu yana ne değişti</h2>
+      <span class="sec-tag">önceki ekran görüntüsü → güncel</span>
+    </div>
+    <p class="sec-desc">Paylaşılan ekran görüntüsündeki tablo ile bu rapordaki güncel tablo arasındaki farkın nedenleri.</p>
+    <div class="changelog">
+      <div class="change-item">
+        <div class="change-mod">DISSEMINATION</div>
+        <div>
+          <div class="change-delta">16/65 (~%75) <span class="arrow">→</span> 8/65 (~%88)</div>
+          <div class="change-why">Spec 036 ile <b style="color:var(--text)">community hazard reporting</b> özelliği tamamlandı (herkese açık /report sayfası, moderasyon durum makinesi, harita kümeleme). Aynı spec yeni backlog kalemleri de ortaya çıkardı: ses eki, zamanlanmış coğrafi küme raporu, canlı SSE bildirim akışı — bunlar henüz kapsam dışı bırakıldı, ileride değerlendirilecek.</div>
+        </div>
+      </div>
+      <div class="change-item">
+        <div class="change-mod">PREPAREDNESS,<br>DRILL &amp; RESPONSE</div>
+        <div>
+          <div class="change-delta">0/3 (%100) <span class="arrow">→</span> değişmedi, kapsam netleşti</div>
+          <div class="change-why">Spec 037 ile modülün son kalemi (tatbikat sırasında simüle tehlike enjeksiyonu) kapatıldı — artık gerçekten tam kapsam tamamlandı, önceki %95 rakamı düzeltildi.</div>
+        </div>
+      </div>
+      <div class="change-item">
+        <div class="change-mod">INCIDENT<br>TRACKING</div>
+        <div>
+          <div class="change-delta">spec 038 (2026-07-08) ile SOP sürüm geçmişi eklendi</div>
+          <div class="change-why">SOP başlığı/içeriği/referans linki değiştiğinde önceki hâl otomatik arşivleniyor; panelde "Geçmiş Sürümler" görünümü eklendi (rollback yok, sadece görüntüleme).</div>
+        </div>
+      </div>
+      <div class="change-item">
+        <div class="change-mod">TOPLAM MVP</div>
+        <div>
+          <div class="change-delta">47/299 (~%84) <span class="arrow">→</span> 39/299 (~%87)</div>
+          <div class="change-why">Dissemination ve Hazard Taxonomy Admin'deki kapanışlardan kaynaklanan net ilerleme.</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- QA note -->
+  <section id="qa">
+    <div class="qa-box">
+      <div class="qa-icon">!</div>
+      <div>
+        <h3>Doğrulama notu — toplam satırı ile modül toplamları uyuşmuyor</h3>
+        <p>Kaynak dosyanın en altındaki <code>TOPLAM 119/446 ~%76</code> satırı, 12 modülün kendi "Kalan" değerlerinin toplamıyla (0+4+0+8+1+1+0+30+0+49+11+0 = <b style="color:var(--amber)">104</b>) örtüşmüyor — 15 birimlik bir fark var. Bu rapordaki genel toplam kartı modül satırlarının toplamına (104/446, ~%77) göre hesaplanmıştır. Kaynak dosyadaki TOPLAM satırının güncellenmemiş (eski bir ara toplam) olması muhtemel; bir sonraki güncellemede bu satırın yeniden hesaplanması önerilir.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- Risk items -->
+  <section id="risks">
+    <div class="sec-head">
+      <h2>Gerçek veri / dış kaynak gerektiren kalemler</h2>
+      <span class="sec-tag">2026-07-07 itibarıyla · 9 kalem</span>
+    </div>
+    <p class="sec-desc">Kod seviyesinde yazılabilir ama anlamlı şekilde çalıştığı ancak gerçek dış veri, altyapı veya hesap bağlandığında görülebilecek kalemler. Kapsam planlamasında unutulmaması, müşteri/yönetime net gösterilmesi için ayrıca listeleniyor.</p>
+    <div class="risk-note">
+      <div class="risk-list">
+        <div class="risk-item">
+          <div class="risk-num">01</div>
+          <div><div class="risk-title">Forecasting &amp; Nowcasting Engine (%0)</div>
+          <div class="risk-body">Gerçek bir NWP/ensemble/ML forecast kaynağı olmadan Model Registry ve Scenario Execution Engine kayıt tutmaktan öteye geçemiyor. Ayrı bir ML servisi + Python pipeline gerektiriyor — mevcut Supabase/Deno/Vue stack'inin dışında yeni bir bileşen sınıfı.</div></div>
+        </div>
+        <div class="risk-item">
+          <div class="risk-num">02</div>
+          <div><div class="risk-title">Risk &amp; Scenario Modeling (%0)</div>
+          <div class="risk-body">Forecasting modülünün gerçek çıktısına bağımlı; o olmadan sadece senaryo şablonu CRUD'u yapılabiliyor. Ağırlıklı zafiyet endeksleri + olasılıksal simülasyon gerçek exposure/vulnerability veri seti gerektiriyor.</div></div>
+        </div>
+        <div class="risk-item">
+          <div class="risk-num">03</div>
+          <div><div class="risk-title">WhatsApp gerçek Meta Cloud API entegrasyonu</div>
+          <div class="risk-body">Kimlik bilgisi yönetimi (Vault) tamamlandı ama dispatch adapter hâlâ mock — gerçek mesaj gönderimi ve delivery-receipt webhook'u ancak onaylı bir WhatsApp Business hesabıyla test edilebilir.</div></div>
+        </div>
+        <div class="risk-item">
+          <div class="risk-num">04</div>
+          <div><div class="risk-title">Tam polygon/PostGIS coğrafi hedefleme</div>
+          <div class="risk-body">Şu an sadece bölge kodu (region_code) seviyesinde eşleştirme var. Gerçek polygon/geofence testi gerçek saha sınırı verisi ister; defalarca ertelendi.</div></div>
+        </div>
+        <div class="risk-item">
+          <div class="risk-num">05</div>
+          <div><div class="risk-title">NLP/LLM kategorileştirme</div>
+          <div class="risk-body">Community Hazard Reporting ve SOP asistanı için planlanan otomatik kategorileştirme — projede henüz AI/LLM altyapısı (API key, prompt pipeline, maliyet) yok, moderatör şu an manuel atıyor.</div></div>
+        </div>
+        <div class="risk-item">
+          <div class="risk-num">06</div>
+          <div><div class="risk-title">Evidence Packaging — PDF + nesne depolama</div>
+          <div class="risk-body">Şu an sadece .zip içinde CAP XML + JSON. PDF üretimi ve MinIO/S3 entegrasyonu gerçek bir depolama hesabı/bütçesi gerektiriyor.</div></div>
+        </div>
+        <div class="risk-item">
+          <div class="risk-num">07</div>
+          <div><div class="risk-title">Community Hazard Reporting — kalan kalemler</div>
+          <div class="risk-body">Ses eki desteği, zamanlanmış coğrafi küme özet raporu, canlı SSE bildirim akışı — teknik olarak yapılabilir ama gerçek kullanım hacmi olmadan faydası test edilemez.</div></div>
+        </div>
+        <div class="risk-item">
+          <div class="risk-num">08</div>
+          <div><div class="risk-title">Shapefile reprojeksiyon</div>
+          <div class="risk-body">WGS84 dışı projeksiyonlu shapefile desteği bilinçli kapsam dışı; çoğu ulusal kadastro sistemi yerel projeksiyon kullandığından gerçek müşteri verisiyle öncelik değişebilir.</div></div>
+        </div>
+        <div class="risk-item">
+          <div class="risk-num">09</div>
+          <div><div class="risk-title">Zamanlanmış/çok adımlı tatbikat senaryo dizileri</div>
+          <div class="risk-body">Şu an tek seferlik olay enjeksiyonu var; çok adımlı senaryo (ör. deprem → artçı → sel) gerçek tatbikat planlama ihtiyacı ortaya çıkınca değerlendirilmeli.</div></div>
+        </div>
+      </div>
+    </div>
+    <p class="sec-desc" style="margin-top:14px;"><b style="color:var(--text)">Genel değerlendirme:</b> 1-2 numaralı kalemler (Forecasting/AI ve Risk &amp; Scenario Modeling) projedeki tek "gerçek yeni motor" gerektiren büyük modüller — geri kalan proje form + workflow + RLS + registry seviyesinde tamamlanabilir/tamamlandı. 3-9 arası kalemler mevcut modüllerin içinde gerçek hesap/veri/ölçekle ortaya çıkacak ince kalanlar.</p>
+  </section>
+
+  <footer>
+    <span>Kaynak: iş_planı_istereler.txt + paylaşılan ekran görüntüleri</span>
+    <span>global-alert-spec-kit</span>
+  </footer>
+
+</div>
+
+<script>
+const mvpData = [
+  {name:"Data Ingestion & Monitoring", remaining:0, total:66, date:"2026-07-06 · spec 012", desc:"OGC WMS/WFS adapter (consume-only, SSRF korumalı) ile modül kapandı. Kaynak state machine, health dashboard, RLS ile küresel/yerel görünürlük ve GDACS entegrasyonu (5. deprem/2. yangın/3. sel/2. kuraklık kaynağı) daha önce tamamlanmıştı.", remainingText:null},
+  {name:"Alert Authoring / CAP", remaining:0, total:67, date:"2026-07-06 · spec 006 + 014", desc:"Four-eyes onay kuralı, broadcast sonrası içerik kilidi, tam CAP v1.2 XML/JSON export (Alert/Update/Cancel, Exercise) ile modül kapandı.", remainingText:null},
+  {name:"Hazard Taxonomy Admin", remaining:0, total:21, date:"2026-07-07 · spec 024", desc:"Hiyerarşik hazard ilişkileri (parent_code, döngü koruması) ve herkese açık salt-okunur Afet Ansiklopedisi sayfası ile modül kapandı.", remainingText:null},
+  {name:"Administration & Access", remaining:1, total:21, date:"2026-07-06 · spec 004 + 005", desc:"Rol bazlı guard'lar, gerçek askıya alma, TOTP tabanlı MFA (SRS NFR-0057, CRITICAL), kurtarma kodları eklendi.", remainingText:"Custom permissions (roller şu an sabit 4 kademe, konfigüre edilemiyor)."},
+  {name:"Dissemination", remaining:8, total:65, date:"2026-07-07 · spec 036", desc:"Community hazard reporting kapandı: kimlik doğrulama gerektirmeyen /report sayfası, moderasyon durum makinesi, harita kümeleme. NLP/LLM kategorileştirme bilinçli olarak kapsam dışı bırakıldı.", remainingText:"Gerçek WhatsApp API, tam polygon/PostGIS geofencing, NLP/LLM kategorileştirme, ses eki, zamanlanmış küme raporu, canlı SSE akışı."},
+  {name:"Audit & Compliance", remaining:30, total:59, date:"2026-07-06 · spec 007", desc:"Görünür Denetim sekmesi, filtre + sayfalama, CSV/JSON export, SHA-256 hash-zinciri bütünlük doğrulaması eklendi.", remainingText:"PDF kanıt paketleri + MinIO/S3 (bilinçli kapsam dışı), zamanlanmış raporlar, AI/LLM denetim alanları."},
+];
+
+const postpocData = [
+  {name:"Preparedness, Drill & Response", remaining:0, total:3, date:"2026-07-06 · spec 013 + 017 + 037", desc:"Exercise-only CAP izolasyonu (DB seviyesinde, hiçbir kod yolu atlayamaz), tepki süresi ölçümü, katılım/ack metrikleri ve simüle tehlike enjeksiyonu ile modül tam kapandı.", remainingText:null},
+  {name:"Integration & API Gateway", remaining:0, total:3, date:"2026-07-06", desc:"Admin UI ile API endpoint konfigürasyonu tamamlandı.", remainingText:null},
+  {name:"Incident Tracking", remaining:1, total:28, date:"2026-07-08 · spec 011 + 038", desc:"Zorunlu state machine, AAR kuralı, SOP repository ve otomatik sürüm geçmişi (rollback yok, sadece görüntüleme) eklendi.", remainingText:"Otomatik/yıllık rapor üretimi, LLM SOP asistanı, timeline playback, false-alarm-rate metrikleri."},
+  {name:"Impact Analysis (Map Viz)", remaining:4, total:53, date:"2026-07-06 · spec 008", desc:"PostGIS extension, 2 adımlı etki analizi, senaryo kaydet/yükle, split-view harita, 24s trend sparkline, CSV/JSON/GeoJSON export tamamlandı.", remainingText:"Shapefile yükleme, ağırlıklı zafiyet endeksleri (Risk & Scenario Modeling'e ait)."},
+  {name:"Forecasting / AI", remaining:49, total:49, date:"başlanmadı", desc:"Ayrı bir ML servisi, model registry ve Python pipeline gerektiriyor — mevcut stack'in dışında yeni bir bileşen sınıfı.", remainingText:"Gerçek NWP/ensemble/ML forecast kaynağı olmadan anlamlı ilerleme mümkün değil."},
+  {name:"Risk & Scenario Modeling", remaining:11, total:11, date:"başlanmadı", desc:"Simulation engine, PostGIS spatial analiz ve varlık bağımlılık grafiği gerektiriyor; Forecasting modülünün çıktısına bağımlı.", remainingText:"Gerçek/gerçekçi exposure+vulnerability veri seti olmadan sonuçlar anlamsız kalıyor."},
+];
+
+function statusOf(remaining, total){
+  if(remaining === 0) return "done";
+  if(remaining === total) return "blocked";
+  return "progress";
+}
+function statusLabel(s){
+  return {done:"Tamamlandı", progress:"Devam ediyor", blocked:"Başlanmadı"}[s];
+}
+
+function renderModules(data, containerId){
+  const el = document.getElementById(containerId);
+  data.forEach(m=>{
+    const done = m.total - m.remaining;
+    const pct = Math.round((done/m.total)*100);
+    const status = statusOf(m.remaining, m.total);
+    const card = document.createElement('div');
+    card.className = `module ${status}`;
+    card.innerHTML = `
+      <div class="m-top">
+        <span class="m-name">${m.name}</span>
+        <span class="badge ${status}">${statusLabel(status)}</span>
+      </div>
+      <div class="m-stat"><span class="pct">%${pct}</span><span class="frac">${m.remaining}/${m.total} kalan · ${m.date}</span></div>
+      <div class="m-bar-row"><div class="bar-track"><div class="bar-fill ${status}" data-pct="${pct}"></div></div></div>
+      <div class="m-desc">${m.desc}</div>
+      ${m.remainingText ? `<div class="m-remaining"><b>Kalan:</b> ${m.remainingText}</div>` : ''}
+    `;
+    el.appendChild(card);
+  });
+}
+renderModules(mvpData, 'mvpGrid');
+renderModules(postpocData, 'postpocGrid');
+
+function subtotal(data){
+  const remaining = data.reduce((a,m)=>a+m.remaining,0);
+  const total = data.reduce((a,m)=>a+m.total,0);
+  const pct = Math.round(((total-remaining)/total)*100);
+  return `${remaining}/${total} kalan · ~%${pct}`;
+}
+document.getElementById('mvpSubtotal').textContent = subtotal(mvpData);
+document.getElementById('postpocSubtotal').textContent = subtotal(postpocData);
+
+// animate bars + ring after paint
+requestAnimationFrame(()=>{
+  setTimeout(()=>{
+    document.querySelectorAll('.bar-fill').forEach(b=>{
+      b.style.width = b.dataset.pct + '%';
+    });
+    const totalRemaining = 104, totalAll = 446;
+    const pct = Math.round(((totalAll-totalRemaining)/totalAll)*100);
+    const circumference = 2*Math.PI*65;
+    const offset = circumference - (pct/100)*circumference;
+    document.getElementById('ringFg').style.strokeDashoffset = offset;
+    let cur = 0;
+    const step = ()=>{
+      cur++;
+      document.getElementById('ringPct').textContent = cur + '%';
+      if(cur < pct) requestAnimationFrame(step);
+    };
+    step();
+  }, 150);
+});
+</script>
+</body>
+</html>

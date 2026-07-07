@@ -631,6 +631,81 @@
       "linkedIncident": "İlgili bir olaya bağlı"
     }
   },
+  "communityReport": {
+    "form": {
+      "title": "Afet/Tehlike Bildirimi Gönder",
+      "hazardType": "Afet Tipi",
+      "hazardTypePlaceholder": "Bir tip seçin",
+      "description": "Açıklama",
+      "descriptionPlaceholder": "Gördüğünüz durumu kısaca anlatın",
+      "lat": "Enlem",
+      "lng": "Boylam",
+      "useMyLocation": "Konumumu kullan",
+      "photo": "Fotoğraf (isteğe bağlı)",
+      "photoHint": "JPEG/PNG/WebP, en fazla 5MB",
+      "submit": "Gönder",
+      "submitting": "Gönderiliyor…",
+      "successMessage": "Bildiriminiz incelemeye alındı. Teşekkür ederiz.",
+      "errorHazardType": "Afet tipi seçmelisiniz.",
+      "errorDescription": "Açıklama zorunludur.",
+      "errorLocation": "Konum zorunludur.",
+      "errorPhotoType": "Desteklenmeyen dosya tipi (yalnızca JPEG/PNG/WebP).",
+      "errorPhotoSize": "Dosya çok büyük (en fazla 5MB).",
+      "errorGeneric": "Gönderim sırasında bir hata oluştu, lütfen tekrar deneyin."
+    },
+    "moderation": {
+      "tabLabel": "Vatandaş Bildirimleri",
+      "queueEmpty": "Bekleyen bildirim yok.",
+      "approve": "Onayla",
+      "reject": "Reddet",
+      "rejectReasonLabel": "Red gerekçesi",
+      "rejectReasonRequired": "Reddetmek için bir gerekçe girmelisiniz.",
+      "assignOrg": "Organizasyona ata (isteğe bağlı)",
+      "assignOrgNone": "— atama yok —",
+      "submittedAt": "Gönderim zamanı",
+      "viewPhoto": "Fotoğrafı görüntüle"
+    },
+    "map": {
+      "toggleLabel": "Vatandaş Bildirimlerini Göster/Gizle",
+      "popupHazardType": "Tür",
+      "popupDescription": "Açıklama",
+      "popupSubmittedAt": "Gönderim zamanı",
+      "clusterCount": "bildirim"
+    },
+    "incidentLink": {
+      "sectionTitle": "İlgili Vatandaş Bildirimleri",
+      "linkButton": "Olaya Bağla",
+      "linkedReports": "Bağlı bildirimler",
+      "noLinkedReports": "Bağlı bildirim yok.",
+      "pickIncident": "Bir olay seçin"
+    },
+    "assigned": {
+      "tabLabel": "Bana Atanan Bildirimler",
+      "empty": "Size atanmış bir bildirim yok.",
+      "assignedOrg": "Atanan Organizasyon"
+    }
+  },
+  "drillInjection": {
+    "form": {
+      "toggleButton": "Olay Enjekte Et",
+      "hazardType": "Afet Tipi",
+      "hazardTypePlaceholder": "Bir tip seçin",
+      "lat": "Enlem",
+      "lng": "Boylam",
+      "severity": "Şiddet",
+      "description": "Açıklama",
+      "submit": "Enjekte Et"
+    },
+    "map": {
+      "badge": "🎯 TATBİKAT",
+      "hazardType": "Tür",
+      "severity": "Şiddet",
+      "description": "Açıklama"
+    },
+    "remove": {
+      "action": "Kaldır"
+    }
+  },
   "integrations": {
     "tabLabel": "Entegrasyonlar",
     "countryCodePlaceholder": "XX",

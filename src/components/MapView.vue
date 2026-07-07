@@ -20,12 +20,21 @@ import ImpactPanel from '@/components/impact/ImpactPanel.vue'
 import GeocodingSearch from '@/components/impact/GeocodingSearch.vue'
 import { useMapLayersStore } from '@/stores/mapLayers.js'
 import { useSheltersStore, occupancyPercentage } from '@/stores/shelters.js'
+import { useCommunityReportsStore } from '@/stores/communityReports.js'
+import { useHazardTypesStore } from '@/stores/hazardTypes.js'
+import { useDrillInjectedEventsStore } from '@/stores/drillInjectedEvents.js'
+import { useAuthStore } from '@/stores/auth.js'
+import { supabase } from '@/services/api/config.js'
 import { getShelterMarkerColor, getShelterMarkerIcon } from '@/services/shelterMarkerStyle.js'
 
 // spec 012: OGC WMS/WFS map layer registry — admin-registered external
 // overlays rendered live on this map (never stored/normalized, FR-008).
 const mapLayersStore = useMapLayersStore()
 const sheltersStore = useSheltersStore()
+const communityReportsStore = useCommunityReportsStore()
+const hazardTypesStore = useHazardTypesStore()
+const drillInjectedEventsStore = useDrillInjectedEventsStore()
+const auth = useAuthStore()
 const layerVisibility = ref({}) // { [layerId]: boolean }
 const layerOpacity = ref({}) // { [layerId]: number 0..1 }
 const DEFAULT_LAYER_OPACITY = 0.7
@@ -195,6 +204,7 @@ let mapLoaded = false
 let styleLoadVersion = 0
 let markerObjects = []
 let shelterMarkerObjects = []
+let drillEventMarkerObjects = []
 let userMarkerObj = null
 const styleCache = {}
 let hexWorker = null
@@ -541,6 +551,56 @@ function addSourcesAndLayers() {
   map.addSource('custom-territories', {
     type: 'geojson',
     data: fixGeometry(CUSTOM_TERRITORIES),
+  })
+
+  // Community reports (spec 036, research.md Decision 6) — MapLibre's native
+  // clustering, independent of the disaster-event DOM-marker layer above.
+  map.addSource('community-reports', {
+    type: 'geojson',
+    data: { type: 'FeatureCollection', features: [] },
+    cluster: true,
+    clusterMaxZoom: 14,
+    clusterRadius: 50,
+  })
+
+  map.addLayer({
+    id: 'community-reports-clusters',
+    type: 'circle',
+    source: 'community-reports',
+    filter: ['has', 'point_count'],
+    paint: {
+      'circle-color': '#f59e0b',
+      'circle-radius': ['step', ['get', 'point_count'], 16, 10, 20, 50, 26],
+      'circle-opacity': 0.85,
+      'circle-stroke-width': 2,
+      'circle-stroke-color': '#7c2d12',
+    },
+  })
+
+  map.addLayer({
+    id: 'community-reports-cluster-count',
+    type: 'symbol',
+    source: 'community-reports',
+    filter: ['has', 'point_count'],
+    layout: {
+      'text-field': ['get', 'point_count_abbreviated'],
+      'text-size': 12,
+    },
+    paint: { 'text-color': '#1c1917' },
+  })
+
+  map.addLayer({
+    id: 'community-reports-unclustered',
+    type: 'circle',
+    source: 'community-reports',
+    filter: ['!', ['has', 'point_count']],
+    paint: {
+      'circle-color': '#f59e0b',
+      'circle-radius': 8,
+      'circle-opacity': 0.9,
+      'circle-stroke-width': 2,
+      'circle-stroke-color': '#7c2d12',
+    },
   })
 
   // Background world grid — faint strokes only, adapts to map style
@@ -986,6 +1046,8 @@ function initMap() {
     brightenDarkLabels()
     updateMarkers()
     updateShelterMarkers()
+    updateCommunityReportMarkers()
+    updateDrillEventMarkers()
     updateHeatmap()
     updateHexbins()
     updateUserMarker()
@@ -1144,6 +1206,55 @@ function setupMapInteractions() {
   map.on('mouseleave', 'hex-fill', () => {
     map.getCanvas().style.cursor = ''
   })
+
+  // Community report clusters (spec 036, US3): click a cluster to zoom into
+  // it (MapLibre's standard expansion-zoom pattern); click an individual
+  // point to open a detail popup.
+  map.on('click', 'community-reports-clusters', (e) => {
+    const features = map.queryRenderedFeatures(e.point, { layers: ['community-reports-clusters'] })
+    const clusterId = features[0]?.properties?.cluster_id
+    if (clusterId == null) return
+    map.getSource('community-reports').getClusterExpansionZoom(clusterId, (err, zoom) => {
+      if (err) return
+      map.easeTo({ center: features[0].geometry.coordinates, zoom })
+    })
+  })
+
+  map.on('click', 'community-reports-unclustered', (e) => {
+    if (!e.features || !e.features.length) return
+    const props = e.features[0].properties
+    const photoHtml = props.photo_path
+      ? `<a href="${supabase.storage.from('community-report-photos').getPublicUrl(props.photo_path).data.publicUrl}" target="_blank" rel="noopener">${t('communityReport.moderation.viewPhoto')}</a>`
+      : ''
+    new maplibregl.Popup({ offset: 12, className: 'modern-popup-container' })
+      .setLngLat(e.features[0].geometry.coordinates)
+      .setHTML(
+        `
+        <div class="community-report-popup-modern">
+          <div class="popup-body">
+            <h4 class="popup-title">${hazardDisplayNameForMap(props.hazard_type)}</h4>
+            <p>${props.description}</p>
+            <span>${new Date(props.created_at).toLocaleString()}</span>
+            ${photoHtml}
+          </div>
+        </div>
+      `,
+      )
+      .addTo(map)
+  })
+
+  map.on('mouseenter', 'community-reports-clusters', () => {
+    map.getCanvas().style.cursor = 'pointer'
+  })
+  map.on('mouseleave', 'community-reports-clusters', () => {
+    map.getCanvas().style.cursor = ''
+  })
+  map.on('mouseenter', 'community-reports-unclustered', () => {
+    map.getCanvas().style.cursor = 'pointer'
+  })
+  map.on('mouseleave', 'community-reports-unclustered', () => {
+    map.getCanvas().style.cursor = ''
+  })
 }
 
 function updateViewportGrid() {
@@ -1251,6 +1362,98 @@ function updateShelterMarkers() {
 
       shelterMarkerObjects.push(marker)
     })
+}
+
+// Community report cluster layer (spec 036) — unlike the shelter/disaster
+// marker functions above, this uses MapLibre's native GeoJSON clustering
+// (research.md Decision 6): visibility is toggled via layer layout
+// properties rather than adding/removing individual Marker objects.
+function updateCommunityReportMarkers() {
+  if (!map || !mapLoaded) return
+  const source = map.getSource('community-reports')
+  if (!source) return
+
+  const features = communityReportsStore.reports.map((report) => ({
+    type: 'Feature',
+    geometry: { type: 'Point', coordinates: [report.lng, report.lat] },
+    properties: {
+      id: report.id,
+      hazard_type: report.hazard_type,
+      description: report.description,
+      created_at: report.created_at,
+      photo_path: report.photo_path,
+    },
+  }))
+  source.setData({ type: 'FeatureCollection', features })
+
+  const visibility = uiStore.showCommunityReports ? 'visible' : 'none'
+  ;['community-reports-clusters', 'community-reports-cluster-count', 'community-reports-unclustered'].forEach(
+    (layerId) => map.setLayoutProperty(layerId, 'visibility', visibility),
+  )
+}
+
+function hazardDisplayNameForMap(code) {
+  return hazardTypesStore.hazardTypes.find((h) => h.code === code)?.display_name ?? code
+}
+
+// Drill injected event marker layer (spec 037) — mirrors the shelter
+// DOM-Marker+Popup approach (research.md Decision 2, no native clustering
+// needed at this scale). RLS's authenticated_read_active_drill_events policy
+// already guarantees fetchForActiveDrill() returns nothing once a drill is
+// 'completed', so no extra "is this drill still active" check is needed here.
+function clearDrillEventMarkers() {
+  drillEventMarkerObjects.forEach((m) => m.remove())
+  drillEventMarkerObjects = []
+}
+
+function updateDrillEventMarkers() {
+  if (!map || !mapLoaded) return
+
+  clearDrillEventMarkers()
+
+  drillInjectedEventsStore.events.forEach((ev) => {
+    const el = document.createElement('div')
+    el.className = 'drill-event-marker'
+    el.innerHTML = `
+      <div class="drill-event-marker-dot">
+        <span class="drill-event-marker-icon">🎯</span>
+      </div>
+    `
+
+    const popup = new maplibregl.Popup({ offset: 12, className: 'modern-popup-container' }).setHTML(
+      `
+      <div class="drill-event-popup-modern">
+        <div class="popup-body">
+          <div class="drill-event-badge">${t('drillInjection.map.badge')}</div>
+          <h4 class="popup-title">${hazardDisplayNameForMap(ev.hazard_type)}</h4>
+          <p>${ev.description}</p>
+          <span><b>${t('drillInjection.map.severity')}:</b> ${ev.severity}</span>
+        </div>
+      </div>
+    `,
+    )
+
+    const marker = new maplibregl.Marker({ element: el, anchor: 'center' })
+      .setLngLat([ev.lng, ev.lat])
+      .setPopup(popup)
+      .addTo(map)
+
+    drillEventMarkerObjects.push(marker)
+  })
+}
+
+async function loadActiveDrillEvents() {
+  const countryCode = auth.isSuperAdmin ? null : (auth.countryCode || null)
+  let query = supabase.from('drill_sessions').select('id').eq('status', 'active').limit(1)
+  if (countryCode) query = query.eq('country_code', countryCode)
+  const { data } = await query
+  const activeDrillId = data?.[0]?.id
+  if (activeDrillId) {
+    await drillInjectedEventsStore.fetchForActiveDrill(activeDrillId)
+  } else {
+    drillInjectedEventsStore.events = []
+  }
+  updateDrillEventMarkers()
 }
 
 function formatPopupDetails(event) {
@@ -1481,6 +1684,8 @@ async function applyBaseStyle() {
     }
     updateMarkers()
     updateShelterMarkers()
+    updateCommunityReportMarkers()
+    updateDrillEventMarkers()
     updateHeatmap()
     updateHexbins()
     updateUserMarker()
@@ -1576,6 +1781,30 @@ watch(
   },
 )
 
+// spec 036 (US3): same toggle/refetch-driven update pattern as shelters above
+watch(
+  () => uiStore.showCommunityReports,
+  () => {
+    updateCommunityReportMarkers()
+  },
+)
+
+watch(
+  () => communityReportsStore.reports,
+  () => {
+    updateCommunityReportMarkers()
+  },
+)
+
+// spec 037: re-render whenever the active drill's injected events change
+// (e.g. an admin injects/removes one in another tab/session)
+watch(
+  () => drillInjectedEventsStore.events,
+  () => {
+    updateDrillEventMarkers()
+  },
+)
+
 // Dark/light mode UI değişikliği harita stilini ETKİLEMEZ
 // Harita stili sadece layer switcher butonuyla değişir
 
@@ -1605,6 +1834,12 @@ onMounted(() => {
   // as the map_layers re-fetch above); updateShelterMarkers() is invoked from
   // initMap()'s style-load handlers once the map itself is ready.
   sheltersStore.fetchShelters().then(() => updateShelterMarkers())
+  // spec 036: same idempotent-refetch rationale as shelters above
+  communityReportsStore.fetchApproved().then(() => updateCommunityReportMarkers())
+  // spec 037: whichever drill is active in the viewer's own country (any,
+  // for super_admin) — no-op if none is active
+  loadActiveDrillEvents()
+  if (!hazardTypesStore.loaded) hazardTypesStore.fetchHazardTypes()
   requestAnimationFrame(function tryInit() {
     if (!mapContainer.value) return
     const { offsetWidth, offsetHeight } = mapContainer.value
@@ -1737,6 +1972,14 @@ onBeforeUnmount(() => {
         <input type="checkbox" :checked="uiStore.showShelters" @change="uiStore.toggleShelters()" />
         <span>{{ t('shelters.map.toggleLabel') }}</span>
       </label>
+      <label class="map-layer-toggle">
+        <input
+          type="checkbox"
+          :checked="uiStore.showCommunityReports"
+          @change="uiStore.toggleCommunityReports()"
+        />
+        <span>{{ t('communityReport.map.toggleLabel') }}</span>
+      </label>
     </div>
   </div>
 </template>
@@ -1799,6 +2042,31 @@ onBeforeUnmount(() => {
 }
 .shelter-marker-icon { font-size: .85rem; line-height: 1; }
 .shelter-popup-linked { margin: 6px 0 0; font-size: .75rem; color: var(--color-text-muted,#94a3b8); }
+
+.drill-event-marker-dot {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  background: #f59e0b;
+  box-shadow: 0 0 10px #f59e0b;
+  border: 2px dashed #7c2d12;
+}
+.drill-event-marker-icon { font-size: .9rem; line-height: 1; }
+.drill-event-badge {
+  display: inline-block;
+  background: #f59e0b;
+  color: #1c1917;
+  font-weight: 700;
+  font-size: .7rem;
+  letter-spacing: .05em;
+  padding: 2px 8px;
+  border-radius: 4px;
+  margin-bottom: 6px;
+}
 
 .zoom-indicator {
   position: absolute;

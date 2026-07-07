@@ -5,6 +5,7 @@ import { useI18n } from 'vue-i18n'
 import { useAuthStore } from '@/stores/auth.js'
 import { useHazardTypesStore } from '@/stores/hazardTypes.js'
 import { useSopDocumentsStore } from '@/stores/sopDocuments.js'
+import { useCommunityReportsStore } from '@/stores/communityReports.js'
 import { supabase } from '@/services/api/config.js'
 import { nextStatuses, requiresAAR } from '@/utils/incidentStateMachine.js'
 
@@ -14,6 +15,7 @@ const { t } = useI18n()
 const auth = useAuthStore()
 const hazardTypesStore = useHazardTypesStore()
 const sopDocumentsStore = useSopDocumentsStore()
+const communityReportsStore = useCommunityReportsStore()
 const incidents = ref([])
 const loading = ref(false)
 const showForm = ref(false)
@@ -33,6 +35,22 @@ const aarNotes = ref('')
 const timelineOpenId = ref(null)
 const timelineEntries = ref({})
 const timelineError = ref(null)
+
+// spec 036: same single-open, cache-by-incident-id pattern as the timeline
+// toggle above, but for read-only linked community reports.
+const linkedReportsOpenId = ref(null)
+const linkedReportsCache = ref({})
+
+async function toggleLinkedReports(incident) {
+  if (linkedReportsOpenId.value === incident.id) {
+    linkedReportsOpenId.value = null
+    return
+  }
+  linkedReportsOpenId.value = incident.id
+  if (linkedReportsCache.value[incident.id]) return
+  const data = await communityReportsStore.fetchLinkedToIncident(incident.id)
+  linkedReportsCache.value = { ...linkedReportsCache.value, [incident.id]: data }
+}
 
 // spec 010: sourced from the hazard taxonomy registry instead of a
 // hardcoded list, same reasoning as CapView.vue.
@@ -277,6 +295,19 @@ onMounted(loadIncidents)
             </li>
           </ul>
           <p v-else class="tab-loading">{{ t('incidentTracking.timeline.loading') }}</p>
+        </div>
+
+        <button class="btn-timeline" @click="toggleLinkedReports(inc)">
+          📢 {{ t('communityReport.incidentLink.sectionTitle') }}
+        </button>
+        <div v-if="linkedReportsOpenId === inc.id" class="inc-timeline">
+          <ul v-if="linkedReportsCache[inc.id]?.length">
+            <li v-for="report in linkedReportsCache[inc.id]" :key="report.id">
+              <span>{{ report.description }}</span>
+              <span class="timeline-date">{{ formatDate(report.created_at) }}</span>
+            </li>
+          </ul>
+          <p v-else>{{ t('communityReport.incidentLink.noLinkedReports') }}</p>
         </div>
 
         <div v-if="linkedSops(inc).length" class="inc-sops">

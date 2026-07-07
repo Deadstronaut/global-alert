@@ -193,6 +193,8 @@ async function handleRecoveryCodeVerify() {
 
       <div class="login-footer">
         © 2026 Global Alert &nbsp;·&nbsp; Confidential
+        <br />
+        <router-link to="/report" class="login-public-link">{{ t('communityReport.form.title') }}</router-link>
       </div>
     </div>
   </div>
@@ -428,5 +430,10 @@ async function handleRecoveryCodeVerify() {
   font-size: 0.65rem;
   color: rgba(140, 151, 179, 0.5);
   letter-spacing: 0.04em;
+}
+
+.login-public-link {
+  color: rgba(140, 151, 179, 0.8);
+  text-decoration: underline;
 }
 </style>

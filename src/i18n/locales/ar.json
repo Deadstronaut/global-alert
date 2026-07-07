@@ -631,6 +631,81 @@
       "linkedIncident": "مرتبط بحادثة"
     }
   },
+  "communityReport": {
+    "form": {
+      "title": "إرسال بلاغ عن خطر",
+      "hazardType": "نوع الخطر",
+      "hazardTypePlaceholder": "اختر نوعًا",
+      "description": "الوصف",
+      "descriptionPlaceholder": "صف بإيجاز ما لاحظته",
+      "lat": "خط العرض",
+      "lng": "خط الطول",
+      "useMyLocation": "استخدم موقعي",
+      "photo": "صورة (اختياري)",
+      "photoHint": "JPEG/PNG/WebP، بحد أقصى 5 ميجابايت",
+      "submit": "إرسال",
+      "submitting": "جارٍ الإرسال…",
+      "successMessage": "تم استلام بلاغك للمراجعة. شكرًا لك.",
+      "errorHazardType": "يجب اختيار نوع الخطر.",
+      "errorDescription": "الوصف مطلوب.",
+      "errorLocation": "الموقع مطلوب.",
+      "errorPhotoType": "نوع ملف غير مدعوم (JPEG/PNG/WebP فقط).",
+      "errorPhotoSize": "الملف كبير جدًا (5 ميجابايت كحد أقصى).",
+      "errorGeneric": "حدث خطأ أثناء الإرسال، يرجى المحاولة مرة أخرى."
+    },
+    "moderation": {
+      "tabLabel": "بلاغات المجتمع",
+      "queueEmpty": "لا توجد بلاغات معلقة.",
+      "approve": "الموافقة",
+      "reject": "رفض",
+      "rejectReasonLabel": "سبب الرفض",
+      "rejectReasonRequired": "يجب تقديم سبب للرفض.",
+      "assignOrg": "تعيين لمؤسسة (اختياري)",
+      "assignOrgNone": "— بدون تعيين —",
+      "submittedAt": "وقت الإرسال",
+      "viewPhoto": "عرض الصورة"
+    },
+    "map": {
+      "toggleLabel": "إظهار/إخفاء بلاغات المجتمع",
+      "popupHazardType": "النوع",
+      "popupDescription": "الوصف",
+      "popupSubmittedAt": "وقت الإرسال",
+      "clusterCount": "بلاغات"
+    },
+    "incidentLink": {
+      "sectionTitle": "بلاغات المجتمع ذات الصلة",
+      "linkButton": "ربط بحادثة",
+      "linkedReports": "البلاغات المرتبطة",
+      "noLinkedReports": "لا توجد بلاغات مرتبطة.",
+      "pickIncident": "اختر حادثة"
+    },
+    "assigned": {
+      "tabLabel": "البلاغات المعينة لي",
+      "empty": "لا توجد بلاغات معينة لك.",
+      "assignedOrg": "المؤسسة المعينة"
+    }
+  },
+  "drillInjection": {
+    "form": {
+      "toggleButton": "حقن حدث",
+      "hazardType": "نوع الخطر",
+      "hazardTypePlaceholder": "اختر نوعًا",
+      "lat": "خط العرض",
+      "lng": "خط الطول",
+      "severity": "الشدة",
+      "description": "الوصف",
+      "submit": "حقن"
+    },
+    "map": {
+      "badge": "🎯 تدريب",
+      "hazardType": "النوع",
+      "severity": "الشدة",
+      "description": "الوصف"
+    },
+    "remove": {
+      "action": "إزالة"
+    }
+  },
   "integrations": {
     "tabLabel": "التكاملات",
     "countryCodePlaceholder": "XX",

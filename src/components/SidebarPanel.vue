@@ -12,9 +12,6 @@ const router = useRouter()
 const disasterStore = useDisasterStore()
 const uiStore = useUIStore()
 const authStore = useAuthStore()
-const canAccessAdmin = computed(() =>
-  ['super_admin', 'country_admin', 'org_admin'].includes(authStore.session?.role)
-)
 const hasMyRegion = computed(() => !!disasterStore.myRegionGeometry)
 
 const activeCountryConfig = computed(() => uiStore.activeCountryConfig)
@@ -24,7 +21,6 @@ function getFlagEmoji(code) {
 }
 const geoStore = useGeolocationStore()
 const isGlobeMode = computed(() => uiStore.viewMode === 'globe')
-const isDarkMode = computed(() => uiStore.darkMode)
 const isMobile = computed(() => typeof window !== 'undefined' && window.innerWidth <= 768)
 
 // Force expand on mobile to avoid unreadable "icons-only" bottom sheet
@@ -49,11 +45,11 @@ const disasterTypes = [
 
 // Accordion open state (set of open type keys)
 const openAccordions = ref(new Set())
+const disasterTypeView = ref('active')
 const openSections = ref({
   disasterFilters: true,
   severityLegend: true,
   magnitudeDepth: true,
-  timeRange: false,
   actions: true,
 })
 
@@ -96,6 +92,27 @@ const severityBreakdown = computed(() => {
 })
 
 const severityLevels = ['critical', 'high', 'moderate', 'low', 'minimal']
+const severitySummaryLevels = ['critical', 'high', 'moderate', 'low', 'minimal']
+const visibleDisasterTypes = computed(() => {
+  const withMeta = disasterTypes
+    .map((type, index) => ({
+      ...type,
+      index,
+      count: disasterStore.totalCount[type.key] ?? 0,
+      active: disasterStore.isLayerActive(type.key),
+    }))
+    .sort((a, b) => {
+      if (b.count !== a.count) return b.count - a.count
+      if (Number(b.active) !== Number(a.active)) return Number(b.active) - Number(a.active)
+      return a.index - b.index
+    })
+
+  if (disasterTypeView.value !== 'active') return withMeta
+
+  const activeTypes = withMeta.filter((type) => type.count > 0 || type.active)
+  return activeTypes.length ? activeTypes : withMeta
+})
+
 const timeRangeMap = {
   '10 Dakika': 10 / 60,
   '30 Dakika': 0.5,
@@ -119,13 +136,6 @@ const timeRanges = Object.keys(timeRangeMap)
 const selectedTimeRangeIndex = ref(5) // Index for '24 Saat'
 const selectedTimeRange = computed(() => timeRanges[selectedTimeRangeIndex.value])
 const today = new Date().toISOString().slice(0, 10)
-const minRangeYear = 2000
-const minRangeMonthIndex = 0
-const currentDate = new Date()
-const maxRangeMonthIndex =
-  (currentDate.getFullYear() - minRangeYear) * 12 + currentDate.getMonth()
-const sliderStartMonth = ref(minRangeMonthIndex)
-const sliderEndMonth = ref(maxRangeMonthIndex)
 const rangeStartDate = ref(today)
 const rangeEndDate = ref('')
 const calendarPickValue = ref(today)
@@ -151,10 +161,6 @@ function handleViewModeSwitch(event) {
     return
   }
   uiStore.transitionToMap(20, 30, 3)
-}
-
-function handleThemeSwitch(event) {
-  uiStore.darkMode = event.target.checked
 }
 
 function getSourceStatusClass(count) {
@@ -183,59 +189,6 @@ function handleTimeSliderInput(event) {
   // Not: watch([selectedTimeRange, startDate, endDate]) zaten loadFromSupabase(true) tetikliyor
   disasterStore.startDate = null
   disasterStore.endDate = null
-}
-
-function getMonthParts(monthIndex) {
-  const year = minRangeYear + Math.floor(monthIndex / 12)
-  const month = (monthIndex % 12) + 1
-  return { year, month }
-}
-
-function formatMonthValue(monthIndex) {
-  const { year, month } = getMonthParts(monthIndex)
-  return `${year}-${String(month).padStart(2, '0')}`
-}
-
-function formatMonthLabel(monthIndex) {
-  const { year, month } = getMonthParts(monthIndex)
-  return `${String(month).padStart(2, '0')}.${year}`
-}
-
-function getMonthEndDate(monthIndex) {
-  const { year, month } = getMonthParts(monthIndex)
-  return new Date(year, month, 0).toISOString().slice(0, 10)
-}
-
-const historicalRangeLabel = computed(() => {
-  const start = Math.min(sliderStartMonth.value, sliderEndMonth.value)
-  const end = Math.max(sliderStartMonth.value, sliderEndMonth.value)
-  return `${formatMonthLabel(start)} - ${formatMonthLabel(end)}`
-})
-
-const historicalRangeStyle = computed(() => {
-  const start = Math.min(sliderStartMonth.value, sliderEndMonth.value)
-  const end = Math.max(sliderStartMonth.value, sliderEndMonth.value)
-  const startPercent = (start / maxRangeMonthIndex) * 100
-  const endPercent = (end / maxRangeMonthIndex) * 100
-  return {
-    left: `${startPercent}%`,
-    width: `${endPercent - startPercent}%`,
-  }
-})
-
-function handleHistoricalRangeInput(edge, value) {
-  const monthIndex = Number(value)
-  if (edge === 'start') {
-    sliderStartMonth.value = Math.min(monthIndex, sliderEndMonth.value)
-  } else {
-    sliderEndMonth.value = Math.max(monthIndex, sliderStartMonth.value)
-  }
-
-  const start = Math.min(sliderStartMonth.value, sliderEndMonth.value)
-  const end = Math.max(sliderStartMonth.value, sliderEndMonth.value)
-  rangeStartDate.value = `${formatMonthValue(start)}-01`
-  rangeEndDate.value = getMonthEndDate(end)
-  calendarPickValue.value = rangeStartDate.value
 }
 
 function handleSingleCalendarPick(event) {
@@ -336,21 +289,55 @@ watch([rangeStartDate, rangeEndDate], ([start, end]) => {
 
       <Transition name="section-accordion">
         <div v-if="openSections.disasterFilters">
-          <div class="disaster-accordion">
+          <div class="hazard-filter-toolbar" role="group" aria-label="Afet tipi görünümü">
+            <button
+              type="button"
+              class="hazard-filter-tab"
+              :class="{ active: disasterTypeView === 'active' }"
+              @click="disasterTypeView = 'active'"
+            >
+              Aktif
+            </button>
+            <button
+              type="button"
+              class="hazard-filter-tab"
+              :class="{ active: disasterTypeView === 'all' }"
+              @click="disasterTypeView = 'all'"
+            >
+              Tümü
+            </button>
+          </div>
+
+          <div class="disaster-accordion compact-hazard-list">
             <div
-              v-for="dtype in disasterTypes"
+              v-for="dtype in visibleDisasterTypes"
               :key="dtype.key"
               class="accordion-item"
-              :class="{ 'accordion-active-layer': disasterStore.isLayerActive(dtype.key) }"
+              :class="{
+                'accordion-active-layer': disasterStore.isLayerActive(dtype.key),
+                'accordion-empty-layer': (disasterStore.totalCount[dtype.key] ?? 0) === 0,
+              }"
             >
               <!-- Accordion Header -->
-              <div class="accordion-header" @click="toggleAccordion(dtype.key)">
+              <div class="accordion-header compact-hazard-header" @click="toggleAccordion(dtype.key)">
                 <span class="accordion-arrow" :class="{ open: openAccordions.has(dtype.key) }"
                   >›</span
                 >
                 <span class="toggle-icon">{{ dtype.icon }}</span>
                 <span class="toggle-label">
                   {{ t(dtype.labelKey).replace('Active ', '').replace('Aktif ', '') }}
+                  <span class="hazard-severity-dots" aria-hidden="true">
+                    <span
+                      v-for="severity in severitySummaryLevels"
+                      :key="severity"
+                      class="hazard-severity-dot"
+                      :class="[
+                        severity,
+                        { inactive: !severityBreakdown[dtype.key]?.[severity] },
+                      ]"
+                      :title="`${severityBreakdown[dtype.key]?.[severity] ?? 0} ${t(`severity.${severity}`)}`"
+                    ></span>
+                  </span>
                 </span>
                 <span
                   class="badge"
@@ -394,6 +381,9 @@ watch([rangeStartDate, rangeEndDate], ([start, end]) => {
                     </span>
                     <span class="sev-chip low" v-if="severityBreakdown[dtype.key].low > 0">
                       ● {{ severityBreakdown[dtype.key].low }} Düşük
+                    </span>
+                    <span class="sev-chip minimal" v-if="severityBreakdown[dtype.key].minimal > 0">
+                      • {{ severityBreakdown[dtype.key].minimal }} Minimum
                     </span>
                     <span class="sev-chip none" v-if="severityBreakdown[dtype.key].total === 0">
                       Henüz veri yok
@@ -481,20 +471,13 @@ watch([rangeStartDate, rangeEndDate], ([start, end]) => {
 
       <div class="collapsed-divider"></div>
 
-      <!-- 4) 2D/3D ve Dark/Light -->
+      <!-- 4) 2D/3D -->
       <button
         class="btn-icon collapsed-action"
         :title="isGlobeMode ? 'View 2D' : 'View 3D'"
         @click="isGlobeMode ? uiStore.transitionToMap(20, 30, 3) : uiStore.transitionToGlobe()"
       >
         {{ isGlobeMode ? '🗺️' : '🌐' }}
-      </button>
-      <button
-        class="btn-icon collapsed-action"
-        :title="isDarkMode ? 'Dark Mode' : 'Light Mode'"
-        @click="uiStore.darkMode = !uiStore.darkMode"
-      >
-        {{ isDarkMode ? '🌙' : '☀️' }}
       </button>
 
       <div class="collapsed-divider"></div>
@@ -506,14 +489,6 @@ watch([rangeStartDate, rangeEndDate], ([start, end]) => {
         :title="t('sidebar.myLocation')"
       >
         🎯
-      </button>
-      <button
-        class="btn-icon collapsed-action"
-        @click="disasterStore.refreshAll()"
-        :disabled="disasterStore.isLoading"
-        :title="t('app.refreshAll')"
-      >
-        🔄
       </button>
 
       <!-- Map Mode Options (Collapsed) -->
@@ -651,54 +626,11 @@ watch([rangeStartDate, rangeEndDate], ([start, end]) => {
             </div>
           </div>
 
-          <div class="filter-row historical-range-row">
+          <div class="date-filter-card inline-date-filter">
             <div class="filter-label">
-              <span>TARİH ARALIĞI</span>
-              <span class="filter-val accent">{{ historicalRangeLabel }}</span>
+              <span>ZAMAN ARALIĞI</span>
+              <span class="filter-val accent">{{ selectedRangeLabel }}</span>
             </div>
-            <div class="dual-range-control">
-              <div class="dual-range-track">
-                <span class="dual-range-fill" :style="historicalRangeStyle"></span>
-              </div>
-              <input
-                type="range"
-                :min="minRangeMonthIndex"
-                :max="maxRangeMonthIndex"
-                step="1"
-                :value="sliderStartMonth"
-                class="filter-range dual-range-input"
-                aria-label="Başlangıç ayı"
-                @input="handleHistoricalRangeInput('start', $event.target.value)"
-              />
-              <input
-                type="range"
-                :min="minRangeMonthIndex"
-                :max="maxRangeMonthIndex"
-                step="1"
-                :value="sliderEndMonth"
-                class="filter-range dual-range-input"
-                aria-label="Bitiş ayı"
-                @input="handleHistoricalRangeInput('end', $event.target.value)"
-              />
-            </div>
-            <div class="filter-ends">
-              <span>01.2000</span>
-              <span>{{ formatMonthLabel(maxRangeMonthIndex) }}</span>
-            </div>
-          </div>
-        </div>
-      </Transition>
-    </div>
-
-    <!-- Time Range -->
-    <div class="sidebar-section" v-if="!isCollapsed">
-      <button class="section-toggle" @click="toggleSection('timeRange')">
-        <span class="section-title">Zaman Aralığı</span>
-        <span class="section-arrow" :class="{ open: openSections.timeRange }">›</span>
-      </button>
-      <Transition name="section-accordion">
-        <div v-if="openSections.timeRange">
-          <div class="date-filter-card">
             <div class="date-filters">
               <label class="date-label">
                 <span>Takvim (Tek Gün / Aralık)</span>
@@ -712,7 +644,6 @@ watch([rangeStartDate, rangeEndDate], ([start, end]) => {
               <span class="date-hint">
                 1 seçim: tek gün. 2 seçim: aralık. Sonraki seçim yeni aralık başlatır.
               </span>
-              <span class="date-range-preview">{{ selectedRangeLabel }}</span>
             </div>
           </div>
         </div>
@@ -752,80 +683,6 @@ watch([rangeStartDate, rangeEndDate], ([start, end]) => {
               </div>
             </label>
 
-            <div class="theme-switch-wrap">
-              <span class="theme-mode-label">{{ isDarkMode ? 'Dark Mode' : 'Light Mode' }}</span>
-              <label class="theme-switch" for="theme-input">
-                <input
-                  id="theme-input"
-                  type="checkbox"
-                  :checked="isDarkMode"
-                  @change="handleThemeSwitch"
-                  aria-label="Toggle Dark Mode"
-                />
-                <div class="theme-slider round">
-                  <div class="sun-moon">
-                    <svg id="moon-dot-1" class="moon-dot" viewBox="0 0 100 100">
-                      <circle cx="50" cy="50" r="50"></circle>
-                    </svg>
-                    <svg id="moon-dot-2" class="moon-dot" viewBox="0 0 100 100">
-                      <circle cx="50" cy="50" r="50"></circle>
-                    </svg>
-                    <svg id="moon-dot-3" class="moon-dot" viewBox="0 0 100 100">
-                      <circle cx="50" cy="50" r="50"></circle>
-                    </svg>
-                    <svg id="light-ray-1" class="light-ray" viewBox="0 0 100 100">
-                      <circle cx="50" cy="50" r="50"></circle>
-                    </svg>
-                    <svg id="light-ray-2" class="light-ray" viewBox="0 0 100 100">
-                      <circle cx="50" cy="50" r="50"></circle>
-                    </svg>
-                    <svg id="light-ray-3" class="light-ray" viewBox="0 0 100 100">
-                      <circle cx="50" cy="50" r="50"></circle>
-                    </svg>
-                    <svg id="cloud-1" class="cloud-dark" viewBox="0 0 100 100">
-                      <circle cx="50" cy="50" r="50"></circle>
-                    </svg>
-                    <svg id="cloud-2" class="cloud-dark" viewBox="0 0 100 100">
-                      <circle cx="50" cy="50" r="50"></circle>
-                    </svg>
-                    <svg id="cloud-3" class="cloud-dark" viewBox="0 0 100 100">
-                      <circle cx="50" cy="50" r="50"></circle>
-                    </svg>
-                    <svg id="cloud-4" class="cloud-light" viewBox="0 0 100 100">
-                      <circle cx="50" cy="50" r="50"></circle>
-                    </svg>
-                    <svg id="cloud-5" class="cloud-light" viewBox="0 0 100 100">
-                      <circle cx="50" cy="50" r="50"></circle>
-                    </svg>
-                    <svg id="cloud-6" class="cloud-light" viewBox="0 0 100 100">
-                      <circle cx="50" cy="50" r="50"></circle>
-                    </svg>
-                  </div>
-                  <div class="stars">
-                    <svg id="star-1" class="star" viewBox="0 0 20 20">
-                      <path
-                        d="M 0 10 C 10 10,10 10 ,0 10 C 10 10 , 10 10 , 10 20 C 10 10 , 10 10 , 20 10 C 10 10 , 10 10 , 10 0 C 10 10,10 10 ,0 10 Z"
-                      ></path>
-                    </svg>
-                    <svg id="star-2" class="star" viewBox="0 0 20 20">
-                      <path
-                        d="M 0 10 C 10 10,10 10 ,0 10 C 10 10 , 10 10 , 10 20 C 10 10 , 10 10 , 20 10 C 10 10 , 10 10 , 10 0 C 10 10,10 10 ,0 10 Z"
-                      ></path>
-                    </svg>
-                    <svg id="star-3" class="star" viewBox="0 0 20 20">
-                      <path
-                        d="M 0 10 C 10 10,10 10 ,0 10 C 10 10 , 10 10 , 10 20 C 10 10 , 10 10 , 20 10 C 10 10 , 10 10 , 10 0 C 10 10,10 10 ,0 10 Z"
-                      ></path>
-                    </svg>
-                    <svg id="star-4" class="star" viewBox="0 0 20 20">
-                      <path
-                        d="M 0 10 C 10 10,10 10 ,0 10 C 10 10 , 10 10 , 10 20 C 10 10 , 10 10 , 20 10 C 10 10 , 10 10 , 10 0 C 10 10,10 10 ,0 10 Z"
-                      ></path>
-                    </svg>
-                  </div>
-                </div>
-              </label>
-            </div>
           </div>
 
           <button class="btn btn-primary sidebar-action-btn" @click="handleLocate">
@@ -837,14 +694,6 @@ watch([rangeStartDate, rangeEndDate], ([start, end]) => {
                   ? t('sidebar.locationDetected')
                   : t('sidebar.myLocation')
             }}
-          </button>
-
-          <button
-            class="btn btn-ghost sidebar-action-btn"
-            @click="disasterStore.refreshAll()"
-            :disabled="disasterStore.isLoading"
-          >
-            🔄 {{ t('app.refreshAll') }}
           </button>
 
           <div class="map-mode-selector">
@@ -875,23 +724,11 @@ watch([rangeStartDate, rangeEndDate], ([start, end]) => {
           </div>
 
           <div class="nav-links">
-            <button class="btn btn-ghost sidebar-action-btn" @click="router.push('/alerts/cap')">
-              ⚠️ CAP Uyarılar
-            </button>
-            <button class="btn btn-ghost sidebar-action-btn" @click="router.push('/alerts/incidents')">
-              🚨 Olay Takip
-            </button>
-            <button class="btn btn-ghost sidebar-action-btn" @click="router.push('/shelters')">
-              🏠 Sığınaklar
-            </button>
             <button class="btn btn-ghost sidebar-action-btn" @click="router.push('/hazards')">
               🌋 Afet Ansiklopedisi
             </button>
             <button class="btn btn-ghost sidebar-action-btn" @click="router.push('/report')">
               📢 {{ t('communityReport.form.title') }}
-            </button>
-            <button v-if="canAccessAdmin" class="btn btn-ghost sidebar-action-btn" @click="router.push('/admin')">
-              🛡️ Yönetim
             </button>
             <button
               v-if="hasMyRegion"
@@ -902,9 +739,6 @@ watch([rangeStartDate, rangeEndDate], ([start, end]) => {
             </button>
           </div>
 
-          <button class="btn btn-ghost sidebar-action-btn" @click="uiStore.toggleSettings()">
-            ⚙️ {{ t('app.settings') }}
-          </button>
         </div>
       </Transition>
     </div>
@@ -919,6 +753,14 @@ watch([rangeStartDate, rangeEndDate], ([start, end]) => {
         {{ disasterStore.sourcesOnline }}/10 {{ t('stats.sourcesOnline') }}
       </span>
     </div>
+
+    <button
+      v-if="!isCollapsed"
+      class="btn btn-ghost sidebar-action-btn sidebar-settings-bottom"
+      @click="uiStore.toggleSettings()"
+    >
+      ⚙️ {{ t('app.settings') }}
+    </button>
 
     <!-- Logout -->
     <button
@@ -1307,74 +1149,6 @@ watch([rangeStartDate, rangeEndDate], ([start, end]) => {
   cursor: pointer;
 }
 
-.historical-range-row {
-  gap: 6px;
-}
-
-.dual-range-control {
-  position: relative;
-  height: 28px;
-}
-
-.dual-range-track {
-  position: absolute;
-  left: 0;
-  right: 0;
-  top: 11px;
-  height: 6px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.12);
-  overflow: hidden;
-}
-
-.dual-range-fill {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  border-radius: inherit;
-  background: linear-gradient(90deg, var(--color-accent), rgba(77, 163, 255, 0.45));
-}
-
-.dual-range-input {
-  position: absolute;
-  inset: 0;
-  height: 28px;
-  margin: 0;
-  pointer-events: none;
-  appearance: none;
-  background: transparent;
-  accent-color: var(--color-accent);
-}
-
-.dual-range-input::-webkit-slider-thumb {
-  pointer-events: auto;
-  appearance: none;
-  width: 16px;
-  height: 16px;
-  border-radius: 50%;
-  border: 2px solid var(--color-bg);
-  background: var(--color-accent);
-  box-shadow: 0 0 0 2px rgba(77, 163, 255, 0.22);
-}
-
-.dual-range-input::-moz-range-thumb {
-  pointer-events: auto;
-  width: 14px;
-  height: 14px;
-  border-radius: 50%;
-  border: 2px solid var(--color-bg);
-  background: var(--color-accent);
-  box-shadow: 0 0 0 2px rgba(77, 163, 255, 0.22);
-}
-
-.dual-range-input::-webkit-slider-runnable-track {
-  background: transparent;
-}
-
-.dual-range-input::-moz-range-track {
-  background: transparent;
-}
-
 .filter-ends {
   display: flex;
   justify-content: space-between;
@@ -1450,12 +1224,6 @@ watch([rangeStartDate, rangeEndDate], ([start, end]) => {
   font-size: 0.64rem;
   line-height: 1.35;
   color: var(--color-text-muted);
-}
-
-.date-range-preview {
-  font-size: 0.68rem;
-  color: var(--color-text-secondary);
-  font-family: var(--font-mono);
 }
 
 .sidebar-icons-only {
@@ -1557,9 +1325,6 @@ watch([rangeStartDate, rangeEndDate], ([start, end]) => {
   display: flex;
   flex-direction: column;
   gap: 4px;
-  padding-bottom: 4px;
-  border-bottom: 1px solid var(--glass-border);
-  margin-bottom: 4px;
 }
 
 .map-mode-selector {
@@ -1634,8 +1399,8 @@ html[data-theme='light'] .mode-btn.active {
 
 .quick-switches {
   display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
+  align-items: center;
+  justify-content: center;
   gap: var(--space-sm);
 }
 
@@ -1656,7 +1421,7 @@ html[data-theme='light'] .mode-btn.active {
 }
 
 .switch-3d-cyan {
-  --w: 110px;
+  --w: 70%;
   --h: 40px;
   --knob-size: 20px;
   --offset: 10px;
@@ -1668,6 +1433,7 @@ html[data-theme='light'] .mode-btn.active {
   position: relative;
   display: inline-block;
   width: var(--w);
+  min-width: 148px;
   height: var(--h);
   cursor: pointer;
 }
@@ -1724,7 +1490,9 @@ html[data-theme='light'] .mode-btn.active {
   height: var(--knob-size);
   perspective: 1200px;
   pointer-events: none;
-  transition: transform 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  transition:
+    left 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275),
+    transform 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
   z-index: 2;
 }
 
@@ -1775,7 +1543,7 @@ html[data-theme='light'] .mode-btn.active {
 }
 
 .switch-input:checked ~ .switch-track .switch-knob {
-  transform: translateX(calc(var(--w) - var(--knob-size) - (var(--offset) * 2)));
+  left: calc(100% - var(--knob-size) - var(--offset));
 }
 
 .switch-input:checked ~ .switch-track .text-3d {
@@ -1810,280 +1578,39 @@ html[data-theme='light'] .mode-btn.active {
   }
 }
 
-.theme-switch {
-  position: relative;
-  display: inline-block;
-  width: 60px;
-  height: 34px;
+.sidebar-footer {
+  width: 100%;
+  margin-top: -6px;
+  padding: 9px 0;
+  border-top: 1px solid var(--glass-border);
+  border-bottom: 1px solid var(--glass-border);
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  align-items: center;
+  text-align: center;
   flex-shrink: 0;
 }
 
-.theme-switch #theme-input {
-  opacity: 0;
-  width: 0;
-  height: 0;
-}
-
-.theme-slider {
-  position: absolute;
-  cursor: pointer;
-  inset: 0;
-  background-color: #2196f3;
-  transition: 0.4s;
-  z-index: 0;
-  overflow: hidden;
-}
-
-.sun-moon {
-  position: absolute;
-  height: 26px;
-  width: 26px;
-  left: 4px;
-  bottom: 4px;
-  background-color: yellow;
-  transition: 0.4s;
-}
-
-#theme-input:checked + .theme-slider {
-  background-color: #000;
-}
-
-#theme-input:checked + .theme-slider .sun-moon {
-  transform: translateX(26px);
-  background-color: #fff;
-  animation: rotate-center 0.6s ease-in-out both;
-}
-
-.moon-dot {
-  opacity: 0;
-  transition: 0.4s;
-  fill: gray;
-}
-
-#theme-input:checked + .theme-slider .sun-moon .moon-dot {
-  opacity: 1;
-}
-
-.theme-slider.round {
-  border-radius: 34px;
-}
-
-.theme-slider.round .sun-moon {
-  border-radius: 50%;
-}
-
-#moon-dot-1 {
-  left: 10px;
-  top: 3px;
-  position: absolute;
-  width: 6px;
-  height: 6px;
-  z-index: 4;
-}
-
-#moon-dot-2 {
-  left: 2px;
-  top: 10px;
-  position: absolute;
-  width: 10px;
-  height: 10px;
-  z-index: 4;
-}
-
-#moon-dot-3 {
-  left: 16px;
-  top: 18px;
-  position: absolute;
-  width: 3px;
-  height: 3px;
-  z-index: 4;
-}
-
-#light-ray-1 {
-  left: -8px;
-  top: -8px;
-  position: absolute;
-  width: 43px;
-  height: 43px;
-  z-index: -1;
-  fill: #fff;
-  opacity: 10%;
-}
-
-#light-ray-2 {
-  left: -50%;
-  top: -50%;
-  position: absolute;
-  width: 55px;
-  height: 55px;
-  z-index: -1;
-  fill: #fff;
-  opacity: 10%;
-}
-
-#light-ray-3 {
-  left: -18px;
-  top: -18px;
-  position: absolute;
-  width: 60px;
-  height: 60px;
-  z-index: -1;
-  fill: #fff;
-  opacity: 10%;
-}
-
-.cloud-light {
-  position: absolute;
-  fill: #eee;
-  animation: cloud-move 6s infinite;
-}
-
-.cloud-dark {
-  position: absolute;
-  fill: #ccc;
-  animation: cloud-move 6s infinite;
-  animation-delay: 1s;
-}
-
-#cloud-1 {
-  left: 30px;
-  top: 15px;
-  width: 40px;
-}
-
-#cloud-2 {
-  left: 44px;
-  top: 10px;
-  width: 20px;
-}
-
-#cloud-3 {
-  left: 18px;
-  top: 24px;
-  width: 30px;
-}
-
-#cloud-4 {
-  left: 36px;
-  top: 18px;
-  width: 40px;
-}
-
-#cloud-5 {
-  left: 48px;
-  top: 14px;
-  width: 20px;
-}
-
-#cloud-6 {
-  left: 22px;
-  top: 26px;
-  width: 30px;
-}
-
-@keyframes cloud-move {
-  0% {
-    transform: translateX(0);
-  }
-  40% {
-    transform: translateX(4px);
-  }
-  80% {
-    transform: translateX(-4px);
-  }
-  100% {
-    transform: translateX(0);
-  }
-}
-
-.stars {
-  transform: translateY(-32px);
-  opacity: 0;
-  transition: 0.4s;
-}
-
-.star {
-  fill: #fff;
-  position: absolute;
-  transition: 0.4s;
-  animation: star-twinkle 2s infinite;
-}
-
-#theme-input:checked + .theme-slider .stars {
-  transform: translateY(0);
-  opacity: 1;
-}
-
-#star-1 {
-  width: 20px;
-  top: 2px;
-  left: 3px;
-  animation-delay: 0.3s;
-}
-
-#star-2 {
-  width: 6px;
-  top: 16px;
-  left: 3px;
-}
-
-#star-3 {
-  width: 12px;
-  top: 20px;
-  left: 10px;
-  animation-delay: 0.6s;
-}
-
-#star-4 {
-  width: 18px;
-  top: 0;
-  left: 18px;
-  animation-delay: 1.3s;
-}
-
-@keyframes star-twinkle {
-  0% {
-    transform: scale(1);
-  }
-  40% {
-    transform: scale(1.2);
-  }
-  80% {
-    transform: scale(0.8);
-  }
-  100% {
-    transform: scale(1);
-  }
-}
-
-@keyframes rotate-center {
-  0% {
-    transform: translateX(26px) rotate(0);
-  }
-  100% {
-    transform: translateX(26px) rotate(360deg);
-  }
-}
-
-.sidebar-footer {
-  padding-top: var(--space-sm);
-  border-top: 1px solid var(--glass-border);
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  align-items: center;
-  text-align: center;
+.sidebar-settings-bottom {
+  width: 100%;
+  flex-shrink: 0;
 }
 
 .footer-text {
   font-size: 0.65rem;
   color: var(--color-text-muted);
   font-family: var(--font-mono);
+  line-height: 1.2;
+  user-select: none;
 }
 
 .footer-sources {
-  font-size: 0.6rem;
+  font-size: 0.64rem;
+  font-weight: 700;
   color: var(--color-info);
+  line-height: 1.2;
+  user-select: none;
 }
 
 html[data-theme='light'] .footer-sources {
@@ -2170,7 +1697,7 @@ html[data-theme='light'] .footer-sources {
   }
 
   .quick-switches {
-    justify-content: space-around;
+    justify-content: center;
     padding: var(--space-sm) 0;
   }
 
@@ -2209,6 +1736,34 @@ html[data-theme='light'] .footer-sources {
   gap: 4px;
 }
 
+.hazard-filter-toolbar {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.hazard-filter-tab {
+  min-height: 30px;
+  border: 1px solid var(--glass-border);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--color-text-secondary);
+  font-size: 0.72rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition:
+    background 0.18s ease,
+    border-color 0.18s ease,
+    color 0.18s ease;
+}
+
+.hazard-filter-tab.active {
+  background: rgba(77, 163, 255, 0.16);
+  border-color: rgba(77, 163, 255, 0.56);
+  color: var(--color-text-primary);
+}
+
 .accordion-item {
   border-radius: var(--radius-sm);
   background: rgba(255, 255, 255, 0.03);
@@ -2224,6 +1779,10 @@ html[data-theme='light'] .footer-sources {
   background: rgba(77, 163, 255, 0.05);
 }
 
+.accordion-item.accordion-empty-layer {
+  opacity: 0.72;
+}
+
 .accordion-header {
   display: flex;
   align-items: center;
@@ -2236,6 +1795,84 @@ html[data-theme='light'] .footer-sources {
 
 .accordion-header:hover {
   background: rgba(255, 255, 255, 0.07);
+}
+
+.compact-hazard-header {
+  min-height: 44px;
+  padding: 7px 8px;
+}
+
+.compact-hazard-header .toggle-label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  line-height: 1.15;
+}
+
+.hazard-severity-dots {
+  display: flex;
+  gap: 4px;
+  min-height: 6px;
+}
+
+.hazard-severity-dot {
+  width: 18px;
+  height: 4px;
+  border-radius: 999px;
+  background: currentColor;
+  box-shadow: 0 0 8px currentColor;
+}
+
+.hazard-severity-dot.critical {
+  color: var(--color-critical);
+}
+
+.hazard-severity-dot.high {
+  color: var(--color-high);
+}
+
+.hazard-severity-dot.moderate {
+  color: var(--color-moderate);
+}
+
+.hazard-severity-dot.low {
+  color: var(--color-low);
+}
+
+.hazard-severity-dot.minimal {
+  color: var(--color-minimal);
+}
+
+.hazard-severity-dot.inactive {
+  opacity: 0.18;
+  box-shadow: none;
+}
+
+.badge {
+  min-width: 34px;
+  padding: 2px 7px;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 800;
+  text-align: center;
+  color: var(--color-text-primary);
+  background: rgba(77, 163, 255, 0.14);
+}
+
+.badge-critical {
+  background: rgba(255, 60, 60, 0.18);
+  color: var(--color-critical);
+}
+
+.badge-warning {
+  background: rgba(255, 140, 0, 0.18);
+  color: var(--color-high);
+}
+
+.badge-info {
+  background: rgba(77, 163, 255, 0.14);
+  color: var(--color-accent);
 }
 
 .accordion-arrow {
@@ -2288,6 +1925,11 @@ html[data-theme='light'] .footer-sources {
 .sev-chip.low {
   background: rgba(100, 200, 100, 0.18);
   color: var(--color-low);
+}
+
+.sev-chip.minimal {
+  background: rgba(148, 163, 184, 0.18);
+  color: var(--color-minimal);
 }
 
 .sev-chip.none {

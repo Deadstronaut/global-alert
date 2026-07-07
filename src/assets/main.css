@@ -23,8 +23,8 @@
   --transition-normal: 0.25s ease;
   --transition-slow: 0.45s ease;
   --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  --z-sidebar: 90;
-  --z-stats: 92;
+  --z-stats: 90;
+  --z-sidebar: 92;
   --z-alerts: 94;
   --z-loading: 999;
   --sidebar-width: 280px;

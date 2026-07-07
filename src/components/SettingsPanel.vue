@@ -1,7 +1,9 @@
 <script setup>
+import { computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { useUIStore } from '@/stores/ui.js'
 import { useGeolocationStore } from '@/stores/geolocation.js'
+import { useDisasterStore } from '@/stores/disaster.js'
 import { useI18n } from 'vue-i18n'
 import { useAuthStore } from '@/stores/auth.js'
 
@@ -9,7 +11,11 @@ const { t, locale } = useI18n()
 const router = useRouter()
 const uiStore = useUIStore()
 const geoStore = useGeolocationStore()
+const disasterStore = useDisasterStore()
 const authStore = useAuthStore()
+const canAccessAdmin = computed(() =>
+  ['super_admin', 'country_admin', 'org_admin'].includes(authStore.session?.role)
+)
 
 async function handleLogout() {
   await authStore.logout()
@@ -19,6 +25,11 @@ async function handleLogout() {
 
 function changeLanguage(lang) {
   locale.value = lang
+}
+
+function navigateTo(path) {
+  uiStore.toggleSettings()
+  router.push(path)
 }
 </script>
 
@@ -63,6 +74,12 @@ function changeLanguage(lang) {
         <h4 class="settings-section-title">{{ t('settings.display') }}</h4>
 
         <label class="settings-toggle">
+          <span>{{ uiStore.darkMode ? 'Dark Mode' : 'Light Mode' }}</span>
+          <input type="checkbox" v-model="uiStore.darkMode" />
+          <span class="toggle-switch"></span>
+        </label>
+
+        <label class="settings-toggle">
           <span>{{ t('settings.highContrast') }}</span>
           <input type="checkbox" v-model="uiStore.highContrast" />
           <span class="toggle-switch"></span>
@@ -104,6 +121,34 @@ function changeLanguage(lang) {
             @input="geoStore.setAlertRadius(Number($event.target.value))"
           />
           <span class="range-value">{{ geoStore.alertRadius }} km</span>
+        </div>
+      </div>
+
+      <!-- Data -->
+      <div class="settings-section">
+        <h4 class="settings-section-title">Veri</h4>
+        <button
+          class="btn btn-ghost settings-action-btn"
+          @click="disasterStore.refreshAll()"
+          :disabled="disasterStore.isLoading"
+        >
+          🔄 {{ t('app.refreshAll') }}
+        </button>
+      </div>
+
+      <!-- Operations -->
+      <div class="settings-section">
+        <h4 class="settings-section-title">Operasyon</h4>
+        <div class="settings-actions">
+          <button class="btn btn-ghost settings-action-btn" @click="navigateTo('/alerts/cap')">
+            ⚠️ CAP Uyarılar
+          </button>
+          <button class="btn btn-ghost settings-action-btn" @click="navigateTo('/alerts/incidents')">
+            🚨 Olay Takip
+          </button>
+          <button class="btn btn-ghost settings-action-btn" @click="navigateTo('/shelters')">
+            🏠 Sığınaklar
+          </button>
         </div>
       </div>
 
@@ -167,6 +212,13 @@ function changeLanguage(lang) {
       <div class="settings-section" v-if="authStore.isLoggedIn">
         <h4 class="settings-section-title">{{ t('settings.account') }}</h4>
         <p class="settings-desc">{{ t('settings.loggedInAs', { email: authStore.session?.email }) }}</p>
+        <button
+          v-if="canAccessAdmin"
+          class="btn btn-ghost settings-action-btn"
+          @click="navigateTo('/admin')"
+        >
+          🛡️ Yönetim
+        </button>
         <button class="btn btn-danger logout-btn" @click="handleLogout">
           ⎋ {{ t('settings.logout') }}
         </button>
@@ -308,6 +360,20 @@ function changeLanguage(lang) {
   padding: 8px;
 }
 
+.settings-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.settings-action-btn {
+  width: 100%;
+  justify-content: center;
+  min-height: 34px;
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
 /* Slide transition */
 .slide-right-enter-active,
 .slide-right-leave-active {
@@ -366,4 +432,3 @@ function changeLanguage(lang) {
   border-color: rgba(239, 68, 68, 0.6);
 }
 </style>
-

@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MHEWS — Sistem Mimarisi (Gerçek Durum)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0a0d12; --panel:#11151c; --panel-2:#161b24; --line:#232a35;
+    --text:#e7ebf1; --text-dim:#8b95a6; --text-faint:#5b6474;
+    --amber:#e8a33d; --amber-dim:#5c4a26;
+    --teal:#3ecf9a; --teal-dim:#1c4a3c;
+    --red:#e05a5a; --red-dim:#4a2323;
+    --blue:#5b9be0; --blue-dim:#1f3654;
+    --purple:#b58af5; --purple-dim:#3a2e57;
+    --mono:'IBM Plex Mono',monospace; --sans:'IBM Plex Sans',sans-serif;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--bg);color:var(--text);font-family:var(--sans);line-height:1.55;-webkit-font-smoothing:antialiased;}
+  body::before{content:"";position:fixed;inset:0;z-index:0;pointer-events:none;
+    background-image:radial-gradient(circle at 12% 8%, rgba(91,155,224,.07), transparent 40%),
+      radial-gradient(circle at 88% 0%, rgba(62,207,154,.05), transparent 40%);}
+  .wrap{max-width:1120px;margin:0 auto;padding:56px 24px 100px;position:relative;z-index:1;}
+
+  header{margin-bottom:36px;}
+  .eyebrow{font-family:var(--mono);font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--blue);
+    display:flex;align-items:center;gap:10px;margin-bottom:14px;}
+  .eyebrow .dot{width:7px;height:7px;border-radius:50%;background:var(--blue);box-shadow:0 0 8px var(--blue);animation:pulse 2.4s ease-in-out infinite;}
+  @keyframes pulse{0%,100%{opacity:1;}50%{opacity:.35;}}
+  h1{font-weight:700;font-size:clamp(26px,4vw,40px);letter-spacing:-.02em;margin:0 0 10px;}
+  .sub{color:var(--text-dim);font-size:15px;max-width:700px;}
+
+  /* critical callout */
+  .callout{
+    background:linear-gradient(155deg,rgba(224,90,90,.09),rgba(224,90,90,.02));
+    border:1px solid var(--red-dim);border-radius:14px;padding:22px 26px;margin:28px 0 48px;
+    display:flex;gap:16px;align-items:flex-start;
+  }
+  .callout .ic{width:36px;height:36px;flex-shrink:0;border-radius:9px;background:var(--red-dim);
+    display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-weight:700;color:var(--red);}
+  .callout h3{margin:0 0 8px;font-size:15.5px;color:var(--text);}
+  .callout p{margin:0 0 10px;font-size:13.8px;color:var(--text-dim);}
+  .callout p:last-child{margin-bottom:0;}
+  .callout code{font-family:var(--mono);background:var(--panel-2);padding:1px 6px;border-radius:4px;color:var(--red);font-size:12.5px;}
+  .diff-row{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:14px;}
+  .diff-col{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px 16px;}
+  .diff-col .lbl{font-family:var(--mono);font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;margin-bottom:8px;}
+  .diff-col.plan .lbl{color:var(--text-faint);}
+  .diff-col.real .lbl{color:var(--teal);}
+  .diff-col ul{margin:0;padding-left:18px;font-size:13px;color:var(--text-dim);}
+  .diff-col li{margin-bottom:4px;}
+  @media(max-width:640px){.diff-row{grid-template-columns:1fr;}}
+
+  section{margin-bottom:56px;}
+  .sec-head{margin-bottom:6px;}
+  .sec-head h2{font-size:21px;margin:0;font-weight:700;letter-spacing:-.01em;}
+  .sec-tag{font-family:var(--mono);font-size:12px;color:var(--text-faint);}
+  .sec-desc{color:var(--text-dim);font-size:14px;margin:8px 0 26px;max-width:720px;}
+
+  /* layered diagram */
+  .layers{display:flex;flex-direction:column;gap:0;}
+  .layer{position:relative;border:1px solid var(--line);border-radius:14px;padding:20px 22px;margin-bottom:6px;background:var(--panel);}
+  .layer-head{display:flex;align-items:center;gap:10px;margin-bottom:14px;}
+  .layer-tag{font-family:var(--mono);font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;padding:3px 10px;border-radius:20px;font-weight:600;}
+  .layer-title{font-weight:700;font-size:15.5px;}
+  .layer-sub{font-family:var(--mono);font-size:11.5px;color:var(--text-faint);margin-left:auto;}
+  .node-row{display:flex;flex-wrap:wrap;gap:10px;}
+  .node{
+    background:var(--panel-2);border:1px solid var(--line);border-radius:9px;
+    padding:10px 14px;font-size:12.8px;color:var(--text-dim);flex:1 1 auto;min-width:150px;
+  }
+  .node b{color:var(--text);font-size:13px;display:block;margin-bottom:2px;}
+  .node.mini{flex:0 1 auto;min-width:auto;font-family:var(--mono);font-size:11.5px;padding:6px 10px;}
+  .connector{display:flex;justify-content:center;padding:6px 0;}
+  .connector svg{opacity:.5;}
+
+  .l-sources .layer-tag{background:var(--purple-dim);color:var(--purple);}
+  .l-ingest .layer-tag{background:var(--blue-dim);color:var(--blue);}
+  .l-db .layer-tag{background:var(--teal-dim);color:var(--teal);}
+  .l-edge .layer-tag{background:var(--amber-dim);color:var(--amber);}
+  .l-front .layer-tag{background:var(--red-dim);color:var(--red);}
+
+  /* pipeline flow */
+  .pipeline{display:flex;flex-direction:column;gap:0;}
+  .pstep{display:grid;grid-template-columns:36px 1fr;gap:16px;position:relative;}
+  .pstep .num{
+    font-family:var(--mono);font-weight:700;font-size:13px;color:var(--bg);
+    background:var(--teal);width:30px;height:30px;border-radius:50%;
+    display:flex;align-items:center;justify-content:center;position:relative;z-index:1;
+  }
+  .pstep.blocked .num{background:var(--red);}
+  .pstep .line{position:absolute;left:15px;top:30px;bottom:-18px;width:1px;background:var(--line);}
+  .pstep:last-child .line{display:none;}
+  .pstep-body{padding-bottom:30px;}
+  .pstep-title{font-weight:600;font-size:14.5px;margin-bottom:4px;}
+  .pstep-title .tbl{font-family:var(--mono);font-size:11.5px;color:var(--amber);font-weight:400;margin-left:8px;}
+  .pstep-desc{font-size:13.3px;color:var(--text-dim);}
+
+  /* roles table */
+  .role-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;}
+  .role-card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px 18px;}
+  .role-card .rname{font-weight:700;font-size:14px;margin-bottom:6px;}
+  .role-card .rdesc{font-size:12.5px;color:var(--text-dim);line-height:1.5;}
+  @media(max-width:800px){.role-grid{grid-template-columns:repeat(2,1fr);}}
+  @media(max-width:480px){.role-grid{grid-template-columns:1fr;}}
+
+  /* table */
+  .datamap{width:100%;border-collapse:collapse;font-size:13px;}
+  .datamap th{text-align:left;font-family:var(--mono);font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--text-faint);padding:10px 12px;border-bottom:1px solid var(--line);}
+  .datamap td{padding:11px 12px;border-bottom:1px solid var(--line);color:var(--text-dim);vertical-align:top;}
+  .datamap td:first-child{color:var(--text);font-weight:600;white-space:nowrap;}
+  .datamap code{font-family:var(--mono);color:var(--blue);font-size:12px;}
+
+  footer{margin-top:60px;padding-top:24px;border-top:1px solid var(--line);
+    font-family:var(--mono);font-size:11.5px;color:var(--text-faint);
+    display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px;}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div class="eyebrow"><span class="dot"></span>global-alert-spec-kit · MHEWS</div>
+    <h1>Sistem Nasıl Çalışıyor</h1>
+    <p class="sub">Bu belge, dört kaynak dokümanın (SRS, IEEE 42010 Mimari Tanımı, Yazılım Tasarım Tanımı, ve <code style="font-family:var(--mono)">iş_planı_istereler.txt</code>'deki gerçek spec kayıtları) karşılaştırılmasıyla çıkarıldı. Aşağıdaki diyagram <b style="color:var(--text)">fiilen inşa edilmiş sistemi</b> gösterir — resmi mimari dokümanındaki planı değil.</p>
+  </header>
+
+  <div class="callout">
+    <div class="ic">!</div>
+    <div>
+      <h3>Kritik bulgu: Mimari dokümanları, gerçek sistemle uyuşmuyor</h3>
+      <p><code>MHEWS_architecture_description.md</code> (IEEE 42010) ve <code>MHEWS_software_design_description.md</code>, sistemi <b style="color:var(--text)">Django + DRF + Celery + Redis + PostgreSQL</b> yığını üzerinde 12 ayrı Django app olarak tanımlıyor. Ama <code>iş_planı_istereler.txt</code>'deki 38 spec kaydında (gerçek migration'lar, gerçek tablo/fonksiyon isimleri) <b style="color:var(--teal)">Django, Celery veya Redis'e tek bir referans bile yok</b> — buna karşılık 49 yerde Supabase/Edge Function/Deno/RLS/PostGIS/Vue geçiyor. Sistem gerçekte tamamen farklı bir teknoloji yığını üzerinde inşa edilmiş.</p>
+      <div class="diff-row">
+        <div class="diff-col plan">
+          <div class="lbl">Mimari dokümanı (planlanan, muhtemelen terk edildi)</div>
+          <ul>
+            <li>Django 5.x + DRF, 12 ayrı Django app</li>
+            <li>Celery 5 + Celery Beat (görev kuyruğu)</li>
+            <li>Redis 7 (broker + cache + SSE)</li>
+            <li>django-guardian (ABAC), simplejwt</li>
+            <li>Dual profil: Cloud + On-premise (Ollama LLM)</li>
+          </ul>
+        </div>
+        <div class="diff-col real">
+          <div class="lbl">Gerçekte inşa edilen (iş planından doğrulandı)</div>
+          <ul>
+            <li>Supabase (PostgreSQL 16 + PostGIS + RLS)</li>
+            <li>Deno Edge Functions (iş mantığı, dispatch)</li>
+            <li>pg_net + pg_cron (DB içi tetikleme/zamanlama)</li>
+            <li>Node.js aggregator (GEWS, ayrı konteyner)</li>
+            <li>Vue 3 + Vite frontend, tek bulut profili</li>
+          </ul>
+        </div>
+      </div>
+      <p style="margin-top:12px;">Aşağıdaki diyagramın tamamı <b style="color:var(--text)">sağ sütuna</b> — yani doğrulanmış gerçek duruma — dayanıyor.</p>
+    </div>
+  </div>
+
+  <!-- LAYER DIAGRAM -->
+  <section>
+    <div class="sec-head"><h2>Katman Mimarisi</h2><span class="sec-tag">gerçek sistem · uçtan uca</span></div>
+    <p class="sec-desc">Veri, dış kaynaklardan başlayıp beş katmandan geçerek son kullanıcıya (operatör veya alarm alıcısı) ulaşıyor.</p>
+
+    <div class="layers">
+
+      <div class="layer l-sources">
+        <div class="layer-head"><span class="layer-tag">01 · Dış Kaynaklar</span><span class="layer-title">Afet Veri Sağlayıcıları</span><span class="layer-sub">HTTP REST / RSS / WebSocket</span></div>
+        <div class="node-row">
+          <div class="node mini">USGS</div><div class="node mini">EMSC</div><div class="node mini">AFAD</div>
+          <div class="node mini">Kandilli</div><div class="node mini">GEOFON</div><div class="node mini">GDACS (BM/AB)</div>
+          <div class="node mini">PTWC</div><div class="node mini">NASA FIRMS</div><div class="node mini">WHO</div>
+          <div class="node mini">FEWS NET</div><div class="node mini">ReliefWeb</div><div class="node mini">OGC WMS/WFS</div>
+        </div>
+      </div>
+      <div class="connector"><svg width="20" height="24"><path d="M10 0 L10 18 M4 12 L10 18 L16 12" stroke="#5b6474" stroke-width="1.6" fill="none"/></svg></div>
+
+      <div class="layer l-ingest">
+        <div class="layer-head"><span class="layer-tag">02 · Alım (Ingestion)</span><span class="layer-title">Node.js Aggregator + fetch-* Fonksiyonları</span><span class="layer-sub">ayrı konteyner</span></div>
+        <div class="node-row">
+          <div class="node"><b>Pollers / listeners</b>her kaynak için ayrı source state machine: healthy/degraded/down/disabled</div>
+          <div class="node"><b>Normalizer</b>ham veriyi ortak DisasterEvent şemasına çevirir (id, tip, lat/lng, şiddet, zaman, kaynak)</div>
+          <div class="node"><b>Deduplicator</b>yakınlık + zaman + büyüklük eşleştirmesiyle mükerrer olayları eler</div>
+          <div class="node"><b>4 fetch-* fonksiyonu</b>GDACS tek uç noktadan 4 afet tipini (deprem/yangın/sel/kuraklık) besliyor</div>
+        </div>
+      </div>
+      <div class="connector"><svg width="20" height="24"><path d="M10 0 L10 18 M4 12 L10 18 L16 12" stroke="#5b6474" stroke-width="1.6" fill="none"/></svg></div>
+
+      <div class="layer l-db">
+        <div class="layer-head"><span class="layer-tag">03 · Veri Katmanı</span><span class="layer-title">Supabase — PostgreSQL 16 + PostGIS 3.4</span><span class="layer-sub">Row Level Security</span></div>
+        <div class="node-row">
+          <div class="node"><b>Çekirdek tablolar</b>data_sources, hazard_types/thresholds, incidents, cap_drafts, community_reports, drill_sessions, audit_log</div>
+          <div class="node"><b>RLS politikaları</b>küresel/yerel kaynak görünürlüğü, ülke bazlı erişim (Madagaskar Türkiye'ye özel veri görmüyor)</div>
+          <div class="node"><b>pg_net + pg_cron</b>DB içinden Edge Function tetikleme (dispatch) ve zamanlanmış görevler (15 dk / 2 saat / günlük)</div>
+          <div class="node"><b>Realtime</b>INSERT olayları tüm bağlı frontend istemcilerine canlı yayınlanıyor</div>
+        </div>
+      </div>
+      <div class="connector"><svg width="20" height="24"><path d="M10 0 L10 18 M4 12 L10 18 L16 12" stroke="#5b6474" stroke-width="1.6" fill="none"/></svg></div>
+
+      <div class="layer l-edge">
+        <div class="layer-head"><span class="layer-tag">04 · İş Mantığı</span><span class="layer-title">Deno Edge Functions</span><span class="layer-sub">stateless, service-role</span></div>
+        <div class="node-row">
+          <div class="node"><b>dispatch-alert</b>CAP broadcast anında pg_net trigger ile tetiklenir → Resend/SendGrid (env ile değiştirilebilir)</div>
+          <div class="node"><b>submit-community-report</b>tek yazma yolu; ülke kodunu server-side belirler (client spoofing riski yok)</div>
+          <div class="node"><b>verify-recovery-code / ack-dispatch</b>MFA kurtarma ve "aldım" onay linki gibi anon-erişimli uç noktalar</div>
+          <div class="node"><b>WhatsApp adapter</b>şu an mock — state machine/receipt izleme kanıtlanmış, gerçek Meta Cloud API bağlı değil</div>
+        </div>
+      </div>
+      <div class="connector"><svg width="20" height="24"><path d="M10 0 L10 18 M4 12 L10 18 L16 12" stroke="#5b6474" stroke-width="1.6" fill="none"/></svg></div>
+
+      <div class="layer l-front">
+        <div class="layer-head"><span class="layer-tag">05 · İstemci</span><span class="layer-title">Vue 3 + Vite</span><span class="layer-sub">operatör panel + genel erişim</span></div>
+        <div class="node-row">
+          <div class="node"><b>AdminView / CapView / IncidentsView</b>operatör paneli — kaynak yönetimi, CAP taslak yazımı, olay takibi</div>
+          <div class="node"><b>2D / 3D harita</b>MapLibre GL (katmanlar, cluster) + Three.js küre görünümü</div>
+          <div class="node"><b>IndexedDB önbellek</b>anında yükleme, arka planda yalnızca son fetch'ten beri delta çekiliyor</div>
+          <div class="node"><b>Public Alert Portal + /report</b>kimlik doğrulama gerektirmeyen genel erişim, community hazard reporting</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ALERT PIPELINE -->
+  <section>
+    <div class="sec-head"><h2>Alarm Yaşam Döngüsü</h2><span class="sec-tag">bir tehlikenin tespitten dağıtıma yolculuğu</span></div>
+    <p class="sec-desc">Bir eşik aşıldığında sistemden geçen adım adım akış — modüller arası bu zincir üzerinden konuşuyor.</p>
+    <div class="pipeline" id="pipeline"></div>
+  </section>
+
+  <!-- ROLES -->
+  <section>
+    <div class="sec-head"><h2>Roller &amp; Erişim</h2><span class="sec-tag">4 sabit kademe · RLS ile uygulanıyor</span></div>
+    <p class="sec-desc">Roller Supabase RLS politikalarıyla veritabanı seviyesinde uygulanıyor; SRS'te planlanan "custom permissions" (konfigüre edilebilir roller) henüz yok — 4 kademe sabit.</p>
+    <div class="role-grid">
+      <div class="role-card"><div class="rname">viewer</div><div class="rdesc">Salt okuma. Afet Ansiklopedisi, harita, genel görünümler. CAP taslağı göremez (viewer görünürlüğü daraltıldı).</div></div>
+      <div class="role-card"><div class="rname">org_admin</div><div class="rdesc">Kendi organizasyonuna atanmış onaylı topluluk bildirimlerini salt-okunur görür. Onay/red yetkisi yok.</div></div>
+      <div class="role-card"><div class="rname">country_admin</div><div class="rdesc">Ülke kapsamlı CRUD: kişi rehberi, kaynak yönetimi, topluluk bildirimi moderasyonu (onay/red).</div></div>
+      <div class="role-card"><div class="rname">super_admin</div><div class="rdesc">Küresel kapsam: hazard taksonomisi, harita katmanları (map_layers), kullanıcı askıya alma, denetim (audit) sekmesi.</div></div>
+    </div>
+    <p class="sec-desc" style="margin-top:18px;">Kimlik doğrulama: TOTP tabanlı MFA (SRS NFR-0057, CRITICAL) — herkese açık "Hesap Güvenliği" sayfası, AAL tabanlı login challenge, özel <code style="font-family:var(--mono);color:var(--blue)">mfa_recovery_codes</code> tablosu (Supabase'de native karşılığı yok). Self-registration bilinçli olarak tamamen kaldırılmış — sadece davetle onboarding.</p>
+  </section>
+
+  <!-- DATA MAP -->
+  <section>
+    <div class="sec-head"><h2>Anahtar Tablolar</h2><span class="sec-tag">kısmi liste</span></div>
+    <table class="datamap">
+      <tr><th>Tablo</th><th>Amaç</th><th>Not</th></tr>
+      <tr><td>data_sources</td><td>Her afet veri kaynağının durumu ve kapsamı</td><td><code>country_code</code> ile küresel/yerel görünürlük</td></tr>
+      <tr><td>hazard_types / hazard_thresholds</td><td>Afet tipi taksonomisi + şiddet eşikleri</td><td>JSONB breakpoint dizisi, sadece super_admin yazar</td></tr>
+      <tr><td>cap_drafts</td><td>CAP alarm taslakları</td><td>Four-eyes onay, broadcast sonrası içerik kilidi</td></tr>
+      <tr><td>incidents</td><td>Olay kaydı yaşam döngüsü</td><td>Guard trigger ile zorunlu state machine</td></tr>
+      <tr><td>community_reports</td><td>Halktan gelen tehlike bildirimleri</td><td>pending → approved/rejected → archived</td></tr>
+      <tr><td>drill_sessions</td><td>Tatbikat oturumları</td><td>is_exercise otomatik işaretleme, gerçek dispatch'i asla tetiklemez</td></tr>
+      <tr><td>dispatch_jobs / dispatch_receipts</td><td>Dağıtım kuyruğu ve teslim kanıtı</td><td>Kısmi hata toleransı + retry</td></tr>
+      <tr><td>audit_log</td><td>Değiştirilemez denetim izi</td><td>SHA-256 hash-zinciri bütünlük doğrulaması</td></tr>
+      <tr><td>map_layers</td><td>OGC WMS/WFS görsel katman kaydı</td><td>"Consume only" — veri hiç depolanmıyor</td></tr>
+    </table>
+  </section>
+
+  <footer>
+    <span>Kaynak: iş_planı_istereler.txt · GEWS_system_plan.md · MHEWS_architecture_description.md · MHEWS_software_design_description.md</span>
+    <span>global-alert-spec-kit</span>
+  </footer>
+</div>
+
+<script>
+const pipeline = [
+  {title:"Veri alımı", tbl:"fetch-*", desc:"10+ kaynaktan (USGS, GDACS, AFAD…) periyodik/gerçek-zamanlı çekim; normalize edilir, dedup'lanır, data_sources'a yazılır."},
+  {title:"Eşik değerlendirmesi", tbl:"hazard_thresholds", desc:"Gelen gözlem, hazard tipine özel şiddet eşikleriyle karşılaştırılır."},
+  {title:"CAP taslağı oluşturma", tbl:"cap_drafts", desc:"Tespit edilen olaydan operatör taslak oluşturur (startFromEvent()); identifier + sender otomatik atanır."},
+  {title:"Four-eyes onay", tbl:"cap_drafts.status", desc:"İkinci bir operatör onaylamadan broadcast edilemez; ret/iptal için zorunlu gerekçe istenir."},
+  {title:"Broadcast + içerik kilidi", tbl:"broadcast_at", desc:"Yayınlanan alarmın içeriği donar; tam CAP v1.2 XML/JSON export (Alert/Update/Cancel) üretilir."},
+  {title:"Dağıtım", tbl:"dispatch-alert", desc:"pg_net trigger → Edge Function → e-posta (Resend/SendGrid) + WhatsApp (mock) + Public Portal. Kısmi hatada retry.", blocked:false},
+  {title:"Olay bağlama", tbl:"incidents", desc:"Broadcast edilen alarmdan tek tıkla bağlantılı incident oluşturulabilir; SOP repository otomatik eşleşir."},
+  {title:"Denetim kaydı", tbl:"audit_log", desc:"Her adım değiştirilemez şekilde loglanır; hash-zinciri ile bütünlük her zaman doğrulanabilir."},
+];
+const el = document.getElementById('pipeline');
+pipeline.forEach((s,i)=>{
+  const div = document.createElement('div');
+  div.className = 'pstep' + (s.blocked ? ' blocked':'');
+  div.innerHTML = `
+    <div class="num">${i+1}<div class="line"></div></div>
+    <div class="pstep-body">
+      <div class="pstep-title">${s.title}<span class="tbl">${s.tbl}</span></div>
+      <div class="pstep-desc">${s.desc}</div>
+    </div>`;
+  el.appendChild(div);
+});
+</script>
+</body>
+</html>

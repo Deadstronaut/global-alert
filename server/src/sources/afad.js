@@ -14,7 +14,9 @@ export function triggerPollAFAD() { return _poll?.(); }
 const BASE_URL = 'https://deprem.afad.gov.tr/apiv2/event/filter';
 const POLL_INTERVAL = 15 * 1000; // 15 saniye
 
-export function startAFAD(onEvent) {
+export function startAFAD(onEvent, opts = {}) {
+  const url = opts.url || BASE_URL;
+  const intervalMs = opts.intervalMs || POLL_INTERVAL;
   const seen = new Set();
   let timer = null;
   let running = true;
@@ -24,7 +26,7 @@ export function startAFAD(onEvent) {
       const now = new Date();
       const from = new Date(now.getTime() - 2 * 60 * 60 * 1000); // son 2 saat
 
-      const res = await axios.get(BASE_URL, {
+      const res = await axios.get(url, {
         params: {
           start: formatDate(from),
           end: formatDate(now),
@@ -53,8 +55,8 @@ export function startAFAD(onEvent) {
 
   _poll = poll;
   poll();
-  timer = setInterval(() => { if (running) poll(); }, POLL_INTERVAL);
-  console.log('[AFAD] ✅ Polling started (15s)');
+  timer = setInterval(() => { if (running) poll(); }, intervalMs);
+  console.log(`[AFAD] ✅ Polling started (${intervalMs / 1000}s)`);
 
   return () => {
     running = false;

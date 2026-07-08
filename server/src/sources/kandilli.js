@@ -15,14 +15,16 @@ export function triggerPollKandilli() {return _poll?.();}
 const URL = 'http://www.koeri.boun.edu.tr/scripts/lst0.asp';
 const POLL_INTERVAL = 20 * 1000; // 20 saniye
 
-export function startKandilli(onEvent) {
+export function startKandilli(onEvent, opts = {}) {
+  const url = opts.url || URL;
+  const intervalMs = opts.intervalMs || POLL_INTERVAL;
   const seen = new Set();
   let timer = null;
   let running = true;
 
   async function poll() {
     try {
-      const res = await axios.get(URL, {
+      const res = await axios.get(url, {
         timeout: 15000,
         headers: {'Accept-Charset': 'windows-1254'},
         responseType: 'arraybuffer',
@@ -49,8 +51,8 @@ export function startKandilli(onEvent) {
 
   _poll = poll;
   poll();
-  timer = setInterval(() => {if (running) poll();}, POLL_INTERVAL);
-  console.log('[Kandilli] ✅ Polling started (20s)');
+  timer = setInterval(() => {if (running) poll();}, intervalMs);
+  console.log(`[Kandilli] ✅ Polling started (${intervalMs / 1000}s)`);
 
   return () => {
     running = false;

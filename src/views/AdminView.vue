@@ -4,7 +4,6 @@ import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useAuthStore } from '@/stores/auth.js'
 import { useSourcesStore } from '@/stores/sources.js'
-import { useDisasterStore } from '@/stores/disaster.js'
 import { supabase } from '@/services/api/config.js'
 import SourceHealthCard from '@/components/admin/SourceHealthCard.vue'
 import SourceFormModal from '@/components/admin/SourceFormModal.vue'
@@ -636,75 +635,6 @@ function closeAudit() {
   auditData.value = null
 }
 
-// ── Built-in feed health (aggregator server) ────────────────────────────────
-// These are the always-on ingestion feeds the server polls directly, shown here
-// split by scope: worldwide feeds vs. Turkey-only feeds (AFAD, Kandilli).
-const disasterStore = useDisasterStore()
-const AGGREGATOR_URL = import.meta.env.VITE_AGGREGATOR_URL || 'http://localhost:8765'
-const GLOBAL_FEED_LIST = [
-  'EMSC',
-  'USGS',
-  'GEOFON',
-  'GDACS',
-  'PTWC',
-  'NASA FIRMS',
-  'FEWS NET',
-  'WHO',
-]
-const LOCAL_FEED_LIST = ['AFAD', 'Kandilli']
-
-const feedServerStatus = ref({})
-let feedServerTimer = null
-
-async function checkFeedServer() {
-  try {
-    const res = await fetch(`${AGGREGATOR_URL}/status`, { signal: AbortSignal.timeout(4000) })
-    feedServerStatus.value = res.ok ? ((await res.json()).sources ?? {}) : {}
-  } catch {
-    feedServerStatus.value = {}
-  }
-}
-
-function feedStatusColor(entry) {
-  if (!entry) return '#6b7280'
-  const code = entry.code
-  if (code === 200) return '#22c55e'
-  if (code === 0) return '#f59e0b'
-  if (code === 401 || code === 403) return '#f97316'
-  return '#ef4444'
-}
-
-function feedStatusLabel(entry) {
-  if (!entry) return 'Bilinmiyor'
-  if (entry.code === 0) return 'WS kapalı'
-  return `HTTP ${entry.code}`
-}
-
-function feedLastCheck(entry) {
-  if (!entry?.at) return 'Henüz yok'
-  const diff = Math.round((Date.now() - entry.at) / 1000)
-  if (diff < 60) return `${diff}sn önce`
-  return `${Math.round(diff / 60)}dk önce`
-}
-
-function buildFeedRows(names) {
-  const status = disasterStore.sourcesStatus
-  return names.map((name) => ({
-    name,
-    entry: feedServerStatus.value[name] ?? null,
-    active: status[name] !== false,
-  }))
-}
-
-const feedSources = computed(() => ({
-  global: buildFeedRows(GLOBAL_FEED_LIST),
-  local: buildFeedRows(LOCAL_FEED_LIST),
-}))
-
-function toggleFeedSource(name) {
-  disasterStore.toggleSource(name)
-}
-
 // ── Audit & Compliance (spec 007) ───────────────────────────────────────────
 const AUDIT_PAGE_SIZE = 25
 const AUDIT_EXPORT_CAP = 5000
@@ -995,6 +925,32 @@ const auditTotalPages = computed(() =>
   Math.max(1, Math.ceil(auditTotalCount.value / AUDIT_PAGE_SIZE)),
 )
 
+const adminMetrics = computed(() => {
+  const activeSources = sourcesStore.sources.filter((source) => source.is_active).length
+  const runningDrills = drills.value.filter((drill) => drill.status === 'active').length
+  // Built-in (Tier-1) kaynaklar artık data_sources'ta source_type dolu satırlar —
+  // eski hardcoded /status tabanlı "Canlı Feed" sayacının yerini bu alıyor.
+  const tier1Sources = sourcesStore.sources.filter((source) => source.source_type)
+  const healthyTier1 = tier1Sources.filter((source) => source.health_state === 'healthy').length
+
+  return [
+    { label: 'Kullanıcı', value: users.value.length, tone: usersError.value ? 'danger' : 'info' },
+    { label: 'Organizasyon', value: orgs.value.length, tone: orgsError.value ? 'danger' : 'neutral' },
+    {
+      label: 'Aktif Kaynak',
+      value: `${activeSources}/${sourcesStore.sources.length || 0}`,
+      tone: sourcesStore.error ? 'danger' : 'success',
+    },
+    {
+      label: 'Canlı Feed',
+      value: `${healthyTier1}/${tier1Sources.length || 0}`,
+      tone: healthyTier1 >= tier1Sources.length * 0.8 ? 'success' : 'warning',
+    },
+    { label: 'Aktif Tatbikat', value: runningDrills, tone: runningDrills ? 'warning' : 'neutral' },
+    { label: 'Audit Kayıt', value: auditTotalCount.value, tone: auditError.value ? 'danger' : 'info' },
+  ]
+})
+
 onMounted(() => {
   loadUsers()
   loadOrgs()
@@ -1002,13 +958,10 @@ onMounted(() => {
   hazardTypesStore.fetchHazardTypes()
   sourcesStore.fetchSources()
   sourcesRefreshTimer = setInterval(() => sourcesStore.fetchSources(), FASTEST_POLL_MS)
-  checkFeedServer()
-  feedServerTimer = setInterval(checkFeedServer, 30_000)
 })
 
 onUnmounted(() => {
   if (sourcesRefreshTimer) clearInterval(sourcesRefreshTimer)
-  if (feedServerTimer) clearInterval(feedServerTimer)
 })
 </script>
 
@@ -1023,6 +976,17 @@ onUnmounted(() => {
       </div>
       <h1 class="admin-title">⚙️ Yönetim Paneli</h1>
       <span class="admin-subtitle">Administration &amp; Access Control</span>
+      <div class="admin-metrics">
+        <div
+          v-for="metric in adminMetrics"
+          :key="metric.label"
+          class="admin-metric"
+          :class="`metric-${metric.tone}`"
+        >
+          <span class="metric-label">{{ metric.label }}</span>
+          <strong class="metric-value">{{ metric.value }}</strong>
+        </div>
+      </div>
     </div>
 
     <!-- Tabs -->
@@ -1533,54 +1497,6 @@ onUnmounted(() => {
         />
       </Transition>
 
-      <!-- Built-in ingestion feeds (aggregator server health) -->
-      <div class="sources-group-label">🌍 Global Kaynaklar</div>
-      <div class="sources-grid">
-        <button
-          v-for="source in feedSources.global"
-          :key="source.name"
-          class="feed-card"
-          :class="{ 'feed-card-inactive': !source.active }"
-          @click="toggleFeedSource(source.name)"
-        >
-          <div class="feed-card-top">
-            <span
-              class="feed-state"
-              :style="{ color: source.active ? feedStatusColor(source.entry) : '#6b7280' }"
-            >
-              ● {{ source.active ? feedStatusLabel(source.entry) : 'Devre Dışı' }}
-            </span>
-          </div>
-          <div class="source-name">{{ source.name }}</div>
-          <div class="feed-card-meta">Son kontrol: {{ feedLastCheck(source.entry) }}</div>
-        </button>
-      </div>
-
-      <div class="sources-divider"></div>
-      <div class="sources-group-label">📍 Yerel Kaynaklar (Türkiye)</div>
-      <div class="sources-grid">
-        <button
-          v-for="source in feedSources.local"
-          :key="source.name"
-          class="feed-card"
-          :class="{ 'feed-card-inactive': !source.active }"
-          @click="toggleFeedSource(source.name)"
-        >
-          <div class="feed-card-top">
-            <span
-              class="feed-state"
-              :style="{ color: source.active ? feedStatusColor(source.entry) : '#6b7280' }"
-            >
-              ● {{ source.active ? feedStatusLabel(source.entry) : 'Devre Dışı' }}
-            </span>
-          </div>
-          <div class="source-name">{{ source.name }}</div>
-          <div class="feed-card-meta">Son kontrol: {{ feedLastCheck(source.entry) }}</div>
-        </button>
-      </div>
-
-      <div class="sources-divider"></div>
-
       <div v-if="sourcesStore.error" class="tab-error">{{ sourcesStore.error }}</div>
       <div v-if="sourcesStore.loading && !sourcesStore.sources.length" class="tab-loading">
         Yükleniyor...
@@ -1943,39 +1859,56 @@ onUnmounted(() => {
 .admin-page {
   height: 100vh;
   overflow-y: auto;
-  background: var(--color-bg, #0f1117);
+  background:
+    linear-gradient(180deg, rgba(12, 19, 36, 0.96), rgba(7, 11, 20, 1) 240px),
+    var(--color-bg, #0f1117);
   color: var(--color-text-primary, #e2e8f0);
-  padding: 24px;
+  padding: 20px 24px 28px;
   font-family: var(--font-sans, 'Inter', sans-serif);
 }
 .admin-header {
-  margin-bottom: 24px;
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  margin: -20px -24px 18px;
+  padding: 18px 24px 16px;
+  background: rgba(7, 11, 20, 0.9);
+  border-bottom: 1px solid rgba(148, 163, 184, 0.16);
+  backdrop-filter: blur(18px) saturate(130%);
+  -webkit-backdrop-filter: blur(18px) saturate(130%);
 }
 .admin-header-top {
   display: flex;
   justify-content: space-between;
-  align-items: center;
+  align-items: flex-start;
+  gap: 16px;
 }
 .btn-back {
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(15, 23, 42, 0.72);
+  border: 1px solid rgba(148, 163, 184, 0.22);
   border-radius: 8px;
-  color: var(--color-text-muted, #94a3b8);
-  padding: 6px 14px;
+  color: var(--color-text-secondary, #cbd5e1);
+  padding: 7px 14px;
   font-size: 0.8rem;
+  font-weight: 700;
   cursor: pointer;
-  transition: background 0.15s;
-  margin-bottom: 12px;
+  transition:
+    background 0.15s,
+    border-color 0.15s,
+    color 0.15s;
+  margin-bottom: 0;
   display: inline-block;
 }
 .btn-back:hover {
-  background: rgba(255, 255, 255, 0.12);
+  background: rgba(77, 163, 255, 0.12);
+  border-color: rgba(77, 163, 255, 0.38);
   color: var(--color-text-primary, #e2e8f0);
 }
 .admin-title {
-  font-size: 1.6rem;
+  font-size: 1.35rem;
   font-weight: 800;
-  margin: 0 0 4px;
+  margin: 10px 0 4px;
+  letter-spacing: 0;
 }
 .admin-subtitle {
   font-size: 0.75rem;
@@ -1983,34 +1916,81 @@ onUnmounted(() => {
   text-transform: uppercase;
   letter-spacing: 0.1em;
 }
+.admin-metrics {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 14px;
+}
+.admin-metric {
+  min-height: 54px;
+  padding: 9px 10px;
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  border-radius: 8px;
+  background: rgba(15, 23, 42, 0.58);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 3px;
+}
+.metric-label {
+  font-size: 0.66rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--color-text-muted, #94a3b8);
+}
+.metric-value {
+  font-size: 1rem;
+  color: var(--color-text-primary, #e2e8f0);
+}
+.metric-success { border-color: rgba(34, 197, 94, 0.3); }
+.metric-warning { border-color: rgba(245, 158, 11, 0.34); }
+.metric-danger { border-color: rgba(239, 68, 68, 0.34); }
+.metric-info { border-color: rgba(77, 163, 255, 0.28); }
 
 .tabs {
   display: flex;
-  gap: 4px;
-  margin-bottom: 20px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  align-content: flex-start;
+  margin-top: 16px;
+  margin-bottom: 18px;
+  padding: 10px;
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  border-radius: 10px;
+  background: rgba(15, 23, 42, 0.5);
 }
 .tab {
-  padding: 10px 18px;
+  min-height: 32px;
+  padding: 7px 12px;
   background: transparent;
-  border: none;
-  border-bottom: 2px solid transparent;
+  border: 1px solid transparent;
+  border-radius: 8px;
   color: var(--color-text-muted, #94a3b8);
-  font-size: 0.85rem;
+  font-size: 0.78rem;
   font-weight: 600;
   cursor: pointer;
   transition: all 0.15s;
+  white-space: nowrap;
+  flex: 0 1 auto;
 }
 .tab.active {
-  color: #4da3ff;
-  border-bottom-color: #4da3ff;
+  color: #dbeafe;
+  border-color: rgba(77, 163, 255, 0.42);
+  background: rgba(77, 163, 255, 0.14);
 }
 .tab:hover:not(.active) {
   color: var(--color-text-primary, #e2e8f0);
+  background: rgba(255, 255, 255, 0.05);
 }
 
 .tab-content {
   animation: fade-in 0.2s ease;
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  border-radius: 10px;
+  background: rgba(15, 23, 42, 0.42);
+  padding: 16px;
 }
 @keyframes fade-in {
   from {
@@ -2026,7 +2006,8 @@ onUnmounted(() => {
 .tab-actions {
   display: flex;
   justify-content: flex-end;
-  margin-bottom: 14px;
+  gap: 8px;
+  margin-bottom: 12px;
 }
 .tab-loading {
   text-align: center;
@@ -2061,6 +2042,9 @@ onUnmounted(() => {
 /* Table */
 .users-table-wrap {
   overflow-x: auto;
+  border: 1px solid rgba(148, 163, 184, 0.12);
+  border-radius: 8px;
+  background: rgba(2, 6, 23, 0.28);
 }
 .data-table {
   width: 100%;
@@ -2068,21 +2052,22 @@ onUnmounted(() => {
   font-size: 0.82rem;
 }
 .data-table th {
-  padding: 10px 12px;
+  padding: 9px 12px;
   text-align: left;
   font-size: 0.7rem;
   text-transform: uppercase;
   letter-spacing: 0.08em;
   color: var(--color-text-muted, #94a3b8);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  border-bottom: 1px solid rgba(148, 163, 184, 0.14);
+  background: rgba(15, 23, 42, 0.72);
 }
 .data-table td {
-  padding: 10px 12px;
+  padding: 9px 12px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.05);
   vertical-align: middle;
 }
 .data-table tr:hover td {
-  background: rgba(255, 255, 255, 0.02);
+  background: rgba(77, 163, 255, 0.04);
 }
 .muted {
   color: var(--color-text-muted, #94a3b8);
@@ -2334,19 +2319,19 @@ onUnmounted(() => {
 
 /* Form shared */
 .form-card {
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 12px;
-  padding: 18px;
+  background: rgba(2, 6, 23, 0.28);
+  border: 1px solid rgba(148, 163, 184, 0.12);
+  border-radius: 8px;
+  padding: 14px;
   margin-bottom: 16px;
 }
 .form-grid {
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 12px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
 }
 .span-2 {
-  grid-column: span 2;
+  grid-column: span 3;
 }
 .form-field {
   display: flex;
@@ -2357,12 +2342,12 @@ onUnmounted(() => {
 }
 .form-field input,
 .form-field select {
-  background: #1e2330;
-  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: rgba(15, 23, 42, 0.86);
+  border: 1px solid rgba(148, 163, 184, 0.18);
   border-radius: 8px;
-  padding: 8px 10px;
+  padding: 7px 10px;
   color: #e2e8f0;
-  font-size: 0.85rem;
+  font-size: 0.82rem;
   width: 100%;
 }
 .form-field select {
@@ -2389,7 +2374,7 @@ onUnmounted(() => {
   flex: 1;
 }
 .btn-submit {
-  padding: 9px 22px;
+  padding: 8px 18px;
   background: rgba(34, 197, 94, 0.2);
   border: 1px solid rgba(34, 197, 94, 0.4);
   border-radius: 8px;
@@ -2429,8 +2414,8 @@ onUnmounted(() => {
 /* Data Sources */
 .sources-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  gap: 12px;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 10px;
 }
 .sources-group-label {
   font-size: 0.78rem;
@@ -2442,14 +2427,14 @@ onUnmounted(() => {
 }
 .sources-divider {
   height: 1px;
-  background: var(--color-border, rgba(255, 255, 255, 0.12));
-  margin: 20px 0 4px;
+  background: rgba(148, 163, 184, 0.14);
+  margin: 18px 0 4px;
 }
 .feed-card {
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 10px;
-  padding: 14px 16px;
+  background: rgba(2, 6, 23, 0.28);
+  border: 1px solid rgba(148, 163, 184, 0.12);
+  border-radius: 8px;
+  padding: 12px 14px;
   display: flex;
   flex-direction: column;
   gap: 6px;
@@ -2458,8 +2443,8 @@ onUnmounted(() => {
   transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
 .feed-card:hover {
-  background: rgba(255, 255, 255, 0.07);
-  border-color: rgba(255, 255, 255, 0.15);
+  background: rgba(77, 163, 255, 0.06);
+  border-color: rgba(77, 163, 255, 0.24);
 }
 .feed-card-inactive {
   opacity: 0.45;
@@ -2486,10 +2471,10 @@ onUnmounted(() => {
 }
 .audit-panel {
   margin-top: 20px;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 12px;
-  padding: 18px;
+  background: rgba(2, 6, 23, 0.28);
+  border: 1px solid rgba(148, 163, 184, 0.12);
+  border-radius: 8px;
+  padding: 14px;
 }
 .audit-header {
   display: flex;
@@ -2538,8 +2523,8 @@ onUnmounted(() => {
 }
 .audit-field input,
 .audit-field select {
-  background: #1e2330;
-  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: rgba(15, 23, 42, 0.86);
+  border: 1px solid rgba(148, 163, 184, 0.18);
   border-radius: 8px;
   padding: 6px 10px;
   color: #e2e8f0;
@@ -2600,12 +2585,15 @@ onUnmounted(() => {
   width: 100%;
   border-collapse: collapse;
   font-size: 0.82rem;
+  background: rgba(2, 6, 23, 0.28);
+  border: 1px solid rgba(148, 163, 184, 0.12);
 }
 .audit-table th {
   text-align: left;
   padding: 8px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.15);
+  border-bottom: 1px solid rgba(148, 163, 184, 0.14);
   color: var(--color-text-muted, #94a3b8);
+  background: rgba(15, 23, 42, 0.72);
 }
 .audit-table td {
   padding: 8px;
@@ -2660,5 +2648,64 @@ onUnmounted(() => {
   flex-direction: column;
   gap: 8px;
   font-size: 0.82rem;
+}
+
+@media (max-width: 1100px) {
+  .admin-metrics {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .tab {
+    flex-basis: calc(25% - 8px);
+    text-align: center;
+  }
+
+  .form-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .span-2 {
+    grid-column: span 2;
+  }
+}
+
+@media (max-width: 720px) {
+  .admin-page {
+    padding: 14px;
+  }
+
+  .admin-header {
+    margin: -14px -14px 14px;
+    padding: 14px;
+  }
+
+  .admin-header-top {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .admin-header-top .btn-back {
+    margin-right: 6px;
+  }
+
+  .admin-metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .tab {
+    flex-basis: calc(50% - 8px);
+  }
+
+  .tab-content {
+    padding: 12px;
+  }
+
+  .form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .span-2 {
+    grid-column: span 1;
+  }
 }
 </style>

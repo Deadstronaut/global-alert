@@ -14,14 +14,16 @@ const POLL_INTERVAL = 3 * 60 * 1000; // 3 dakika
 let _poll = null;
 export function triggerPollPTWC() { return _poll?.(); }
 
-export function startPTWC(onEvent) {
+export function startPTWC(onEvent, opts = {}) {
+  const url = opts.url || FEED_URL;
+  const intervalMs = opts.intervalMs || POLL_INTERVAL;
   const seen = new Set();
   let timer = null;
   let running = true;
 
   async function poll() {
     try {
-      const res = await axios.get(FEED_URL, { timeout: 10000, responseType: 'text' });
+      const res = await axios.get(url, { timeout: 10000, responseType: 'text' });
       const events = parsePTWCXML(res.data);
       let count = 0;
       for (const e of events) {
@@ -45,8 +47,8 @@ export function startPTWC(onEvent) {
 
   _poll = poll;
   poll();
-  timer = setInterval(() => { if (running) poll(); }, POLL_INTERVAL);
-  console.log('[PTWC] ✅ Polling started (3 min)');
+  timer = setInterval(() => { if (running) poll(); }, intervalMs);
+  console.log(`[PTWC] ✅ Polling started (${intervalMs / 1000}s)`);
 
   return () => {
     running = false;

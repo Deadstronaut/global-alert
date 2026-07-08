@@ -16,8 +16,9 @@
 import { normalize } from '../processors/normalizer.js';
 import { reportStatus } from '../output/healthTracker.js';
 
-// Minimal XML parser — bağımlılık yok
-function parseXML(xml) {
+// Minimal XML parser — bağımlılık yok. Export edilir: formatHandlers/rss.js
+// (Faz 2.5 generic RSS/XML kaynakları) aynı parser'ı kullanır.
+export function parseXML(xml) {
   const items = [];
   const itemRegex = /<item[^>]*>([\s\S]*?)<\/item>/gi;
   let match;
@@ -94,6 +95,13 @@ export function startRSSSource(onEvent, { name, url, type, intervalMs = 5 * 60_0
         headers: { 'User-Agent': 'MHEWS/1.0 (Global Alert System)' },
         signal: AbortSignal.timeout(15_000),
       });
+      if (res.status === 404) {
+        // Some feeds (e.g. PTWC) 404 when there are simply no active
+        // bulletins right now — normal empty state, not a failure. Matches
+        // how ptwc.js's REST/XML sibling already treats this same case.
+        reportStatus(name, 200, 0);
+        return;
+      }
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const xml = await res.text();
       const items = parseXML(xml);
@@ -123,12 +131,17 @@ export function startRSSSource(onEvent, { name, url, type, intervalMs = 5 * 60_0
  * GDACS — Global Disaster Alert and Coordination System
  * Covers: earthquakes, cyclones, floods, tsunamis, droughts, volcanoes
  */
-export function startGDACSRSS(onEvent) {
+export function startGDACSRSS(onEvent, opts = {}) {
   return startRSSSource(onEvent, {
-    name:       'GDACS',
-    url:        'https://www.gdacs.org/xml/rss.xml',
+    // name is the healthTracker/reportStatus key — opts.name lets the
+    // registry-driven copy (data_sources row "GDACS RSS") track health
+    // independently from the REST "GDACS" row instead of colliding on the
+    // same key. event.source stays the literal 'GDACS' below regardless
+    // (map/UI display label, unrelated to health tracking).
+    name:       opts.name || 'GDACS',
+    url:        opts.url || 'https://www.gdacs.org/xml/rss.xml',
     type:       'disaster',
-    intervalMs: 5 * 60_000,
+    intervalMs: opts.intervalMs || 5 * 60_000,
     parseItem(item, sourceName) {
       const lat = parseFloat(item.lat ?? '0');
       const lng = parseFloat(item.lng ?? '0');
@@ -161,11 +174,11 @@ export function startGDACSRSS(onEvent) {
 /**
  * PTWC — Pacific Tsunami Warning Center (RSS)
  */
-export function startPTWCRSS(onEvent) {
+export function startPTWCRSS(onEvent, opts = {}) {
   return startRSSSource(onEvent, {
-    name:       'PTWC',
-    url:        'https://www.tsunami.gov/events/rss.xml',
+    name:       opts.name || 'PTWC', // see startGDACSRSS's comment on opts.name
+    url:        opts.url || 'https://www.tsunami.gov/events/rss.xml',
     type:       'tsunami',
-    intervalMs: 2 * 60_000,
+    intervalMs: opts.intervalMs || 2 * 60_000,
   });
 }

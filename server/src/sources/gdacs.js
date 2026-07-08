@@ -25,14 +25,16 @@ const TYPE_MAP = {
   TS: 'tsunami',
 };
 
-export function startGDACS(onEvent) {
+export function startGDACS(onEvent, opts = {}) {
+  const url = opts.url || API_URL;
+  const intervalMs = opts.intervalMs || POLL_INTERVAL;
   const seen = new Set();
   let timer = null;
   let running = true;
 
   async function poll() {
     try {
-      const res = await axios.get(API_URL, {
+      const res = await axios.get(url, {
         params: {
           alertlevel: 'Green,Orange,Red',
           eventlist: 'EQ,FL,TC,VO,DR,WF,TS',
@@ -62,8 +64,8 @@ export function startGDACS(onEvent) {
 
   _poll = poll;
   poll();
-  timer = setInterval(() => { if (running) poll(); }, POLL_INTERVAL);
-  console.log('[GDACS] ✅ Polling started (5 min)');
+  timer = setInterval(() => { if (running) poll(); }, intervalMs);
+  console.log(`[GDACS] ✅ Polling started (${intervalMs / 1000}s)`);
 
   return () => {
     running = false;

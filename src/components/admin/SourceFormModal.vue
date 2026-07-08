@@ -8,11 +8,12 @@ const auth = useAuthStore()
 // their own country (enforced by RLS regardless — this just keeps the form honest).
 const scopeLocked = computed(() => !auth.isSuperAdmin)
 
-// spec 010: intersected with the hazard types data_sources.hazard_type's own
-// CHECK constraint permits (20260703120000_data_sources.sql) — a source can
-// only ever be routed to one of these 5 fetch-* functions today, regardless
-// of what's active in the broader taxonomy registry.
-const SOURCE_SUPPORTED_HAZARDS = ['earthquake', 'wildfire', 'flood', 'drought', 'food_security']
+// spec 010, widened by tier1-source-unification migration
+// (20260709000000_data_sources_tier1_source_type.sql): intersected with the
+// hazard types data_sources.hazard_type's own CHECK constraint permits —
+// 'multi_hazard' is only used by built-in multi-hazard adapters (GDACS) and
+// isn't offered here since it's not selectable for admin-created sources.
+const SOURCE_SUPPORTED_HAZARDS = ['earthquake', 'wildfire', 'flood', 'drought', 'food_security', 'tsunami', 'epidemic']
 const hazardTypesStore = useHazardTypesStore()
 const HAZARD_TYPES = computed(() =>
   hazardTypesStore.activeHazardTypes.filter((h) => SOURCE_SUPPORTED_HAZARDS.includes(h.code)),
@@ -28,6 +29,24 @@ const MAPPABLE_FIELDS = [
   { key: 'title', label: 'Başlık' },
   { key: 'description', label: 'Açıklama' },
 ]
+
+// Faz 2.5: veri formatı seçimi — sadece "özel kaynak" işaretliyken görünür.
+// 'json' varsayılan (mevcut özel kaynaklarla geriye dönük uyumlu). GeoJSON/RSS
+// formatlarında lat/lng/time gibi bazı alanlar standart konumlarda olduğundan
+// field_map'te boş bırakılırsa sunucu tarafı makul varsayılanlar kullanır
+// (server/src/sources/formatHandlers/*.js).
+const SOURCE_FORMATS = [
+  { value: 'json', label: 'JSON (düz liste + alan eşleştirme)' },
+  { value: 'geojson', label: 'GeoJSON (features[] — USGS tarzı)' },
+  { value: 'rss', label: 'RSS / XML (<item> tabanlı)' },
+  { value: 'csv', label: 'CSV (başlıklı sütunlar)' },
+  { value: 'fdsn', label: 'FDSN metin (| ile ayrılmış — sismoloji ağları, GEOFON tarzı)' },
+]
+
+// Tier-1 (yerleşik) kaynakların source_type'ı buradan asla elle set edilemez
+// — sadece seed migration ile atanır. WebSocket tabanlı adapter'larda
+// poll_interval_seconds sunucu tarafında hiç okunmaz (bkz. registry.js).
+const WEBSOCKET_SOURCE_TYPES = ['emsc']
 
 const props = defineProps({
   source: { type: Object, default: null }, // null = create mode
@@ -45,8 +64,13 @@ function blankForm() {
     poll_interval_seconds: 60,
     staleness_threshold_seconds: null,
     down_after_consecutive_failures: 3,
+    // source_type is never set on create — every admin-created source stays
+    // a generic/custom row (source_type NULL). Tier-1 rows only ever exist
+    // via seed migration.
+    source_type: null,
     is_custom: false,
     response_path: '',
+    format: 'json',
     field_map: {},
     // country_admin can only ever save their own country's scope; super_admin defaults
     // new sources to Global (null) and can change it. `scopeChoice` is UI-only state
@@ -60,8 +84,12 @@ function blankForm() {
 function fromSource(src) {
   return {
     ...src,
+    // Read-only passthrough — see blankForm()'s comment. Carried through on
+    // edit so a Tier-1 row's source_type round-trips unchanged.
+    source_type: src.source_type ?? null,
     is_custom: !!src.endpoint_config?.field_map,
     response_path: src.endpoint_config?.response_path ?? '',
+    format: src.endpoint_config?.format ?? 'json',
     field_map: { ...(src.endpoint_config?.field_map ?? {}) },
     country_code: scopeLocked.value ? auth.countryCode : (src.country_code ?? null),
     scopeChoice: scopeLocked.value || src.country_code ? 'country' : 'global',
@@ -96,11 +124,11 @@ const friendlyError = computed(() => {
 })
 
 function submit() {
-  const { is_custom, response_path, field_map, scopeChoice, ...rest } = form.value
+  const { is_custom, response_path, format, field_map, scopeChoice, ...rest } = form.value
   const payload = {
     ...rest,
     country_code: scopeChoice === 'global' ? null : rest.country_code || null,
-    endpoint_config: is_custom ? { response_path, field_map } : {},
+    endpoint_config: is_custom ? { response_path, format, field_map } : {},
   }
   emit('save', payload)
 }
@@ -117,8 +145,21 @@ function submit() {
           <option v-for="t in HAZARD_TYPES" :key="t.code" :value="t.code">{{ t.display_name }}</option>
         </select>
       </label>
-      <label class="form-field"><span>Poll Aralığı (saniye) *</span>
-        <input v-model.number="form.poll_interval_seconds" type="number" min="1" />
+      <label class="form-field">
+        <span>Poll Aralığı (saniye) *</span>
+        <input
+          v-model.number="form.poll_interval_seconds"
+          type="number" min="1"
+          :disabled="WEBSOCKET_SOURCE_TYPES.includes(form.source_type)"
+          :title="WEBSOCKET_SOURCE_TYPES.includes(form.source_type) ? 'Bu kaynak WebSocket üzerinden çalışır, aralık ayarı geçerli değildir' : ''"
+        />
+        <span v-if="WEBSOCKET_SOURCE_TYPES.includes(form.source_type)" class="field-hint">
+          Bu kaynak WebSocket üzerinden çalışır, aralık ayarı geçerli değildir.
+        </span>
+      </label>
+      <label v-if="form.source_type" class="form-field">
+        <span>Yerleşik kaynak türü (değiştirilemez)</span>
+        <input :value="form.source_type" disabled />
       </label>
       <label class="form-field span-2"><span>Endpoint URL *</span>
         <input v-model="form.endpoint_url" placeholder="https://..." />
@@ -152,10 +193,19 @@ function submit() {
     </div>
 
     <div v-if="form.is_custom" class="mapping-section">
-      <label class="form-field"><span>Kayıt Listesi Yolu (response_path)</span>
+      <label class="form-field"><span>Veri Formatı</span>
+        <select v-model="form.format">
+          <option v-for="f in SOURCE_FORMATS" :key="f.value" :value="f.value">{{ f.label }}</option>
+        </select>
+      </label>
+      <label v-if="form.format === 'json'" class="form-field"><span>Kayıt Listesi Yolu (response_path)</span>
         <input v-model="form.response_path" placeholder="örn. data.records (yanıtın kendisi bir dizi ise boş bırak)" />
       </label>
-      <p class="mapping-hint">Onların API'sindeki alan adını, bizim standart alanımızla eşleştir:</p>
+      <p class="mapping-hint">
+        Onların API'sindeki alan adını, bizim standart alanımızla eşleştir
+        <template v-if="form.format === 'geojson'">(GeoJSON'da lat/lng/derinlik koordinatlardan otomatik okunur, sadece properties altındaki alanları eşleştirin):</template>
+        <template v-else>:</template>
+      </p>
       <div class="mapping-grid">
         <template v-for="f in MAPPABLE_FIELDS" :key="f.key">
           <span class="mapping-label">{{ f.label }}</span>
@@ -191,6 +241,7 @@ function submit() {
 .form-field select { color-scheme: dark; }
 .form-field select option { background: #1e2330; color: #e2e8f0; }
 .form-field input:focus, .form-field select:focus { outline: none; border-color: rgba(77,163,255,.5); }
+.field-hint { color: #f59e0b; font-size: .72rem; }
 .checkbox-field { flex-direction: row; align-items: center; gap: 8px; font-size: .82rem; color: #e2e8f0; }
 .checkbox-field input { width: auto; }
 .mapping-section { margin-top: 14px; padding: 14px; background: rgba(77,163,255,.05); border: 1px dashed rgba(77,163,255,.3); border-radius: 10px; }

@@ -16,11 +16,14 @@ const BASE_URL = 'https://firms.modaps.eosdis.nasa.gov/api/area/csv';
 const GEOJSON_URL = 'https://firms.modaps.eosdis.nasa.gov/api/area/geojson';
 const POLL_INTERVAL = 15 * 60 * 1000; // 15 dakika
 
-export function startNASAFirms(onEvent, apiKey) {
+export function startNASAFirms(onEvent, apiKey, opts = {}) {
   if (!apiKey) {
     console.warn('[NASA FIRMS] ⚠️ API key eksik, wildfire verisi devre dışı');
     return () => {};
   }
+
+  const baseUrl = opts.url || BASE_URL;
+  const intervalMs = opts.intervalMs || POLL_INTERVAL;
 
   // id → ISO timestamp — 6 saatin ötesindekiler otomatik temizlenir
   const seen = new Map();
@@ -38,7 +41,7 @@ export function startNASAFirms(onEvent, apiKey) {
     cleanSeen();
     try {
       // Son 24h, tüm dünya — sadece yüksek/nominal güven seviyesi (low confidence atla)
-      const res = await axios.get(`${BASE_URL}/${apiKey}/VIIRS_SNPP_NRT/world/1`, {
+      const res = await axios.get(`${baseUrl}/${apiKey}/VIIRS_SNPP_NRT/world/1`, {
         timeout: 90000,        // 90s — büyük CSV için yeterli
         responseType: 'text',
         decompress: true,
@@ -75,8 +78,8 @@ export function startNASAFirms(onEvent, apiKey) {
 
   _poll = poll;
   poll();
-  timer = setInterval(() => { if (running) poll(); }, POLL_INTERVAL);
-  console.log('[NASA FIRMS] ✅ Polling started (10 min)');
+  timer = setInterval(() => { if (running) poll(); }, intervalMs);
+  console.log(`[NASA FIRMS] ✅ Polling started (${intervalMs / 1000}s)`);
 
   return () => {
     running = false;

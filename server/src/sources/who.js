@@ -45,14 +45,16 @@ const COUNTRY_COORDS = {
 let _poll = null;
 export function triggerPollWHO() {return _poll?.();}
 
-export function startWHO(onEvent) {
+export function startWHO(onEvent, opts = {}) {
+  const url = opts.url || FEED_URL;
+  const intervalMs = opts.intervalMs || POLL_INTERVAL;
   const seen = new Set();
   let timer = null;
   let running = true;
 
   async function poll() {
     try {
-      const res = await axios.get(FEED_URL, {
+      const res = await axios.get(url, {
         params: {
           sf_provider: 'dynamicProvider372',
           sf_culture: 'en',
@@ -83,8 +85,8 @@ export function startWHO(onEvent) {
 
   _poll = poll;
   poll();
-  timer = setInterval(() => {if (running) poll();}, POLL_INTERVAL);
-  console.log('[WHO] ✅ Polling started (30 min)');
+  timer = setInterval(() => {if (running) poll();}, intervalMs);
+  console.log(`[WHO] ✅ Polling started (${intervalMs / 1000}s)`);
 
   return () => {
     running = false;

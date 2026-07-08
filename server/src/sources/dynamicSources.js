@@ -7,22 +7,17 @@
  * field_map, so this module only ever touches admin-added custom sources.
  */
 
-import axios from 'axios';
 import { normalize } from '../processors/normalizer.js';
 import { recordFetchOutcome, logRejectedPayload } from '../processors/sourceHealth.js';
 import { getSupabaseClient } from '../output/supabaseWriter.js';
 import { reportStatus } from '../output/healthTracker.js';
+import { FORMAT_HANDLERS, resolveFormat } from './formatHandlers/index.js';
 
 const REFRESH_LIST_MS = 60 * 1000; // how often we re-check data_sources for added/removed/edited custom sources
 
 function isGenericSource(row) {
   const fm = row.endpoint_config?.field_map;
   return !!fm && !!fm.id && !!fm.lat && !!fm.lng && !!fm.time;
-}
-
-function getPath(obj, path) {
-  if (!path) return obj;
-  return path.split('.').reduce((acc, key) => (acc == null || typeof acc !== 'object' ? undefined : acc[key]), obj);
 }
 
 function validate(raw) {
@@ -39,22 +34,20 @@ function validate(raw) {
 }
 
 async function pollOne(row, onEvent) {
-  const { response_path = '', field_map } = row.endpoint_config;
+  const { field_map } = row.endpoint_config;
+  const format = resolveFormat(row);
+  const handler = FORMAT_HANDLERS[format];
+  if (!handler) {
+    console.warn(`[Dynamic:${row.name}] Unknown format "${format}", skipping`);
+    return;
+  }
+
   try {
-    const res = await axios.get(row.endpoint_url, { timeout: 10000 });
-    const records = response_path ? getPath(res.data, response_path) : res.data;
-    if (!Array.isArray(records)) throw new Error(`response_path "${response_path}" did not resolve to an array`);
+    const { records, status } = await handler.fetch(row);
 
     let count = 0;
     for (const rec of records) {
-      const raw = {
-        id: getPath(rec, field_map.id),
-        lat: getPath(rec, field_map.lat),
-        lng: getPath(rec, field_map.lng),
-        time: getPath(rec, field_map.time),
-        magnitude: field_map.magnitude ? getPath(rec, field_map.magnitude) : null,
-        depth: field_map.depth ? getPath(rec, field_map.depth) : null,
-      };
+      const raw = handler.map(rec, field_map);
       const check = validate(raw);
       if (!check.valid) {
         await logRejectedPayload(row.id, row.hazard_type, check.reason, rec);
@@ -67,15 +60,15 @@ async function pollOne(row, onEvent) {
         lng: Number(raw.lng),
         magnitude: raw.magnitude != null ? Number(raw.magnitude) : null,
         depth: raw.depth != null ? Number(raw.depth) : null,
-        title: field_map.title ? String(getPath(rec, field_map.title) ?? '') : `${row.name} #${raw.id}`,
-        description: field_map.description ? String(getPath(rec, field_map.description) ?? '') : '',
+        title: raw.title != null ? String(raw.title) : `${row.name} #${raw.id}`,
+        description: raw.description != null ? String(raw.description) : '',
         time: raw.time,
         source: row.name,
         sourceUrl: row.endpoint_url,
       }));
       count++;
     }
-    reportStatus(row.name, res.status, count);
+    reportStatus(row.name, status, count);
     await recordFetchOutcome(row, 'success');
   } catch (err) {
     reportStatus(row.name, err.response?.status || 0);

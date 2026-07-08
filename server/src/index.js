@@ -26,6 +26,7 @@ import { startFEWSNET }    from './sources/fewsnet.js';
 import { startGDACSRSS, startPTWCRSS } from './sources/rss.js';
 import { startIoTSource }  from './sources/iot.js';
 import { startDynamicSources } from './sources/dynamicSources.js';
+import { startConfiguredSources } from './sources/configuredSources.js';
 
 // ── İşlemciler ───────────────────────────────────────────────────────────────
 import { Deduplicator }        from './processors/deduplicator.js';
@@ -84,40 +85,44 @@ function handleEvent(event) {
 // ─────────────────────────────────────────────────────────────────────────────
 const stoppers = [];
 
-// 🌍 Sismik — WebSocket (gerçek zamanlı)
-stoppers.push(connectEMSC(handleEvent));
-
-// 🌍 Sismik — REST polling
-stoppers.push(startUSGS(handleEvent));
-stoppers.push(startAFAD(handleEvent));
-stoppers.push(startKandilli(handleEvent));
-stoppers.push(startGEOFON(handleEvent));
-
-// 🌊 Çoklu afet — REST polling
-stoppers.push(startGDACS(handleEvent));
-stoppers.push(startPTWC(handleEvent));
-
-// 🌊 Tsunami — RSS (PTWC yedek)
-stoppers.push(startPTWCRSS(handleEvent));
-
-// 🌋 GDACS — RSS (CC + EQ + FL + VO + TC + DR)
-stoppers.push(startGDACSRSS(handleEvent));
-
-// 🔥 Yangın — NASA FIRMS (API key gerekli)
-if (process.env.NASA_FIRMS_KEY) {
-  stoppers.push(startNASAFirms(handleEvent, process.env.NASA_FIRMS_KEY));
-} else {
-  console.warn('[GEWS] NASA_FIRMS_KEY eksik, wildfire kaynağı devre dışı');
-}
-
-// 🌾 Gıda güvensizliği — FEWS NET
-stoppers.push(startFEWSNET(handleEvent));
-
-// 🦠 Salgın — WHO
-stoppers.push(startWHO(handleEvent));
+// TIER1-CUTOVER-2026-07-13: Tier-1 kaynaklar (EMSC/USGS/AFAD/Kandilli/GEOFON/
+// GDACS+RSS/PTWC+RSS/NASA FIRMS/FEWS NET/WHO) artık aşağıdaki
+// startConfiguredSources(handleEvent) üzerinden data_sources tablosundan
+// DB-driven çalışıyor — dual-run doğrulaması geçti (bkz. plan dosyası
+// C:\Users\Deadstro\.claude\plans\nifty-bubbling-shannon.md, Faz 3
+// doğrulama adımları: /status taze, Postgres'te duplicate yok, EMSC WS
+// stabil). Statik importlar SİLİNMEDİ, sadece devre dışı — acil rollback
+// için bu bloğu geri açıp altındaki startConfiguredSources satırını
+// kaldırman/USE_DB_SOURCES_TIER1=false yapman yeterli.
+//
+// stoppers.push(connectEMSC(handleEvent));
+// stoppers.push(startUSGS(handleEvent));
+// stoppers.push(startAFAD(handleEvent));
+// stoppers.push(startKandilli(handleEvent));
+// stoppers.push(startGEOFON(handleEvent));
+// stoppers.push(startGDACS(handleEvent));
+// stoppers.push(startPTWC(handleEvent));
+// stoppers.push(startPTWCRSS(handleEvent));
+// stoppers.push(startGDACSRSS(handleEvent));
+// if (process.env.NASA_FIRMS_KEY) {
+//   stoppers.push(startNASAFirms(handleEvent, process.env.NASA_FIRMS_KEY));
+// } else {
+//   console.warn('[GEWS] NASA_FIRMS_KEY eksik, wildfire kaynağı devre dışı');
+// }
+// stoppers.push(startFEWSNET(handleEvent));
+// stoppers.push(startWHO(handleEvent));
 
 // 🌐 Ülkelerin admin panelden ekleyeceği özel kaynaklar (sıfır kod değişikliği)
 stoppers.push(startDynamicSources(handleEvent));
+
+// 🧪→✅ DB-driven Tier-1 kaynaklar — artık varsayılan yol (opt-out: rollback
+// için USE_DB_SOURCES_TIER1=false set edilebilir, kod değişikliği gerekmez).
+if (process.env.USE_DB_SOURCES_TIER1 !== 'false') {
+  stoppers.push(startConfiguredSources(handleEvent));
+  console.log('[GEWS] DB-driven Tier-1 kaynaklar aktif (data_sources tablosu)');
+} else {
+  console.warn('[GEWS] USE_DB_SOURCES_TIER1=false — DB-driven Tier-1 kaynaklar devre dışı, statik importlar da yorum satırında, HİÇBİR Tier-1 kaynak çalışmıyor!');
+}
 
 // 📡 Ek IoT kaynakları (opsiyonel — .env ile aktif)
 // Örnek: SENSOR_URL tanımlıysa OGC SensorThings endpoint'i dinle

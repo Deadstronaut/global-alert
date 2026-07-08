@@ -11,7 +11,8 @@ import { reportStatus } from '../output/healthTracker.js';
 const WS_URL = 'wss://www.seismicportal.eu/standing_order/websocket';
 const PING_INTERVAL = 15000; // 15s
 
-export function connectEMSC(onEvent) {
+export function connectEMSC(onEvent, opts = {}) {
+  const url = opts.url || WS_URL;
   let ws = null;
   let pingTimer = null;
   let reconnectTimer = null;
@@ -19,7 +20,7 @@ export function connectEMSC(onEvent) {
 
   function connect() {
     console.log('[EMSC] Connecting WebSocket...');
-    ws = new WebSocket(WS_URL);
+    ws = new WebSocket(url);
 
     ws.on('open', () => {
       console.log('[EMSC] ✅ WebSocket connected');

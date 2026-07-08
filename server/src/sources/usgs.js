@@ -18,14 +18,16 @@ const ENDPOINTS = {
 
 const POLL_INTERVAL = 15 * 1000; // 15 saniye
 
-export function startUSGS(onEvent) {
+export function startUSGS(onEvent, opts = {}) {
+  const url = opts.url || ENDPOINTS.hour;
+  const intervalMs = opts.intervalMs || POLL_INTERVAL;
   const seen = new Set();
   let timer = null;
   let running = true;
 
   async function poll() {
     try {
-      const res = await axios.get(ENDPOINTS.hour, { timeout: 10000 });
+      const res = await axios.get(url, { timeout: 10000 });
       const features = res.data?.features || [];
       let count = 0;
       for (const f of features) {
@@ -63,8 +65,8 @@ export function startUSGS(onEvent) {
   pollDay();
 
   // Sonrası: saatlik polling
-  timer = setInterval(() => { if (running) poll(); }, POLL_INTERVAL);
-  console.log('[USGS] ✅ Polling started (15s)');
+  timer = setInterval(() => { if (running) poll(); }, intervalMs);
+  console.log(`[USGS] ✅ Polling started (${intervalMs / 1000}s)`);
 
   return () => {
     running = false;

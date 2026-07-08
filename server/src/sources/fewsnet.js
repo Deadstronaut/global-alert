@@ -32,14 +32,16 @@ const COUNTRY_CENTROIDS = {
   'ZM': [-13.13, 27.85], 'ZW': [-19.02, 29.15],
 };
 
-export function startFEWSNET(onEvent) {
+export function startFEWSNET(onEvent, opts = {}) {
+  const url = opts.url || API_URL;
+  const intervalMs = opts.intervalMs || POLL_INTERVAL;
   const seen = new Set();
   let timer = null;
   let running = true;
 
   async function poll() {
     try {
-      const res = await axios.get(API_URL, {
+      const res = await axios.get(url, {
         params: {
           fields: 'simple',
           scenario: 'CS',
@@ -74,8 +76,8 @@ export function startFEWSNET(onEvent) {
 
   _poll = poll;
   poll();
-  timer = setInterval(() => { if (running) poll(); }, POLL_INTERVAL);
-  console.log('[FEWS NET] ✅ Polling started (6h)');
+  timer = setInterval(() => { if (running) poll(); }, intervalMs);
+  console.log(`[FEWS NET] ✅ Polling started (${intervalMs / 1000}s)`);
 
   return () => {
     running = false;

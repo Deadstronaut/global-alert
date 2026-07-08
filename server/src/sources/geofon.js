@@ -15,7 +15,9 @@ const POLL_INTERVAL = 2 * 60 * 1000; // 2 dakika
 let _poll = null;
 export function triggerPollGEOFON() { return _poll?.(); }
 
-export function startGEOFON(onEvent) {
+export function startGEOFON(onEvent, opts = {}) {
+  const url = opts.url || FDSN_URL;
+  const intervalMs = opts.intervalMs || POLL_INTERVAL;
   const seen = new Set();
   let timer = null;
   let running = true;
@@ -25,7 +27,7 @@ export function startGEOFON(onEvent) {
       const now = new Date();
       const from = new Date(now.getTime() - 3 * 60 * 60 * 1000); // son 3 saat
 
-      const res = await axios.get(FDSN_URL, {
+      const res = await axios.get(url, {
         params: {
           starttime: from.toISOString().slice(0, 19) + 'Z',
           endtime: now.toISOString().slice(0, 19) + 'Z',
@@ -60,8 +62,8 @@ export function startGEOFON(onEvent) {
 
   _poll = poll;
   poll();
-  timer = setInterval(() => { if (running) poll(); }, POLL_INTERVAL);
-  console.log('[GEOFON] ✅ Polling started (2 min)');
+  timer = setInterval(() => { if (running) poll(); }, intervalMs);
+  console.log(`[GEOFON] ✅ Polling started (${intervalMs / 1000}s)`);
 
   return () => {
     running = false;

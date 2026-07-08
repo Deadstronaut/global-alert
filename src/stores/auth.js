@@ -66,7 +66,7 @@ export const useAuthStore = defineStore('auth', () => {
       // (anon-callable, silently no-ops if the email doesn't match any
       // profile — never reveals account existence). Failure here must never
       // block surfacing the original auth error to the user.
-      await supabase.rpc('record_failed_login', { p_email: email }).catch(() => {});
+      await supabase.rpc('record_failed_login', { p_email: email }).then(null, () => {});
       authError.value = error.message;
       throw error;
     }
@@ -91,7 +91,7 @@ export const useAuthStore = defineStore('auth', () => {
 
     // spec 028 FR-006: a successful password check resets the failed-attempt
     // counter, whether or not an MFA challenge is still pending below.
-    await supabase.rpc('clear_own_login_lock').catch(() => {});
+    await supabase.rpc('clear_own_login_lock').then(null, () => {});
 
     // Password alone is not enough once a second factor is enrolled (spec 005
     // FR-003) — signInWithPassword already succeeds and issues a valid aal1

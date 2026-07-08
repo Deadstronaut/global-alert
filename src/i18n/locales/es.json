@@ -370,7 +370,9 @@
       "unclassified": "sin clasificar"
     },
     "geocoding": {
-      "placeholder": "Buscar un lugar o dirección...",
+      "label": "Buscar país, provincia, dirección o coordenadas en el mapa",
+      "placeholder": "Buscar país, provincia, dirección o coordenadas...",
+      "help": "Búsqueda de ubicación: p. ej. Turquía, Estambul, Ankara, 39.92, 32.85",
       "search": "Buscar",
       "searching": "Buscando...",
       "noResults": "No se encontraron resultados.",

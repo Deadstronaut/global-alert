@@ -134,7 +134,7 @@ const selectedImpactEvent = ref(null)
 
 function onLocationSelected(location) {
   if (!map) return
-  map.flyTo({ center: [location.lng, location.lat], zoom: 10 })
+  map.flyTo({ center: [location.lng, location.lat], zoom: location.zoom || 10 })
 }
 
 /**

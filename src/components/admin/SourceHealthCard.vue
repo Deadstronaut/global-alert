@@ -1,5 +1,5 @@
 <script setup>
-import { computed } from 'vue'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
 
 const props = defineProps({
   source: { type: Object, required: true },
@@ -16,10 +16,39 @@ const STATE_META = {
   degraded: { label: 'Bozulmuş', color: '#fbbf24', dot: '▲' },
   down:     { label: 'Çalışmıyor', color: '#ef4444', dot: '✕' },
   disabled: { label: 'Devre Dışı', color: '#94a3b8', dot: '○' },
+  offline:  { label: 'Çevrimdışı', color: '#ef4444', dot: '✕' },
 }
 
-const stateMeta = computed(() => STATE_META[props.source.health_state] ?? STATE_META.disabled)
-const isWarning = computed(() => ['degraded', 'down'].includes(props.source.health_state))
+// health_state is only ever updated by the aggregator when it actually attempts
+// a fetch (server/src/processors/sourceHealth.js) — if that process isn't running
+// at all, nothing ever flips it, so a stale 'healthy' from its last run sits in
+// the DB forever. `now` re-evaluates on an interval so this card independently
+// notices "no success reported in longer than expected" even with the aggregator
+// fully down, instead of trusting the frozen DB value.
+const now = ref(Date.now())
+let nowTimer
+onMounted(() => { nowTimer = setInterval(() => { now.value = Date.now() }, 30000) })
+onUnmounted(() => clearInterval(nowTimer))
+
+const staleThresholdMs = computed(() => {
+  const s = props.source
+  return (s.staleness_threshold_seconds ?? (s.poll_interval_seconds ?? 3600) * 3) * 1000
+})
+
+const isStale = computed(() => {
+  const s = props.source
+  if (!s.is_active) return false
+  if (!s.last_success_at) return true
+  return now.value - new Date(s.last_success_at).getTime() > staleThresholdMs.value
+})
+
+const stateMeta = computed(() => {
+  const raw = props.source.health_state
+  // Only override 'healthy' — an explicit 'degraded'/'down' from the aggregator's
+  // own last real attempt is more specific than a client-side staleness guess.
+  if (raw === 'healthy' && isStale.value) return STATE_META.offline
+  return STATE_META[raw] ?? STATE_META.disabled
+})
 
 function relativeTime(iso) {
   if (!iso) return 'Henüz yok'
@@ -34,7 +63,10 @@ function relativeTime(iso) {
 </script>
 
 <template>
-  <div class="source-card" :class="{ 'source-card--warning': isWarning }">
+  <div
+    class="source-card"
+    :style="{ borderColor: stateMeta.color + '66', background: stateMeta.color + '0a' }"
+  >
     <div class="source-card-top">
       <span class="source-state" :style="{ color: stateMeta.color }">
         {{ stateMeta.dot }} {{ stateMeta.label }}
@@ -73,10 +105,6 @@ function relativeTime(iso) {
   display: flex;
   flex-direction: column;
   gap: 6px;
-}
-.source-card--warning {
-  border-color: rgba(251, 191, 36, 0.4);
-  background: rgba(251, 191, 36, 0.04);
 }
 .source-card-top {
   display: flex;

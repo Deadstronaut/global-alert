@@ -370,7 +370,9 @@
       "unclassified": "non classé"
     },
     "geocoding": {
-      "placeholder": "Rechercher un lieu ou une adresse...",
+      "label": "Rechercher un pays, une région, une adresse ou des coordonnées sur la carte",
+      "placeholder": "Pays, région, adresse ou coordonnées...",
+      "help": "Recherche de lieu : ex. Turquie, Istanbul, Ankara, 39.92, 32.85",
       "search": "Rechercher",
       "searching": "Recherche...",
       "noResults": "Aucun résultat trouvé.",

@@ -224,6 +224,7 @@ const statChips = computed(() => {
 
 @media (max-width: 1150px) {
   .stats-overlay {
+    top: var(--space-md);
     left: auto;
     right: var(--space-md);
     transform: none;

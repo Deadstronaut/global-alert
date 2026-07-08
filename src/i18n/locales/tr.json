@@ -370,7 +370,9 @@
       "unclassified": "sınıflandırılmamış"
     },
     "geocoding": {
-      "placeholder": "Bir yer veya adres arayın...",
+      "label": "Haritada ülke, il, adres veya koordinat ara",
+      "placeholder": "Ülke, il, adres veya koordinat ara...",
+      "help": "Konum araması: ör. Türkiye, İstanbul, Ankara, 39.92, 32.85",
       "search": "Ara",
       "searching": "Aranıyor...",
       "noResults": "Sonuç bulunamadı.",

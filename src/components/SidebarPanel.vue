@@ -1,10 +1,11 @@
 <script setup>
-import { computed, ref, watch } from 'vue'
+import { computed, ref, watch, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useDisasterStore } from '@/stores/disaster.js'
 import { useUIStore } from '@/stores/ui.js'
 import { useGeolocationStore } from '@/stores/geolocation.js'
 import { useAuthStore } from '@/stores/auth.js'
+import { useSourcesStore } from '@/stores/sources.js'
 import { useI18n } from 'vue-i18n'
 
 const { t } = useI18n()
@@ -12,6 +13,26 @@ const router = useRouter()
 const disasterStore = useDisasterStore()
 const uiStore = useUIStore()
 const authStore = useAuthStore()
+
+// Toplam bilinen kaynak sayısı artık data_sources tablosundan geliyor
+// (eskiden hardcoded "10" idi — tier1-source-unification refactor'ından
+// sonra Tier-1 kaynak sayısı 12'ye çıktı, bu yüzden sabit değer yanlıştı).
+const sourcesStore = useSourcesStore()
+const totalKnownSources = computed(() => sourcesStore.sources.filter((s) => s.is_active).length || 10)
+// Admin paneliyle aynı anlamı taşısın diye (health_state), event üretmiş
+// olmasına değil, aktif+sağlıklı poll/bağlantı durumuna bakıyor — eskiden
+// disasterStore.sourcesOnline kullanılıyordu ama o "en az bir event
+// göndermiş kaynak sayısı" idi, gerçek afet olmadığında yanıltıcı düşük
+// çıkıyordu (örn. 1/16).
+const healthySourcesCount = computed(
+  () => sourcesStore.sources.filter((s) => s.is_active && s.health_state === 'healthy').length,
+)
+
+onMounted(() => {
+  // AdminView zaten bir kere çekmişse (aynı oturumda) tekrar sorgu atma.
+  if (!sourcesStore.sources.length) sourcesStore.fetchSources()
+})
+
 const hasMyRegion = computed(() => !!disasterStore.myRegionGeometry)
 
 const activeCountryConfig = computed(() => uiStore.activeCountryConfig)
@@ -163,11 +184,12 @@ function handleViewModeSwitch(event) {
   uiStore.transitionToMap(20, 30, 3)
 }
 
-function getSourceStatusClass(count) {
-  if (count >= 8) return 'source-level-4'
-  if (count >= 6) return 'source-level-3'
-  if (count >= 4) return 'source-level-2'
-  if (count >= 1) return 'source-level-1'
+function getSourceStatusClass(count, total = totalKnownSources.value) {
+  const ratio = total > 0 ? count / total : 0
+  if (ratio >= 0.8) return 'source-level-4'
+  if (ratio >= 0.6) return 'source-level-3'
+  if (ratio >= 0.4) return 'source-level-2'
+  if (ratio > 0) return 'source-level-1'
   return 'source-level-0'
 }
 
@@ -529,10 +551,10 @@ watch([rangeStartDate, rangeEndDate], ([start, end]) => {
 
       <div
         class="collapsed-sources"
-        :class="getSourceStatusClass(disasterStore.sourcesOnline)"
+        :class="getSourceStatusClass(healthySourcesCount)"
         v-if="disasterStore.lastUpdated"
       >
-        {{ disasterStore.sourcesOnline }}/10
+        {{ healthySourcesCount }}/{{ totalKnownSources }}
       </div>
     </div>
 
@@ -749,8 +771,8 @@ watch([rangeStartDate, rangeEndDate], ([start, end]) => {
         {{ t('app.lastUpdated') }}:
         {{ new Date(disasterStore.lastUpdated).toLocaleTimeString('tr-TR') }}
       </span>
-      <span class="footer-sources" :class="getSourceStatusClass(disasterStore.sourcesOnline)">
-        {{ disasterStore.sourcesOnline }}/10 {{ t('stats.sourcesOnline') }}
+      <span class="footer-sources" :class="getSourceStatusClass(healthySourcesCount)">
+        {{ healthySourcesCount }}/{{ totalKnownSources }} {{ t('stats.sourcesOnline') }}
       </span>
     </div>
 

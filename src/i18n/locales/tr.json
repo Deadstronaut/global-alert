@@ -367,7 +367,9 @@
       "breakdownBySector": "Sektöre Göre",
       "breakdownByBoundary": "İdari Sınıra Göre",
       "breakdownEmpty": "Kırılım verisi yok.",
-      "unclassified": "sınıflandırılmamış"
+      "unclassified": "sınıflandırılmamış",
+      "collapse": "Etki analizini küçült",
+      "expand": "Etki analizini aç"
     },
     "geocoding": {
       "label": "Haritada ülke, il, adres veya koordinat ara",
@@ -376,7 +378,8 @@
       "search": "Ara",
       "searching": "Aranıyor...",
       "noResults": "Sonuç bulunamadı.",
-      "error": "Konum arama başarısız oldu."
+      "error": "Konum arama başarısız oldu.",
+      "clear": "Temizle"
     },
     "errors": {
       "uploadFailed": "Yükleme başarısız oldu."

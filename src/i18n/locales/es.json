@@ -367,7 +367,9 @@
       "breakdownBySector": "Por Sector",
       "breakdownByBoundary": "Por Límite Administrativo",
       "breakdownEmpty": "No hay datos de desglose.",
-      "unclassified": "sin clasificar"
+      "unclassified": "sin clasificar",
+      "collapse": "Contraer análisis de impacto",
+      "expand": "Expandir análisis de impacto"
     },
     "geocoding": {
       "label": "Buscar país, provincia, dirección o coordenadas en el mapa",
@@ -376,7 +378,8 @@
       "search": "Buscar",
       "searching": "Buscando...",
       "noResults": "No se encontraron resultados.",
-      "error": "La búsqueda de geocodificación falló."
+      "error": "La búsqueda de geocodificación falló.",
+      "clear": "Borrar"
     },
     "errors": {
       "uploadFailed": "La subida falló."

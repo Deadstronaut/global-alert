@@ -367,7 +367,9 @@
       "breakdownBySector": "By Sector",
       "breakdownByBoundary": "By Admin Boundary",
       "breakdownEmpty": "No breakdown data.",
-      "unclassified": "unclassified"
+      "unclassified": "unclassified",
+      "collapse": "Collapse impact analysis",
+      "expand": "Expand impact analysis"
     },
     "geocoding": {
       "label": "Search country, province, address, or coordinates on the map",
@@ -376,7 +378,8 @@
       "search": "Search",
       "searching": "Searching...",
       "noResults": "No results found.",
-      "error": "Geocoding search failed."
+      "error": "Geocoding search failed.",
+      "clear": "Clear"
     },
     "errors": {
       "uploadFailed": "Upload failed."

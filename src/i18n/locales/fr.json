@@ -367,7 +367,9 @@
       "breakdownBySector": "Par Secteur",
       "breakdownByBoundary": "Par Limite Administrative",
       "breakdownEmpty": "Aucune donnée de ventilation.",
-      "unclassified": "non classé"
+      "unclassified": "non classé",
+      "collapse": "Réduire l'analyse d'impact",
+      "expand": "Ouvrir l'analyse d'impact"
     },
     "geocoding": {
       "label": "Rechercher un pays, une région, une adresse ou des coordonnées sur la carte",
@@ -376,7 +378,8 @@
       "search": "Rechercher",
       "searching": "Recherche...",
       "noResults": "Aucun résultat trouvé.",
-      "error": "La recherche de géocodage a échoué."
+      "error": "La recherche de géocodage a échoué.",
+      "clear": "Effacer"
     },
     "errors": {
       "uploadFailed": "Le téléchargement a échoué."

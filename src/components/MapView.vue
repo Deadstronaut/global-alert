@@ -131,6 +131,7 @@ function setMapLayerOpacity(layer, value) {
 // Impact Analysis (spec 008): selected event for the split-view side panel,
 // set from marker clicks below — independent of the existing popup behavior.
 const selectedImpactEvent = ref(null)
+const impactPanelCollapsed = ref(false)
 
 function onLocationSelected(location) {
   if (!map) return
@@ -1868,7 +1869,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="map-view-wrapper">
+  <div class="map-view-wrapper" :class="{ 'impact-panel-collapsed': impactPanelCollapsed }">
     <div ref="mapContainer" class="map-leaflet"></div>
     <div class="zoom-indicator">x {{ currentZoom }}</div>
 
@@ -1943,8 +1944,18 @@ onBeforeUnmount(() => {
 
     <!-- Impact Analysis (spec 008): geocoding search + split-view side panel -->
     <GeocodingSearch @location-selected="onLocationSelected" />
-    <div class="impact-panel-dock">
-      <ImpactPanel :selected-event="selectedImpactEvent" />
+    <div class="impact-panel-dock" :class="{ collapsed: impactPanelCollapsed }">
+      <button
+        class="impact-panel-toggle"
+        type="button"
+        :title="impactPanelCollapsed ? t('impact.panel.expand') : t('impact.panel.collapse')"
+        :aria-label="impactPanelCollapsed ? t('impact.panel.expand') : t('impact.panel.collapse')"
+        :aria-expanded="!impactPanelCollapsed"
+        @click="impactPanelCollapsed = !impactPanelCollapsed"
+      >
+        {{ impactPanelCollapsed ? '‹' : '›' }}
+      </button>
+      <ImpactPanel v-show="!impactPanelCollapsed" :selected-event="selectedImpactEvent" />
     </div>
 
     <!-- OGC WMS/WFS Map Layers (spec 012): toggle + opacity, session-only state -->
@@ -1986,11 +1997,18 @@ onBeforeUnmount(() => {
 
 <style scoped>
 .map-view-wrapper {
+  --impact-panel-width: 320px;
+  --map-control-offset: calc(var(--impact-panel-width) + 16px);
   width: 100%;
   height: 100vh;
   position: relative;
   z-index: 1;
   isolation: isolate;
+}
+
+.map-view-wrapper.impact-panel-collapsed {
+  --impact-panel-width: 48px;
+  --map-control-offset: calc(var(--impact-panel-width) + 12px);
 }
 
 .map-leaflet {
@@ -2001,7 +2019,7 @@ onBeforeUnmount(() => {
 .map-layers-panel {
   position: absolute;
   top: 16px;
-  right: 16px;
+  right: var(--map-control-offset);
   z-index: 5;
   background: rgba(15,17,23,.9);
   border: 1px solid rgba(255,255,255,.12);
@@ -2071,7 +2089,7 @@ onBeforeUnmount(() => {
 .zoom-indicator {
   position: absolute;
   top: 10px;
-  right: 10px;
+  right: var(--map-control-offset);
   z-index: 10;
   background: rgba(0, 0, 0, 0.55);
   color: white;
@@ -2085,7 +2103,7 @@ onBeforeUnmount(() => {
 }
 
 :deep(.maplibregl-ctrl-bottom-right) {
-  right: 10px;
+  right: var(--map-control-offset);
   bottom: 12px;
 }
 
@@ -2119,7 +2137,7 @@ onBeforeUnmount(() => {
 .map-download-btn {
   position: absolute;
   bottom: 160px;
-  right: 10px;
+  right: var(--map-control-offset);
   z-index: 10;
   width: 36px;
   height: 36px;
@@ -2142,7 +2160,7 @@ onBeforeUnmount(() => {
 .layer-switcher {
   position: absolute;
   bottom: 96px;
-  right: 10px;
+  right: var(--map-control-offset);
   z-index: 10;
   cursor: pointer;
   border-radius: 8px;
@@ -2287,7 +2305,7 @@ onBeforeUnmount(() => {
 .country-badge {
   position: absolute;
   top: 24px;
-  right: 24px;
+  right: calc(var(--impact-panel-width) + 24px);
   background: var(--glass-bg);
   backdrop-filter: blur(24px) saturate(180%);
   -webkit-backdrop-filter: blur(24px) saturate(180%);
@@ -2366,9 +2384,109 @@ onBeforeUnmount(() => {
   position: absolute;
   top: 0;
   right: 0;
+  width: var(--impact-panel-width);
   height: 100%;
   z-index: 15;
   pointer-events: auto;
+  transition: width 0.22s ease;
+}
+
+.impact-panel-dock.collapsed {
+  background: rgba(15, 17, 23, 0.64);
+  border-left: 1px solid rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+
+.impact-panel-toggle {
+  position: absolute;
+  top: 14px;
+  left: -18px;
+  z-index: 2;
+  width: 36px;
+  height: 36px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: rgba(20, 24, 33, 0.92);
+  color: #e2e8f0;
+  font-size: 1.35rem;
+  line-height: 1;
+  cursor: pointer;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.28);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
+.impact-panel-toggle:hover {
+  background: rgba(77, 163, 255, 0.28);
+  border-color: rgba(77, 163, 255, 0.42);
+}
+
+.impact-panel-dock.collapsed .impact-panel-toggle {
+  left: 6px;
+}
+
+@media (max-width: 900px) {
+  .map-view-wrapper {
+    --impact-panel-width: min(320px, 42vw);
+    --map-control-offset: calc(var(--impact-panel-width) + 12px);
+  }
+
+  .map-layers-panel {
+    max-width: 220px;
+  }
+}
+
+@media (max-width: 768px) {
+  .map-view-wrapper {
+    --impact-panel-width: 0px;
+    --map-control-offset: 10px;
+    --impact-panel-mobile-height: 34vh;
+  }
+
+  .map-view-wrapper.impact-panel-collapsed {
+    --impact-panel-mobile-height: 52px;
+  }
+
+  .impact-panel-dock {
+    top: auto;
+    left: 0;
+    width: 100%;
+    height: var(--impact-panel-mobile-height);
+    min-height: 220px;
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+  }
+
+  .impact-panel-dock.collapsed {
+    min-height: 52px;
+  }
+
+  .impact-panel-toggle {
+    top: -18px;
+    left: 50%;
+    transform: translateX(-50%) rotate(90deg);
+  }
+
+  .impact-panel-dock.collapsed .impact-panel-toggle {
+    left: 50%;
+  }
+
+  :deep(.maplibregl-ctrl-bottom-right) {
+    bottom: calc(var(--impact-panel-mobile-height) + 16px);
+  }
+
+  .layer-switcher {
+    bottom: calc(var(--impact-panel-mobile-height) + 100px);
+  }
+
+  .map-download-btn {
+    bottom: calc(var(--impact-panel-mobile-height) + 164px);
+  }
+
+  .map-layers-panel,
+  .country-badge {
+    right: 12px;
+  }
 }
 </style>
 

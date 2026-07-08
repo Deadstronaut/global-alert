@@ -367,7 +367,9 @@
       "breakdownBySector": "按行业",
       "breakdownByBoundary": "按行政边界",
       "breakdownEmpty": "没有细分数据。",
-      "unclassified": "未分类"
+      "unclassified": "未分类",
+      "collapse": "收起影响分析",
+      "expand": "展开影响分析"
     },
     "geocoding": {
       "label": "在地图上搜索国家、省份、地址或坐标",
@@ -376,7 +378,8 @@
       "search": "搜索",
       "searching": "搜索中...",
       "noResults": "未找到结果。",
-      "error": "地理编码搜索失败。"
+      "error": "地理编码搜索失败。",
+      "clear": "清除"
     },
     "errors": {
       "uploadFailed": "上传失败。"

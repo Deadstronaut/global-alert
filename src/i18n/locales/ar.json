@@ -367,7 +367,9 @@
       "breakdownBySector": "حسب القطاع",
       "breakdownByBoundary": "حسب الحدود الإدارية",
       "breakdownEmpty": "لا توجد بيانات توزيع.",
-      "unclassified": "غير مصنف"
+      "unclassified": "غير مصنف",
+      "collapse": "طي تحليل التأثير",
+      "expand": "فتح تحليل التأثير"
     },
     "geocoding": {
       "label": "ابحث في الخريطة عن دولة أو منطقة أو عنوان أو إحداثيات",
@@ -376,7 +378,8 @@
       "search": "بحث",
       "searching": "جارٍ البحث...",
       "noResults": "لم يتم العثور على نتائج.",
-      "error": "فشل البحث الجغرافي."
+      "error": "فشل البحث الجغرافي.",
+      "clear": "مسح"
     },
     "errors": {
       "uploadFailed": "فشل الرفع."

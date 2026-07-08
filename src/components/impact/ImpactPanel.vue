@@ -357,4 +357,18 @@ onMounted(() => {
   border-radius: 6px; color: #e2e8f0; font-size: .72rem; cursor: pointer;
 }
 .impact-breakdown-toggle button.active { background: rgba(77,163,255,.2); border-color: rgba(77,163,255,.4); color: #4da3ff; }
+
+@media (max-width: 768px) {
+  .impact-panel {
+    width: 100%;
+    max-width: none;
+    height: 100%;
+    border-left: none;
+    padding: 14px 16px 18px;
+  }
+
+  .impact-empty {
+    padding: 24px 10px;
+  }
+}
 </style>

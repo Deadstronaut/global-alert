@@ -20,7 +20,10 @@ const canAccessAdmin = computed(() =>
 async function handleLogout() {
   await authStore.logout()
   uiStore.toggleSettings()
-  router.push('/')
+  // See SidebarPanel.vue's handleLogout: push '/login' directly, not '/' —
+  // if already on '/', re-pushing it is a no-op duplicate navigation and the
+  // post-logout redirect never fires.
+  router.push('/login')
 }
 
 function changeLanguage(lang) {

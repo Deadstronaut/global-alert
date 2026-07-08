@@ -287,8 +287,19 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   async function logout() {
-    await supabase.auth.signOut();
-    session.value = null;
+    // Local state must clear even if the server-side revoke call fails
+    // (network hiccup, timeout) — otherwise the UI stays stuck on the
+    // logged-in view until a hard refresh re-evaluates the (already-cleared)
+    // local session. The error is swallowed (not rethrown) so callers can
+    // always navigate away right after calling this.
+    try {
+      await supabase.auth.signOut();
+    } catch {
+      // local session storage is already cleared by signOut() before it
+      // attempts the server-side revoke call — nothing more to do here.
+    } finally {
+      session.value = null;
+    }
   }
 
   return {

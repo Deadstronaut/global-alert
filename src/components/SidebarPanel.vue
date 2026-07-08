@@ -163,7 +163,10 @@ const calendarPickValue = ref(today)
 
 async function handleLogout() {
   await authStore.logout()
-  router.push('/')
+  // Push straight to /login rather than '/' — if the sidebar is open on the
+  // home screen (already at '/'), pushing '/' again is a no-op duplicate
+  // navigation in vue-router, so the post-logout redirect never fires.
+  router.push('/login')
 }
 
 function handleLocate() {

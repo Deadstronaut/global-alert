@@ -326,6 +326,7 @@
   },
   "impact": {
     "loading": "Chargement...",
+    "downloadMap": "Télécharger la carte",
     "exposure": {
       "tabLabel": "Données d'Exposition",
       "uploadTitle": "Télécharger un Jeu de Données d'Exposition",

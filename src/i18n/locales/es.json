@@ -326,6 +326,7 @@
   },
   "impact": {
     "loading": "Cargando...",
+    "downloadMap": "Descargar mapa",
     "exposure": {
       "tabLabel": "Datos de Exposición",
       "uploadTitle": "Subir Conjunto de Datos de Exposición",

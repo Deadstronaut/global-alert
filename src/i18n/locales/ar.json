@@ -326,6 +326,7 @@
   },
   "impact": {
     "loading": "جاري التحميل...",
+    "downloadMap": "تنزيل الخريطة",
     "exposure": {
       "tabLabel": "بيانات التعرض",
       "uploadTitle": "رفع مجموعة بيانات التعرض",

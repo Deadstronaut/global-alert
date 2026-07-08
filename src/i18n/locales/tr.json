@@ -326,6 +326,7 @@
   },
   "impact": {
     "loading": "Yükleniyor...",
+    "downloadMap": "Haritayı indir",
     "exposure": {
       "tabLabel": "Etkilenme Verisi",
       "uploadTitle": "Etkilenme Veri Seti Yükle",

@@ -326,6 +326,7 @@
   },
   "impact": {
     "loading": "Loading...",
+    "downloadMap": "Download map",
     "exposure": {
       "tabLabel": "Exposure Data",
       "uploadTitle": "Upload Exposure Dataset",

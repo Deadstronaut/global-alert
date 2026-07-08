@@ -32,6 +32,31 @@
   --space-xs: 4px;
 }
 
+/* Global scrollbar — thin, theme-accented, consistent across every
+   scrollable panel/list instead of each component defining its own. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--color-accent) 55%, transparent) transparent;
+}
+
+*::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+*::-webkit-scrollbar-thumb {
+  background-color: color-mix(in srgb, var(--color-accent) 55%, transparent);
+  border-radius: 3px;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background-color: color-mix(in srgb, var(--color-accent) 80%, transparent);
+}
+
 /* Global User Pin Styles (Shared between 2D Map and 3D Globe) */
 .user-pin,
 .user-globe-marker {

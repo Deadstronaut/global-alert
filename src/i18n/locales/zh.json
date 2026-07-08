@@ -326,6 +326,7 @@
   },
   "impact": {
     "loading": "加载中...",
+    "downloadMap": "下载地图",
     "exposure": {
       "tabLabel": "暴露数据",
       "uploadTitle": "上传暴露数据集",

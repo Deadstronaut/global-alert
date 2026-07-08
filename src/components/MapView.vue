@@ -1916,7 +1916,18 @@ onBeforeUnmount(() => {
       </div>
     </div>
 
-    <button class="map-download-btn" @click="downloadMap" title="Haritayı PNG olarak indir">⬇</button>
+    <button
+      class="map-download-btn"
+      type="button"
+      :title="t('impact.downloadMap')"
+      :aria-label="t('impact.downloadMap')"
+      @click="downloadMap"
+    >
+      <svg class="map-download-icon" viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M12 3v12m0 0 5-5m-5 5-5-5M5 21h14a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2" />
+      </svg>
+      <span>{{ t('impact.downloadMap') }}</span>
+    </button>
 
     <div class="layer-switcher" @click="cycleMapStyle">
       <div
@@ -2139,22 +2150,41 @@ onBeforeUnmount(() => {
   bottom: 160px;
   right: var(--map-control-offset);
   z-index: 10;
-  width: 36px;
-  height: 36px;
+  min-height: 44px;
+  padding: 0 14px;
   border-radius: 8px;
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  background: rgba(20, 24, 33, 0.88);
+  border: 1px solid rgba(77, 163, 255, 0.65);
+  background: rgba(20, 24, 33, 0.96);
   color: #fff;
-  font-size: 14px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
   cursor: pointer;
-  backdrop-filter: blur(8px);
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: background 0.15s;
+  gap: 8px;
+  white-space: nowrap;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+  transition: background 0.15s, border-color 0.15s;
 }
 .map-download-btn:hover {
-  background: rgba(77, 163, 255, 0.3);
+  background: #164f7a;
+  border-color: #75bfff;
+}
+.map-download-btn:focus-visible {
+  outline: 2px solid #75bfff;
+  outline-offset: 2px;
+}
+.map-download-icon {
+  width: 19px;
+  height: 19px;
+  flex: 0 0 19px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
 .layer-switcher {

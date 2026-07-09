@@ -10,6 +10,7 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3'
 import { corsHeaders } from '../shared/cors.ts'
 import { validateGeojson } from '../shared/geojsonValidation.ts'
+import { geometryToWkt } from '../shared/geometryToWkt.ts'
 
 function adminClient() {
   const url = Deno.env.get('SUPABASE_URL')
@@ -133,28 +134,4 @@ function normalizeTagValue(value: unknown): string | null {
   if (typeof value !== 'string') return null
   const trimmed = value.trim()
   return trimmed.length > 0 ? trimmed : null
-}
-
-// Minimal GeoJSON-geometry-to-WKT converter covering the geometry types
-// realistically produced by common GIS export tools (Point/Polygon/
-// MultiPolygon) — sufficient for exposure-dataset uploads without pulling in
-// a full GIS conversion library (Principle VIII).
-function geometryToWkt(geometry: { type: string; coordinates: unknown }): string {
-  const ring = (coords: number[][]) => `(${coords.map(([lng, lat]) => `${lng} ${lat}`).join(', ')})`
-  switch (geometry.type) {
-    case 'Point': {
-      const [lng, lat] = geometry.coordinates as number[]
-      return `POINT(${lng} ${lat})`
-    }
-    case 'Polygon': {
-      const rings = geometry.coordinates as number[][][]
-      return `POLYGON(${rings.map(ring).join(', ')})`
-    }
-    case 'MultiPolygon': {
-      const polys = geometry.coordinates as number[][][][]
-      return `MULTIPOLYGON(${polys.map((rings) => `(${rings.map(ring).join(', ')})`).join(', ')})`
-    }
-    default:
-      throw new Error(`Unsupported geometry type: ${geometry.type}`)
-  }
 }

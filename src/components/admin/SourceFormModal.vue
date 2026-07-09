@@ -13,7 +13,14 @@ const scopeLocked = computed(() => !auth.isSuperAdmin)
 // hazard types data_sources.hazard_type's own CHECK constraint permits —
 // 'multi_hazard' is only used by built-in multi-hazard adapters (GDACS) and
 // isn't offered here since it's not selectable for admin-created sources.
-const SOURCE_SUPPORTED_HAZARDS = ['earthquake', 'wildfire', 'flood', 'drought', 'food_security', 'tsunami', 'epidemic']
+// 'population' added by feature 038 (population exposure data sources) — not a
+// disaster hazard, but data_sources.hazard_type is documented as a
+// "primary/informational label" (see the tier1-source-unification migration's own
+// comment) and this is the existing extension mechanism for non-hazard source
+// categories. hazard_types.category = 'exposure' for this row lets other
+// hazard-specific UI (threshold editor, CAP hazard picker) filter it out without
+// removing it here.
+const SOURCE_SUPPORTED_HAZARDS = ['earthquake', 'wildfire', 'flood', 'drought', 'food_security', 'tsunami', 'epidemic', 'population']
 const hazardTypesStore = useHazardTypesStore()
 const HAZARD_TYPES = computed(() =>
   hazardTypesStore.activeHazardTypes.filter((h) => SOURCE_SUPPORTED_HAZARDS.includes(h.code)),

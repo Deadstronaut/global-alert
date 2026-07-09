@@ -209,6 +209,18 @@ crashing subsequent polling cycles.
 - "Endpoint reference" is treated as an opaque configuration value (e.g., an API URL and any
   auth/query parameters it needs); this spec does not define a new external protocol (OGC WMS/WFS
   support is explicitly out of scope, per the feature description).
+- **Guardrail (added after feature 038's review, 2026-07-09)**: `data_sources.endpoint_url` /
+  `endpoint_config` are readable by anonymous visitors, by design (`public_read_data_sources` policy,
+  `TO anon USING (true)`), matching this system's public-transparency stance on hazard data
+  provenance — this is intentional and MUST NOT be "fixed" into a country-locked table without a
+  deliberate decision, since it would silently change dashboard behavior every existing source
+  already relies on. Because of that public readability, `endpoint_config` MUST NEVER contain a
+  real secret (API key, password, bearer token) for any source, existing or future — any source
+  requiring authenticated access MUST store its credential via the credential-management mechanism
+  introduced in feature 025 (Generic Integration Credentials), which is country-scoped and
+  encrypted, and have its fetch adapter look the credential up from there at request time, not read
+  it out of this table's `endpoint_config`. `endpoint_config` may only ever hold non-secret
+  configuration (URLs, query parameter names, format hints).
 - Rejected-payload audit entries retain enough of the offending record to diagnose the issue, but
   are not required to retain unlimited raw payloads forever — exact retention duration follows
   whatever audit/log retention policy governs the rest of the system's audit trail.

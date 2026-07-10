@@ -39,7 +39,10 @@ export const EDGE_FUNCTIONS = {
     WILDFIRES: `${supabaseUrl}/functions/v1/fetch-wildfires`,
     FLOODS: `${supabaseUrl}/functions/v1/fetch-floods`,
     DROUGHTS: `${supabaseUrl}/functions/v1/fetch-droughts`,
-    FOOD_SECURITY: `${supabaseUrl}/functions/v1/fetch-food-security`
+    FOOD_SECURITY: `${supabaseUrl}/functions/v1/fetch-food-security`,
+    // spec 039: user-triggered only, no polling interval (not scheduled).
+    SIMULATE_HAZARD_SCENARIO: `${supabaseUrl}/functions/v1/simulate-hazard-scenario`,
+    COMPUTE_RISK_EXCEEDANCE_CURVE: `${supabaseUrl}/functions/v1/compute-risk-exceedance-curve`
 };
 
 /**

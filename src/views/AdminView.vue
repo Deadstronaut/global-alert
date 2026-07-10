@@ -15,6 +15,9 @@ import { groupSourcesByScope } from '@/utils/sourceScope.js'
 import { rowsToCsv, rowsToJson, triggerDownload } from '@/lib/auditExport.js'
 import { buildComplianceChecklist, TEMPLATE_VERSION } from '@/services/complianceChecklist.js'
 import ExposureDatasetManager from '@/components/impact/ExposureDatasetManager.vue'
+import RiskIndicatorConfig from '@/components/risk/RiskIndicatorConfig.vue'
+import RiskScoreDashboard from '@/components/risk/RiskScoreDashboard.vue'
+import ScenarioBuilder from '@/components/risk/ScenarioBuilder.vue'
 import ContactsPanel from '@/components/admin/ContactsPanel.vue'
 import DispatchPanel from '@/components/admin/DispatchPanel.vue'
 import IntegrationsPanel from '@/components/admin/IntegrationsPanel.vue'
@@ -1078,6 +1081,13 @@ onUnmounted(() => {
       </button>
       <button
         v-if="canAdmin"
+        :class="['tab', { active: tab === 'risk' }]"
+        @click="tab = 'risk'"
+      >
+        🧭 {{ t('risk.tabLabel') }}
+      </button>
+      <button
+        v-if="canAdmin"
         :class="['tab', { active: tab === 'communityReports' }]"
         @click="tab = 'communityReports'"
       >
@@ -1843,6 +1853,13 @@ onUnmounted(() => {
       <ExposureDatasetManager />
     </div>
 
+    <!-- ── Risk & Scenario Modeling tab (spec 039) ──────────────────────────── -->
+    <div v-if="tab === 'risk' && canAdmin" class="tab-content risk-tab-content">
+      <RiskIndicatorConfig />
+      <RiskScoreDashboard />
+      <ScenarioBuilder />
+    </div>
+
     <!-- ── Community Reports moderation tab (spec 036) ──────────────────────── -->
     <div v-if="tab === 'communityReports' && canAdmin" class="tab-content">
       <CommunityReportsPanel />
@@ -1991,6 +2008,11 @@ onUnmounted(() => {
   border-radius: 10px;
   background: rgba(15, 23, 42, 0.42);
   padding: 16px;
+}
+.risk-tab-content {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
 }
 @keyframes fade-in {
   from {

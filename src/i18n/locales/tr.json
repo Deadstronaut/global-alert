@@ -386,6 +386,70 @@
       "uploadFailed": "Yükleme başarısız oldu."
     }
   },
+  "risk": {
+    "tabLabel": "Risk ve Senaryo Modelleme",
+    "indicators": {
+      "formTitle": "Risk Göstergesi Yapılandır",
+      "dataset": "Exposure Veri Kümesi",
+      "datasetPlaceholder": "Bir veri kümesi seçin...",
+      "category": "Kategori",
+      "categoryVulnerability": "Vulnerability (Kırılganlık)",
+      "categoryCopingCapacity": "Coping Capacity (Baş Etme Kapasitesi)",
+      "categoryExposure": "Exposure",
+      "weight": "Ağırlık",
+      "weightHint": "bu kategorideki diğer göstergelerin toplamı {sum}",
+      "normalizeMin": "Normalizasyon Min",
+      "normalizeMax": "Normalizasyon Max",
+      "save": "Göstergeyi Kaydet",
+      "saving": "Kaydediliyor...",
+      "listTitle": "Yapılandırılmış Göstergeler",
+      "empty": "Henüz risk göstergesi yapılandırılmadı."
+    },
+    "dashboard": {
+      "countryCode": "Ülke",
+      "countryCodePlaceholder": "örn. tr",
+      "adminBoundaryCode": "İdari Bölge",
+      "adminBoundaryPlaceholder": "örn. Ankara",
+      "hazardType": "Tehlike Türü",
+      "computeScore": "Risk Skorunu Hesapla",
+      "computing": "Hesaplanıyor...",
+      "hazard": "Hazard (Tehlike)",
+      "exposure": "Exposure (Maruziyet)",
+      "vulnerability": "Vulnerability (Kırılganlık)",
+      "copingCapacity": "Coping Capacity (Baş Etme Kapasitesi)",
+      "composite": "Bileşik Risk Skoru",
+      "notAvailable": "Mevcut değil",
+      "exceedanceCurveTitle": "Olasılıksal Aşım Eğrisi",
+      "loadCurve": "Eğriyi Yükle",
+      "impactLevel": "Etki seviyesi",
+      "recordCount": "{count} geçmiş olaya dayanmaktadır",
+      "insufficientData": "Güvenilir bir eğri oluşturmak için yeterli geçmiş veri yok ({count} / minimum {minimum} kayıt)."
+    },
+    "scenario": {
+      "formTitle": "Hipotetik Senaryo Simüle Et",
+      "name": "Senaryo Adı",
+      "hazardType": "Tehlike Türü",
+      "magnitude": "Büyüklük",
+      "epicenterLat": "Merkez Üssü Enlem",
+      "epicenterLng": "Merkez Üssü Boylam",
+      "datasets": "Exposure Veri Kümeleri",
+      "noDatasets": "Kullanılabilir exposure veri kümesi yok — önce bir tane yükleyin.",
+      "simulate": "Simüle Et",
+      "simulating": "Simüle ediliyor...",
+      "resultTitle": "Simülasyon Sonucu",
+      "rangeWarning": "Bu parametreler formülün doğrulanmış aralığının dışında — bu tahmini dikkatli değerlendirin.",
+      "totalValue": "Toplam maruz kalan değer",
+      "featureCount": "Feature sayısı",
+      "save": "Senaryoyu Kaydet",
+      "savedTitle": "Kaydedilmiş Senaryolar",
+      "empty": "Henüz kaydedilmiş senaryo yok.",
+      "reload": "Yeniden Yükle",
+      "noFormulaAvailable": "\"{hazardType}\" tehlike türü için senaryo simülasyonu henüz mevcut değil.",
+      "errors": {
+        "simulationFailed": "Simülasyon tamamlanamadı."
+      }
+    }
+  },
   "contacts": {
     "tabLabel": "İletişim Rehberi",
     "addButton": "+ Kişi Ekle",

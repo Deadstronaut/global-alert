@@ -386,6 +386,70 @@
       "uploadFailed": "Upload failed."
     }
   },
+  "risk": {
+    "tabLabel": "Risk & Scenario Modeling",
+    "indicators": {
+      "formTitle": "Configure Risk Indicator",
+      "dataset": "Exposure Dataset",
+      "datasetPlaceholder": "Select a dataset...",
+      "category": "Category",
+      "categoryVulnerability": "Vulnerability",
+      "categoryCopingCapacity": "Coping Capacity",
+      "categoryExposure": "Exposure",
+      "weight": "Weight",
+      "weightHint": "other indicators in this category sum to {sum}",
+      "normalizeMin": "Normalize Min",
+      "normalizeMax": "Normalize Max",
+      "save": "Save Indicator",
+      "saving": "Saving...",
+      "listTitle": "Configured Indicators",
+      "empty": "No risk indicators configured yet."
+    },
+    "dashboard": {
+      "countryCode": "Country",
+      "countryCodePlaceholder": "e.g. tr",
+      "adminBoundaryCode": "Administrative Area",
+      "adminBoundaryPlaceholder": "e.g. Ankara",
+      "hazardType": "Hazard Type",
+      "computeScore": "Compute Risk Score",
+      "computing": "Computing...",
+      "hazard": "Hazard",
+      "exposure": "Exposure",
+      "vulnerability": "Vulnerability",
+      "copingCapacity": "Coping Capacity",
+      "composite": "Composite Risk Score",
+      "notAvailable": "Not available",
+      "exceedanceCurveTitle": "Probabilistic Exceedance Curve",
+      "loadCurve": "Load Curve",
+      "impactLevel": "Impact level",
+      "recordCount": "Based on {count} historical events",
+      "insufficientData": "Insufficient historical data ({count} of {minimum} minimum records) to generate a reliable curve."
+    },
+    "scenario": {
+      "formTitle": "Simulate Hypothetical Scenario",
+      "name": "Scenario Name",
+      "hazardType": "Hazard Type",
+      "magnitude": "Magnitude",
+      "epicenterLat": "Epicenter Latitude",
+      "epicenterLng": "Epicenter Longitude",
+      "datasets": "Exposure Datasets",
+      "noDatasets": "No exposure datasets available — upload one first.",
+      "simulate": "Simulate",
+      "simulating": "Simulating...",
+      "resultTitle": "Simulation Result",
+      "rangeWarning": "These parameters are outside the formula's validated range — treat this estimate with caution.",
+      "totalValue": "Total exposed value",
+      "featureCount": "Feature count",
+      "save": "Save Scenario",
+      "savedTitle": "Saved Scenarios",
+      "empty": "No saved scenarios yet.",
+      "reload": "Reload",
+      "noFormulaAvailable": "Scenario simulation is not yet available for hazard type \"{hazardType}\".",
+      "errors": {
+        "simulationFailed": "The simulation could not be completed."
+      }
+    }
+  },
   "contacts": {
     "tabLabel": "Contact Directory",
     "addButton": "+ Add Contact",

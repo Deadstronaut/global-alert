@@ -19,11 +19,22 @@
 1. Upload a previously-working `.geojson` file, exactly as before this feature existed.
 2. **Expected**: identical behavior and result to before — same validation, same dataset creation.
 
-## Scenario 3 — Reject a non-WGS84 Shapefile (FR-004, SC-003)
+## Scenario 3 — Non-WGS84 Shapefile with a valid `.prj` (FR-004, SC-003)
 
-1. Select the non-WGS84 `.zip` bundle; attempt to upload.
-2. **Expected**: rejected with a clear message that only WGS84 coordinates are supported; no
-   partial dataset is created.
+**Verified 2026-07-10** (`tests/unit/exposureFileParser.test.js`): `shpjs` bundles its own `proj4`
+and reprojects coordinates to WGS84 at parse time whenever the bundle includes a recognized
+`.prj` file — this happens transparently, before the Edge Function's WGS84 bounds check ever
+runs.
+
+1. Select a `.zip` bundle in a different projection (e.g. a local UTM zone) that includes a
+   correct `.prj` file; upload.
+2. **Expected**: accepted — the Shapefile is silently reprojected to WGS84 and behaves exactly
+   like a native WGS84 upload. No rejection occurs in this case.
+3. Select a bundle with a **missing or unrecognized `.prj`** (or non-WGS84 coordinates with no
+   `.prj` at all).
+4. **Expected**: rejected — with no `.prj` to reproject from, raw projected coordinates pass
+   through unchanged and the existing backend WGS84 bounds check (`geojsonValidation.ts`)
+   rejects them with a clear message; no partial dataset is created.
 
 ## Scenario 4 — Reject a malformed Shapefile bundle (FR-005)
 

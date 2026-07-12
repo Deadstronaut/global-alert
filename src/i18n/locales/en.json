@@ -463,6 +463,11 @@
     "allHazards": "— all —",
     "country": "Country",
     "region": "Region Code",
+    "lat": "Latitude (optional, for precise geofencing)",
+    "lng": "Longitude (optional, for precise geofencing)",
+    "latLngBothRequired": "Both latitude and longitude are required together.",
+    "invalidLat": "Latitude must be between -90 and 90.",
+    "invalidLng": "Longitude must be between -180 and 180.",
     "emailOptIn": "Allow email dispatch",
     "whatsappOptIn": "Allow WhatsApp dispatch",
     "save": "Save",
@@ -713,6 +718,8 @@
       "useMyLocation": "Use my location",
       "photo": "Photo (optional)",
       "photoHint": "JPEG/PNG/WebP, up to 5MB",
+      "audio": "Voice note (optional)",
+      "audioHint": "WebM/OGG/MP3/M4A/WAV, up to 10MB",
       "submit": "Submit",
       "submitting": "Submitting…",
       "successMessage": "Your report has been received for review. Thank you.",
@@ -721,6 +728,8 @@
       "errorLocation": "Location is required.",
       "errorPhotoType": "Unsupported file type (JPEG/PNG/WebP only).",
       "errorPhotoSize": "File is too large (5MB max).",
+      "errorAudioType": "Unsupported audio file type.",
+      "errorAudioSize": "Audio file is too large (10MB max).",
       "errorGeneric": "Something went wrong while submitting, please try again."
     },
     "moderation": {
@@ -733,7 +742,8 @@
       "assignOrg": "Assign to organization (optional)",
       "assignOrgNone": "— no assignment —",
       "submittedAt": "Submitted at",
-      "viewPhoto": "View photo"
+      "viewPhoto": "View photo",
+      "playAudio": "Play voice note"
     },
     "map": {
       "toggleLabel": "Show/Hide Community Reports",
@@ -753,6 +763,17 @@
       "tabLabel": "Reports Assigned to Me",
       "empty": "No reports assigned to you.",
       "assignedOrg": "Assigned Organization"
+    },
+    "clusterSummary": {
+      "sectionTitle": "Scheduled Geo-Cluster Summaries",
+      "empty": "No cluster summaries yet.",
+      "unresolvedCountry": "Unresolved country",
+      "totalReports": "Total reports",
+      "reportsAt": "reports at"
+    },
+    "stream": {
+      "connected": "Live updates connected",
+      "disconnected": "Live updates disconnected"
     }
   },
   "drillInjection": {
@@ -775,6 +796,13 @@
     "remove": {
       "action": "Remove"
     }
+  },
+  "drillScenario": {
+    "title": "Scheduled Scenario Sequence",
+    "hint": "Add ordered steps that inject automatically N minutes after the drill starts.",
+    "delayMinutes": "Delay (minutes)",
+    "addStep": "Add Step",
+    "minutesShort": "min"
   },
   "integrations": {
     "tabLabel": "Integrations",

@@ -9,6 +9,22 @@ We will provide this product not just to a single country, but to **multiple cou
 1. **Generic code, country-specific data.** The adapter/parser code that knows how to read a source is written once and remains identical across all country deployments. The information regarding "which dataset/endpoint for which country" is not written in the code, but in the configuration of that country's own deployment. We are using **Turkey as a reference country** for development and testing (because we have direct access to Turkey's data) — but there is no hardcoded "Turkey" string in the codebase; every country will add its own data using the same generic mechanism.
 2. **Country-specific/sensitive data is never embedded in shared code or shared infrastructure.** In production, each country will run its own isolated server/database (federated model) — data entered by one country will never exist in another country's deployment under any circumstances.
 
+## D. Please confirm: is this the right operating model? — the question behind all the questions below
+
+Before we go further into individual source questions, we want to make explicit the operating model we are assuming, because **it directly determines which of the PDF's 15 sources we can realistically support** — this is the root cause of most of the "could not be implemented" findings in Section B, not a lack of effort on our side.
+
+**Our assumption**: this will be a **self-service, multi-tenant web product**. A country's focal point signs up with an email/password, logs in, and sees **only their own country's workspace** — nothing shared, nothing visible from any other country. From there, they upload their own boundary files, exposure datasets, and configure their own source connections. Each country gets its **own isolated database and server instance** at that point (federated model, as stated above) — we are not operating one shared central database that holds every country's data side by side.
+
+**Why this matters for the source list**: under this model, a source is only realistically usable if either (a) it is **free and globally accessible via a stable API**, so the generic onboarding flow can pull it automatically for any country with zero marginal cost to us or to that country, or (b) it is something a **country's own team can upload themselves** through the self-service UI (a file, a boundary, their own vulnerability data). A source that is **paid per API call/month** (e.g., Google's Roads API, which is metered and — at the volumes a country-wide road network would need — runs well into the hundreds of dollars per month) or that requires **processing an unaggregated 18.6-million-row / 1.1GB file per country** (Meta/HDX population, Section B) does not fit either category: we cannot bill each of 185 countries individually for a paid API key, and we cannot ask a country's own non-technical staff to run GDAL/raster pipelines themselves.
+
+**Our concrete questions**:
+
+1. Does the self-service, per-country-isolated model described above match what you had in mind, or did you envision something more centrally managed on your/UNDP's side (e.g., you provision and pay for these paid/heavy sources centrally, and hand our system pre-processed, already-aggregated data per country)?
+2. For sources that are **paid** (Google Roads API being the clearest example we found — see C.4) — is the expectation that **each country's own budget** covers that cost (in which case, should the self-service onboarding flow simply let a country enter their own Google API key, so the cost is theirs, not ours), or should we treat any paid source as **out of scope** for the generic product and rely entirely on the free equivalent (OSM/Overpass, in the Roads case)?
+3. For sources that require **heavy/raw processing** before they're usable (WorldPop, Meta, GHSL — Section B) — should we build that processing capability as a real, budgeted piece of infrastructure (which is a meaningfully larger scope than the rest of this integration work), or should these remain out of scope until/unless a specific country's deployment actually needs them and can justify that investment?
+
+We are not trying to avoid work here — we want to build whatever the real requirement is. We just need to know which of these two operating models we're building for, because it changes the answer to nearly every other question in this document.
+
 ---
 
 ## A. The generic integration pattern we built — how it works
@@ -54,10 +70,11 @@ We tested this end-to-end with real Turkey data for Kontur: the system automatic
 - Drought.gov (NOAA) is typically a portal covering the continental US. Is the "Global Gridded SPI from CMORPH" layer listed **truly global**, or was it included here just for the Madagascar example?
 - If not global: From which source should the SPI/drought index be obtained for Madagascar (and other countries)?
 
-### C.4 Roads — Google Maps API
+### C.4 Roads — Google Maps API (also priced — see Section D)
 
 - To our knowledge, Google's Roads API is a **snap-to-road / route-matching** service — it is not a product suitable for downloading an entire country's road network in bulk. Is this the intended API, or another Google service?
 - If the goal is to "download the country's entire road network for exposure analysis," does the already listed **OSM roads (Overpass API)** meet the same need, and can we skip this source?
+- Separately from the API-type question above: Google's Roads API is **metered/paid**, not free — at the request volume a country-wide road network would need, this runs to roughly **$150+/month per deployment**, recurring. Under our self-service, per-country model (Section D), this cost has to land somewhere concrete — either each country's own budget, or it's dropped in favor of the free OSM/Overpass equivalent, which appears to cover the same need. Which do you prefer?
 
 ### C.5 OpenBuildingMap — is there an actual API/service?
 
@@ -99,11 +116,12 @@ We tested this end-to-end with real Turkey data for Kontur: the system automatic
 
 ## Priority order (most critical for us → least critical)
 
+0. **Operating model confirmation** (Section D) — the root question everything else depends on: self-service/per-country-isolated vs. centrally-managed. Answering this first will make several of the questions below trivial to resolve.
 1. **WorldPop/Meta/GHSL alternative** (question C.1) — will unblock the rest of Tier 1, the most concrete and urgent question.
 2. **Data privacy/ownership/hosting** (question C.11) — we don't want to proceed without confirming our architectural assumption is correct.
 3. **INFORM** (question C.2) — the core input for the risk score formula.
 4. **SPI/Drought.gov scope** (question C.3) — we want to find out early if it's the wrong source.
-5. **Roads — Google Maps** (question C.4) — likely unnecessary, can be clarified quickly.
+5. **Roads — Google Maps, including its cost** (question C.4) — likely unnecessary given the free OSM equivalent, can be clarified quickly.
 6. **CHIRPS** (question C.8) — likely the same raster issue as WorldPop/GHSL, can be evaluated alongside C.1.
 7. Others (C.5–C.7, C.9, C.10, C.12) — for subsequent tiers, not urgent.
 
@@ -129,6 +147,53 @@ kuracak. Bu yüzden mimarimizi şu iki prensibe göre kuruyoruz:
 2. **Ülkeye özel/hassas veri hiçbir zaman paylaşılan kod veya paylaşılan altyapıya gömülmez.**
    Prodüksiyonda her ülke kendi izole sunucusunu/veritabanını çalıştıracak (federated model) — bir
    ülkenin girdiği veri, başka bir ülkenin kurulumunda hiçbir şekilde bulunmaz.
+
+## D. Lütfen teyit edin: doğru işletim modeli bu mu? — aşağıdaki tüm soruların arkasındaki asıl soru
+
+Kaynak bazlı sorulara geçmeden önce, varsaydığımız işletim modelini açıkça yazmak istiyoruz, çünkü
+**bu, PDF'teki 15 kaynaktan hangilerini gerçekçi şekilde destekleyebileceğimizi doğrudan belirliyor**
+— Bölüm B'deki "yapılamadı" bulgularının çoğunun kök nedeni bu, bizim çabamızın eksikliği değil.
+
+**Bizim varsayımımız**: bu, **self-service (kendi kendine hizmet), çok kiracılı (multi-tenant) bir
+web ürünü** olacak. Bir ülkenin odak noktası (focal point) email/şifre ile kayıt olur, giriş yapar
+ve **sadece kendi ülkesinin çalışma alanını** görür — hiçbir şey paylaşılmaz, başka hiçbir ülkeden
+görünmez. Oradan kendi sınır dosyalarını, exposure veri setlerini yükler ve kendi kaynak
+bağlantılarını kendisi yapılandırır. Bu noktada her ülke **kendi izole veritabanı ve sunucu
+örneğini** alır (yukarıda belirtilen federated model) — biz tüm ülkelerin verisini yan yana tutan
+tek bir paylaşılan merkezi veritabanı işletmiyoruz.
+
+**Bunun kaynak listesi için neden önemli olduğu**: bu modelde bir kaynak ancak şu iki durumdan
+biriyse gerçekçi şekilde kullanılabilir: (a) **ücretsiz ve global olarak API üzerinden erişilebilir**
+olması — böylece jenerik onboarding akışı bunu herhangi bir ülke için, bize veya o ülkeye sıfır ek
+maliyetle otomatik çekebilir, ya da (b) **ülkenin kendi ekibinin self-service arayüzden kendisinin
+yükleyebileceği** bir şey olması (bir dosya, bir sınır, kendi kırılganlık verisi). **API çağrısı/ay
+başına ücretli** olan bir kaynak (örn. Google'ın Roads API'si — metered/ölçülü ücretlendiriliyor ve
+ülke çapında bir yol ağının ihtiyaç duyacağı hacimde ayda rahatlıkla yüzlerce dolara çıkıyor) ya da
+**ülke başına 18,6 milyon satır / 1,1GB'lık agregasyonlanmamış bir dosyanın işlenmesini** gerektiren
+bir kaynak (Meta/HDX nüfus verisi, Bölüm B) bu iki kategoriye de girmiyor: 185 ülkenin her birine
+ayrı ayrı ücretli bir API key için fatura kesemeyiz, ve bir ülkenin kendi teknik olmayan personelinden
+kendi başlarına GDAL/raster pipeline'ı çalıştırmalarını isteyemeyiz.
+
+**Somut sorularımız**:
+
+1. Yukarıda tarif edilen self-service, ülke-başına-izole model sizin aklınızdakiyle örtüşüyor mu,
+   yoksa sizin/UNDP'nin tarafında daha merkezi yönetilen bir şey mi öngörmüştünüz (örn. bu ücretli/
+   ağır kaynakları merkezi olarak siz sağlıyor ve ödüyorsunuz, bize ülke başına önceden işlenmiş,
+   zaten agregasyonlanmış veri veriliyor)?
+2. **Ücretli** kaynaklar için (bulduğumuz en net örnek Google Roads API — bkz. C.4) — beklenti bu
+   maliyeti **her ülkenin kendi bütçesinin** karşılaması mı (bu durumda, self-service onboarding
+   akışı ülkenin kendi Google API key'ini girmesine izin vermeli, maliyet bize değil onlara ait
+   olsun), yoksa ücretli herhangi bir kaynağı jenerik ürün için **kapsam dışı** sayıp tamamen
+   ücretsiz eşdeğerine (Roads örneğinde OSM/Overpass) mi güvenmeliyiz?
+3. **Ağır/ham işleme** gerektiren kaynaklar için (WorldPop, Meta, GHSL — Bölüm B) — bu işleme
+   yeteneğini gerçek, bütçelenmiş bir altyapı parçası olarak mı inşa etmeliyiz (bu, bu entegrasyon
+   işinin geri kalanından anlamlı ölçüde daha büyük bir kapsam), yoksa belirli bir ülkenin
+   deployment'ı bunlara gerçekten ihtiyaç duyup bu yatırımı gerekçelendirene kadar kapsam dışı mı
+   kalmalı?
+
+Burada işten kaçınmaya çalışmıyoruz — gerçek gereksinim neyse onu inşa etmek istiyoruz. Sadece bu iki
+işletim modelinden hangisi için inşa ettiğimizi bilmemiz gerekiyor, çünkü bu, bu dokümandaki neredeyse
+her diğer sorunun cevabını değiştiriyor.
 
 ---
 
@@ -203,13 +268,19 @@ arasında **tek istisna** çünkü Kontur veriyi zaten kendi tarafında H3 altı
 - Eğer global değilse: Madagaskar (ve diğer ülkeler) için SPI/kuraklık indeksi hangi kaynaktan
   alınmalı?
 
-### C.4 Roads — Google Maps API
+### C.4 Roads — Google Maps API (ayrıca ücretli — bkz. Bölüm D)
 
 - Google'ın Roads API'si bizim bildiğimiz kadarıyla **snap-to-road / route-matching** hizmeti —
   toplu bir ülkenin yol ağını indirmeye uygun bir ürün değil. Kastedilen bu API mi, yoksa Google'ın
   başka bir servisi mi?
 - Eğer amaç "ülkenin tüm yol ağını exposure analizi için indirmek" ise, listede zaten olan **OSM
   yolları (Overpass API)** aynı ihtiyacı karşılıyor mu, bu kaynağı atlayabilir miyiz?
+- Yukarıdaki API-tipi sorusundan bağımsız olarak: Google'ın Roads API'si **ölçülü/ücretli**, ücretsiz
+  değil — ülke çapında bir yol ağının ihtiyaç duyacağı istek hacminde bu, deployment başına aylık
+  **~150$+**'a çıkıyor, tekrarlanan bir maliyet olarak. Bizim self-service, ülke-başına model
+  altında (Bölüm D) bu maliyetin somut bir yere oturması lazım — ya her ülkenin kendi bütçesine, ya
+  da aynı ihtiyacı karşılıyor görünen ücretsiz OSM/Overpass eşdeğeri lehine tamamen bırakılır. Hangisini
+  tercih edersiniz?
 
 ### C.5 OpenBuildingMap — gerçek bir API/servis var mı?
 
@@ -276,10 +347,12 @@ arasında **tek istisna** çünkü Kontur veriyi zaten kendi tarafında H3 altı
 
 ## Öncelik sırası (bizim için en kritik → en az kritik)
 
+0. **İşletim modeli teyidi** (Bölüm D) — her şeyin bağlı olduğu kök soru: self-service/ülke-başına-izole
+   mi, yoksa merkezi yönetilen mi? Bu önce yanıtlanırsa aşağıdaki sorulardan birçoğu kendiliğinden netleşir.
 1. **WorldPop/Meta/GHSL alternatifi** (soru C.1) — Tier 1'in geri kalanının önünü açacak, en somut ve acil soru
 2. **Veri gizliliği/sahiplik/barındırma** (soru C.11) — mimari varsayımımızın doğru olduğunu teyit etmeden ilerlemek istemiyoruz
 3. **INFORM** (soru C.2) — risk skoru formülünün temel girdisi
 4. **SPI/Drought.gov kapsamı** (soru C.3) — yanlış kaynaksa erken öğrenmek istiyoruz
-5. **Roads — Google Maps** (soru C.4) — muhtemelen gereksiz, hızlı netleşebilir
+5. **Roads — Google Maps, maliyeti dahil** (soru C.4) — ücretsiz OSM eşdeğeri düşünülünce muhtemelen gereksiz, hızlı netleşebilir
 6. **CHIRPS** (soru C.8) — muhtemelen WorldPop/GHSL ile aynı raster sorunu, C.1 ile birlikte değerlendirilebilir
 7. Diğerleri (C.5–C.7, C.9, C.10, C.12) — sonraki tier'lar için, acil değil

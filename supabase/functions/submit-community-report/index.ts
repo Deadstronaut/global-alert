@@ -22,12 +22,21 @@ import { resolveCountryCode } from '../shared/geoCountry.ts'
 
 interface RequestBody extends CommunityReportPayload {
   photo?: { base64?: string; mimeType?: string }
+  audio?: { base64?: string; mimeType?: string }
 }
 
 const EXTENSION_BY_MIME: Record<string, string> = {
   'image/jpeg': 'jpg',
   'image/png': 'png',
   'image/webp': 'webp',
+}
+
+const AUDIO_EXTENSION_BY_MIME: Record<string, string> = {
+  'audio/webm': 'webm',
+  'audio/ogg': 'ogg',
+  'audio/mpeg': 'mp3',
+  'audio/mp4': 'm4a',
+  'audio/wav': 'wav',
 }
 
 function adminClient() {
@@ -54,6 +63,7 @@ Deno.serve(async (req) => {
   }
 
   const photoBytes = body.photo?.base64 ? decodeBase64(body.photo.base64) : null
+  const audioBytes = body.audio?.base64 ? decodeBase64(body.audio.base64) : null
 
   const validation = validateReportPayload({
     hazardType: body.hazardType,
@@ -62,6 +72,8 @@ Deno.serve(async (req) => {
     lng: body.lng,
     photoMimeType: body.photo?.mimeType,
     photoSizeBytes: photoBytes?.length,
+    audioMimeType: body.audio?.mimeType,
+    audioSizeBytes: audioBytes?.length,
   })
   if (!validation.valid) return json({ error: validation.error }, 400)
 
@@ -82,6 +94,17 @@ Deno.serve(async (req) => {
     photoPath = path
   }
 
+  let audioPath: string | null = null
+  if (audioBytes && body.audio?.mimeType) {
+    const ext = AUDIO_EXTENSION_BY_MIME[body.audio.mimeType]
+    const path = `${crypto.randomUUID()}.${ext}`
+    const { error: uploadError } = await admin.storage
+      .from('community-report-audio')
+      .upload(path, audioBytes, { contentType: body.audio.mimeType })
+    if (uploadError) return json({ error: `Audio upload failed: ${uploadError.message}` }, 500)
+    audioPath = path
+  }
+
   const { data, error: insertError } = await admin
     .from('community_reports')
     .insert({
@@ -91,6 +114,7 @@ Deno.serve(async (req) => {
       lng,
       country_code: countryCode,
       photo_path: photoPath,
+      audio_path: audioPath,
       status: 'pending',
     })
     .select('id, status')

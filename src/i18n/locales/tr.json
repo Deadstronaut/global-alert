@@ -463,6 +463,11 @@
     "allHazards": "— tümü —",
     "country": "Ülke",
     "region": "Bölge Kodu",
+    "lat": "Enlem (isteğe bağlı, hassas coğrafi hedefleme için)",
+    "lng": "Boylam (isteğe bağlı, hassas coğrafi hedefleme için)",
+    "latLngBothRequired": "Enlem ve boylam birlikte girilmelidir.",
+    "invalidLat": "Enlem -90 ile 90 arasında olmalıdır.",
+    "invalidLng": "Boylam -180 ile 180 arasında olmalıdır.",
     "emailOptIn": "E-posta gönderimine izin ver",
     "whatsappOptIn": "WhatsApp gönderimine izin ver",
     "save": "Kaydet",
@@ -713,6 +718,8 @@
       "useMyLocation": "Konumumu kullan",
       "photo": "Fotoğraf (isteğe bağlı)",
       "photoHint": "JPEG/PNG/WebP, en fazla 5MB",
+      "audio": "Sesli not (isteğe bağlı)",
+      "audioHint": "WebM/OGG/MP3/M4A/WAV, en fazla 10MB",
       "submit": "Gönder",
       "submitting": "Gönderiliyor…",
       "successMessage": "Bildiriminiz incelemeye alındı. Teşekkür ederiz.",
@@ -721,6 +728,8 @@
       "errorLocation": "Konum zorunludur.",
       "errorPhotoType": "Desteklenmeyen dosya tipi (yalnızca JPEG/PNG/WebP).",
       "errorPhotoSize": "Dosya çok büyük (en fazla 5MB).",
+      "errorAudioType": "Desteklenmeyen ses dosyası tipi.",
+      "errorAudioSize": "Ses dosyası çok büyük (en fazla 10MB).",
       "errorGeneric": "Gönderim sırasında bir hata oluştu, lütfen tekrar deneyin."
     },
     "moderation": {
@@ -733,7 +742,8 @@
       "assignOrg": "Organizasyona ata (isteğe bağlı)",
       "assignOrgNone": "— atama yok —",
       "submittedAt": "Gönderim zamanı",
-      "viewPhoto": "Fotoğrafı görüntüle"
+      "viewPhoto": "Fotoğrafı görüntüle",
+      "playAudio": "Sesli notu dinle"
     },
     "map": {
       "toggleLabel": "Vatandaş Bildirimlerini Göster/Gizle",
@@ -753,6 +763,17 @@
       "tabLabel": "Bana Atanan Bildirimler",
       "empty": "Size atanmış bir bildirim yok.",
       "assignedOrg": "Atanan Organizasyon"
+    },
+    "clusterSummary": {
+      "sectionTitle": "Zamanlanmış Coğrafi Küme Özetleri",
+      "empty": "Henüz küme özeti yok.",
+      "unresolvedCountry": "Belirlenemeyen ülke",
+      "totalReports": "Toplam bildirim",
+      "reportsAt": "bildirim —"
+    },
+    "stream": {
+      "connected": "Canlı güncellemeler bağlı",
+      "disconnected": "Canlı güncellemeler bağlı değil"
     }
   },
   "drillInjection": {
@@ -775,6 +796,13 @@
     "remove": {
       "action": "Kaldır"
     }
+  },
+  "drillScenario": {
+    "title": "Zamanlanmış Senaryo Dizisi",
+    "hint": "Tatbikat başladıktan N dakika sonra otomatik enjekte edilecek sıralı adımlar ekleyin.",
+    "delayMinutes": "Gecikme (dakika)",
+    "addStep": "Adım Ekle",
+    "minutesShort": "dk"
   },
   "integrations": {
     "tabLabel": "Entegrasyonlar",

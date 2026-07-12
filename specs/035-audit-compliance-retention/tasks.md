@@ -169,3 +169,20 @@ Single Vue 3 + Supabase project — `src/`, `supabase/migrations/`, `tests/unit/
 - `audit_log`'un append-only RLS kısıtı (`no_update_audit`/`no_delete_audit`) HİÇ gevşetilmez — retention silme SADECE SECURITY DEFINER fonksiyon yoluyla, kendi kendini loglayarak yapılır (research.md Decision 7)
 - "Sil" eylemi hiçbir zaman varsayılan değildir; bir `retention_policies` satırı açıkça `action='delete'` olarak yapılandırılmadıkça hiçbir kayıt kalıcı olarak silinmez
 - Commit only when explicitly requested by the user
+
+---
+
+## Addendum (2026-07-15): PDF generation for Evidence Packages
+
+Closes the PDF-generation half of the "PDF kanıt paketleri + MinIO/S3"
+remaining item (the object-storage/MinIO half remains out of scope — that
+needs a real storage account/budget, unlike client-side PDF generation).
+Added a new pure line-builder, `buildEvidenceSummaryLines()`
+(`src/lib/evidencePackage.js`, mirroring the existing
+`buildEvidencePackageManifest()`'s separation of pure logic from
+ZIP/DOM side effects — 4 new Vitest cases), and wired a new `jsPDF`
+dependency into `CapView.vue`'s `downloadEvidencePackage()`: a one-page
+`summary.pdf` (CAP draft ID, hazard type, severity, country, broadcast
+timestamp, receipt/audit-log counts) is now added to the same evidence
+package `.zip` alongside the existing `alert.xml`/`receipts.csv`/
+`audit-log.csv`/`manifest.json` — no existing file in that package changed.

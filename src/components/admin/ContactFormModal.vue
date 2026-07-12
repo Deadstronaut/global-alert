@@ -25,6 +25,8 @@ const whatsappNumber = ref('')
 const preferredLanguage = ref('en')
 const countryCode = ref(auth.isSuperAdmin ? '' : (auth.countryCode || ''))
 const regionCode = ref('')
+const lat = ref('')
+const lng = ref('')
 const hazardTypeFilter = ref('')
 const emailOptIn = ref(true)
 const whatsappOptIn = ref(true)
@@ -46,6 +48,8 @@ watch(
     preferredLanguage.value = c?.preferred_language ?? 'en'
     countryCode.value = c ? c.country_code : (auth.isSuperAdmin ? '' : (auth.countryCode || ''))
     regionCode.value = c?.region_code ?? ''
+    lat.value = c?.lat != null ? String(c.lat) : ''
+    lng.value = c?.lng != null ? String(c.lng) : ''
     hazardTypeFilter.value = c?.hazard_type_filter ?? ''
     emailOptIn.value = c?.email_opt_in ?? true
     whatsappOptIn.value = c?.whatsapp_opt_in ?? true
@@ -65,6 +69,9 @@ function save() {
     return
   }
   if (!countryCode.value) { error.value = t('contacts.noCountry'); return }
+  if ((lat.value !== '') !== (lng.value !== '')) { error.value = t('contacts.latLngBothRequired'); return }
+  if (lat.value !== '' && (Number(lat.value) < -90 || Number(lat.value) > 90)) { error.value = t('contacts.invalidLat'); return }
+  if (lng.value !== '' && (Number(lng.value) < -180 || Number(lng.value) > 180)) { error.value = t('contacts.invalidLng'); return }
 
   saving.value = true
   emit('save', {
@@ -74,6 +81,8 @@ function save() {
     preferred_language: preferredLanguage.value,
     country_code: countryCode.value.trim().toLowerCase(),
     region_code: regionCode.value.trim() || null,
+    lat: lat.value !== '' ? Number(lat.value) : null,
+    lng: lng.value !== '' ? Number(lng.value) : null,
     hazard_type_filter: hazardTypeFilter.value || null,
     email_opt_in: emailOptIn.value,
     whatsapp_opt_in: whatsappOptIn.value,
@@ -117,6 +126,12 @@ function save() {
         </label>
         <label class="form-field"><span>{{ t('contacts.region') }}</span>
           <input v-model="regionCode" placeholder="opsiyonel" />
+        </label>
+        <label class="form-field"><span>{{ t('contacts.lat') }}</span>
+          <input v-model="lat" type="number" step="any" placeholder="opsiyonel" />
+        </label>
+        <label class="form-field"><span>{{ t('contacts.lng') }}</span>
+          <input v-model="lng" type="number" step="any" placeholder="opsiyonel" />
         </label>
         <label class="form-checkbox"><input type="checkbox" v-model="emailOptIn" /> {{ t('contacts.emailOptIn') }}</label>
         <label class="form-checkbox"><input type="checkbox" v-model="whatsappOptIn" /> {{ t('contacts.whatsappOptIn') }}</label>

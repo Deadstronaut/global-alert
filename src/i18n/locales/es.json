@@ -399,6 +399,11 @@
     "allHazards": "— todos —",
     "country": "País",
     "region": "Código de Región",
+    "lat": "Latitud (opcional, para geolocalización precisa)",
+    "lng": "Longitud (opcional, para geolocalización precisa)",
+    "latLngBothRequired": "Se requieren tanto la latitud como la longitud.",
+    "invalidLat": "La latitud debe estar entre -90 y 90.",
+    "invalidLng": "La longitud debe estar entre -180 y 180.",
     "emailOptIn": "Permitir envío por correo",
     "whatsappOptIn": "Permitir envío por WhatsApp",
     "save": "Guardar",
@@ -649,6 +654,8 @@
       "useMyLocation": "Usar mi ubicación",
       "photo": "Foto (opcional)",
       "photoHint": "JPEG/PNG/WebP, hasta 5MB",
+      "audio": "Nota de voz (opcional)",
+      "audioHint": "WebM/OGG/MP3/M4A/WAV, hasta 10MB",
       "submit": "Enviar",
       "submitting": "Enviando…",
       "successMessage": "Su reporte ha sido recibido para revisión. Gracias.",
@@ -657,6 +664,8 @@
       "errorLocation": "La ubicación es obligatoria.",
       "errorPhotoType": "Tipo de archivo no soportado (solo JPEG/PNG/WebP).",
       "errorPhotoSize": "El archivo es demasiado grande (máximo 5MB).",
+      "errorAudioType": "Tipo de archivo de audio no soportado.",
+      "errorAudioSize": "El archivo de audio es demasiado grande (máximo 10MB).",
       "errorGeneric": "Ocurrió un error al enviar, por favor intente de nuevo."
     },
     "moderation": {
@@ -669,7 +678,8 @@
       "assignOrg": "Asignar a organización (opcional)",
       "assignOrgNone": "— sin asignar —",
       "submittedAt": "Enviado el",
-      "viewPhoto": "Ver foto"
+      "viewPhoto": "Ver foto",
+      "playAudio": "Reproducir nota de voz"
     },
     "map": {
       "toggleLabel": "Mostrar/Ocultar Reportes Comunitarios",
@@ -689,6 +699,17 @@
       "tabLabel": "Reportes Asignados a Mí",
       "empty": "No tiene reportes asignados.",
       "assignedOrg": "Organización Asignada"
+    },
+    "clusterSummary": {
+      "sectionTitle": "Resúmenes de Clústeres Geográficos Programados",
+      "empty": "Aún no hay resúmenes de clústeres.",
+      "unresolvedCountry": "País no determinado",
+      "totalReports": "Total de reportes",
+      "reportsAt": "reportes en"
+    },
+    "stream": {
+      "connected": "Actualizaciones en vivo conectadas",
+      "disconnected": "Actualizaciones en vivo desconectadas"
     }
   },
   "drillInjection": {
@@ -711,6 +732,13 @@
     "remove": {
       "action": "Eliminar"
     }
+  },
+  "drillScenario": {
+    "title": "Secuencia de Escenario Programada",
+    "hint": "Agregue pasos ordenados que se inyectan automáticamente N minutos después de que comience el simulacro.",
+    "delayMinutes": "Retraso (minutos)",
+    "addStep": "Agregar Paso",
+    "minutesShort": "min"
   },
   "integrations": {
     "tabLabel": "Integraciones",

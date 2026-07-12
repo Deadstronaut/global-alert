@@ -128,3 +128,21 @@ Deno.test('empty-but-successful fetch counts as success (stays healthy)', () => 
   assertEquals(next.state, 'healthy')
   assertEquals(next.transitioned, false)
 })
+
+// spec 038 T031: computeNextState() never takes a hazard_type parameter at
+// all — resolveSourceId()'s hazard_type filter is a separate DB lookup, not
+// something this state machine branches on. This test is a no-op
+// confirmation that a 'population' source's fetch outcomes go through the
+// exact same rules as any other hazard type (degraded/down transition after
+// consecutive failures), not a hidden special case.
+Deno.test('degraded -> down after consecutive failures behaves identically for a population source', () => {
+  const next = computeNextState({
+    currentState: 'degraded',
+    consecutiveFailures: 2,
+    outcome: 'failure',
+    downAfterConsecutiveFailures: 3,
+    isStale: false,
+  })
+  assertEquals(next.state, 'down')
+  assertEquals(next.transitioned, true)
+})

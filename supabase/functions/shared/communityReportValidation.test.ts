@@ -46,3 +46,29 @@ Deno.test('validateReportPayload: oversized photo fails', () => {
   const result = validateReportPayload({ ...validBase, photoMimeType: 'image/jpeg', photoSizeBytes: 6 * 1024 * 1024 })
   assertEquals(result.valid, false)
 })
+
+Deno.test('validateReportPayload: valid audio metadata passes', () => {
+  const result = validateReportPayload({ ...validBase, audioMimeType: 'audio/webm', audioSizeBytes: 1024 })
+  assertEquals(result.valid, true)
+})
+
+Deno.test('validateReportPayload: unsupported audio MIME type fails', () => {
+  const result = validateReportPayload({ ...validBase, audioMimeType: 'video/mp4', audioSizeBytes: 1024 })
+  assertEquals(result.valid, false)
+})
+
+Deno.test('validateReportPayload: oversized audio fails', () => {
+  const result = validateReportPayload({ ...validBase, audioMimeType: 'audio/webm', audioSizeBytes: 11 * 1024 * 1024 })
+  assertEquals(result.valid, false)
+})
+
+Deno.test('validateReportPayload: photo and audio together both pass', () => {
+  const result = validateReportPayload({
+    ...validBase,
+    photoMimeType: 'image/png',
+    photoSizeBytes: 1024,
+    audioMimeType: 'audio/mpeg',
+    audioSizeBytes: 2048,
+  })
+  assertEquals(result.valid, true)
+})

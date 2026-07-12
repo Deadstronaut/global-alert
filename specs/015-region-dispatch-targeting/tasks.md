@@ -130,3 +130,39 @@ value persists and displays (quickstart.md Scenario 5).
 - No new table — this is a single additive column plus a pure-function extension (plan.md's Structure Decision)
 - Migrations are provided as exact CLI commands to the user for manual application once implementation is complete
 - Commit only when explicitly requested by the user
+
+---
+
+## Addendum (2026-07-15): Full polygon/PostGIS-based geographic targeting
+
+Closes the "tam polygon/PostGIS tabanlı coğrafi hedefleme" remaining item
+(previously deferred multiple times across specs 015/036). Adds an
+**additional, purely narrowing** layer on top of the region_code text match
+above — never a replacement, same restraint as region_code's own "an unset
+region always matches" rule:
+
+- Optional `contacts.lat`/`lng` columns
+  (`supabase/migrations/20260715150000_contacts_polygon_geofencing.sql`),
+  editable from `ContactFormModal.vue` (both-or-neither validated, range
+  checked, i18n across all 7 locales).
+- A new `resolve_contacts_in_region()` PostGIS RPC (SECURITY DEFINER,
+  STABLE): given a country + region_code + a batch of contact IDs, does a
+  real `ST_Contains` point-in-polygon test against the admin boundary
+  polygons already uploaded per country (`country_boundaries.geojson`,
+  spec 010) — returning NULL (never excludes) whenever containment can't be
+  determined (no contact coordinates, or no resolvable boundary/feature).
+- `dispatch-alert/index.ts` calls this RPC once per dispatch (batched, not
+  per-contact) after the existing `matchesContact()` text-match filter, and
+  applies the pure, unit-tested `polygonAllowsContact()`
+  (`supabase/functions/shared/geofencePolygon.ts`, 4 Deno tests) — only an
+  explicit `false` (coordinates geometrically outside the region polygon)
+  narrows the audience; `null`/`undefined` never do.
+
+This closes the real gap the previous text-only matching had: a contact
+with no `region_code` set today always matches a region-targeted alert
+(FR-003) even if their actual coordinates are nowhere near it — with
+coordinates on file, that same contact can now be correctly excluded based
+on real administrative boundary geometry, not just a hand-typed string. No
+existing table, RLS policy, or `matchesContact()` behavior is modified —
+`dispatchMatching.ts`'s existing test suite is untouched and still passes.
+Migration + Edge Function deploy pending user go-ahead.

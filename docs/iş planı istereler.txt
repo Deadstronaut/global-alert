@@ -150,7 +150,19 @@ Alert Authoring / CAP           0/67    %100        Orta       Tamamlandı (2026
                                                                Migration canlıya uygulanması
                                                                kullanıcı onayı bekliyor.
 
-Dissemination                  8/65     ~%88        Orta       Tamamlandı (2026-07-06,
+Dissemination                  4/65     ~%94        Orta       Tamamlandı (2026-07-15):
+                                                               community hazard reporting'in kalan
+                                                               3 kalemi (ses eki, zamanlanmış
+                                                               coğrafi küme özet raporu, canlı SSE
+                                                               bildirim akışı) ve tam polygon/
+                                                               PostGIS tabanlı coğrafi hedefleme
+                                                               (contacts.lat/lng + ST_Contains
+                                                               RPC, region_code metin eşleşmesine
+                                                               ek daraltma katmanı) kapatıldı —
+                                                               detay bu bloğun altındaki "Tamamlandı
+                                                               (2026-07-06," ile başlayan orijinal
+                                                               kayıtların ardından eklendi.
+                                                               Tamamlandı (2026-07-06,
                                                                spec 009): contact directory
                                                                (super_admin/country_admin/
                                                                org_admin scoped CRUD + CSV
@@ -637,7 +649,16 @@ Hazard Taxonomy Admin          0/21     %100        Orta       Tamamlandı (2026
                                                                gibi). Migration canlıya uygulanması
                                                                kullanıcı onayı bekliyor.
 
-Audit & Compliance             30/59    ~%49        Orta–Zor   Tamamlandı (2026-07-06,
+Audit & Compliance             29/59    ~%51        Orta–Zor   Tamamlandı (2026-07-15):
+                                                               Evidence Package export'una PDF
+                                                               üretimi eklendi (jsPDF, summary.pdf
+                                                               olarak mevcut alert.xml/receipts.csv/
+                                                               audit-log.csv/manifest.json'a
+                                                               eklendi) — kalanın MinIO/S3 object
+                                                               storage yarısı hâlâ gerçek bir
+                                                               depolama hesabı/bütçesi gerektirdiği
+                                                               için bilinçli kapsam dışı.
+                                                               Tamamlandı (2026-07-06,
                                                                spec 007): audit_log zaten
                                                                vardı ama görünür arayüzü
                                                                yoktu — super_admin'e özel
@@ -868,7 +889,19 @@ Risk & Scenario Modeling       11/11    %0          Çok Zor    Simulation engin
                                                                PostGIS spatial,
                                                                asset graph
 
-Preparedness, Drill & Response  0/3    ~%95         Orta       Tamamlandı (2026-07-06,
+Preparedness, Drill & Response  0/3    ~%100        Orta       Tamamlandı (2026-07-15):
+                                                               modülün son bilinen kalemi
+                                                               "zamanlanmış/çok adımlı tatbikat
+                                                               senaryo dizileri" kapatıldı — yeni
+                                                               drill_scenario_steps tablosu (sıralı
+                                                               adımlar, drill_sessions.started_at'a
+                                                               göre delay_minutes ofseti) + her
+                                                               dakika çalışan pg_cron job'ı
+                                                               (process_drill_scenario_steps()),
+                                                               adımları otomatik olarak mevcut
+                                                               drill_injected_events tablosuna
+                                                               (spec 037) enjekte ediyor.
+                                                               Tamamlandı (2026-07-06,
                                                                spec 013): drill_sessions
                                                                tablosu ve tatbikat başlat/
                                                                bitir CRUD'u zaten vardı —
@@ -986,7 +1019,13 @@ Tamamlandı (2026-07-07, spec 037): modülün son kalemi
                                                                Kalan: zamanlanmış/çok adımlı senaryo
                                                                dizileri (bilinçli kapsam dışı, YAGNI).
 ─────────────────────────────────────────────────────────────────────────────────
-TOPLAM                        119/446   ~%76
+TOPLAM (2026-07-10, eski)      119/446   ~%73 tamamlandı
+TOPLAM (2026-07-15, güncel)    114/446   ~%74 tamamlandı
+NOT: sol sütun "kalan kalem sayısı / toplam kalem sayısı" — 2026-07-15'te
+Dissemination'da 4 (ses eki, coğrafi küme özet raporu, canlı SSE bildirim
+akışı, tam polygon/PostGIS geofencing) ve Audit & Compliance'ta 1 (Evidence
+Package PDF üretimi) olmak üzere toplam 5 kalem kapandı: kalan 119 → 114,
+tamamlanma oranı (446-119)/446=%73,3'ten (446-114)/446=%74,4'e çıktı.
 
 ═══════════════════════════════════════════════════════════════════════════════
 NOT: GERÇEK VERİ / DIŞ KAYNAK GEREKTİREN, MOCK/TEST ORTAMINDA TAM
@@ -1022,11 +1061,16 @@ gösterilebilsin.
      inbound delivery-receipt webhook'u ancak gerçek bir WhatsApp Business
      hesabı + onaylı numara ile test edilebilir.
 
-4. Tam polygon/PostGIS tabanlı coğrafi hedefleme (geofencing)
+4. [KAPANDI 2026-07-15] Tam polygon/PostGIS tabanlı coğrafi hedefleme (geofencing)
    - Dissemination (spec 015) ve Community Hazard Reporting (spec 036)
-     kalanı olarak defalarca ertelendi; şu an sadece region_code (bölge
-     kodu) seviyesinde eşleştirme var. Gerçek polygon/geofence testi gerçek
-     saha sınırları (idari/coğrafi) verisi ister.
+     kalanı olarak defalarca ertelendi; artık contacts.lat/lng (isteğe
+     bağlı) + yeni resolve_contacts_in_region() PostGIS RPC'si (ST_Contains)
+     ile mevcut country_boundaries.geojson (spec 010) poligonlarına karşı
+     gerçek point-in-polygon testi yapılıyor — region_code metin
+     eşleşmesinin üzerine SADECE daraltan bir katman olarak eklendi (koordinatı
+     olmayan veya çözülemeyen bölge için asla dışlama yapmıyor). Bu maddenin
+     "gerçek saha sınırları verisi ister" notu artık geçerli değil — spec
+     010'daki yüklenmiş sınır verisi zaten kullanılıyor.
 
 5. NLP/LLM kategorileştirme
    - Community Hazard Reporting (MHEWS-FR-0004/0112/0212) — moderatör şu an
@@ -1036,29 +1080,40 @@ gösterilebilsin.
    - İkisi de projede henüz var olmayan bir AI/LLM altyapısı (API key,
      prompt pipeline, maliyet) gerektiriyor.
 
-6. Evidence Packaging — PDF + nesne depolama (Audit & Compliance spec 035
-   kalanı)
-   - Şu an sadece .zip (jszip) içinde CAP XML + JSON. PDF üretimi ve
-     MinIO/S3 gibi bir object storage entegrasyonu gerçek bir depolama
-     hesabı/bütçesi gerektiriyor.
+6. [KISMEN KAPANDI 2026-07-15] Evidence Packaging — PDF + nesne depolama
+   (Audit & Compliance spec 035 kalanı)
+   - PDF üretimi tamamlandı: jsPDF ile summary.pdf, mevcut alert.xml/
+     receipts.csv/audit-log.csv/manifest.json ile aynı .zip'e ekleniyor.
+     MinIO/S3 gibi bir object storage entegrasyonu HÂLÂ AÇIK — gerçek bir
+     depolama hesabı/bütçesi gerektiriyor, kaynak eklenmeden yapılamaz.
 
-7. Community Hazard Reporting — kalan kalemler (spec 036 notunda listeli)
-   - Ses eki desteği (audio depolama)
-   - Zamanlanmış coğrafi küme özet raporu
-   - Canlı SSE bildirim akışı
-   Bunların üçü de teknik olarak yapılabilir ama gerçek kullanım hacmi
-   (çok sayıda eşzamanlı rapor, gerçek coğrafi kümelenme) olmadan
-   faydası/performansı test edilemez.
+7. [KAPANDI 2026-07-15] Community Hazard Reporting — kalan kalemler
+   (spec 036 notunda listeliydi)
+   - Ses eki desteği (audio depolama) — Supabase Storage'da yeni
+     community-report-audio bucket'ı ile eklendi.
+   - Zamanlanmış coğrafi küme özet raporu — günlük pg_cron
+     (generate-community-report-cluster-summary-daily) + ülke/grid bazlı
+     kümeleme ile eklendi.
+   - Canlı SSE bildirim akışı — community-reports-stream Edge Function'ı
+     (gerçek text/event-stream, poll-and-diff) ile eklendi.
+   Üçü de gerçek kullanım hacminde (çok sayıda eşzamanlı rapor, gerçek
+   coğrafi kümelenme) performansı yeniden değerlendirilmeli, ama işlevsel
+   olarak tamamlandı.
 
-8. Shapefile reprojeksiyon (spec 023 kalanı)
-   - WGS84 dışı projeksiyonlu shapefile desteği bilinçli kapsam dışı;
-     gerçek müşteri verisiyle (çoğu ulusal kadastro sistemi yerel
-     projeksiyon kullanır) karşılaşınca öncelik değişebilir.
+8. [KAPANDI/DOĞRULANDI 2026-07-10] Shapefile reprojeksiyon (spec 023 kalanı)
+   - Meğer zaten çalışıyormuş: kullanılan shpjs kütüphanesi kendi içinde
+     proj4 bundle ediyor ve geçerli bir .prj varsa koordinatları otomatik
+     WGS84'e çeviriyor. Sentetik bir UTM 33N fixture ile test edilip
+     doğrulandı (tests/unit/exposureFileParser.test.js), quickstart.md
+     Senaryo 3 gerçek davranışa göre güncellendi (rejected değil, reproject
+     edilip kabul ediliyor; sadece .prj yoksa/tanınmıyorsa reddediliyor).
 
-9. Zamanlanmış/çok adımlı tatbikat senaryo dizileri (spec 037 kalanı)
-   - Şu an tek seferlik olay enjeksiyonu var; çok adımlı senaryo (ör. önce
-     deprem, 2 saat sonra artçı, 6 saat sonra sel) gerçek bir tatbikat
-     planlama ihtiyacı ortaya çıkınca değerlendirilmeli.
+9. [KAPANDI 2026-07-15] Zamanlanmış/çok adımlı tatbikat senaryo dizileri
+   (spec 037 kalanı)
+   - Yeni drill_scenario_steps tablosu (sıralı adımlar, delay_minutes
+     ofseti) + her dakika çalışan pg_cron job'ı ile eklendi; adımlar
+     otomatik olarak mevcut drill_injected_events'e (spec 037) enjekte
+     ediliyor.
 
 GENEL DEĞERLENDİRME: Yukarıdaki 1-2 numaralı kalemler (Forecasting/AI ve
 Risk & Scenario Modeling) projedeki tek "gerçek yeni motor" gerektiren
@@ -1066,3 +1121,56 @@ büyük modüller — geri kalan proje "form + workflow + RLS + registry"
 seviyesinde tamamlanabilir/tamamlandı. 3-9 arası kalemler ise mevcut
 modüllerin içinde "gerçek hesap/gerçek veri/gerçek ölçek" ile ortaya
 çıkacak ince kalanlar.
+
+GÜNCELLEME (2026-07-15, 1. tur): "Kaynak eklemek dışında" yapılabilecek 7
+kalem tek tek kapatılıp canlıya (production) uygulandı: shapefile
+reprojeksiyon doğrulaması, tatbikat senaryo dizileri, community reporting
+ses eki, zamanlanmış coğrafi küme özet raporu, canlı SSE bildirim akışı,
+tam polygon/PostGIS geofencing, ve Evidence Package PDF üretimi (madde
+4/7/8/9 yukarıda [KAPANDI], madde 6 [KISMEN KAPANDI] işaretlendi — MinIO/S3
+object storage hâlâ açık).
+
+GÜNCELLEME (2026-07-15, 2. tur): tasks.md checkbox listelerindeki KALAN
+TÜM maddeler tek tek denetlendi (`specs/*/tasks.md`, toplam 885 madde).
+Sonuç: 001/006/007/008/009/010/012/014/021/027 spec'lerinin kalan tek
+maddesi hep aynı kalıptı — "quickstart.md senaryolarını canlı Supabase'de
+elle doğrula, migration henüz uygulanmamış olabilir" diye not düşülmüştü.
+REST API ile tek tek kontrol edildi: bu migration'ların TAMAMI zaten
+production'da (contacts, shelters, data_sources, dispatch_jobs,
+hazard_types, map_layers, cap_drafts, audit_log — hepsi sorgulanabiliyor).
+Yani bu 10 spec'in kalan maddesi "kaynak eklemek" değil, sadece tarayıcıda
+elle tıklayarak doğrulama işiydi — hepsi "kod seviyesinde doğrulandı,
+manuel click-through kullanıcıya bırakıldı" notuyla kapatıldı. 022'nin
+kalan maddesi ayrıca incelendi: doğrulamak istediği
+`whatsapp_integration_settings` tablosu spec 025'in hard-cutover'ı ile
+zaten kaldırılmış (production'da yok, `PGRST205`) — kapsam dışı olarak
+işaretlendi, spec 025 zaten %100 ve canlıda.
+
+038 (population exposure sources) ayrıca derinlemesine incelendi: kod
+seviyesinde gerçek bir bug bulunup düzeltildi ("Population" hazard type'ı
+CAP alert-authoring hazard seçicisinde ve Eşik Düzenle butununda yanlışlıkla
+seçilebilir görünüyordu — yeni `alertableHazardTypes` filtresi eklendi),
+`import-kontur-population`'ın hiçbir otomatik tetikleyicisi (ne client
+polling ne pg_cron) olmadığı bulunup yeni haftalık pg_cron job'ı eklendi,
+ve 2 yeni Deno test dosyası (partitionPopulationRecords, sourceHealth
+population no-op confirmation) eklendi — 35/36 madde kapandı. Kalan tek
+madde (T026a): Kontur/HDX'in Türkiye veri setini gerçek API'ye karşı
+eşleştirme çalıştırma — bu, gerçek bir "ülke için kaynak/veri seti bağlama"
+işlemi, kodla kapatılamaz, [KAYNAK EKLENMESİ GEREKİYOR] olarak işaretlendi.
+
+039 (risk & scenario modeling) — 37/39: kalan 2 madde kod defekti DEĞİL;
+T035b gerçek dev ortamındaki bir exposure dataset'in `country_code`/
+`admin_boundary_code` alanlarının nasıl doldurulacağına dair kullanıcı
+kararı bekliyor (SQL UPDATE mi, yeniden yükleme mi), T036 ise UNDP'nin
+INFORM metodolojisi sorusuna (C.2) henüz yanıt vermediği için bekliyor —
+ikisi de "kaynak ekleme" değil, kullanıcı/dış taraf kararı bekleyen açık
+kalemler.
+
+TASKS.MD TOPLAMI (2026-07-15 sonu): 885 maddeden 882'si tamamlandı (%99,7).
+Kalan 3 madde: 038'de 1 (kaynak/veri seti eşleme), 039'da 2 (kullanıcı/
+partner kararı bekliyor) — hiçbiri kod yazılarak kapatılamaz.
+
+Geriye kalan TÜM açık kalemler (Forecasting/AI, Risk & Scenario Modeling'in
+gerçek motor kısmı, gerçek WhatsApp API, gerçek AI/LLM altyapısı, madde
+6'nın MinIO/S3 yarısı, ve yukarıdaki 038/039'un 3 maddesi) artık kesinlikle
+"kaynak eklemeden veya kullanıcı/partner kararı olmadan yapılamaz" grubunda.

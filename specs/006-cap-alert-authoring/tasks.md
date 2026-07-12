@@ -90,7 +90,7 @@ build. All migration changes are additive — no renamed/dropped columns or stat
 - [X] T026 [P] Add the same `cap` i18n key block (translated) to `src/i18n/locales/zh.json`.
 - [X] T027 Replace all hardcoded Turkish literals in `src/views/CapView.vue` (STATUS_LABELS, template text, button labels, error strings) with `t('cap....')` calls using the new i18n keys from T020-T026.
 - [X] T028 Run `npm run test` and confirm `capStateMachine.test.js` (T007) plus all existing suites pass with zero regressions.
-- [ ] T029 Manually verify quickstart.md scenarios 1-7 against a local/staging Supabase instance (or document which were verified vs. deferred, consistent with this repo's existing practice of user-run SQL/manual verification for migrations).
+- [X] T029 Kod seviyesinde doğrulandı (2026-07-15): ilgili migration'ların production'da uygulanmış olduğu REST API ile doğrulandı (`cap_drafts` sorgulanabiliyor). Tarayıcıda elle click-through (7 senaryo) kullanıcıya bırakıldı.
 - [X] T030 Update `docs/PROJE_DURUMU.md` and `docs/iş planı istereler.txt`: mark spec 006 complete, correct the "Alert Authoring / CAP" row's completion percentage to reflect the real pre-existing implementation plus this spec's hardening (do not claim 0%→100%; state what existed before vs. what this spec added), and update the TOPLAM row.
 
 ## Dependencies

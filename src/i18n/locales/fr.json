@@ -399,6 +399,11 @@
     "allHazards": "— tous —",
     "country": "Pays",
     "region": "Code Région",
+    "lat": "Latitude (facultatif, pour un ciblage géographique précis)",
+    "lng": "Longitude (facultatif, pour un ciblage géographique précis)",
+    "latLngBothRequired": "La latitude et la longitude sont toutes deux requises.",
+    "invalidLat": "La latitude doit être comprise entre -90 et 90.",
+    "invalidLng": "La longitude doit être comprise entre -180 et 180.",
     "emailOptIn": "Autoriser l'envoi par e-mail",
     "whatsappOptIn": "Autoriser l'envoi par WhatsApp",
     "save": "Enregistrer",
@@ -649,6 +654,8 @@
       "useMyLocation": "Utiliser ma position",
       "photo": "Photo (facultatif)",
       "photoHint": "JPEG/PNG/WebP, 5 Mo maximum",
+      "audio": "Note vocale (facultatif)",
+      "audioHint": "WebM/OGG/MP3/M4A/WAV, 10 Mo maximum",
       "submit": "Envoyer",
       "submitting": "Envoi en cours…",
       "successMessage": "Votre signalement a été reçu pour examen. Merci.",
@@ -657,6 +664,8 @@
       "errorLocation": "La position est obligatoire.",
       "errorPhotoType": "Type de fichier non pris en charge (JPEG/PNG/WebP uniquement).",
       "errorPhotoSize": "Fichier trop volumineux (5 Mo maximum).",
+      "errorAudioType": "Type de fichier audio non pris en charge.",
+      "errorAudioSize": "Fichier audio trop volumineux (10 Mo maximum).",
       "errorGeneric": "Une erreur s'est produite lors de l'envoi, veuillez réessayer."
     },
     "moderation": {
@@ -669,7 +678,8 @@
       "assignOrg": "Assigner à une organisation (facultatif)",
       "assignOrgNone": "— aucune assignation —",
       "submittedAt": "Envoyé le",
-      "viewPhoto": "Voir la photo"
+      "viewPhoto": "Voir la photo",
+      "playAudio": "Écouter la note vocale"
     },
     "map": {
       "toggleLabel": "Afficher/Masquer les Signalements Communautaires",
@@ -689,6 +699,17 @@
       "tabLabel": "Signalements qui me sont assignés",
       "empty": "Aucun signalement ne vous est assigné.",
       "assignedOrg": "Organisation Assignée"
+    },
+    "clusterSummary": {
+      "sectionTitle": "Résumés de Clusters Géographiques Planifiés",
+      "empty": "Aucun résumé de cluster pour l'instant.",
+      "unresolvedCountry": "Pays non déterminé",
+      "totalReports": "Total des signalements",
+      "reportsAt": "signalements à"
+    },
+    "stream": {
+      "connected": "Mises à jour en direct connectées",
+      "disconnected": "Mises à jour en direct déconnectées"
     }
   },
   "drillInjection": {
@@ -711,6 +732,13 @@
     "remove": {
       "action": "Supprimer"
     }
+  },
+  "drillScenario": {
+    "title": "Séquence de Scénario Planifiée",
+    "hint": "Ajoutez des étapes ordonnées qui s'injectent automatiquement N minutes après le début de l'exercice.",
+    "delayMinutes": "Délai (minutes)",
+    "addStep": "Ajouter une Étape",
+    "minutesShort": "min"
   },
   "integrations": {
     "tabLabel": "Intégrations",

@@ -13,7 +13,7 @@ import { corsHeaders } from '../shared/cors.ts'
 import { recordFetchOutcome, resolveSourceId, logRejectedPayload, isSourceActive } from '../shared/sourceHealth.ts'
 import { getServedCountryCodes } from '../shared/servedCountries.ts'
 import { fetchKonturPopulation } from '../shared/konturFetch.ts'
-import { validatePopulationRecord } from '../shared/validatePopulationRecord.ts'
+import { partitionPopulationRecords } from '../shared/populationImportPartition.ts'
 import { writePopulationDataset } from '../shared/supersedeExposureDataset.ts'
 import type { PopulationRecord } from '../shared/populationRecord.ts'
 
@@ -54,18 +54,13 @@ Deno.serve(async (req) => {
       continue
     }
 
-    const validRecords: PopulationRecord[] = []
-    for (const record of records) {
-      const validation = validatePopulationRecord(record, servedCountryCodes)
-      if (!validation.valid) {
-        rejected += 1
-        await logRejectedPayload(sourceId, 'population', validation.reason, {
-          countryCode: record.countryCode,
-          population: record.population,
-        })
-        continue
-      }
-      validRecords.push(record)
+    const { validRecords, rejectedRecords } = partitionPopulationRecords(records, servedCountryCodes)
+    rejected += rejectedRecords.length
+    for (const { record, reason } of rejectedRecords) {
+      await logRejectedPayload(sourceId, 'population', reason, {
+        countryCode: record.countryCode,
+        population: record.population,
+      })
     }
 
     if (validRecords.length === 0) {

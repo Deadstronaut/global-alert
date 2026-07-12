@@ -22,6 +22,11 @@ function photoUrl(path) {
   if (!path) return null
   return supabase.storage.from('community-report-photos').getPublicUrl(path).data.publicUrl
 }
+
+function audioUrl(path) {
+  if (!path) return null
+  return supabase.storage.from('community-report-audio').getPublicUrl(path).data.publicUrl
+}
 </script>
 
 <template>
@@ -39,6 +44,9 @@ function photoUrl(path) {
         <a :href="photoUrl(report.photo_path)" target="_blank" rel="noopener">
           {{ t('communityReport.moderation.viewPhoto') }}
         </a>
+      </div>
+      <div v-if="report.audio_path">
+        <audio controls :src="audioUrl(report.audio_path)" :aria-label="t('communityReport.moderation.playAudio')"></audio>
       </div>
     </div>
   </div>

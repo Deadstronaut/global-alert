@@ -1227,6 +1227,9 @@ function setupMapInteractions() {
     const photoHtml = props.photo_path
       ? `<a href="${supabase.storage.from('community-report-photos').getPublicUrl(props.photo_path).data.publicUrl}" target="_blank" rel="noopener">${t('communityReport.moderation.viewPhoto')}</a>`
       : ''
+    const audioHtml = props.audio_path
+      ? `<audio controls src="${supabase.storage.from('community-report-audio').getPublicUrl(props.audio_path).data.publicUrl}" aria-label="${t('communityReport.moderation.playAudio')}"></audio>`
+      : ''
     new maplibregl.Popup({ offset: 12, className: 'modern-popup-container' })
       .setLngLat(e.features[0].geometry.coordinates)
       .setHTML(
@@ -1237,6 +1240,7 @@ function setupMapInteractions() {
             <p>${props.description}</p>
             <span>${new Date(props.created_at).toLocaleString()}</span>
             ${photoHtml}
+            ${audioHtml}
           </div>
         </div>
       `,
@@ -1383,6 +1387,7 @@ function updateCommunityReportMarkers() {
       description: report.description,
       created_at: report.created_at,
       photo_path: report.photo_path,
+      audio_path: report.audio_path,
     },
   }))
   source.setData({ type: 'FeatureCollection', features })

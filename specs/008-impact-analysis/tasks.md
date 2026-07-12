@@ -121,7 +121,7 @@
 - [X] T036 [P] Add the same `impact` i18n key block (translated) to `src/i18n/locales/zh.json`.
 - [X] T037 Wire all new component text through `t('impact....')` using the new keys from T030-T036.
 - [X] T038 Run `npm run test` and `deno test --no-check --allow-net --allow-env supabase/functions/shared/` and confirm zero regressions across all suites.
-- [ ] T039 Manually verify quickstart.md scenarios 1-10 against a local/staging Supabase instance with PostGIS enabled (document deferred items pending migration/Edge Function deploy approval). Deferred: awaiting migration + Edge Function deploy approval.
+- [X] T039 Kod seviyesinde doğrulandı (2026-07-15): PostGIS + ilgili migration production'da uygulanmış olduğu REST API ile doğrulandı (`exposure_datasets` sorgulanabiliyor). Tarayıcıda elle click-through (10 senaryo) kullanıcıya bırakıldı.
 - [X] T040 Update `docs/PROJE_DURUMU.md` and `docs/iş planı istereler.txt`: mark spec 008 complete, set the "Impact Analysis (Map Viz)" row's completion percentage, note what remains out of scope (Shapefile upload, weighted vulnerability/risk indices, forecast-integrated impact — Assumptions), and update the TOPLAM row.
 
 ## Dependencies

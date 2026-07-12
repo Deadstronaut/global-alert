@@ -10,6 +10,13 @@ const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
 
 export const supabase = createClient(supabaseUrl, supabaseKey);
 
+// Exported so callers that need to hand-build a fetch() request (e.g. the
+// community-reports-stream SSE client, which can't use supabase.functions.invoke
+// since it needs a streamed ReadableStream response) don't have to reach into
+// the client's internal properties.
+export const SUPABASE_URL = supabaseUrl;
+export const SUPABASE_ANON_KEY = supabaseKey;
+
 /**
  * Direct API endpoints (used by Edge Functions, or as fallbacks)
  */

@@ -14,6 +14,8 @@ const lat = ref('')
 const lng = ref('')
 const photoFile = ref(null)
 const photoError = ref(null)
+const audioFile = ref(null)
+const audioError = ref(null)
 
 const submitting = ref(false)
 const submitted = ref(false)
@@ -21,6 +23,8 @@ const errorMessage = ref(null)
 
 const ALLOWED_PHOTO_TYPES = ['image/jpeg', 'image/png', 'image/webp']
 const MAX_PHOTO_SIZE_BYTES = 5 * 1024 * 1024
+const ALLOWED_AUDIO_TYPES = ['audio/webm', 'audio/ogg', 'audio/mpeg', 'audio/mp4', 'audio/wav']
+const MAX_AUDIO_SIZE_BYTES = 10 * 1024 * 1024
 
 onMounted(() => {
   if (!hazardTypesStore.loaded) hazardTypesStore.fetchHazardTypes()
@@ -54,6 +58,26 @@ function onPhotoChange(event) {
     return
   }
   photoFile.value = file
+}
+
+function onAudioChange(event) {
+  const file = event.target.files?.[0] ?? null
+  audioError.value = null
+  if (!file) {
+    audioFile.value = null
+    return
+  }
+  if (!ALLOWED_AUDIO_TYPES.includes(file.type)) {
+    audioError.value = t('communityReport.form.errorAudioType')
+    audioFile.value = null
+    return
+  }
+  if (file.size > MAX_AUDIO_SIZE_BYTES) {
+    audioError.value = t('communityReport.form.errorAudioSize')
+    audioFile.value = null
+    return
+  }
+  audioFile.value = file
 }
 
 function fileToBase64(file) {
@@ -93,6 +117,12 @@ async function handleSubmit() {
       payload.photo = {
         base64: await fileToBase64(photoFile.value),
         mimeType: photoFile.value.type,
+      }
+    }
+    if (audioFile.value) {
+      payload.audio = {
+        base64: await fileToBase64(audioFile.value),
+        mimeType: audioFile.value.type,
       }
     }
 
@@ -150,6 +180,13 @@ async function handleSubmit() {
         <small>{{ t('communityReport.form.photoHint') }}</small>
       </label>
       <p v-if="photoError" class="error-message">{{ photoError }}</p>
+
+      <label class="form-field">
+        <span>{{ t('communityReport.form.audio') }}</span>
+        <input type="file" accept="audio/webm,audio/ogg,audio/mpeg,audio/mp4,audio/wav" @change="onAudioChange" />
+        <small>{{ t('communityReport.form.audioHint') }}</small>
+      </label>
+      <p v-if="audioError" class="error-message">{{ audioError }}</p>
 
       <p v-if="errorMessage" class="error-message">{{ errorMessage }}</p>
 

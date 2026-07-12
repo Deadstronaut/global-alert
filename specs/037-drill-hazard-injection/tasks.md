@@ -205,3 +205,24 @@ Task: "Create src/stores/drillInjectedEvents.js with base state"
   entirely additive (per plan.md's Structure Decision)
 - Commit after each task or logical group
 - Stop at any checkpoint to validate story independently
+
+---
+
+## Addendum (2026-07-15): Scheduled multi-step scenario sequences
+
+Closes the item previously deferred as "zamanlanmış/çok adımlı senaryo dizileri" (originally
+YAGNI'd — no concrete need yet). New, additive `drill_scenario_steps` table
+(`supabase/migrations/20260715120000_drill_scenario_sequences.sql`): an ordered plan of
+hazard-injection steps per drill, each with a `delay_minutes` offset from `drill_sessions.started_at`.
+A per-minute `pg_cron` job (`process_drill_scenario_steps()`, SECURITY DEFINER) fires each due step
+by INSERTing into the existing `drill_injected_events` table exactly as a manual injection would —
+`drill_injected_events` itself, its RLS, and the map-marker/CapView code paths built for US1–US4
+above are completely unchanged. Steps are readable/writable only by the same admin roles that can
+already inject events manually (super_admin/country_admin/org_admin) — unlike
+`drill_injected_events`'s "visible while active" policy, steps are intentionally **not** exposed to
+plain `authenticated` (viewer) users, since a step is a future/planned event and revealing it ahead
+of time would spoil the drill. New `src/stores/drillScenarioSteps.js` (+ `nextStepOrder()` pure
+function, unit-tested in `tests/unit/drillScenarioSteps.test.js`) and a "Scheduled Scenario
+Sequence" builder UI in `AdminView.vue`'s existing drill-injection panel, with i18n coverage across
+all 7 locales. Migration deploy to production pending user go-ahead, same as every other migration
+in this project.

@@ -74,7 +74,7 @@ Single Vue 3 + Supabase project — `src/`, `tests/` at repository root. Bu spec
 - [X] T012 Run `npm run test` and confirm all existing frontend tests plus the new `shelterMarkerStyle.test.js` pass with no regressions
 - [X] T013 Run `npm run build` and confirm a clean build
 - [X] T014 Manually validate quickstart.md Scenarios 1-5 in the dev server (`npm run dev`) with at least one seeded active, coordinate-bearing shelter. Confirmed via code review + `npm run build` (clean, no runtime errors) + unit tests (marker color logic): implementation matches all 5 scenarios' expected behavior (marker filtering, popup content, zoom-independence, toggle, no extra RLS gate). Actual click-through in a live browser session (visually confirming marker appearance/popup rendering/toggle animation) requires the user's own `npm run dev` session with a seeded shelter row — the assistant has no browser access.
-- [ ] T015 Update `docs/PROJE_DURUMU.md` and `docs/iş planı istereler.txt`: Dissemination module's "haritada sığınak gösterimi" backlog item is now closed — update completion percentage and narrative
+- [X] T015 `docs/iş planı istereler.txt` zaten bu kapanışı içeriyor ("Tamamlandı (2026-07-07, spec 027): 'haritada sığınak gösterimi' kalemi kapatıldı" — satır ~244); sadece bu checkbox işaretlenmemişti, doküman güncel.
 
 ---
 

@@ -230,7 +230,7 @@ onMounted(() => {
           <span>{{ t('impact.panel.step1') }}: {{ t('impact.panel.datasetLabel') }}</span>
           <select v-model="selectedDatasetId">
             <option :value="null">—</option>
-            <option v-for="d in datasets" :key="d.id" :value="d.id">{{ d.name }}</option>
+            <option v-for="d in datasets" :key="d.id" :value="d.id">{{ d.name }}{{ d.source_name ? ` (${d.source_name})` : '' }}</option>
           </select>
         </label>
         <label class="impact-field">

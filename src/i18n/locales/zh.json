@@ -399,6 +399,11 @@
     "allHazards": "— 全部 —",
     "country": "国家",
     "region": "地区代码",
+    "lat": "纬度（可选，用于精确地理定位）",
+    "lng": "经度（可选，用于精确地理定位）",
+    "latLngBothRequired": "纬度和经度必须同时提供。",
+    "invalidLat": "纬度必须在 -90 到 90 之间。",
+    "invalidLng": "经度必须在 -180 到 180 之间。",
     "emailOptIn": "允许通过电子邮件发送",
     "whatsappOptIn": "允许通过 WhatsApp 发送",
     "save": "保存",
@@ -649,6 +654,8 @@
       "useMyLocation": "使用我的位置",
       "photo": "照片（可选）",
       "photoHint": "JPEG/PNG/WebP，最大5MB",
+      "audio": "语音留言（可选）",
+      "audioHint": "WebM/OGG/MP3/M4A/WAV，最大10MB",
       "submit": "提交",
       "submitting": "提交中…",
       "successMessage": "您的报告已收到并等待审核。谢谢。",
@@ -657,6 +664,8 @@
       "errorLocation": "位置为必填项。",
       "errorPhotoType": "不支持的文件类型（仅限JPEG/PNG/WebP）。",
       "errorPhotoSize": "文件过大（最大5MB）。",
+      "errorAudioType": "不支持的音频文件类型。",
+      "errorAudioSize": "音频文件过大（最大10MB）。",
       "errorGeneric": "提交时发生错误，请重试。"
     },
     "moderation": {
@@ -669,7 +678,8 @@
       "assignOrg": "分配给组织（可选）",
       "assignOrgNone": "— 未分配 —",
       "submittedAt": "提交时间",
-      "viewPhoto": "查看照片"
+      "viewPhoto": "查看照片",
+      "playAudio": "播放语音留言"
     },
     "map": {
       "toggleLabel": "显示/隐藏民众报告",
@@ -689,6 +699,17 @@
       "tabLabel": "分配给我的报告",
       "empty": "没有分配给您的报告。",
       "assignedOrg": "分配的组织"
+    },
+    "clusterSummary": {
+      "sectionTitle": "计划的地理聚类摘要",
+      "empty": "暂无聚类摘要。",
+      "unresolvedCountry": "未确定的国家",
+      "totalReports": "报告总数",
+      "reportsAt": "条报告于"
+    },
+    "stream": {
+      "connected": "实时更新已连接",
+      "disconnected": "实时更新已断开"
     }
   },
   "drillInjection": {
@@ -711,6 +732,13 @@
     "remove": {
       "action": "移除"
     }
+  },
+  "drillScenario": {
+    "title": "计划的情景序列",
+    "hint": "添加在演习开始后N分钟自动注入的有序步骤。",
+    "delayMinutes": "延迟（分钟）",
+    "addStep": "添加步骤",
+    "minutesShort": "分钟"
   },
   "integrations": {
     "tabLabel": "集成",

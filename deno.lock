@@ -89,6 +89,7 @@
         "npm:globals@^17.3.0",
         "npm:globe.gl@^2.45.0",
         "npm:h3-js@^4.4.0",
+        "npm:jspdf@^4.2.1",
         "npm:jszip@^3.10.1",
         "npm:maplibre-gl@^4.7.1",
         "npm:npm-run-all2@^8.0.4",

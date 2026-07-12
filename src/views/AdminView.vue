@@ -32,6 +32,7 @@ import AssignedCommunityReportsPanel from '@/components/admin/AssignedCommunityR
 import { computeResponseTimeSeconds, computeAckRate } from '@/utils/drillMetrics.js'
 import { useHazardTypesStore } from '@/stores/hazardTypes.js'
 import { useDrillInjectedEventsStore } from '@/stores/drillInjectedEvents.js'
+import { useDrillScenarioStepsStore } from '@/stores/drillScenarioSteps.js'
 
 const router = useRouter()
 const { t } = useI18n()
@@ -39,6 +40,7 @@ const { t } = useI18n()
 const auth = useAuthStore()
 const hazardTypesStore = useHazardTypesStore()
 const drillInjectedEventsStore = useDrillInjectedEventsStore()
+const drillScenarioStepsStore = useDrillScenarioStepsStore()
 const tab = ref('users') // 'users' | 'orgs' | 'drill' | 'sources' | 'manual' | 'csv' | 'boundaries' | 'contacts' | 'dispatch' | 'audit'
 
 async function handleLogout() {
@@ -447,6 +449,37 @@ function toggleDrillInjectionForm(drill) {
   injectingForDrillId.value = drill.id
   drillInjectionForm.value = { hazard_type: '', lat: '', lng: '', severity: 'moderate', description: '' }
   loadDrillInjectedEvents(drill.id)
+  loadDrillScenarioSteps(drill.id)
+}
+
+// Scheduled multi-step scenario sequences (spec 037 remaining item): an
+// ordered plan of hazard injections, each firing automatically N minutes
+// after the drill starts (process_drill_scenario_steps() pg_cron job) —
+// distinct from the immediate manual injection form above.
+const scenarioStepForm = ref({ delay_minutes: '', hazard_type: '', lat: '', lng: '', severity: 'moderate', description: '' })
+const addingScenarioStep = ref(false)
+
+async function loadDrillScenarioSteps(drillId) {
+  await drillScenarioStepsStore.fetchSteps(drillId)
+}
+
+async function submitScenarioStep(drill) {
+  addingScenarioStep.value = true
+  const result = await drillScenarioStepsStore.addStep(drill.id, {
+    delay_minutes: Number(scenarioStepForm.value.delay_minutes),
+    hazard_type: scenarioStepForm.value.hazard_type,
+    lat: Number(scenarioStepForm.value.lat),
+    lng: Number(scenarioStepForm.value.lng),
+    severity: scenarioStepForm.value.severity,
+    description: scenarioStepForm.value.description,
+  })
+  addingScenarioStep.value = false
+  if (!result.success) return
+  scenarioStepForm.value = { delay_minutes: '', hazard_type: '', lat: '', lng: '', severity: 'moderate', description: '' }
+}
+
+async function removeScenarioStep(drillId, stepId) {
+  await drillScenarioStepsStore.removeStep(drillId, stepId)
 }
 
 async function loadDrillInjectedEvents(drillId) {
@@ -1456,6 +1489,59 @@ onUnmounted(() => {
                 </button>
               </li>
             </ul>
+
+            <!-- Scheduled multi-step scenario sequence: fires automatically N minutes after drill start -->
+            <div class="drill-scenario-sequence">
+              <h4>{{ t('drillScenario.title') }}</h4>
+              <p class="muted" style="font-size: 0.75rem">{{ t('drillScenario.hint') }}</p>
+              <div class="form-grid">
+                <label class="form-field">
+                  <span>{{ t('drillScenario.delayMinutes') }}</span>
+                  <input v-model="scenarioStepForm.delay_minutes" type="number" min="0" step="1" />
+                </label>
+                <label class="form-field">
+                  <span>{{ t('drillInjection.form.hazardType') }}</span>
+                  <select v-model="scenarioStepForm.hazard_type">
+                    <option value="" disabled>{{ t('drillInjection.form.hazardTypePlaceholder') }}</option>
+                    <option v-for="h in hazardTypesStore.activeHazardTypes" :key="h.code" :value="h.code">{{ h.display_name }}</option>
+                  </select>
+                </label>
+              </div>
+              <div class="form-grid">
+                <label class="form-field">
+                  <span>{{ t('drillInjection.form.lat') }}</span>
+                  <input v-model="scenarioStepForm.lat" type="number" step="any" />
+                </label>
+                <label class="form-field">
+                  <span>{{ t('drillInjection.form.lng') }}</span>
+                  <input v-model="scenarioStepForm.lng" type="number" step="any" />
+                </label>
+              </div>
+              <label class="form-field">
+                <span>{{ t('drillInjection.form.severity') }}</span>
+                <select v-model="scenarioStepForm.severity">
+                  <option v-for="s in SEVERITIES" :key="s" :value="s">{{ s }}</option>
+                </select>
+              </label>
+              <label class="form-field">
+                <span>{{ t('drillInjection.form.description') }}</span>
+                <textarea v-model="scenarioStepForm.description" rows="2"></textarea>
+              </label>
+              <button :disabled="addingScenarioStep" @click="submitScenarioStep(d)">
+                {{ t('drillScenario.addStep') }}
+              </button>
+
+              <ol v-if="drillScenarioStepsStore.stepsByDrill[d.id]?.length" class="drill-scenario-steps-list">
+                <li v-for="step in drillScenarioStepsStore.stepsByDrill[d.id]" :key="step.id">
+                  <span v-if="step.injected_at">✅</span>
+                  <span v-else>⏳</span>
+                  +{{ step.delay_minutes }} {{ t('drillScenario.minutesShort') }} — {{ step.hazard_type }}: {{ step.description }}
+                  <button v-if="!step.injected_at" class="btn-export" @click="removeScenarioStep(d.id, step.id)">
+                    {{ t('drillInjection.remove.action') }}
+                  </button>
+                </li>
+              </ol>
+            </div>
           </div>
 
           <div v-if="d.status === 'completed'" class="drill-actions">

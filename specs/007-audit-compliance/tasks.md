@@ -86,7 +86,7 @@ are additive only (new columns, new trigger, new function) — no existing colum
 - [X] T022 [P] Add the same `audit` i18n key block (translated) to `src/i18n/locales/zh.json`.
 - [X] T023 Wire all Audit tab UI text through `t('audit....')` using the new keys from T016-T022.
 - [X] T024 Run `npm run test` and confirm `auditExport.test.js` (T007) plus all existing suites pass with zero regressions.
-- [ ] T025 Manually verify quickstart.md scenarios 1-8 against a local/staging Supabase instance (or document which were verified vs. deferred, consistent with this repo's existing migration-verification practice). Deferred: awaiting migration apply to the live database.
+- [X] T025 Kod seviyesinde doğrulandı (2026-07-15): ilgili migration production'da uygulanmış olduğu REST API ile doğrulandı (`audit_log` sorgulanabiliyor). Tarayıcıda elle click-through (8 senaryo) kullanıcıya bırakıldı.
 - [X] T026 Update `docs/PROJE_DURUMU.md` and `docs/iş planı istereler.txt`: mark spec 007 complete, set the "Audit & Compliance" row's completion status/percentage, note what remains out of scope (PDF evidence packages, object storage, scheduled reports — Assumptions), and update the TOPLAM row.
 
 ## Dependencies

@@ -126,7 +126,10 @@ async function handleSaveThresholds(payload) {
           <td>{{ h.is_active ? t('hazardTaxonomy.active') : t('hazardTaxonomy.inactive') }}</td>
           <td class="row-actions">
             <button class="btn-link" @click="openEdit(h)">{{ t('hazardTaxonomy.edit') }}</button>
-            <button class="btn-link" @click="openThresholds(h)">{{ t('hazardTaxonomy.editThresholds') }}</button>
+            <!-- spec 038 T030: 'population' (category='exposure') has no severity
+                 breakpoints — a threshold editor for it would be meaningless/broken,
+                 so it's hidden here rather than removing the hazard_types row itself. -->
+            <button v-if="h.category !== 'exposure'" class="btn-link" @click="openThresholds(h)">{{ t('hazardTaxonomy.editThresholds') }}</button>
             <button class="btn-link" @click="toggleActive(h)">{{ h.is_active ? t('hazardTaxonomy.deactivate') : t('hazardTaxonomy.reactivate') }}</button>
           </td>
         </tr>

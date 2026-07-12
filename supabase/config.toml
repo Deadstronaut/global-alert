@@ -19,6 +19,13 @@ enabled = true
 verify_jwt = true
 entrypoint = "./functions/generate-compliance-report/index.ts"
 
+# spec 036 remaining item: live SSE notification stream. Uses the caller's own
+# JWT (not service-role) so existing community_reports RLS applies as-is.
+[functions.community-reports-stream]
+enabled = true
+verify_jwt = true
+entrypoint = "./functions/community-reports-stream/index.ts"
+
 [functions.fetch-historical-events]
 enabled = true
 verify_jwt = true

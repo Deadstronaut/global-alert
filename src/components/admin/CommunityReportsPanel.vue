@@ -1,13 +1,15 @@
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useCommunityReportsStore } from '@/stores/communityReports.js'
+import { useCommunityReportsStreamStore } from '@/stores/communityReportsStream.js'
 import { useHazardTypesStore } from '@/stores/hazardTypes.js'
 import { useAuthStore } from '@/stores/auth.js'
 import { supabase } from '@/services/api/config.js'
 
 const { t } = useI18n()
 const store = useCommunityReportsStore()
+const stream = useCommunityReportsStreamStore()
 const hazardTypesStore = useHazardTypesStore()
 const auth = useAuthStore()
 
@@ -52,7 +54,38 @@ onMounted(() => {
   store.fetchModerationQueue()
   store.fetchApproved()
   if (!hazardTypesStore.loaded) hazardTypesStore.fetchHazardTypes()
+  loadClusterSummaries()
+  // Live notification stream (spec 036 remaining item): a new/updated report
+  // simply triggers a refetch of whichever lists could be affected — safer
+  // than trying to splice the SSE payload's partial shape directly into
+  // reactive state, and cheap since these are already fast, indexed queries.
+  stream.connect(() => {
+    store.fetchModerationQueue()
+    store.fetchApproved()
+  })
 })
+
+onUnmounted(() => {
+  stream.disconnect()
+})
+
+// Scheduled geo-cluster digest (spec 036 remaining item): read-only here —
+// the only writer is the daily generate-community-report-cluster-summary
+// Edge Function. RLS already scopes rows to the caller's own country (or
+// all countries for super_admin), so no client-side filtering is needed.
+const clusterSummaries = ref([])
+const clusterSummariesLoading = ref(false)
+
+async function loadClusterSummaries() {
+  clusterSummariesLoading.value = true
+  const { data } = await supabase
+    .from('community_report_cluster_summaries')
+    .select('*')
+    .order('period_start', { ascending: false })
+    .limit(14)
+  clusterSummaries.value = data || []
+  clusterSummariesLoading.value = false
+}
 
 function hazardDisplayName(code) {
   return hazardTypesStore.hazardTypes.find((h) => h.code === code)?.display_name ?? code
@@ -61,6 +94,11 @@ function hazardDisplayName(code) {
 function photoUrl(path) {
   if (!path) return null
   return supabase.storage.from('community-report-photos').getPublicUrl(path).data.publicUrl
+}
+
+function audioUrl(path) {
+  if (!path) return null
+  return supabase.storage.from('community-report-audio').getPublicUrl(path).data.publicUrl
 }
 
 async function loadOrganizationsFor(countryCode) {
@@ -99,7 +137,14 @@ async function confirmReject(id) {
 
 <template>
   <div class="community-reports-panel">
-    <h3>{{ t('communityReport.moderation.tabLabel') }}</h3>
+    <h3>
+      {{ t('communityReport.moderation.tabLabel') }}
+      <span
+        class="stream-status"
+        :class="stream.connected ? 'stream-connected' : 'stream-disconnected'"
+        :title="stream.connected ? t('communityReport.stream.connected') : t('communityReport.stream.disconnected')"
+      >●</span>
+    </h3>
 
     <p v-if="!store.moderationQueue.length">{{ t('communityReport.moderation.queueEmpty') }}</p>
 
@@ -114,6 +159,9 @@ async function confirmReject(id) {
           <a :href="photoUrl(report.photo_path)" target="_blank" rel="noopener">
             {{ t('communityReport.moderation.viewPhoto') }}
           </a>
+        </div>
+        <div v-if="report.audio_path">
+          <audio controls :src="audioUrl(report.audio_path)" :aria-label="t('communityReport.moderation.playAudio')"></audio>
         </div>
       </div>
 
@@ -178,6 +226,24 @@ async function confirmReject(id) {
       </div>
     </div>
     <p v-if="linkError" class="error-message">{{ linkError }}</p>
+
+    <h3>{{ t('communityReport.clusterSummary.sectionTitle') }}</h3>
+    <div v-if="clusterSummariesLoading" class="tab-loading">{{ t('audit.loading') }}</div>
+    <p v-else-if="!clusterSummaries.length">{{ t('communityReport.clusterSummary.empty') }}</p>
+    <ul v-else class="cluster-summary-list">
+      <li v-for="summary in clusterSummaries" :key="summary.id" class="cluster-summary-row">
+        <strong>{{ summary.country_code || t('communityReport.clusterSummary.unresolvedCountry') }}</strong>
+        — {{ summary.period_start.slice(0, 10) }}
+        — {{ t('communityReport.clusterSummary.totalReports') }}: {{ summary.total_reports }}
+        <ul v-if="summary.clusters.length" class="cluster-list">
+          <li v-for="(cluster, idx) in summary.clusters" :key="idx">
+            ({{ cluster.grid_lat }}, {{ cluster.grid_lng }}) — {{ cluster.report_count }}
+            {{ t('communityReport.clusterSummary.reportsAt') }}
+            — {{ Object.entries(cluster.hazard_type_breakdown).map(([k, v]) => `${hazardDisplayName(k)}: ${v}`).join(', ') }}
+          </li>
+        </ul>
+      </li>
+    </ul>
   </div>
 </template>
 
@@ -188,4 +254,7 @@ async function confirmReject(id) {
 .form-field { display: flex; flex-direction: column; gap: 4px; }
 .reject-form { display: flex; flex-direction: column; gap: 6px; }
 .error-message { color: #c0392b; }
+.stream-status { font-size: 0.7rem; margin-left: 8px; }
+.stream-connected { color: #1e7e34; }
+.stream-disconnected { color: #94a3b8; }
 </style>

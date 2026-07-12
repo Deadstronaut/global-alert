@@ -166,6 +166,23 @@ export const useHazardTypesStore = defineStore('hazardTypes', () => {
     return FALLBACK_HAZARD_TYPES;
   });
 
+  // spec 038 T030: 'population' (category='exposure') is not an alertable
+  // hazard — it exists in this registry only so Impact Analysis's source
+  // health/admin CRUD can reuse the same hazard_types infrastructure
+  // (spec 038 research.md). Alert-authoring pickers (CapView.vue) must use
+  // this instead of activeHazardTypes so a non-alertable exposure type can
+  // never be selected as a CAP alert's hazard type — the hazard_types row
+  // itself is never filtered out of the registry, only out of this specific
+  // display context.
+  const alertableHazardTypes = computed(() => {
+    if (loaded.value) {
+      return hazardTypes.value
+        .filter((h) => h.is_active && h.category !== 'exposure')
+        .map((h) => ({ code: h.code, display_name: h.display_name }));
+    }
+    return FALLBACK_HAZARD_TYPES;
+  });
+
   // FR-007/FR-008: synchronous, evaluated against cached (or fallback)
   // breakpoints — no per-call DB round trip.
   function computeSeverity(hazardType, value, countryCode) {
@@ -241,6 +258,7 @@ export const useHazardTypesStore = defineStore('hazardTypes', () => {
     loading,
     error,
     activeHazardTypes,
+    alertableHazardTypes,
     fetchHazardTypes,
     computeSeverity,
     createHazardType,

@@ -9,6 +9,8 @@ export interface CommunityReportPayload {
   lng?: unknown
   photoMimeType?: unknown
   photoSizeBytes?: unknown
+  audioMimeType?: unknown
+  audioSizeBytes?: unknown
 }
 
 export interface ValidationResult {
@@ -18,6 +20,12 @@ export interface ValidationResult {
 
 const ALLOWED_PHOTO_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp']
 const MAX_PHOTO_SIZE_BYTES = 5 * 1024 * 1024 // 5MB (FR-013)
+
+// Community reporting remaining item: optional voice-note attachment,
+// alongside the existing optional photo — same "only validated if present"
+// shape as the photo fields above.
+const ALLOWED_AUDIO_MIME_TYPES = ['audio/webm', 'audio/ogg', 'audio/mpeg', 'audio/mp4', 'audio/wav']
+const MAX_AUDIO_SIZE_BYTES = 10 * 1024 * 1024 // 10MB — voice notes are short but bitrate varies
 
 export function validateReportPayload(payload: CommunityReportPayload): ValidationResult {
   if (typeof payload.hazardType !== 'string' || payload.hazardType.trim() === '') {
@@ -44,6 +52,20 @@ export function validateReportPayload(payload: CommunityReportPayload): Validati
       payload.photoSizeBytes > MAX_PHOTO_SIZE_BYTES
     ) {
       return { valid: false, error: 'photo file is too large' }
+    }
+  }
+
+  // Voice note is optional — only validated if the caller indicates one is present.
+  if (payload.audioMimeType != null) {
+    if (typeof payload.audioMimeType !== 'string' || !ALLOWED_AUDIO_MIME_TYPES.includes(payload.audioMimeType)) {
+      return { valid: false, error: 'unsupported audio file type' }
+    }
+    if (
+      typeof payload.audioSizeBytes !== 'number' ||
+      !Number.isFinite(payload.audioSizeBytes) ||
+      payload.audioSizeBytes > MAX_AUDIO_SIZE_BYTES
+    ) {
+      return { valid: false, error: 'audio file is too large' }
     }
   }
 

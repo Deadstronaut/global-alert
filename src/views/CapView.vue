@@ -9,9 +9,10 @@ import { useDrillInjectedEventsStore } from '@/stores/drillInjectedEvents.js'
 import { supabase } from '@/services/api/config.js'
 import { allowedTransitions, isDraftCompleteForApproval, canUserActOnDraft } from '@/lib/capStateMachine.js'
 import { generateCapXml, generateCapJson } from '@/lib/capExport.js'
-import { buildEvidencePackageManifest } from '@/lib/evidencePackage.js'
+import { buildEvidencePackageManifest, buildEvidenceSummaryLines } from '@/lib/evidencePackage.js'
 import { rowsToCsv } from '@/lib/auditExport.js'
 import JSZip from 'jszip'
+import { jsPDF } from 'jspdf'
 
 const router = useRouter()
 const { t } = useI18n()
@@ -29,10 +30,13 @@ const error = ref(null)
 const activeTab = ref('active') // 'active' | 'history'
 
 // spec 010: sourced from the hazard taxonomy registry instead of a hardcoded
-// list — a CAP alert can be authored for any registered hazard type, unlike
-// ManualEntryForm/FileImportForm/SourceFormModal which are limited to
-// hazard types with a dedicated disaster table.
-const HAZARD_TYPES = computed(() => hazardTypesStore.activeHazardTypes)
+// list — a CAP alert can be authored for any registered ALERTABLE hazard
+// type, unlike ManualEntryForm/FileImportForm/SourceFormModal which are
+// limited to hazard types with a dedicated disaster table. Uses
+// alertableHazardTypes (not activeHazardTypes) so 'population' (spec 038,
+// category='exposure' — not an alertable hazard, exists only for Impact
+// Analysis's source health/admin CRUD) can never be selected here.
+const HAZARD_TYPES = computed(() => hazardTypesStore.alertableHazardTypes)
 const SEVERITIES   = ['critical','high','moderate','low','minimal']
 const CERTAINTIES  = ['observed','likely','possible','unlikely','unknown']
 const URGENCIES    = ['immediate','expected','future','past','unknown']
@@ -320,6 +324,25 @@ async function downloadEvidencePackage(draft) {
         2,
       ),
     )
+
+    // Audit & Compliance (spec 035) remaining item — "PDF kanıt paketleri".
+    // A one-page human-readable summary alongside the machine-readable
+    // alert.xml/receipts.csv/audit-log.csv/manifest.json already in the
+    // package; object-storage (MinIO/S3) delivery remains out of scope
+    // (needs a real storage account/budget), this is purely local generation.
+    const summaryLines = buildEvidenceSummaryLines({
+      capDraftId: draft.id,
+      hazardType: draft.hazard_type,
+      severity: draft.severity,
+      countryCode: draft.country_code,
+      broadcastAt: draft.broadcast_at,
+      receiptCount: receipts?.length ?? 0,
+      auditLogCount: auditRows?.length ?? 0,
+    })
+    const pdf = new jsPDF()
+    pdf.setFontSize(11)
+    summaryLines.forEach((line, i) => pdf.text(line, 10, 15 + i * 7))
+    zip.file('summary.pdf', pdf.output('blob'))
 
     const blob = await zip.generateAsync({ type: 'blob' })
     const url = URL.createObjectURL(blob)

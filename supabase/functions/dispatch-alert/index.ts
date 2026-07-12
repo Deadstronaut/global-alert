@@ -17,6 +17,7 @@ import { matchesContact, type DispatchableContact, type DispatchableCapDraft } f
 import { canRetryDispatchJob } from '../shared/dispatchRetryAuthorization.ts'
 import { resolveLocalizedContent } from '../shared/emailLocalization.ts'
 import { shouldAutoRetryNow, MAX_AUTO_RETRIES } from '../shared/dispatchBackoff.ts'
+import { polygonAllowsContact } from '../shared/geofencePolygon.ts'
 
 function adminClient() {
   const url = Deno.env.get('SUPABASE_URL')
@@ -159,9 +160,32 @@ async function handleAutoDispatch(admin: ReturnType<typeof adminClient>, draftId
     region_code: draft.region_code,
     hazard_type: draft.hazard_type,
   }
-  const matched = (contacts ?? []).filter(
+  const textMatched = (contacts ?? []).filter(
     (c: DispatchableContact) => matchesContact(c, draftForMatching, 'email') || matchesContact(c, draftForMatching, 'whatsapp'),
   )
+
+  // Polygon/PostGIS geofencing narrowing layer (spec 015/036 remaining item):
+  // an ADDITIONAL filter on top of the region_code text match above, never a
+  // replacement — only excludes a contact whose coordinates are
+  // geometrically confirmed outside the draft's region polygon; anything
+  // undeterminable (no coordinates, no resolvable boundary) is kept.
+  let matched = textMatched
+  if (draft.region_code) {
+    const contactIds = (textMatched as Array<DispatchableContact & { id: string }>).map((c) => c.id)
+    if (contactIds.length > 0) {
+      const { data: containment } = await admin.rpc('resolve_contacts_in_region', {
+        p_country_code: draft.country_code,
+        p_region_code: draft.region_code,
+        p_contact_ids: contactIds,
+      })
+      const isWithinById = new Map<string, boolean | null>(
+        (containment ?? []).map((row: { contact_id: string; is_within: boolean | null }) => [row.contact_id, row.is_within]),
+      )
+      matched = (textMatched as Array<DispatchableContact & { id: string }>).filter((c) =>
+        polygonAllowsContact(isWithinById.get(c.id)),
+      )
+    }
+  }
 
   await admin.from('dispatch_jobs').update({ matched_contact_count: matched.length }).eq('id', job.id)
 

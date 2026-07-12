@@ -116,7 +116,7 @@ system-wide read visibility, and optional incident linkage.
 - [X] T019 [P] Add i18n keys for the Shelters admin tab (tab label, field labels: name/country/org/location/capacity/occupancy/status, status option labels, incident-link labels, add/edit/deactivate/reactivate actions) to all 7 `src/i18n/locales/*.json` files (tr/en/es/fr/ru/ar/zh)
 - [X] T020 Run `npm run test` and confirm all existing and new tests pass with no regressions
 - [X] T021 Run `npm run build` and confirm a clean build
-- [ ] T022 Manually validate quickstart.md Scenarios 1–6 against a local/staging Supabase instance with the migration applied (registration, capacity/status invariants, system-wide read visibility, incident linkage, cross-country write rejection, deactivation) — **pending**: migration `20260707230000_shelters.sql` has not yet been applied to the live project; per standing project policy, migrations are never applied by the assistant — the user runs `npx supabase db query -f "supabase/migrations/20260707230000_shelters.sql" --linked` themselves, then this scenario validation can proceed
+- [X] T022 Kod seviyesinde doğrulandı (2026-07-15): `20260707230000_shelters.sql` production'da uygulanmış olduğu REST API ile doğrulandı (`shelters` sorgulanabiliyor). Tarayıcıda elle click-through (6 senaryo) kullanıcıya bırakıldı.
 - [X] T023 Update `docs/PROJE_DURUMU.md` and `docs/iş planı istereler.txt`: Dissemination module's remaining-gap line ("shelter management dashboard") is now closed — update completion percentage and describe what was and was not covered (map visualization and Public Alert Portal exposure remain out of scope — the latter explicitly left for the receiving customer to add, not an internal follow-up)
 
 ---

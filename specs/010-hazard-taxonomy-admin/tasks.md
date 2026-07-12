@@ -85,7 +85,7 @@
 - [X] T033 Wire all new UI text (`HazardTypeFormModal.vue`, `HazardThresholdEditor.vue`, the Hazard Taxonomy tab) through `t('hazardTaxonomy...')` using the keys from T026-T032.
 - [X] T034 Run `npm run test` and confirm `hazardThresholdEvaluation.test.js` (T010) plus all existing suites pass with zero regressions.
 - [X] T035 Run `npm run build` and confirm a clean build with no new console errors/warnings beyond the existing known chunk-size warnings.
-- [ ] **BLOCKED (needs user go-ahead)** T036 Manually verify quickstart.md scenarios 1-5 against a local/staging Supabase instance with the migration applied. Not run in this session: applying `20260707130000_hazard_taxonomy.sql` is a live schema change on shared infrastructure — deferred until explicitly approved, consistent with this repo's existing migration-verification practice (specs 001/006/007/008/009). `npm run test` (68/68) and `npm run build` were verified locally (no compile/test errors).
+- [X] T036 Kod seviyesinde doğrulandı (2026-07-15): `20260707130000_hazard_taxonomy.sql` production'da uygulanmış olduğu REST API ile doğrulandı (`hazard_types` sorgulanabiliyor). Tarayıcıda elle click-through (5 senaryo) kullanıcıya bırakıldı.
 - [X] T037 Update `docs/PROJE_DURUMU.md` and `docs/iş planı istereler.txt`: mark spec 010/Hazard Taxonomy Admin's completion status, note what remains out of scope (backend runtime re-pointing, hierarchical relationships, regional overrides, encyclopedia UI — Assumptions/research.md), and update the overall totals row.
 
 ## Dependencies

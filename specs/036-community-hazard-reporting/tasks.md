@@ -247,3 +247,83 @@ Task: "Create src/stores/communityReports.js with base state"
   is entirely additive (per plan.md's Structure Decision)
 - Commit after each task or logical group
 - Stop at any checkpoint to validate story independently
+
+---
+
+## Addendum (2026-07-15): Voice-note (audio) attachment
+
+Closes the "ses eki desteği" remaining item. Additive `audio_path` column
+(`supabase/migrations/20260715130000_community_report_audio.sql`) + a new
+public-read `community-report-audio` storage bucket, mirroring the existing
+optional photo attachment exactly: `submit-community-report` remains the only
+write path (service-role upload), `communityReportValidation.ts` gained
+matching optional `audioMimeType`/`audioSizeBytes` checks (webm/ogg/mpeg/mp4/wav,
+10MB cap — tested in `communityReportValidation.test.ts`), and the citizen form
+(`CommunityReportForm.vue`), moderation queue, assigned-reports view, and map
+popup (`MapView.vue`) all gained an `<audio controls>` playback element
+alongside their existing "view photo" link. No existing column, RLS policy, or
+Edge Function behavior changed. Migration deploy pending user go-ahead, same as
+every other migration in this project.
+
+---
+
+## Addendum (2026-07-15): Scheduled geo-cluster summary report
+
+Closes the "zamanlanmış coğrafi küme özet raporu" remaining item, following
+the exact compliance_reports (spec 019) / incident_reports (spec 026) /
+drill_reports (spec 032) shape: new `community_report_cluster_summaries`
+table + `trigger_community_report_cluster_summary()` pg_net/Vault trigger,
+scheduled daily at 00:15 UTC
+(`supabase/migrations/20260715140000_community_report_cluster_summaries.sql`).
+The actual grouping logic is a pure, unit-tested function
+(`clusterReportsByCountryAndGrid()` in
+`supabase/functions/shared/communityReportClustering.ts`, 6 Deno tests) —
+approved reports are grouped by country, then by a fixed 0.5°×0.5° lat/lng
+grid cell (no PostGIS/H3 dependency needed for a periodic digest), with a
+per-cluster hazard-type breakdown. New Edge Function
+`generate-community-report-cluster-summary` computes the most recently
+elapsed UTC day and upserts one row per country (idempotent via
+`UNIQUE(period_start, period_end, country_code)`; an unresolved country is
+stored as `''`, not `NULL`, so the uniqueness guarantee actually holds). RLS:
+super_admin reads all rows, country_admin/org_admin read only their own
+country's rows — mirrors the country-scoped read pattern used elsewhere. A
+read-only "Scheduled Geo-Cluster Summaries" section was added to
+`CommunityReportsPanel.vue`, i18n-covered across all 7 locales. No existing
+table, RLS policy, or Edge Function is modified. Migration + Edge Function
+deploy pending user go-ahead.
+
+---
+
+## Addendum (2026-07-15): Live SSE notification stream
+
+Closes the "canlı SSE bildirim akışı" remaining item. New Edge Function
+`community-reports-stream` (registered in `supabase/config.toml`,
+`verify_jwt = true`): a genuine `text/event-stream` response built from a
+`ReadableStream`, using the **caller's own JWT** (not service-role) to build
+its Supabase client — existing `community_reports` RLS therefore applies
+automatically with zero new authorization logic. Implementation is
+poll-and-diff (every 4s) rather than a Realtime/LISTEN-NOTIFY bridge (Edge
+Functions are not a good home for a long-lived Realtime client); the
+diffing itself is a pure, unit-tested function
+(`selectNewerRows()` in `supabase/functions/shared/sseReportDiff.ts`, 4 Deno
+tests) that only ever emits rows strictly newer than the last cursor sent,
+with the very first poll used solely to establish the starting cursor
+(never emitted) so a fresh connection doesn't replay pre-existing rows as
+if new. Each connection self-closes after 5 minutes; the client reconnects
+transparently.
+
+Native `EventSource` can't attach an `Authorization` header, so the
+frontend (`src/stores/communityReportsStream.js`) instead does a raw
+`fetch()` + `ReadableStream` reader, decoding chunks with a pure
+`parseSseBuffer()` (`src/utils/sseParser.js`, 7 Vitest tests covering
+multi-event chunks, buffered/incomplete trailing events, heartbeat
+comments, and malformed-event skipping). `CommunityReportsPanel.vue` wires
+this in: on mount it connects and simply refetches the moderation queue +
+approved list whenever an event arrives (simpler and safer than splicing
+the partial SSE payload into reactive state directly), with a small
+connected/disconnected status dot, i18n-covered across all 7 locales.
+`SUPABASE_URL`/`SUPABASE_ANON_KEY` were exported from
+`src/services/api/config.js` (previously only used to construct the
+internal `supabase` client) since the raw `fetch()` call needs them
+directly. No existing table, RLS policy, or Edge Function is modified.
+Edge Function deploy pending user go-ahead.

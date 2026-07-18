@@ -25,10 +25,37 @@ Deno.test('geometryToWkt: MultiPolygon converts correctly', () => {
   assertEquals(result, 'MULTIPOLYGON(((0 0, 1 0, 1 1, 0 0)), ((2 2, 3 2, 3 3, 2 2)))')
 })
 
+Deno.test('geometryToWkt: LineString converts correctly', () => {
+  const result = geometryToWkt({
+    type: 'LineString',
+    coordinates: [[27.1, 38.5], [27.2, 38.6], [27.3, 38.7]],
+  })
+  assertEquals(result, 'LINESTRING(27.1 38.5, 27.2 38.6, 27.3 38.7)')
+})
+
+Deno.test('geometryToWkt: MultiLineString converts correctly', () => {
+  const result = geometryToWkt({
+    type: 'MultiLineString',
+    coordinates: [
+      [[0, 0], [1, 1]],
+      [[2, 2], [3, 3]],
+    ],
+  })
+  assertEquals(result, 'MULTILINESTRING((0 0, 1 1), (2 2, 3 3))')
+})
+
+Deno.test('geometryToWkt: LineString with no coordinates throws', () => {
+  assertThrows(
+    () => geometryToWkt({ type: 'LineString', coordinates: [] }),
+    Error,
+    'LineString has no coordinates',
+  )
+})
+
 Deno.test('geometryToWkt: unsupported geometry type throws', () => {
   assertThrows(
-    () => geometryToWkt({ type: 'LineString', coordinates: [[0, 0], [1, 1]] }),
+    () => geometryToWkt({ type: 'GeometryCollection', coordinates: [] }),
     Error,
-    'Unsupported geometry type: LineString',
+    'Unsupported geometry type: GeometryCollection',
   )
 })

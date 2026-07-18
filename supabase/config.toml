@@ -19,6 +19,16 @@ enabled = true
 verify_jwt = true
 entrypoint = "./functions/generate-compliance-report/index.ts"
 
+# spec 040: scheduled import, invoked by pg_cron with a service-role bearer
+# token (trigger_osm_roads_import()) — same convention as
+# import-kontur-population (spec 038), verify_jwt stays at the project
+# default (true). Explicit entry added because an earlier manual deploy
+# accidentally set verify_jwt=false and a bare redeploy did not reset it.
+[functions.import-osm-roads]
+enabled = true
+verify_jwt = true
+entrypoint = "./functions/import-osm-roads/index.ts"
+
 # spec 036 remaining item: live SSE notification stream. Uses the caller's own
 # JWT (not service-role) so existing community_reports RLS applies as-is.
 [functions.community-reports-stream]

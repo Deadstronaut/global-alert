@@ -40,9 +40,12 @@ Deno.test('validatePopulationRecord: non-numeric population is rejected', () => 
 })
 
 Deno.test('validatePopulationRecord: invalid/empty geometry is rejected', () => {
+  // GeometryCollection remains genuinely unsupported by geometryToWkt.
+  // (LineString/MultiLineString were added to geometryToWkt by spec 040 for
+  // OSM road data — no longer a valid "unsupported type" example here.)
   const result = validatePopulationRecord(
     // deno-lint-ignore no-explicit-any
-    validRecord({ geometry: { type: 'LineString' as any, coordinates: [] } }),
+    validRecord({ geometry: { type: 'GeometryCollection' as any, coordinates: [] } }),
     SERVED,
   )
   assertEquals(result.valid, false)

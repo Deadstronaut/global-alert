@@ -15,17 +15,17 @@ import type { RoadRecord } from './roadRecord.ts'
 
 const OVERPASS_ENDPOINT = 'https://overpass-api.de/api/interpreter'
 
-// MVP-scoped road hierarchy (research.md §8 addendum) — narrowed from the
-// full motorway..unclassified set originally planned after live testing
-// against Turkey found the full set is 1.58M ways (unusable in one Edge
-// Function request); even primary-only was 85MB/36s. motorway+trunk (the
-// national highway network) was live-verified at 52MB/35s for Turkey — the
-// largest served country — and is expected to be dramatically smaller for
-// Madagascar. Expanding to secondary/tertiary/residential is future work
-// requiring the admin-boundary query-splitting this feature's plan.md
-// Complexity Tracking already flagged as deferred, not a silent limitation.
+// MVP-scoped road hierarchy (research.md §8 addendum) — narrowed twice after
+// live testing against Turkey: first from the full motorway..unclassified
+// set (1.58M ways, unusable in one request), then from motorway+trunk
+// (37,407 ways / 52MB — Overpass itself handled this fine, but the deployed
+// Edge Function crashed with WORKER_RESOURCE_LIMIT parsing/mapping that much
+// JSON in one invocation) down to motorway only. Expanding coverage is
+// future work requiring either a streaming/paginated Overpass response
+// approach or the admin-boundary query-splitting plan.md's Complexity
+// Tracking already flagged as deferred — not a silent limitation.
 // Kept in sync with validateRoadRecord.ts's IMPORTED_HIGHWAY_VALUES.
-const HIGHWAY_FILTER = 'motorway|trunk'
+const HIGHWAY_FILTER = 'motorway'
 
 interface OverpassNode {
   lat: number

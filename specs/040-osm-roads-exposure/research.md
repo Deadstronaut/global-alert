@@ -169,21 +169,31 @@ Four real findings surfaced only by live-testing against Turkey, each fixed or s
    country instead of one call for all of them (each call is independent/fire-and-forget, so this
    also strengthens FR-009's per-country isolation at the infrastructure level, not just inside the
    function).
-5. **Shared-IP rate limiting (HTTP 429) from Supabase's outbound egress pool**: even after fixes
-   1-4, live invocation from the deployed Edge Function was rate-limited by `overpass-api.de`
-   (`429 Too Many Requests`) while the byte-identical query succeeded immediately from a non-cloud
-   IP (confirmed by running the same query directly). Two alternate public mirrors
-   (`overpass.kumi.systems`, `overpass.openstreetmap.ru`) were also tried live and were unreachable
-   at the time of testing. **A bounded in-request retry was attempted and rejected**: a single 429
-   rejection was observed taking up to ~2.5 minutes to even arrive (Overpass appears to queue
-   requests before rejecting them under load), which alone can exceed the 150s timeout — no retry
-   budget can be sized reliably against that. **Decision: no in-request retry.** A failed country is
-   skipped (not treated as a failure, per the existing "zero valid is not a failure" convention) and
-   the next weekly cron cycle's independent per-country invocation tries again. This is a genuine,
-   documented operational risk of relying on a free, shared public Overpass instance rather than a
-   dedicated/paid endpoint — **flagged here as a known limitation for anyone relying on this feature
-   for a live demo or production use, not silently worked around.** If reliability becomes a hard
-   requirement, the mitigations are: (a) a paid/dedicated Overpass instance, (b) self-hosting a small
-   Overpass mirror, or (c) an API key-based commercial alternative — all explicitly out of scope for
-   this MVP feature (would need their own spec/cost decision, mirroring how Google Roads API's cost
-   was handled).
+5. **Shared-IP rate limiting / instability from Supabase's outbound egress pool**: even after fixes
+   1-4, live invocation from the deployed Edge Function failed with a *different* symptom on nearly
+   every attempt: `429 Too Many Requests` (one attempt, ~2.5 min before the rejection even arrived),
+   `WORKER_RESOURCE_LIMIT` (one attempt, the Edge Function's own worker ran out of memory handling
+   Overpass's response), and `504 Gateway Timeout` from Overpass's own front-end (two attempts, fast
+   rejection, ~10s). The byte-identical query succeeded immediately and consistently from a
+   non-cloud IP throughout this entire investigation (confirmed repeatedly by running the same query
+   directly, including a full local run of `fetchOsmRoads(['tr'])` that returned 37,407 real
+   records). Two alternate public mirrors (`overpass.kumi.systems`, `overpass.openstreetmap.ru`)
+   were also tried live and were unreachable at the time of testing. **A bounded in-request retry
+   was attempted and rejected**: the slowest rejection observed (429, ~2.5 min) alone can exceed the
+   150s timeout, so no retry budget can be sized reliably against the range of failure modes seen.
+   **Decision: no in-request retry.** A failed country is skipped (not treated as a failure, per the
+   existing "zero valid is not a failure" convention) and the next weekly cron cycle's independent
+   per-country invocation tries again. **The `WORKER_RESOURCE_LIMIT` finding additionally drove a
+   second scope narrowing**: `HIGHWAY_FILTER` was reduced from `motorway|trunk` (37,407 ways, 52MB)
+   to `motorway` only, since the Edge Function's own memory ceiling — not just Overpass's
+   willingness to respond — was a real constrait once a response was large enough to actually be
+   returned. This is a genuine, documented operational risk of relying on a free, shared public
+   Overpass instance from a cloud platform's shared egress IP rather than a dedicated/paid endpoint
+   — **flagged here as a known limitation for anyone relying on this feature for a live demo or
+   production use, not silently worked around.** As of this writing, no live invocation through the
+   deployed Supabase Edge Function has yet succeeded end-to-end for any country, despite the
+   pipeline itself being proven fully correct via a local (non-cloud-IP) run. If reliability becomes
+   a hard requirement, the mitigations are: (a) a paid/dedicated Overpass instance, (b) self-hosting
+   a small Overpass mirror, or (c) an API key-based commercial alternative — all explicitly out of
+   scope for this MVP feature (would need their own spec/cost decision, mirroring how Google Roads
+   API's cost was handled).

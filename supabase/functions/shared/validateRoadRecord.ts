@@ -8,11 +8,11 @@
 import type { RoadRecord } from './roadRecord.ts'
 import { geometryToWkt } from './geometryToWkt.ts'
 
-// MVP-scoped road hierarchy — narrowed to the national highway network
-// (motorway+trunk) after live testing found the full standard hierarchy
-// unusable in a single Edge Function request (research.md §8 addendum,
-// osmRoadsFetch.ts's HIGHWAY_FILTER). Kept in sync with that constant.
-const IMPORTED_HIGHWAY_VALUES = new Set(['motorway', 'trunk'])
+// MVP-scoped road hierarchy — narrowed to motorway only after live testing
+// found both the full standard hierarchy and motorway+trunk unusable in a
+// single Edge Function invocation (research.md §8 addendum, osmRoadsFetch.ts's
+// HIGHWAY_FILTER). Kept in sync with that constant.
+const IMPORTED_HIGHWAY_VALUES = new Set(['motorway'])
 
 export type ValidationResult =
   | { valid: true }

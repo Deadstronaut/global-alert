@@ -15,7 +15,7 @@ function record(overrides: Partial<RoadRecord> = {}): RoadRecord {
 }
 
 Deno.test('partitionRoadRecords: all-valid batch returns no rejections', () => {
-  const records = [record(), record({ properties: { highway: 'trunk', osmId: 2 } })]
+  const records = [record(), record({ properties: { highway: 'motorway', osmId: 2 } })]
   const { validRecords, rejectedRecords } = partitionRoadRecords(records, SERVED)
   assertEquals(validRecords.length, 2)
   assertEquals(rejectedRecords.length, 0)

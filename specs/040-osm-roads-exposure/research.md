@@ -197,3 +197,15 @@ Four real findings surfaced only by live-testing against Turkey, each fixed or s
    a small Overpass mirror, or (c) an API key-based commercial alternative — all explicitly out of
    scope for this MVP feature (would need their own spec/cost decision, mirroring how Google Roads
    API's cost was handled).
+6. **Follow-up manual re-test (2026-07-18, later same day, motorway-only scope)**: retried live via
+   `curl.exe` (a real curl invocation, bypassing PowerShell's `Invoke-WebRequest` alias which does
+   not accept curl-style flags) against the deployed function with `{"countryCode":"tr"}`. Result:
+   `{"countriesProcessed":0,"countriesSkipped":["tr"],"featuresImported":0,"rejected":0}` — a fourth
+   distinct symptom. Temporary debug instrumentation (`lastFetchErrors` export + `_debugFetchErrors`
+   response field, added and fully removed within the same session, matching the earlier two rounds)
+   revealed the cause: `TimeoutError: Signal timed out` — Overpass never responded at all within the
+   130s `AbortSignal.timeout`, even for the much smaller `motorway`-only query. This confirms finding
+   5 is not query-size-dependent: it is Supabase's shared egress IP itself being rate-limited/queued
+   by `overpass-api.de`, independent of how small the request is. No code change made — this
+   reinforces the existing "no reliable in-request retry, rely on next weekly cron cycle" decision
+   rather than prompting a new one.

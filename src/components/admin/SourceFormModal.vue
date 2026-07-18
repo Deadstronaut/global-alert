@@ -20,7 +20,7 @@ const scopeLocked = computed(() => !auth.isSuperAdmin)
 // categories. hazard_types.category = 'exposure' for this row lets other
 // hazard-specific UI (threshold editor, CAP hazard picker) filter it out without
 // removing it here.
-const SOURCE_SUPPORTED_HAZARDS = ['earthquake', 'wildfire', 'flood', 'drought', 'food_security', 'tsunami', 'epidemic', 'population']
+const SOURCE_SUPPORTED_HAZARDS = ['earthquake', 'wildfire', 'flood', 'drought', 'food_security', 'tsunami', 'epidemic', 'population', 'roads']
 const hazardTypesStore = useHazardTypesStore()
 const HAZARD_TYPES = computed(() =>
   hazardTypesStore.activeHazardTypes.filter((h) => SOURCE_SUPPORTED_HAZARDS.includes(h.code)),

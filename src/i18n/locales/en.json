@@ -41,7 +41,10 @@
     "myLocation": "My Location",
     "locating": "Locating...",
     "locationDetected": "Location Detected",
-    "locationDenied": "Location permission denied"
+    "locationDenied": "Location permission denied",
+    "hexResolution": {
+      "label": "Hexagon size"
+    }
   },
   "alerts": {
     "title": "Nearest Threats",

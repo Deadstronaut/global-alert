@@ -41,7 +41,10 @@
     "myLocation": "Mi ubicación",
     "locating": "Localizando...",
     "locationDetected": "Ubicación detectada",
-    "locationDenied": "Permiso de ubicación denegado"
+    "locationDenied": "Permiso de ubicación denegado",
+    "hexResolution": {
+      "label": "Tamaño del hexágono"
+    }
   },
   "alerts": {
     "title": "Amenazas más cercanas",

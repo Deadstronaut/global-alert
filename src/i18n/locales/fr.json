@@ -41,7 +41,10 @@
     "myLocation": "Ma position",
     "locating": "Localisation...",
     "locationDetected": "Position détectée",
-    "locationDenied": "Autorisation de localisation refusée"
+    "locationDenied": "Autorisation de localisation refusée",
+    "hexResolution": {
+      "label": "Taille de l'hexagone"
+    }
   },
   "alerts": {
     "title": "Menaces les plus proches",

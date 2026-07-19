@@ -41,7 +41,10 @@
     "myLocation": "موقعي",
     "locating": "جاري تحديد الموقع...",
     "locationDetected": "تم تحديد الموقع",
-    "locationDenied": "تم رفض إذن الوصول إلى الموقع"
+    "locationDenied": "تم رفض إذن الوصول إلى الموقع",
+    "hexResolution": {
+      "label": "حجم السداسي"
+    }
   },
   "alerts": {
     "title": "أقرب التهديدات",

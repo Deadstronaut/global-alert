@@ -1,6 +1,19 @@
 import {defineStore} from 'pinia';
 import {ref, computed, watch} from 'vue';
 
+// spec 045: shared range for the manual hex-resolution slider — single
+// source of truth so SidebarPanel.vue (the slider's min/max) and
+// MapView.vue (the clamp on the automatic fallback) never drift apart.
+// H3-H8 was tried first (research.md §4) and live-tested directly against
+// Turkey's real boundary geometry via the exact polygonToCells(poly, res+1,
+// 2) call hexWorker.js makes: slider=7 (actual H3 res 8) produced ~979,000
+// cells in ~12.5s; slider=8 (actual res 9) produced ~6.85M cells in ~87s —
+// both unusable client-side. slider=6 (actual res 7) produced ~140,000
+// cells in ~1.8s, matching today's existing automatic maximum already in
+// production — confirmed safe. Narrowed to the H3-H6 fallback per FR-009.
+export const MIN_HEX_RES = 3;
+export const MAX_HEX_RES = 6;
+
 export const useUIStore = defineStore('ui', () => {
     // View state
     const viewMode = ref('globe'); // 'globe' | 'map'
@@ -32,6 +45,15 @@ export const useUIStore = defineStore('ui', () => {
     // Computed aliases kept for backward compat with MapView watches
     const showHeatmap = computed(() => mapMode.value === 'heatmap');
     const showHexbins = computed(() => mapMode.value === 'hexagon');
+
+    // spec 045: manual override for the selected country's hex grid
+    // resolution — null means "automatic" (existing zoom-based
+    // hexResForZoom() behavior in MapView.vue), an integer overrides it
+    // until changed again. Session-only, mirrors mapMode's own shape.
+    const manualHexResolution = ref(null);
+    function setManualHexResolution(value) {
+        manualHexResolution.value = value;
+    }
 
     // Shelter map layer visibility (spec 027) — independent of mapMode, always
     // relevant regardless of visualization mode
@@ -130,6 +152,8 @@ export const useUIStore = defineStore('ui', () => {
         mapMode,
         showHeatmap,
         showHexbins,
+        manualHexResolution,
+        setManualHexResolution,
         showShelters,
         toggleShelters,
         showCommunityReports,

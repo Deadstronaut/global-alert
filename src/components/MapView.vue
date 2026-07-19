@@ -2,7 +2,7 @@
 import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useDisasterStore } from '@/stores/disaster.js'
-import { useUIStore } from '@/stores/ui.js'
+import { useUIStore, MAX_HEX_RES } from '@/stores/ui.js'
 import { useGeolocationStore } from '@/stores/geolocation.js'
 import { useI18n } from 'vue-i18n'
 import { numericToAlpha2 } from '@/data/isoMapping.js'
@@ -387,8 +387,10 @@ watch(currentHexRes, (newRes) => {
   hexGridCache.delete(newRes)
   updateHexbins()
 
-  // Refresh country hex grid at new resolution if a country is selected
-  if (selectedFeatureId && hexWorker) {
+  // Refresh country hex grid at new resolution if a country is selected —
+  // but never override a manually-set resolution (spec 045 FR-005): a
+  // zoom-bucket crossing must not silently revert the user's own choice.
+  if (uiStore.manualHexResolution == null && selectedFeatureId && hexWorker) {
     const f = _allCountryFeatures.find((cf) => cf.id === selectedFeatureId)
     if (f) {
       const gridRes = Math.min(newRes, 6)
@@ -1072,10 +1074,23 @@ function refreshCountryHexGridFromSelection() {
   const fullFeature = _allCountryFeatures.find((cf) => String(cf.id) === String(selectedFeatureId))
   const geom = fullFeature?.geometry
   if (!geom) return
-  const gridRes = Math.min(currentHexRes.value, 8)
+  const gridRes = uiStore.manualHexResolution ?? Math.min(currentHexRes.value, MAX_HEX_RES)
   countryHexRes = gridRes + 1
   hexWorker.postMessage({ type: 'FILL_GRID', geometry: geom, resolution: gridRes })
 }
+
+// spec 045 US2: live-regenerate the selected country's hex grid while the
+// user drags the manual resolution slider. If petek isn't currently active,
+// this is a no-op — the new value is simply stored and picked up the next
+// time uiStore.mapMode becomes 'hexagon' (the existing mapMode watch already
+// calls refreshCountryHexGridFromSelection() on entering hexagon mode),
+// satisfying FR-006's persistence-across-toggle requirement with no extra code.
+watch(
+  () => uiStore.manualHexResolution,
+  (value) => {
+    if (value != null && uiStore.mapMode === 'hexagon') refreshCountryHexGridFromSelection()
+  },
+)
 
 function selectCountry(f) {
   if (!map || !mapLoaded) return

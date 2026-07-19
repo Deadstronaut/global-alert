@@ -2,7 +2,7 @@
 import { computed, ref, watch, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useDisasterStore } from '@/stores/disaster.js'
-import { useUIStore } from '@/stores/ui.js'
+import { useUIStore, MIN_HEX_RES, MAX_HEX_RES } from '@/stores/ui.js'
 import { useGeolocationStore } from '@/stores/geolocation.js'
 import { useAuthStore } from '@/stores/auth.js'
 import { useSourcesStore } from '@/stores/sources.js'
@@ -721,6 +721,7 @@ watch([rangeStartDate, rangeEndDate], ([start, end]) => {
             }}
           </button>
 
+          <!-- spec 045: durum/ısı paired toggle — petek moved to its own wide panel below -->
           <div class="map-mode-selector">
             <button
               class="mode-btn"
@@ -732,20 +733,37 @@ watch([rangeStartDate, rangeEndDate], ([start, end]) => {
             </button>
             <button
               class="mode-btn"
-              :class="{ active: uiStore.mapMode === 'hexagon' }"
-              @click="uiStore.mapMode = 'hexagon'"
-              title="Petek (2)"
-            >
-              ⬡ Petek<span class="mode-key">2</span>
-            </button>
-            <button
-              class="mode-btn"
               :class="{ active: uiStore.mapMode === 'heatmap' }"
               @click="uiStore.mapMode = 'heatmap'"
               title="Isı (3)"
             >
               🔥 Isı<span class="mode-key">3</span>
             </button>
+          </div>
+
+          <!-- spec 045: petek — full-width standalone panel, own resolution slider -->
+          <div class="hex-panel">
+            <button
+              class="btn btn-ghost sidebar-action-btn hex-panel-toggle"
+              :class="{ active: uiStore.mapMode === 'hexagon' }"
+              @click="uiStore.mapMode = 'hexagon'"
+              title="Petek (2)"
+            >
+              ⬡ Petek<span class="mode-key">2</span>
+            </button>
+            <div v-if="uiStore.mapMode === 'hexagon'" class="hex-resolution-control">
+              <label class="hex-resolution-label">{{ t('sidebar.hexResolution.label') }}</label>
+              <input
+                type="range"
+                :min="MIN_HEX_RES"
+                :max="MAX_HEX_RES"
+                step="1"
+                :value="uiStore.manualHexResolution ?? 6"
+                @input="uiStore.setManualHexResolution(Number($event.target.value))"
+                class="hex-resolution-slider"
+                :title="t('sidebar.hexResolution.label')"
+              />
+            </div>
           </div>
 
           <div class="nav-links">
@@ -1420,6 +1438,51 @@ html[data-theme='light'] .mode-btn:hover {
 html[data-theme='light'] .mode-btn.active {
   background: rgba(49, 130, 206, 0.12);
   color: #3182ce;
+}
+
+/* spec 045: petek — full-width standalone panel + resolution slider */
+.hex-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.hex-panel-toggle {
+  border: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.hex-panel-toggle.active {
+  background: rgba(99, 179, 237, 0.2);
+  color: #63b3ed;
+  border-color: rgba(99, 179, 237, 0.4);
+}
+
+html[data-theme='light'] .hex-panel-toggle {
+  border-color: rgba(0, 0, 0, 0.12);
+}
+
+html[data-theme='light'] .hex-panel-toggle.active {
+  background: rgba(49, 130, 206, 0.12);
+  color: #3182ce;
+  border-color: rgba(49, 130, 206, 0.35);
+}
+
+.hex-resolution-control {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 4px 8px 2px;
+}
+
+.hex-resolution-label {
+  font-size: 0.72rem;
+  font-weight: 600;
+  opacity: 0.7;
+}
+
+.hex-resolution-slider {
+  width: 100%;
+  accent-color: #63b3ed;
 }
 
 .quick-switches {

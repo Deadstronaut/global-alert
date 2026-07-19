@@ -41,7 +41,10 @@
     "myLocation": "我的位置",
     "locating": "正在定位...",
     "locationDetected": "已检测到位置",
-    "locationDenied": "位置权限被拒绝"
+    "locationDenied": "位置权限被拒绝",
+    "hexResolution": {
+      "label": "六边形大小"
+    }
   },
   "alerts": {
     "title": "最近威胁",

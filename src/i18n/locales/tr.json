@@ -41,7 +41,10 @@
     "myLocation": "Konumum",
     "locating": "Konum belirleniyor...",
     "locationDetected": "Konum Saptandı",
-    "locationDenied": "Konum izni reddedildi"
+    "locationDenied": "Konum izni reddedildi",
+    "hexResolution": {
+      "label": "Altıgen Boyutu"
+    }
   },
   "alerts": {
     "title": "En Yakın Tehditler",

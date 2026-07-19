@@ -105,3 +105,29 @@ plan.md's Complexity Tracking "Reverted" table for full context.
 - [X] T011 N/A — no new user-facing UI text was added; this feature is behavior-only (camera framing, interaction gating, layer-visibility coordination), no new strings requiring i18n (Constitution Principle VI).
 - [~] T012 **Not performed this session** — quickstart.md's full walkthrough requires a live browser session with a real country-locked test account (Turkey/Madagascar) and an anon session for regression comparison, which was not run. `npm run build` and `eslint` both pass clean (verified), confirming the code compiles and lints correctly, but this does **not** substitute for live UI verification — flagged explicitly per this session's own standing practice of not claiming UI success without actually testing it in a browser. Recommended as the next concrete step before considering this feature fully done.
 - [X] T013 Confirmed via `git diff --stat supabase/functions/` — zero files changed under `supabase/functions/` by this feature; all changes are confined to `src/components/MapView.vue`, `src/stores/auth.js`, and one additive migration (FR-011).
+
+---
+
+## Phase 7: Live-review bug fix — durum/petek/ısı left-menu switching didn't hide the selected country's hex grid
+
+**Found**: 2026-07-19, via a screenshot from the user showing a selected country with "ısı"
+(heatmap) mode active on the left-side menu (`SidebarPanel.vue`'s durum/petek/ısı buttons,
+`uiStore.mapMode = 'normal'|'hexagon'|'heatmap'`) — the previously-populated `country-hex-grid`
+layer was still fully visible underneath the heatmap and the exposure-layer panel's watershed
+layer, instead of being hidden. Root cause: `selectCountry()` populates `country-hex-grid` via the
+hex worker, but only `clearCountrySelection()` ever cleared it — switching `uiStore.mapMode` via
+the left-side menu (independent of country selection/deselection) never touched that source, so
+once populated it persisted regardless of mode.
+
+- [X] T014 Added `refreshCountryHexGridFromSelection()` (extracted from `selectCountry()`'s
+  inline hex-worker `FILL_GRID` trigger) so the same regeneration logic can be reused.
+- [X] T015 Updated the `watch(() => uiStore.mapMode, ...)` handler: when the mode becomes
+  `'hexagon'`, regenerate the selected country's hex grid; otherwise (durum/`'normal'` or
+  ısı/`'heatmap'`), clear the `country-hex-grid` source data. This makes durum/petek/ısı properly
+  mutually exclusive for the per-country hex grid, matching the user's clarified scenario: select
+  a country → petek opens by default (fit-to-country camera, existing behavior unchanged) → switch
+  to durum or ısı → petek disappears, replaced by that mode's own view → the exposure-layer panel
+  (right side) remains completely independent throughout, exactly as confirmed in this spec's
+  earlier revision.
+- [X] T016 Verified `eslint` clean and `npm run build` succeeds after the fix. Live browser
+  verification not performed this session (same caveat as T012).

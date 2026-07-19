@@ -1034,6 +1034,21 @@ async function applyCountryLockedCamera() {
   }
 }
 
+// Regenerates the selected country's hex grid (country-hex-grid source) via
+// the hex worker, using whichever country is currently selected. Extracted
+// so both selectCountry() and the mapMode watch below can trigger it — the
+// grid must be regenerated whenever the user switches back to 'hexagon'
+// mode (durum/ısı ↔ petek), not only on the initial country selection.
+function refreshCountryHexGridFromSelection() {
+  if (!hexWorker || selectedFeatureId == null) return
+  const fullFeature = _allCountryFeatures.find((cf) => String(cf.id) === String(selectedFeatureId))
+  const geom = fullFeature?.geometry
+  if (!geom) return
+  const gridRes = Math.min(currentHexRes.value, 8)
+  countryHexRes = gridRes + 1
+  hexWorker.postMessage({ type: 'FILL_GRID', geometry: geom, resolution: gridRes })
+}
+
 function selectCountry(f) {
   if (!map || !mapLoaded) return
   const fid = f.id
@@ -1091,15 +1106,7 @@ function selectCountry(f) {
 
   map.setFeatureState({ source, id: fid }, { selected: true, dimmed: false })
 
-  if (hexWorker) {
-    const gridRes = Math.min(currentHexRes.value, 8)
-    countryHexRes = gridRes + 1
-    hexWorker.postMessage({
-      type: 'FILL_GRID',
-      geometry: geom,
-      resolution: gridRes,
-    })
-  }
+  refreshCountryHexGridFromSelection()
 
   _allCountryFeatures.forEach((cf) => {
     if (cf.id != null && cf.id !== fid) {
@@ -1897,6 +1904,18 @@ watch(
     updateHexbins()
     // When switching to heatmap on a focused country, filter immediately
     if (uiStore.showHeatmap && selectedFeatureId) updateHeatmap()
+
+    // durum/petek/ısı (normal/hexagon/heatmap) are mutually exclusive for
+    // the selected country's own hex grid — it must only be visible in
+    // 'hexagon' mode, not linger underneath 'normal'/'heatmap' once a user
+    // switches away from petek (this was previously left rendered
+    // indefinitely, since only clearCountrySelection() ever cleared it).
+    if (!map || !mapLoaded) return
+    if (uiStore.mapMode === 'hexagon') {
+      refreshCountryHexGridFromSelection()
+    } else {
+      map.getSource('country-hex-grid')?.setData({ type: 'FeatureCollection', features: [] })
+    }
   },
 )
 

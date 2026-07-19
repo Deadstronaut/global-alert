@@ -96,3 +96,23 @@ at the new resolution and stays there across zoom changes and durum/ısı ↔ pe
 - [X] T015 [P] Ran `npm run build` — succeeds.
 - [X] T016 Confirmed no regression to the exposure-layer panel or the world/viewport background hex mesh — neither reads `uiStore.manualHexResolution` (grep-confirmed: only `MapView.vue`'s country-grid paths and `SidebarPanel.vue`'s slider reference it).
 - [X] T017 Final live-test findings recorded directly against T012 above (table + decision), matching this session's established convention of keeping live-run outcomes with the task itself.
+
+---
+
+## Phase 5: Live-review UX follow-up
+
+**Found**: 2026-07-19, immediately after Phase 4 — the user reviewed the shipped panel and asked
+for four polish changes: (1) remove the "Altıgen Boyutu" visible label text entirely; (2) merge
+the slider visually into the petek button itself rather than a separate row that only appears
+when petek is active; (3) remove the small "1"/"2"/"3" keyboard-shortcut number badges next to
+durum/petek/ısı — visual clutter, not worth the space; (4) default the slider's idle handle
+position to the leftmost/minimum end instead of the rightmost/maximum end. The user also
+explicitly re-confirmed the H3-H6 range from Phase 3 is correct and should not be widened.
+
+- [X] T018 Removed the `<span class="mode-key">` badges from all three durum/petek/ısı buttons; removed the now-unused `.mode-key` CSS rule.
+- [X] T019 Restructured `.hex-panel` into one bordered/rounded container holding the toggle button and the resolution slider row together (border-top divider between them) instead of two visually separate pieces — reads as a single cohesive widget.
+- [X] T020 Removed the visible `<label class="hex-resolution-label">` text; the `sidebar.hexResolution.label` i18n key is now used only for the slider's `title`/`aria-label` (accessibility, Constitution Principle VI), not rendered on screen.
+- [X] T021 The slider is now always rendered (removed the `v-if="uiStore.mapMode === 'hexagon'"` wrapper) with `:disabled="uiStore.mapMode !== 'hexagon'"` instead — a persistent, visually-dimmed-when-inactive affordance rather than appearing/disappearing. Added `.hex-resolution-slider:disabled` styling (reduced opacity, `cursor: not-allowed`).
+- [X] T022 Added a small inline `H{n}` numeric indicator (`.hex-resolution-value`, tabular-nums, low-opacity) next to the slider, updating live as it's dragged — a minimal, non-label way to show the current level without the removed descriptive text.
+- [X] T023 Changed the slider's idle-position fallback from `?? 6` (rightmost) to `?? MIN_HEX_RES` (leftmost, `3`) per the user's explicit request — cosmetic only, per research.md §5 the actual rendered grid still uses the automatic zoom-based resolution until `manualHexResolution` is genuinely set (FR-007 unaffected).
+- [X] T024 Confirmed `eslint` clean and `npm run build` succeeds after the follow-up. Live browser verification not performed this session (same caveat as prior tasks).

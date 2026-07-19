@@ -721,7 +721,9 @@ watch([rangeStartDate, rangeEndDate], ([start, end]) => {
             }}
           </button>
 
-          <!-- spec 045: durum/ısı paired toggle — petek moved to its own wide panel below -->
+          <!-- spec 045 (+ UX follow-up): durum/ısı paired toggle — petek moved to its
+               own wide panel below. Keyboard-shortcut number badges removed per
+               live-review feedback (visual clutter, not worth the space). -->
           <div class="map-mode-selector">
             <button
               class="mode-btn"
@@ -729,7 +731,7 @@ watch([rangeStartDate, rangeEndDate], ([start, end]) => {
               @click="uiStore.mapMode = 'normal'"
               title="Durum (1)"
             >
-              📍 Durum<span class="mode-key">1</span>
+              📍 Durum
             </button>
             <button
               class="mode-btn"
@@ -737,11 +739,17 @@ watch([rangeStartDate, rangeEndDate], ([start, end]) => {
               @click="uiStore.mapMode = 'heatmap'"
               title="Isı (3)"
             >
-              🔥 Isı<span class="mode-key">3</span>
+              🔥 Isı
             </button>
           </div>
 
-          <!-- spec 045: petek — full-width standalone panel, own resolution slider -->
+          <!-- spec 045 (+ UX follow-up): petek — the resolution slider now lives
+               inside the same panel as the toggle button itself (not a separate
+               labeled row that appears/disappears) and is always present, just
+               disabled until petek is the active mode — a persistent affordance
+               rather than a control that pops in and out. No visible "hexagon
+               size" text (kept only as an a11y title/aria-label); the current
+               level shows as a small inline number next to the slider instead. -->
           <div class="hex-panel">
             <button
               class="btn btn-ghost sidebar-action-btn hex-panel-toggle"
@@ -749,20 +757,22 @@ watch([rangeStartDate, rangeEndDate], ([start, end]) => {
               @click="uiStore.mapMode = 'hexagon'"
               title="Petek (2)"
             >
-              ⬡ Petek<span class="mode-key">2</span>
+              ⬡ Petek
             </button>
-            <div v-if="uiStore.mapMode === 'hexagon'" class="hex-resolution-control">
-              <label class="hex-resolution-label">{{ t('sidebar.hexResolution.label') }}</label>
+            <div class="hex-resolution-control">
               <input
                 type="range"
                 :min="MIN_HEX_RES"
                 :max="MAX_HEX_RES"
                 step="1"
-                :value="uiStore.manualHexResolution ?? 6"
+                :value="uiStore.manualHexResolution ?? MIN_HEX_RES"
+                :disabled="uiStore.mapMode !== 'hexagon'"
                 @input="uiStore.setManualHexResolution(Number($event.target.value))"
                 class="hex-resolution-slider"
                 :title="t('sidebar.hexResolution.label')"
+                :aria-label="t('sidebar.hexResolution.label')"
               />
+              <span class="hex-resolution-value">H{{ uiStore.manualHexResolution ?? MIN_HEX_RES }}</span>
             </div>
           </div>
 
@@ -1408,19 +1418,6 @@ watch([rangeStartDate, rangeEndDate], ([start, end]) => {
   color: #63b3ed;
 }
 
-.mode-key {
-  display: inline-block;
-  margin-left: 4px;
-  font-size: 0.6rem;
-  font-weight: 700;
-  opacity: 0.45;
-  background: rgba(255, 255, 255, 0.1);
-  border-radius: 3px;
-  padding: 0 3px;
-  line-height: 1.4;
-  vertical-align: middle;
-}
-
 html[data-theme='light'] .map-mode-selector {
   border-color: rgba(0, 0, 0, 0.12);
 }
@@ -1441,48 +1438,65 @@ html[data-theme='light'] .mode-btn.active {
 }
 
 /* spec 045: petek — full-width standalone panel + resolution slider */
+/* One cohesive bordered widget: toggle button on top, slider row below —
+   the slider is always present, just disabled until petek is active,
+   rather than appearing/disappearing (live-review UX feedback). */
 .hex-panel {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.12);
 }
 
 .hex-panel-toggle {
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  border: none;
+  border-radius: 0;
 }
 
 .hex-panel-toggle.active {
   background: rgba(99, 179, 237, 0.2);
   color: #63b3ed;
-  border-color: rgba(99, 179, 237, 0.4);
 }
 
-html[data-theme='light'] .hex-panel-toggle {
+html[data-theme='light'] .hex-panel {
   border-color: rgba(0, 0, 0, 0.12);
 }
 
 html[data-theme='light'] .hex-panel-toggle.active {
   background: rgba(49, 130, 206, 0.12);
   color: #3182ce;
-  border-color: rgba(49, 130, 206, 0.35);
 }
 
 .hex-resolution-control {
   display: flex;
-  flex-direction: column;
-  gap: 4px;
-  padding: 4px 8px 2px;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 10px 8px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
 }
 
-.hex-resolution-label {
-  font-size: 0.72rem;
-  font-weight: 600;
-  opacity: 0.7;
+html[data-theme='light'] .hex-resolution-control {
+  border-top-color: rgba(0, 0, 0, 0.06);
 }
 
 .hex-resolution-slider {
-  width: 100%;
+  flex: 1;
   accent-color: #63b3ed;
+}
+
+.hex-resolution-slider:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.hex-resolution-value {
+  font-size: 0.68rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  opacity: 0.55;
+  min-width: 1.6em;
+  text-align: right;
 }
 
 .quick-switches {

@@ -644,7 +644,9 @@
     "loading": "Loading...",
     "sourceLabel": {
       "osm": "Road Network",
-      "kontur": "Population Density"
+      "kontur": "Population Density",
+      "hydrorivers": "River Network",
+      "hydrobasins": "Watershed Boundaries"
     },
     "countryLabel": {
       "tr": "Turkey",

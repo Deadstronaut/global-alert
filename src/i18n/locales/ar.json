@@ -580,7 +580,9 @@
     "loading": "جارٍ التحميل...",
     "sourceLabel": {
       "osm": "شبكة الطرق",
-      "kontur": "الكثافة السكانية"
+      "kontur": "الكثافة السكانية",
+      "hydrorivers": "شبكة الأنهار",
+      "hydrobasins": "حدود الأحواض المائية"
     },
     "countryLabel": {
       "tr": "تركيا",

@@ -580,7 +580,9 @@
     "loading": "Chargement...",
     "sourceLabel": {
       "osm": "Réseau Routier",
-      "kontur": "Densité de Population"
+      "kontur": "Densité de Population",
+      "hydrorivers": "Réseau Fluvial",
+      "hydrobasins": "Limites des Bassins"
     },
     "countryLabel": {
       "tr": "Turquie",

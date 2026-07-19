@@ -644,7 +644,9 @@
     "loading": "Yükleniyor...",
     "sourceLabel": {
       "osm": "Yol Ağı",
-      "kontur": "Nüfus Yoğunluğu"
+      "kontur": "Nüfus Yoğunluğu",
+      "hydrorivers": "Nehir Ağı",
+      "hydrobasins": "Havza Sınırları"
     },
     "countryLabel": {
       "tr": "Türkiye",

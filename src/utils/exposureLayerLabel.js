@@ -10,6 +10,8 @@
 const SOURCE_LABEL_KEYS = {
   osm: 'exposureLayers.sourceLabel.osm',
   kontur: 'exposureLayers.sourceLabel.kontur',
+  hydrorivers: 'exposureLayers.sourceLabel.hydrorivers',
+  hydrobasins: 'exposureLayers.sourceLabel.hydrobasins',
 }
 
 const COUNTRY_LABEL_KEYS = {

@@ -580,7 +580,9 @@
     "loading": "加载中...",
     "sourceLabel": {
       "osm": "道路网络",
-      "kontur": "人口密度"
+      "kontur": "人口密度",
+      "hydrorivers": "河流网络",
+      "hydrobasins": "流域边界"
     },
     "countryLabel": {
       "tr": "土耳其",

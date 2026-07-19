@@ -28,6 +28,15 @@ export const useUIStore = defineStore('ui', () => {
     const sidebarOpen = ref(true);
     const sidebarCollapsed = ref(false);
 
+    // Impact-analysis dock on the map (spec 008) — collapsed state lifted
+    // here (rather than kept local to MapView.vue) so StatsOverlay.vue can
+    // keep the top stat strip clear of the dock's right-hand column without
+    // the two components needing a direct reference to each other.
+    const impactPanelCollapsed = ref(false);
+    function toggleImpactPanel() {
+        impactPanelCollapsed.value = !impactPanelCollapsed.value;
+    }
+
     // Panels
     const alertPanelOpen = ref(false);
     const settingsPanelOpen = ref(false);
@@ -141,6 +150,8 @@ export const useUIStore = defineStore('ui', () => {
         selectedDisaster,
         sidebarOpen,
         sidebarCollapsed,
+        impactPanelCollapsed,
+        toggleImpactPanel,
         alertPanelOpen,
         settingsPanelOpen,
         emergencyPopupOpen,

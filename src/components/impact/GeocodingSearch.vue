@@ -376,8 +376,13 @@ function clearQuery() {
 
 <style scoped>
 .geocoding-search {
-  position: absolute; top: 82px; left: 50%; transform: translateX(-50%);
+  /* Sits a fixed gap below StatsOverlay's chip row, whose height varies as
+     it wraps — --stats-bar-height is published by that component so the
+     two never overlap regardless of row count. */
+  position: absolute; top: calc(var(--stats-bar-height, 64px) + var(--space-md) + 20px);
+  left: 50%; transform: translateX(-50%);
   z-index: 20; display: flex; flex-direction: column; align-items: center; gap: 4px;
+  transition: top 0.2s ease;
 }
 .geocoding-row { display: flex; }
 .geocoding-input-wrap { position: relative; width: 280px; }
@@ -422,7 +427,7 @@ function clearQuery() {
 
 @media (max-width: 768px) {
   .geocoding-search {
-    top: 112px;
+    top: calc(var(--stats-bar-height, 90px) + var(--space-sm) + 20px);
     left: var(--space-sm);
     right: var(--space-sm);
     transform: none;

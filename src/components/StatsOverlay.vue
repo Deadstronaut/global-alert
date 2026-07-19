@@ -1,10 +1,33 @@
 <script setup>
-import { computed } from 'vue'
+import { computed, onMounted, onBeforeUnmount, ref, watch, nextTick } from 'vue'
 import { useDisasterStore } from '@/stores/disaster.js'
 import { useUIStore } from '@/stores/ui.js'
+import { useMapLayersStore } from '@/stores/mapLayers.js'
+import { useExposureLayersStore } from '@/stores/exposureLayers.js'
 
 const disasterStore = useDisasterStore()
 const uiStore = useUIStore()
+const mapLayersStore = useMapLayersStore()
+const exposureLayersStore = useExposureLayersStore()
+
+// The map view floats a right-hand control column over the map: the impact
+// analysis dock (spec 008, 48px collapsed / 320px expanded) and, right next
+// to it, the WMS/exposure layer panel stack (spec 012/042, up to 280px)
+// when either has content. The stat strip below used to be centered on the
+// full viewport width and would run underneath that column. Reserve real
+// space for it instead of guessing a fixed margin.
+const layerPanelStackVisible = computed(
+  () => mapLayersStore.activeMapLayers.length > 0 || exposureLayersStore.loaded
+)
+const rightReserve = computed(() => {
+  const impactDockWidth = uiStore.impactPanelCollapsed ? 48 : 320
+  let reserve = impactDockWidth + 32 // dock width + its own gap + breathing room
+  if (layerPanelStackVisible.value) reserve += 290 // layer panel stack width + gap
+  return `${reserve}px`
+})
+const leftReserve = computed(() =>
+  uiStore.sidebarCollapsed ? 'var(--sidebar-collapsed)' : 'var(--sidebar-width)'
+)
 
 const STAT_META = {
   earthquake: { chipClass: 'chip-earthquake' },
@@ -27,16 +50,44 @@ const statChips = computed(() => {
       ...STAT_META[key],
     }))
 })
+
+// The chip row wraps to a second line once the reserved-space width above
+// gets tight, so its rendered height isn't constant. Publish it as a CSS
+// var on the document root so GeocodingSearch.vue (a sibling, positioned
+// independently below this bar) can sit a fixed gap under it instead of
+// overlapping whenever it wraps.
+const rootEl = ref(null)
+let resizeObserver = null
+
+function publishBarHeight() {
+  if (!rootEl.value) return
+  document.documentElement.style.setProperty('--stats-bar-height', `${rootEl.value.offsetHeight}px`)
+}
+
+onMounted(() => {
+  resizeObserver = new ResizeObserver(publishBarHeight)
+  resizeObserver.observe(rootEl.value)
+  publishBarHeight()
+})
+
+onBeforeUnmount(() => {
+  resizeObserver?.disconnect()
+  document.documentElement.style.removeProperty('--stats-bar-height')
+})
+
+watch(statChips, () => nextTick(publishBarHeight))
 </script>
 
 <template>
   <div
+    ref="rootEl"
     class="stats-overlay"
     :class="{
       'stats-shifted-down': uiStore.sidebarCollapsed,
       'stats-mobile-shifted': uiStore.sidebarOpen,
       'hidden-on-mobile': uiStore.sidebarOpen,
     }"
+    :style="{ '--stats-right-reserve': rightReserve, '--stats-left-reserve': leftReserve }"
   >
     <div
       v-for="stat in statChips"
@@ -119,8 +170,11 @@ const statChips = computed(() => {
 .stats-overlay {
   position: fixed;
   top: var(--space-md);
-  left: 50%;
-  transform: translateX(-50%);
+  /* Centered in the space between the left sidebar and the map's right-hand
+     control column (impact dock + layer panel stack), not the full
+     viewport — otherwise a wide chip row runs straight under that column. */
+  left: var(--stats-left-reserve, var(--sidebar-width));
+  right: var(--stats-right-reserve, var(--space-md));
   z-index: var(--z-stats);
   display: flex;
   flex-wrap: wrap;
@@ -128,10 +182,12 @@ const statChips = computed(() => {
   justify-content: center;
   gap: 10px;
   pointer-events: none;
-  width: min(92vw, 980px);
+  max-width: 980px;
+  margin: 0 auto;
   transition:
     top 0.35s ease,
-    transform 0.35s ease,
+    left 0.35s ease,
+    right 0.35s ease,
     opacity 0.25s ease;
 }
 
@@ -223,15 +279,8 @@ const statChips = computed(() => {
 .chip-epidemic .chip-icon { background: rgba(90, 239, 182, 0.18); }
 
 @media (max-width: 1150px) {
-  .stats-overlay {
-    top: var(--space-md);
-    left: auto;
-    right: var(--space-md);
-    transform: none;
-    justify-content: flex-end;
-    width: calc(100vw - var(--sidebar-width) - 32px);
-  }
-
+  /* Same left/right-reserve-aware band as the base rule (still active here),
+     just denser chips so more of the row fits before wrapping. */
   .stat-chip {
     padding-right: 14px;
   }

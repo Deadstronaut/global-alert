@@ -1,4 +1,9 @@
-# Research: Country-Locked Map View with Mutually Exclusive Hexagon Layers
+# Research: Country-Locked Map View
+
+**Note (2026-07-19)**: §2 and §3 below (originally documenting the hazard-hex/exposure-layer
+coordination hooks) were removed after that component was reverted — see spec.md's Note. The
+decision that survives is: `uiStore.mapMode` and `layerVisibility` remain exactly as they were
+before this feature touched them, with no coordination added between them.
 
 ## §1. "Country-locked" definition — reuses existing `authStore`, no new auth mechanism
 
@@ -20,33 +25,6 @@ a `countryCode`, and is the role not the one sees-all role" — `country_admin`/
 with a `countryCode` are locked exactly the same way a plain `viewer` with a `countryCode` is, for
 map-navigation purposes (this feature doesn't need role-level granularity beyond the sees-all
 distinction).
-
-## §2. Existing `uiStore.mapMode` is already the right hook for the hazard side
-
-**Decision**: Do not introduce a new store or state shape for "is the hazard hex grid active" —
-`uiStore.mapMode === 'hexagon'` already is that signal, set by `selectCountry()`
-(`MapView.vue:1031`) and cleared by `clearCountrySelection()` (`MapView.vue:1078`). This feature
-adds coordination *around* that existing signal, not a replacement for it.
-
-**Why**: `mapMode` is already a single mutually-exclusive string (`'normal' | 'hexagon' |
-'heatmap'`), already read in the render/refresh paths that gate the hazard grid's visibility
-(`MapView.vue:1126,1151,1358`) — it is, in effect, exactly the "hazard" half of spec.md's Key
-Entities' conceptual "active hexagon view" already built, just not yet coordinated with the
-exposure-layer panel.
-
-## §3. Existing `layerVisibility` ref is the right hook for the exposure side
-
-**Decision**: Do not introduce a new per-dataset visibility store — `layerVisibility` (a plain
-`ref({})` keyed by `'exposure-dataset-' + dataset.id`, `MapView.vue:48`) already tracks which
-exposure datasets are on, toggled via `toggleExposureLayer()` (`MapView.vue:203-210`). This
-feature's exposure-side coordination is: (a) when `toggleExposureLayer()` turns a dataset ON while
-`mapMode === 'hexagon'`, clear the hazard hex grid; (b) when `selectCountry()` activates hazard
-mode, turn OFF every currently-true `'exposure-dataset-*'` key in `layerVisibility`.
-
-**Why not unify `mapMode` and `layerVisibility` into one new state object**: See plan.md's
-Complexity Tracking — `layerVisibility`'s multi-select-amongst-exposure-datasets behavior (spec.md
-FR-010, already required to keep working) is exactly what it already does; the only new behavior
-needed is two conditional side effects at existing toggle points, not a data model change.
 
 ## §4. Per-country default zoom: new nullable column on `country_boundaries`
 

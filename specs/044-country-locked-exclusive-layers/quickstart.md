@@ -1,12 +1,12 @@
-# Quickstart: Country-Locked Map View with Mutually Exclusive Hexagon Layers
+# Quickstart: Country-Locked Map View
 
 ## Prerequisites
 
-- Migration `<timestamp>_country_boundaries_default_zoom.sql` applied.
+- Migration `20260719160000_country_boundaries_default_zoom.sql` applied.
 - A test account whose `profiles.country_code` is set to `tr` (or `mg`) and whose `role` is not
   `super_admin` — the "country-locked" test user (User Stories 1-2).
 - The existing anon/global browsing path available for regression comparison (User Story 1
-  Acceptance Scenario 3, User Story 3 baseline).
+  Acceptance Scenario 3).
 
 ## 1. Country-locked camera on open (US1)
 
@@ -25,21 +25,21 @@
 2. Confirm the camera does not fly there and no other country's data is selected (FR-004).
 3. Confirm normal zoom in/out and panning still work freely within the session (FR-005).
 
-## 3. Hazard hex vs. exposure layer mutual exclusion (US3)
+## 3. Hazard view and exposure layers stay independent (FR-007)
 
-1. As any user, select a country (hazard hex grid appears — `uiStore.mapMode === 'hexagon'`).
-2. Toggle on an exposure-layer dataset (e.g. WorldPop population) from the layer panel.
-3. Confirm the hazard hex grid disappears and the exposure layer becomes visible (FR-008).
-4. Toggle on a second exposure-layer dataset (e.g. roads) while the first is still on.
-5. Confirm both exposure layers remain visible together (FR-010 — multi-select within exposure
-   state is unaffected).
-6. Re-select the country (or otherwise re-trigger hazard mode).
-7. Confirm all currently-visible exposure layers are hidden and the hazard hex grid reappears
-   (FR-009).
+1. As any user, select a country and switch between the left-side hazard view modes (status /
+   hexagon / heat).
+2. Toggle on an exposure-layer dataset (e.g. WorldPop population) from the panel — confirm the
+   currently-active hazard view mode does NOT change or disappear.
+3. Switch the hazard view mode again (e.g. status → heat) — confirm the exposure layer(s) toggled
+   on in step 2 remain visible, unaffected.
+4. Toggle a second exposure-layer dataset (e.g. roads) on while the first is still on — confirm
+   both remain visible together (existing spec 042 multi-select behavior, untouched).
 
 ## 4. Regression check
 
 1. Confirm existing anon/global map navigation (single-click select, double-click fly-to-country)
    is unchanged for non-locked sessions (FR-006).
 2. Confirm exposure-layer datasets still fetch/render identically to specs 040/041/043's existing
-   behavior — this feature touches visibility coordination only, not data fetching (FR-011).
+   behavior — this feature touches only the camera/navigation path, not layer visibility or data
+   fetching (FR-007).

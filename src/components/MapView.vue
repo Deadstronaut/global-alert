@@ -200,30 +200,9 @@ function removeExposureLayerRendering(dataset) {
   if (map.getSource(sourceId)) map.removeSource(sourceId)
 }
 
-// spec 044 US3: at most one of {hazard hex grid, exposure layers} is ever
-// visible at once (FR-007/FR-008/FR-009) — exposure datasets otherwise keep
-// their existing multi-select-amongst-themselves behavior (FR-010).
-function hideAllExposureLayers() {
-  for (const dataset of exposureLayersStore.datasets) {
-    const key = exposureLayerKey(dataset)
-    if (!isLayerVisible(key)) continue
-    if (mapLoaded) removeExposureLayerRendering(dataset)
-    layerVisibility.value = { ...layerVisibility.value, [key]: false }
-  }
-}
-
-function hideHazardHexGrid() {
-  if (uiStore.mapMode !== 'hexagon') return
-  uiStore.mapMode = 'normal'
-  if (map?.getSource('country-hex-grid')) {
-    map.getSource('country-hex-grid').setData({ type: 'FeatureCollection', features: [] })
-  }
-}
-
 function toggleExposureLayer(dataset) {
   const key = exposureLayerKey(dataset)
   const next = !isLayerVisible(key)
-  if (next) hideHazardHexGrid()
   layerVisibility.value = { ...layerVisibility.value, [key]: next }
   if (!mapLoaded) return
   if (next) addExposureLayer(dataset)
@@ -1089,7 +1068,6 @@ function selectCountry(f) {
   // Visual state only needs updating when selecting a different country
   if (alreadySelected) return
 
-  hideAllExposureLayers() // spec 044 FR-009
   uiStore.mapMode = 'hexagon'
 
   if (selectedFeatureId !== null) {
@@ -1755,11 +1733,8 @@ function updateHexbins() {
       if (!map || !mapLoaded) return
 
       if (data.type === 'FILL_GRID') {
-        // Country grid: apply signal colors then render. Guarded on mapMode
-        // (spec 044 FR-008) so an in-flight request from before a user
-        // switched to an exposure layer can't resurrect the hazard grid
-        // after it was just hidden.
-        if (uiStore.mapMode === 'hexagon') applySignalToCountryGrid(data.features)
+        // Country grid: apply signal colors then render
+        applySignalToCountryGrid(data.features)
       } else if (data.type === 'FILL_VIEWPORT') {
         // Cache static mesh for this resolution
         const res = data.res ?? currentHexRes.value

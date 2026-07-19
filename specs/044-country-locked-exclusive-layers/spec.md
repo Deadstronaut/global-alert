@@ -1,4 +1,4 @@
-# Feature Specification: Country-Locked Map View with Mutually Exclusive Hexagon Layers
+# Feature Specification: Country-Locked Map View
 
 **Feature Branch**: `044-country-locked-exclusive-layers`
 
@@ -6,38 +6,32 @@
 
 **Status**: Draft
 
-**Input**: User description: "Country-locked map view with mutually exclusive hexagon layers.
-Context: this project has two related map UX gaps discovered in practice. (1) Country-scoped/
-locked user accounts (this project's existing federated-per-country login architecture — anon
-users see all countries, logged-in users are scoped to exactly one country) currently get no
-special map camera behavior at all: the map still behaves like the global/anon browsing mode
-(free pan/zoom across all countries, double-click on any country flies the camera there). For a
-country-locked user, the map should instead open already fitted to their own country's bounds at
-a sensible default zoom (e.g. Turkey ~5.2 — a per-country configurable value, not hardcoded,
-following this project's existing data-driven-not-hardcoded convention for country-specific
-behavior), and the existing double-click-to-navigate-to-a-different-country interaction should
-simply not be wired up for that user (they can still zoom in/out and pan within reason, they just
-can't select a different country's hexagon/data). Anon/global users keep today's existing
-behavior unchanged (single-click selects a country and shows its hazard-event hexagon grid,
-double-click flies/zooms to that country). (2) Independently of the above, there are currently two
-different kinds of hexagon-shaped map layers that were never designed to interact: (a) the
-existing hazard-event hexagon grid that appears when a country is single-clicked/selected
-(clusters hazard events by lat/lng into hexagon cells — already implemented, works well per user
-feedback), and (b) the newer generic exposure-layer panel (spec 042/043 — population/Kontur,
-WorldPop, roads, rivers, watershed-basin hexagon/vector layers, independently toggleable, each
-with click-to-inspect popups showing real metric values). Right now both can be visible
-simultaneously with no coordination, which is confusing and wasn't an intentional design. The fix:
-introduce a single shared 'active hexagon view' concept with exactly two mutually exclusive
-states — 'hazard' (the event hexagon grid) and 'exposure' (any exposure-layer panel dataset).
-Turning on the hazard hex view automatically turns off any active exposure layers; turning on any
-exposure layer automatically turns off the hazard hex view. Within the 'exposure' state, multiple
-exposure datasets may still be toggled on simultaneously exactly as spec 042 already allows
-(population + roads + rivers together, for example) — the mutual exclusion is only between the
-'hazard' state and the 'exposure' state as a whole, not between individual exposure datasets. This
-feature is UI/UX and map-interaction logic only — no changes to how exposure datasets are
-fetched, aggregated, or stored (specs 038/040/041/043's pipelines are unaffected); it only changes
-when/how these two already-existing categories of hexagon layers are shown together on the map,
-plus adds the country-locked camera behavior for scoped logins."
+**Note (2026-07-19)**: This feature originally also included a "mutually exclusive hexagon
+layers" component (hiding the hazard-event hexagon grid whenever an exposure layer was toggled
+on, and vice versa). That component was implemented, then explicitly reverted at the user's
+request after live review — the desired behavior is the opposite: the left-side hazard view mode
+(status/hexagon/heat) and the right-side exposure-layer panel MUST coexist independently, never
+hide each other, so a user can see how a selected exposure layer (e.g. roads, rivers, WorldPop
+population) correlates with the hazard status/hexagon/heat view underneath it. This spec has been
+rewritten to reflect only the surviving scope (the country-locked camera behavior). The directory
+name (`044-country-locked-exclusive-layers`) is kept as-is for continuity with the git history
+rather than renamed.
+
+**Input**: User description (original): "Country-locked map view with mutually exclusive hexagon
+layers. Context: this project has two related map UX gaps discovered in practice. (1)
+Country-scoped/locked user accounts (this project's existing federated-per-country login
+architecture — anon users see all countries, logged-in users are scoped to exactly one country)
+currently get no special map camera behavior at all: the map still behaves like the global/anon
+browsing mode (free pan/zoom across all countries, double-click on any country flies the camera
+there). For a country-locked user, the map should instead open already fitted to their own
+country's bounds at a sensible default zoom (e.g. Turkey ~5.2 — a per-country configurable value,
+not hardcoded, following this project's existing data-driven-not-hardcoded convention for
+country-specific behavior), and the existing double-click-to-navigate-to-a-different-country
+interaction should simply not be wired up for that user (they can still zoom in/out and pan within
+reason, they just can't select a different country's hexagon/data). Anon/global users keep today's
+existing behavior unchanged (single-click selects a country and shows its hazard-event hexagon
+grid, double-click flies/zooms to that country)." (The original description's second part, about
+mutually exclusive hexagon layers, is superseded by the Note above and intentionally omitted here.)
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -90,34 +84,6 @@ selection is triggered. Confirm normal zoom in/out and panning within the view s
 2. **Given** a Turkey-scoped user, **When** they zoom in or pan around the map, **Then** normal
    zoom/pan interaction still works freely (only cross-country navigation is restricted).
 
----
-
-### User Story 3 - Selecting one hexagon view automatically closes the other (Priority: P1) 🎯 MVP
-
-A user viewing the hazard-event hexagon grid (shown after selecting a country) switches to an
-exposure layer (e.g. population) from the exposure-layer panel, and the hazard hexagon grid
-disappears automatically — and vice versa — so only one kind of hexagon layer is ever visible at
-once, avoiding the current confusing overlap.
-
-**Why this priority**: This is the second concrete, currently-broken behavior the feature exists
-to fix — today both layer types can linger on screen simultaneously with no coordination.
-
-**Independent Test**: With a country selected (hazard hexagon grid visible), toggle on any
-exposure-layer dataset from the panel; confirm the hazard hexagon grid disappears. Then toggle the
-exposure layer off and reselect the hazard view; confirm the exposure layer(s) disappear.
-
-**Acceptance Scenarios**:
-
-1. **Given** the hazard-event hexagon grid is currently visible for a selected country, **When**
-   a user toggles on an exposure-layer dataset (e.g. WorldPop population), **Then** the hazard
-   hexagon grid is hidden and the exposure layer becomes visible.
-2. **Given** one or more exposure-layer datasets are currently visible, **When** a user re-selects
-   the country to show the hazard hexagon grid again, **Then** all currently-visible exposure
-   layers are hidden and the hazard hexagon grid becomes visible.
-3. **Given** one or more exposure-layer datasets are already visible, **When** a user toggles on
-   an additional exposure-layer dataset, **Then** both remain visible together (multi-select
-   within the exposure state is unaffected — only the hazard-vs-exposure switch is exclusive).
-
 ### Edge Cases
 
 - What happens if a country-locked user has no configured default zoom value for their country
@@ -125,10 +91,6 @@ exposure layer off and reselect the hazard view; confirm the exposure layer(s) d
   the existing anon-mode zoomToCountry behavior) rather than failing to open the map — this
   mirrors the project's general "missing per-country config degrades gracefully, never blocks
   access" convention.
-- What happens if a user switches from the hazard hexagon view directly to a second exposure
-  layer while a first exposure layer is already active? → No conflict — both exposure layers
-  coexist normally (User Story 3, Acceptance Scenario 3); the exclusivity only ever fires on a
-  hazard-vs-exposure transition, not between exposure layers.
 - What happens when a country-locked user's own country has zero hazard events or zero exposure
   data at the moment they open the map? → The map still opens correctly framed on their country;
   an empty hexagon grid/layer is a normal, expected state (matches this project's general
@@ -154,29 +116,20 @@ exposure layer off and reselect the hazard view; confirm the exposure layer(s) d
 - **FR-006**: For an anonymous (non-logged-in) user, all existing map camera and navigation
   behavior (free pan/zoom, single-click select, double-click fly-to-country) MUST remain
   unchanged.
-- **FR-007**: The system MUST maintain a single shared "active hexagon view" state with exactly
-  two mutually exclusive values: the hazard-event hexagon grid, or the exposure-layer panel's
-  active dataset(s).
-- **FR-008**: When the hazard-event hexagon grid becomes active, the system MUST automatically
-  deactivate (hide) any currently-visible exposure-layer datasets.
-- **FR-009**: When any exposure-layer dataset becomes active, the system MUST automatically
-  deactivate (hide) the hazard-event hexagon grid if it is currently visible.
-- **FR-010**: Multiple exposure-layer datasets MUST remain independently toggleable amongst
-  themselves (existing spec 042 behavior) — the mutual exclusion introduced by this feature
-  applies only between the hazard state and the exposure state as a whole, never between
-  individual exposure datasets.
-- **FR-011**: This feature MUST NOT alter how exposure datasets are fetched, aggregated, computed,
-  or stored (specs 038/040/041/043's pipelines) — it changes only map camera/interaction behavior
-  and hexagon-layer visibility coordination.
+- **FR-007**: This feature MUST NOT alter how exposure datasets are fetched, aggregated, computed,
+  or stored (specs 038/040/041/043's pipelines), and MUST NOT hide or otherwise coordinate
+  visibility between the hazard-event hexagon grid / heat view and the exposure-layer panel — the
+  two MUST remain fully independent and simultaneously visible, so a user can visually correlate a
+  selected exposure layer (e.g. roads, rivers, WorldPop population) against whichever hazard view
+  mode (status/hexagon/heat) is currently active underneath it. *(This requirement replaces the
+  original spec's FR-007 through FR-010, which described the opposite — mutually exclusive —
+  behavior; see the Note at the top of this document.)*
 
 ### Key Entities
 
 - **Country default zoom configuration**: A per-country value representing the map's default
   zoom level when a country-locked user opens the map on that country — data-driven, extensible to
   new countries without code changes.
-- **Active hexagon view state**: A single shared piece of map UI state representing which of the
-  two mutually exclusive hexagon-layer categories (hazard-event grid, or exposure-layer panel) is
-  currently shown.
 
 ## Success Criteria *(mandatory)*
 
@@ -187,33 +140,23 @@ exposure layer off and reselect the hazard view; confirm the exposure layer(s) d
 - **SC-002**: A country-locked user cannot cause the map camera to navigate to, or select data
   for, any country other than their own, verified across repeated double-click attempts on other
   countries.
-- **SC-003**: At any point in time, at most one of {hazard-event hexagon grid, exposure-layer
-  panel} is visible on the map — never both simultaneously.
-- **SC-004**: Switching between the hazard hexagon view and any exposure layer (in either
-  direction) requires exactly one user action (one click/toggle) — no manual "turn off the other
-  one first" step is ever required.
-- **SC-005**: Anonymous/global users experience zero behavioral change to today's existing map
+- **SC-003**: Anonymous/global users experience zero behavioral change to today's existing map
   navigation.
+- **SC-004**: Toggling any exposure-layer dataset on/off never changes the currently-active hazard
+  view mode (status/hexagon/heat), and switching the hazard view mode never changes which
+  exposure-layer datasets are visible — the two remain independently controllable at all times.
 
 ## Assumptions
 
 - "Country-locked user" refers to this project's existing federated-per-country login/account
   scoping (already implemented and documented as intentional architecture) — this feature adds
-  map-camera and layer-visibility behavior for that existing user category; it does not introduce
-  any new authentication or authorization mechanism.
+  map-camera behavior for that existing user category; it does not introduce any new
+  authentication or authorization mechanism.
 - The per-country default zoom value is a new, small piece of configuration (e.g. one numeric
   column/table entry per country) — where exactly it is stored is a planning-phase decision, not a
   product-scope one; any storage location consistent with this project's existing
   data-driven-per-country-config convention (used by served-country lists, HydroSHEDS continent
   mapping, etc.) satisfies this requirement.
-- "Hazard-event hexagon grid" refers to the existing, already-implemented hexagon-shaped
-  clustering of hazard events by latitude/longitude shown when a country is selected — this
-  feature does not change how that grid computes or clusters events, only when it is shown
-  relative to the exposure-layer panel.
-- "Exposure-layer panel" refers to the existing generic layer panel introduced in spec 042
-  (population/Kontur, WorldPop, roads, rivers, watershed basins, and any future exposure source) —
-  this feature does not change what datasets appear there or how they are fetched, only the
-  panel's coordination with the hazard hexagon grid's visibility.
 - Restricting cross-country double-click navigation for a locked user is a map-interaction-layer
   change only; it is not a substitute for and does not replace any existing server-side/API-level
   data access restriction already in place for that user's account scope.

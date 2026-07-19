@@ -1,17 +1,24 @@
 ---
 
-description: "Task list for feature 044: Country-Locked Map View with Mutually Exclusive Hexagon Layers"
+description: "Task list for feature 044: Country-Locked Map View"
 ---
 
-# Tasks: Country-Locked Map View with Mutually Exclusive Hexagon Layers
+# Tasks: Country-Locked Map View
 
 **Input**: Design documents from `/specs/044-country-locked-exclusive-layers/`
 
 **Prerequisites**: plan.md, spec.md, research.md, data-model.md, quickstart.md
 
-**Scope note**: Frontend map-interaction coordination only (`src/components/MapView.vue`,
+**Note (2026-07-19)**: Phase 5 (User Story 3, hazard-hex/exposure-layer mutual exclusion) was
+implemented, then explicitly reverted at the user's request after live review — see spec.md's
+Note. Its tasks are kept below marked `[R]` (reverted) for the historical record rather than
+deleted, per this project's general preference for a visible trail over silently rewriting
+history.
+
+**Scope note**: Frontend map-interaction change only (`src/components/MapView.vue`,
 `src/stores/auth.js`) plus one nullable DB column. No backend fetch/aggregation pipeline changes
-(specs 038/040/041/043 unaffected, FR-011).
+(specs 038/040/041/043 unaffected, FR-007). The hazard-event hex grid and exposure-layer panel
+are explicitly left uncoordinated — see Phase 5's reversion note.
 
 **Tests**: No new `deno test` unit coverage — this feature is Vue component interaction logic with
 no existing frontend test harness to extend (plan.md's Testing section, Constitution Principle
@@ -77,22 +84,19 @@ camera navigation or data selection occurs, and confirm normal zoom/pan still fu
 
 ---
 
-## Phase 5: User Story 3 - Hazard hex vs. exposure layer mutual exclusion (Priority: P1) 🎯 MVP
+## Phase 5: User Story 3 - Hazard hex vs. exposure layer mutual exclusion — **REVERTED**
 
-**Goal**: Only one of {hazard-event hexagon grid, exposure-layer panel} is ever visible at once;
-switching between them takes exactly one user action.
+**Original goal**: Only one of {hazard-event hexagon grid, exposure-layer panel} would ever be
+visible at once. **This entire user story was reverted** after live review — the user clarified
+the actual desired behavior is the opposite: both must remain simultaneously visible so an
+exposure layer's correlation with the active hazard view can be seen. See spec.md's Note and
+plan.md's Complexity Tracking "Reverted" table for full context.
 
-**Independent Test**: Select a country (hazard hex visible), toggle on an exposure layer, confirm
-the hazard hex disappears; toggle on a second exposure layer, confirm both remain visible
-together; re-select the country, confirm all exposure layers hide and the hazard hex reappears.
+- [R] T008 [US3] ~~Added `hideAllExposureLayers()` helper, called from `selectCountry()`.~~ **Reverted**: helper deleted, call site removed.
+- [R] T009 [US3] ~~Added `hideHazardHexGrid()` helper, called from `toggleExposureLayer()`; guarded the hex-worker's `FILL_GRID` response handler on `mapMode === 'hexagon'`.~~ **Reverted**: helper deleted, call site removed, `FILL_GRID` handler restored to its original unconditional form (the guard existed only to protect the now-removed coordination logic).
+- [R] T010 [US3] ~~Confirmed multi-select amongst exposure datasets was preserved under the mutual-exclusion design.~~ **Moot**: with the mutual-exclusion logic removed entirely, exposure datasets and the hazard hex grid are both simply independent again, exactly as before this feature.
 
-### Implementation for User Story 3
-
-- [X] T008 [US3] Added `hideAllExposureLayers()` helper (iterates `exposureLayersStore.datasets`, removes rendering + clears `layerVisibility` for any currently-visible one) and call it from `selectCountry()` immediately before `uiStore.mapMode = 'hexagon'` is set (FR-009).
-- [X] T009 [US3] Added `hideHazardHexGrid()` helper (sets `uiStore.mapMode = 'normal'` and clears the `'country-hex-grid'` source data, without calling the full `clearCountrySelection()` — country context/badge/bounds preserved) and call it from `toggleExposureLayer()` when a dataset is being turned ON (FR-008). Also guarded the hex-worker's `FILL_GRID` response handler on `uiStore.mapMode === 'hexagon'` to prevent an in-flight hazard-grid request from resurrecting the grid after a race-condition switch to an exposure layer.
-- [X] T010 [P] [US3] Confirmed by construction: `hideAllExposureLayers()` is only called from `selectCountry()`, never from `toggleExposureLayer()` — toggling a second exposure dataset on does not touch the first (FR-010 preserved).
-
-**Checkpoint**: All three P1 user stories functional — country-locked camera, no cross-country navigation, and mutually-exclusive hexagon layers all working together.
+**Checkpoint**: `src/components/MapView.vue` verified (via `grep`) to contain no remaining references to `hideAllExposureLayers`/`hideHazardHexGrid` — only the surviving US1/US2 code (`applyCountryLockedCamera`, conditional dblclick registration) remains tagged "spec 044".
 
 ---
 

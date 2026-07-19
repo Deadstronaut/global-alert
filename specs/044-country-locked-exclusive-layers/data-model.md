@@ -1,4 +1,10 @@
-# Data Model: Country-Locked Map View with Mutually Exclusive Hexagon Layers
+# Data Model: Country-Locked Map View
+
+**Note (2026-07-19)**: The "Behavioral contract" section originally described a coordination
+between `uiStore.mapMode` and `layerVisibility` (hazard hex vs. exposure layer mutual exclusion).
+That was implemented, then explicitly reverted at the user's request — the two remain fully
+independent, exactly as before this feature. This document has been updated to remove that
+section; only the country-locked camera behavior remains.
 
 ## Schema changes
 
@@ -21,8 +27,8 @@ that cover this new column automatically, since RLS is row-scoped, not column-sc
 ```
 authStore.session.countryCode   // existing — profiles.country_code
 authStore.session.role          // existing — 'viewer' | 'country_admin' | 'org_admin' | 'super_admin'
-uiStore.mapMode                 // existing — 'normal' | 'hexagon' | 'heatmap'
-layerVisibility                 // existing — MapView.vue ref({}), keyed 'exposure-dataset-<id>'
+uiStore.mapMode                 // existing — 'normal' | 'hexagon' | 'heatmap' — untouched by this feature
+layerVisibility                 // existing — MapView.vue ref({}), keyed 'exposure-dataset-<id>' — untouched
 ```
 
 ## New derived state
@@ -38,25 +44,9 @@ const isCountryLocked = computed(() =>
 // MapView.vue — reads authStore.isCountryLocked + authStore.countryCode on mount
 ```
 
-## Behavioral contract (not a new data shape — coordination logic only)
+## Behavioral contract
 
 ```
-selectCountry(f) called (existing)
-  → uiStore.mapMode = 'hexagon'                                    (existing)
-  → NEW: for every key in layerVisibility starting with 'exposure-dataset-'
-         that is currently true, set it to false                   (FR-009)
-
-toggleExposureLayer(dataset) called, turning a dataset ON (existing)
-  → NEW: if uiStore.mapMode === 'hexagon':
-         uiStore.mapMode = 'normal'
-         clear the 'country-hex-grid' source data                  (FR-008)
-         (does NOT call full clearCountrySelection() — country
-         context/badge/bounds are preserved; only the hex grid
-         layer itself is hidden, matching spec.md's framing that
-         this is a layer-visibility coordination, not a country
-         re-deselection)
-  → layerVisibility[key] = true                                    (existing)
-
 Map mount (NEW)
   if authStore.isCountryLocked:
     country = fetch country_boundaries row for authStore.countryCode
@@ -69,6 +59,10 @@ Map mount (NEW)
     // existing anon/global mount behavior, unchanged (FR-006)
 ```
 
+`selectCountry()` and `toggleExposureLayer()` are otherwise untouched by this feature — the hazard
+hex grid and the exposure-layer panel remain exactly as independently controllable as before
+(spec.md FR-007/SC-004).
+
 ## Key relationships
 
 ```
@@ -78,7 +72,4 @@ country_boundaries.default_zoom (NEW column) ───────────�
                                                                          ▼
                                                           MapView.vue mount-time camera fit
                                                           + conditional dblclick registration
-
-uiStore.mapMode ('hexagon')  ◄──coordination (NEW)──►  layerVisibility['exposure-dataset-*']
-   (hazard hex grid visibility)                          (exposure-layer panel visibility)
 ```

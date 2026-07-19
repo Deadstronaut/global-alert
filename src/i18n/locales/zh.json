@@ -76,6 +76,12 @@
   },
   "settings": {
     "title": "设置",
+    "appearance": "外观与无障碍",
+    "quickAccess": "快速访问",
+    "capAlerts": "CAP 警报",
+    "incidentTracking": "事件跟踪",
+    "shelters": "避难所",
+    "admin": "管理",
     "display": "显示",
     "highContrast": "高对比度",
     "safeMode": "安全模式（低 GPU）",
@@ -93,7 +99,8 @@
     "showHexbinsDesc": "蜂巢式聚类可视化",
     "account": "账户",
     "loggedInAs": "已以 {email} 身份登录",
-    "logout": "退出登录"
+    "logout": "退出登录",
+    "hazardEncyclopedia": "灾害百科"
   },
   "map": {
     "zoomIn": "放大",

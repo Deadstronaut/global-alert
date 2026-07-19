@@ -59,15 +59,51 @@ describe('populationFillExpression', () => {
     expect(populationFillExpression(geojson)).toMatch(/^#[0-9A-Fa-f]{6}$/)
   })
 
-  it('returns a MapLibre interpolate expression when values vary', () => {
+  it('returns a MapLibre step expression when values vary', () => {
     const geojson = { features: [{ properties: { __metricValue: 0 } }, { properties: { __metricValue: 100 } }] }
     const expr = populationFillExpression(geojson)
     expect(Array.isArray(expr)).toBe(true)
-    expect(expr[0]).toBe('interpolate')
+    expect(expr[0]).toBe('step')
   })
 
   it('ignores features with a missing/non-numeric metric value', () => {
     const geojson = { features: [{ properties: {} }, { properties: { __metricValue: 'n/a' } }] }
     expect(populationFillExpression(geojson)).toMatch(/^#[0-9A-Fa-f]{6}$/)
+  })
+
+  it('buckets by quantile (equal hex counts per color), not equal value range', () => {
+    // Right-skewed distribution: 18 low-value hexes, 2 extreme outliers —
+    // a linear min→max scale would put nearly everything in the first
+    // bucket. Quantile buckets should spread the 18 low values across
+    // multiple colors instead.
+    const lowValues = Array.from({ length: 18 }, (_, i) => ({ properties: { __metricValue: i + 1 } }))
+    const outliers = [{ properties: { __metricValue: 5000 } }, { properties: { __metricValue: 10000 } }]
+    const geojson = { features: [...lowValues, ...outliers] }
+    const expr = populationFillExpression(geojson)
+
+    expect(expr[0]).toBe('step')
+    // step breakpoints (the numeric stop values) live at odd indices after
+    // the input expression and base color: ['step', input, color0, bp1, color1, bp2, color2, ...]
+    const breakpoints = expr.slice(3).filter((_, i) => i % 2 === 0)
+    // With a linear min→max (0..10000) scale every one of these breakpoints
+    // would sit above ~2000; quantile breakpoints should stay within the
+    // low-value cluster instead.
+    expect(breakpoints.some((bp) => bp < 100)).toBe(true)
+  })
+
+  it('produces strictly ascending step breakpoints even with many duplicate values', () => {
+    const geojson = {
+      features: [
+        ...Array.from({ length: 10 }, () => ({ properties: { __metricValue: 1 } })),
+        { properties: { __metricValue: 500 } },
+      ],
+    }
+    const expr = populationFillExpression(geojson)
+    if (Array.isArray(expr) && expr[0] === 'step') {
+      const breakpoints = expr.slice(3).filter((_, i) => i % 2 === 0)
+      for (let i = 1; i < breakpoints.length; i++) {
+        expect(breakpoints[i]).toBeGreaterThan(breakpoints[i - 1])
+      }
+    }
   })
 })

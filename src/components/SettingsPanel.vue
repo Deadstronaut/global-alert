@@ -2,16 +2,12 @@
 import { computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { useUIStore } from '@/stores/ui.js'
-import { useGeolocationStore } from '@/stores/geolocation.js'
-import { useDisasterStore } from '@/stores/disaster.js'
 import { useI18n } from 'vue-i18n'
 import { useAuthStore } from '@/stores/auth.js'
 
 const { t, locale } = useI18n()
 const router = useRouter()
 const uiStore = useUIStore()
-const geoStore = useGeolocationStore()
-const disasterStore = useDisasterStore()
 const authStore = useAuthStore()
 const canAccessAdmin = computed(() =>
   ['super_admin', 'country_admin', 'org_admin'].includes(authStore.session?.role)
@@ -42,117 +38,6 @@ function navigateTo(path) {
       <div class="settings-header">
         <h3>⚙️ {{ t('settings.title') }}</h3>
         <button class="btn-icon btn-ghost" @click="uiStore.toggleSettings()">✕</button>
-      </div>
-
-      <!-- Map View Mode -->
-      <div class="settings-section">
-        <h4 class="settings-section-title">Harita Görünüm Modu</h4>
-        <div class="map-mode-selector-settings">
-          <button 
-            class="mode-btn-settings" 
-            :class="{ active: uiStore.mapMode === 'normal' }"
-            @click="uiStore.mapMode = 'normal'"
-          >
-            📍 Durum
-          </button>
-          <button 
-            class="mode-btn-settings" 
-            :class="{ active: uiStore.mapMode === 'hexagon' }"
-            @click="uiStore.mapMode = 'hexagon'"
-          >
-            ⬡ Petek
-          </button>
-          <button 
-            class="mode-btn-settings" 
-            :class="{ active: uiStore.mapMode === 'heatmap' }"
-            @click="uiStore.mapMode = 'heatmap'"
-          >
-            🔥 Isı
-          </button>
-        </div>
-      </div>
-
-      <!-- Display -->
-      <div class="settings-section">
-        <h4 class="settings-section-title">{{ t('settings.display') }}</h4>
-
-        <label class="settings-toggle">
-          <span>{{ uiStore.darkMode ? 'Dark Mode' : 'Light Mode' }}</span>
-          <input type="checkbox" v-model="uiStore.darkMode" />
-          <span class="toggle-switch"></span>
-        </label>
-
-        <label class="settings-toggle">
-          <span>{{ t('settings.highContrast') }}</span>
-          <input type="checkbox" v-model="uiStore.highContrast" />
-          <span class="toggle-switch"></span>
-        </label>
-
-        <label class="settings-toggle">
-          <span>{{ t('settings.safeMode') }}</span>
-          <input type="checkbox" v-model="uiStore.safeMode" />
-          <span class="toggle-switch"></span>
-        </label>
-        <p class="settings-desc">{{ t('settings.safeModeDesc') }}</p>
-      </div>
-
-
-      <!-- Accessibility -->
-      <div class="settings-section">
-        <h4 class="settings-section-title">{{ t('settings.accessibility') }}</h4>
-
-        <label class="settings-toggle">
-          <span>{{ t('settings.colorblindMode') }}</span>
-          <input type="checkbox" v-model="uiStore.colorblindMode" />
-          <span class="toggle-switch"></span>
-        </label>
-        <p class="settings-desc">{{ t('settings.colorblindDesc') }}</p>
-      </div>
-
-      <!-- Notifications -->
-      <div class="settings-section">
-        <h4 class="settings-section-title">{{ t('settings.notifications') }}</h4>
-
-        <div class="settings-range">
-          <label>{{ t('settings.alertRadius') }}</label>
-          <input
-            type="range"
-            min="10"
-            max="500"
-            step="10"
-            :value="geoStore.alertRadius"
-            @input="geoStore.setAlertRadius(Number($event.target.value))"
-          />
-          <span class="range-value">{{ geoStore.alertRadius }} km</span>
-        </div>
-      </div>
-
-      <!-- Data -->
-      <div class="settings-section">
-        <h4 class="settings-section-title">Veri</h4>
-        <button
-          class="btn btn-ghost settings-action-btn"
-          @click="disasterStore.refreshAll()"
-          :disabled="disasterStore.isLoading"
-        >
-          🔄 {{ t('app.refreshAll') }}
-        </button>
-      </div>
-
-      <!-- Operations -->
-      <div class="settings-section">
-        <h4 class="settings-section-title">Operasyon</h4>
-        <div class="settings-actions">
-          <button class="btn btn-ghost settings-action-btn" @click="navigateTo('/alerts/cap')">
-            ⚠️ CAP Uyarılar
-          </button>
-          <button class="btn btn-ghost settings-action-btn" @click="navigateTo('/alerts/incidents')">
-            🚨 Olay Takip
-          </button>
-          <button class="btn btn-ghost settings-action-btn" @click="navigateTo('/shelters')">
-            🏠 Sığınaklar
-          </button>
-        </div>
       </div>
 
       <!-- Language -->
@@ -211,17 +96,76 @@ function navigateTo(path) {
         </div>
       </div>
 
+      <!-- Appearance & Accessibility -->
+      <div class="settings-section">
+        <h4 class="settings-section-title">{{ t('settings.appearance') }}</h4>
+
+        <label class="settings-toggle">
+          <span>{{ uiStore.darkMode ? 'Dark Mode' : 'Light Mode' }}</span>
+          <input type="checkbox" v-model="uiStore.darkMode" />
+          <span class="toggle-switch"></span>
+        </label>
+
+        <label class="settings-toggle">
+          <span>{{ t('settings.highContrast') }}</span>
+          <input type="checkbox" v-model="uiStore.highContrast" />
+          <span class="toggle-switch"></span>
+        </label>
+
+        <label class="settings-toggle">
+          <span>{{ t('settings.colorblindMode') }}</span>
+          <input type="checkbox" v-model="uiStore.colorblindMode" />
+          <span class="toggle-switch"></span>
+        </label>
+        <p class="settings-desc">{{ t('settings.colorblindDesc') }}</p>
+
+        <label class="settings-toggle">
+          <span>{{ t('settings.safeMode') }}</span>
+          <input type="checkbox" v-model="uiStore.safeMode" />
+          <span class="toggle-switch"></span>
+        </label>
+        <p class="settings-desc">{{ t('settings.safeModeDesc') }}</p>
+      </div>
+
+      <!-- Quick Access -->
+      <div class="settings-section">
+        <h4 class="settings-section-title">{{ t('settings.quickAccess') }}</h4>
+        <div class="quick-access-list">
+          <button class="quick-access-link" @click="navigateTo('/alerts/cap')">
+            <span>⚠️ {{ t('settings.capAlerts') }}</span>
+            <span class="quick-access-arrow">›</span>
+          </button>
+          <button class="quick-access-link" @click="navigateTo('/alerts/incidents')">
+            <span>🚨 {{ t('settings.incidentTracking') }}</span>
+            <span class="quick-access-arrow">›</span>
+          </button>
+          <button class="quick-access-link" @click="navigateTo('/shelters')">
+            <span>🏠 {{ t('settings.shelters') }}</span>
+            <span class="quick-access-arrow">›</span>
+          </button>
+          <button class="quick-access-link" @click="navigateTo('/hazards')">
+            <span>🌋 {{ t('settings.hazardEncyclopedia') }}</span>
+            <span class="quick-access-arrow">›</span>
+          </button>
+          <button class="quick-access-link" @click="navigateTo('/report')">
+            <span>📢 {{ t('communityReport.form.title') }}</span>
+            <span class="quick-access-arrow">›</span>
+          </button>
+          <button
+            v-if="canAccessAdmin"
+            class="quick-access-link"
+            @click="navigateTo('/admin')"
+          >
+            <span>🛡️ {{ t('settings.admin') }}</span>
+            <span class="quick-access-arrow">›</span>
+          </button>
+        </div>
+      </div>
+
       <!-- Account -->
       <div class="settings-section" v-if="authStore.isLoggedIn">
         <h4 class="settings-section-title">{{ t('settings.account') }}</h4>
         <p class="settings-desc">{{ t('settings.loggedInAs', { email: authStore.session?.email }) }}</p>
-        <button
-          v-if="canAccessAdmin"
-          class="btn btn-ghost settings-action-btn"
-          @click="navigateTo('/admin')"
-        >
-          🛡️ Yönetim
-        </button>
         <button class="btn btn-danger logout-btn" @click="handleLogout">
           ⎋ {{ t('settings.logout') }}
         </button>
@@ -326,28 +270,6 @@ function navigateTo(path) {
   margin-top: -4px;
 }
 
-.settings-range {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.settings-range label {
-  font-size: 0.85rem;
-  color: var(--color-text-secondary);
-}
-
-.settings-range input[type='range'] {
-  width: 100%;
-  accent-color: var(--color-accent);
-}
-
-.range-value {
-  font-family: var(--font-mono);
-  font-size: 0.75rem;
-  color: var(--color-info);
-}
-
 .language-buttons {
   display: flex;
   flex-wrap: wrap;
@@ -377,6 +299,49 @@ function navigateTo(path) {
   font-weight: 700;
 }
 
+.quick-access-list {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--glass-border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.quick-access-link {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 10px 12px;
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid var(--glass-border);
+  color: var(--color-text-secondary);
+  font-size: 0.82rem;
+  text-align: left;
+  cursor: pointer;
+  transition: background var(--transition-normal);
+}
+
+.quick-access-link:last-child {
+  border-bottom: none;
+}
+
+.quick-access-link:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--color-text-primary);
+}
+
+.quick-access-link:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.quick-access-arrow {
+  color: var(--color-text-muted);
+  font-size: 1rem;
+}
+
 /* Slide transition */
 .slide-right-enter-active,
 .slide-right-leave-active {
@@ -389,37 +354,6 @@ function navigateTo(path) {
 .slide-right-leave-to {
   transform: translateX(100%);
   opacity: 0;
-}
-
-.map-mode-selector-settings {
-  display: flex;
-  gap: 8px;
-  width: 100%;
-}
-
-.mode-btn-settings {
-  flex: 1;
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid var(--glass-border);
-  color: var(--color-text-secondary);
-  padding: 8px 4px;
-  border-radius: 8px;
-  font-size: 0.75rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.mode-btn-settings:hover {
-  background: rgba(255, 255, 255, 0.1);
-  border-color: rgba(255, 255, 255, 0.2);
-}
-
-.mode-btn-settings.active {
-  background: rgba(77, 163, 255, 0.15);
-  border-color: var(--color-accent);
-  color: var(--color-accent);
-  box-shadow: 0 0 12px rgba(77, 163, 255, 0.1);
 }
 
 .logout-btn {

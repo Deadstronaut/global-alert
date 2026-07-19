@@ -71,7 +71,8 @@ const openSections = ref({
   disasterFilters: true,
   severityLegend: true,
   magnitudeDepth: true,
-  actions: true,
+  viewMode: true,
+  location: true,
 })
 
 function toggleAccordion(key) {
@@ -130,7 +131,10 @@ const visibleDisasterTypes = computed(() => {
 
   if (disasterTypeView.value !== 'active') return withMeta
 
-  const activeTypes = withMeta.filter((type) => type.count > 0 || type.active)
+  // "Aktif" = şu an verisi olan türler. type.active (katman checkbox'ı) buraya
+  // dahil edilmez — tüm katmanlar varsayılan olarak açık geldiği için bu ikisi
+  // birleştirilirse filtre pratikte hep "Tümü" ile aynı sonucu verir.
+  const activeTypes = withMeta.filter((type) => type.count > 0)
   return activeTypes.length ? activeTypes : withMeta
 })
 
@@ -675,14 +679,14 @@ watch([rangeStartDate, rangeEndDate], ([start, end]) => {
       </Transition>
     </div>
 
-    <!-- Actions -->
-    <div class="sidebar-actions" v-if="!isCollapsed">
-      <button class="section-toggle" @click="toggleSection('actions')">
-        <span class="section-title">Seçenekler</span>
-        <span class="section-arrow" :class="{ open: openSections.actions }">›</span>
+    <!-- View Mode: 2D/3D + Durum/Petek/Isı + hex resolution, all in one place -->
+    <div class="sidebar-section" v-if="!isCollapsed">
+      <button class="section-toggle" @click="toggleSection('viewMode')">
+        <span class="section-title">Görünüm Modu</span>
+        <span class="section-arrow" :class="{ open: openSections.viewMode }">›</span>
       </button>
       <Transition name="section-accordion">
-        <div v-if="openSections.actions">
+        <div v-if="openSections.viewMode" class="view-mode-content">
           <div class="quick-switches">
             <label class="switch-3d-cyan">
               <input
@@ -707,58 +711,39 @@ watch([rangeStartDate, rangeEndDate], ([start, end]) => {
                 </div>
               </div>
             </label>
-
           </div>
 
-          <button class="btn btn-primary sidebar-action-btn" @click="handleLocate">
-            🎯
-            {{
-              geoStore.isTracking
-                ? t('sidebar.locating')
-                : geoStore.hasLocation
-                  ? t('sidebar.locationDetected')
-                  : t('sidebar.myLocation')
-            }}
-          </button>
-
-          <!-- spec 045 (+ UX follow-up): durum/ısı paired toggle — petek moved to its
-               own wide panel below. Keyboard-shortcut number badges removed per
-               live-review feedback (visual clutter, not worth the space). -->
-          <div class="map-mode-selector">
-            <button
-              class="mode-btn"
-              :class="{ active: uiStore.mapMode === 'normal' }"
-              @click="uiStore.mapMode = 'normal'"
-              title="Durum (1)"
-            >
-              📍 Durum
-            </button>
-            <button
-              class="mode-btn"
-              :class="{ active: uiStore.mapMode === 'heatmap' }"
-              @click="uiStore.mapMode = 'heatmap'"
-              title="Isı (3)"
-            >
-              🔥 Isı
-            </button>
-          </div>
-
-          <!-- spec 045 (+ UX follow-up): petek — the resolution slider now lives
-               inside the same panel as the toggle button itself (not a separate
-               labeled row that appears/disappears) and is always present, just
-               disabled until petek is the active mode — a persistent affordance
-               rather than a control that pops in and out. No visible "hexagon
-               size" text (kept only as an a11y title/aria-label); the current
-               level shows as a small inline number next to the slider instead. -->
+          <!-- Durum/Petek/Isı: single 3-way selector, resolution slider always
+               present but disabled unless petek is active (persistent affordance
+               rather than a control that pops in and out — live-review feedback
+               from spec 045). No longer split across separate widgets. -->
           <div class="hex-panel">
-            <button
-              class="btn btn-ghost sidebar-action-btn hex-panel-toggle"
-              :class="{ active: uiStore.mapMode === 'hexagon' }"
-              @click="uiStore.mapMode = 'hexagon'"
-              title="Petek (2)"
-            >
-              ⬡ Petek
-            </button>
+            <div class="map-mode-selector-embedded">
+              <button
+                class="mode-btn"
+                :class="{ active: uiStore.mapMode === 'normal' }"
+                @click="uiStore.mapMode = 'normal'"
+                title="Durum (1)"
+              >
+                📍 Durum
+              </button>
+              <button
+                class="mode-btn"
+                :class="{ active: uiStore.mapMode === 'hexagon' }"
+                @click="uiStore.mapMode = 'hexagon'"
+                title="Petek (2)"
+              >
+                ⬡ Petek
+              </button>
+              <button
+                class="mode-btn"
+                :class="{ active: uiStore.mapMode === 'heatmap' }"
+                @click="uiStore.mapMode = 'heatmap'"
+                title="Isı (3)"
+              >
+                🔥 Isı
+              </button>
+            </div>
             <div class="hex-resolution-control">
               <input
                 type="range"
@@ -775,36 +760,80 @@ watch([rangeStartDate, rangeEndDate], ([start, end]) => {
               <span class="hex-resolution-value">H{{ uiStore.manualHexResolution ?? MIN_HEX_RES }}</span>
             </div>
           </div>
+        </div>
+      </Transition>
+    </div>
 
-          <div class="nav-links">
-            <button class="btn btn-ghost sidebar-action-btn" @click="router.push('/hazards')">
-              🌋 Afet Ansiklopedisi
-            </button>
-            <button class="btn btn-ghost sidebar-action-btn" @click="router.push('/report')">
-              📢 {{ t('communityReport.form.title') }}
-            </button>
-            <button
-              v-if="hasMyRegion"
-              :class="['btn', 'btn-ghost', 'sidebar-action-btn', { active: disasterStore.showOnlyMyRegion }]"
-              @click="disasterStore.showOnlyMyRegion = !disasterStore.showOnlyMyRegion"
-            >
-              📍 {{ disasterStore.showOnlyMyRegion ? 'Tüm Ülke' : 'Sadece Bölgem' }}
-            </button>
+    <!-- Location & Alerts: "what's near me" — locate button, alert radius and
+         region filter grouped together instead of scattered across panels. -->
+    <div class="sidebar-section" v-if="!isCollapsed">
+      <button class="section-toggle" @click="toggleSection('location')">
+        <span class="section-title">Konum &amp; Uyarı</span>
+        <span class="section-arrow" :class="{ open: openSections.location }">›</span>
+      </button>
+      <Transition name="section-accordion">
+        <div v-if="openSections.location" class="location-content">
+          <button class="btn btn-primary sidebar-action-btn" @click="handleLocate">
+            🎯
+            {{
+              geoStore.isTracking
+                ? t('sidebar.locating')
+                : geoStore.hasLocation
+                  ? t('sidebar.locationDetected')
+                  : t('sidebar.myLocation')
+            }}
+          </button>
+
+          <div class="filter-row">
+            <div class="filter-label">
+              <span>{{ t('settings.alertRadius') }}</span>
+              <span class="filter-val accent">{{ geoStore.alertRadius }} km</span>
+            </div>
+            <input
+              type="range"
+              min="10"
+              max="500"
+              step="10"
+              :value="geoStore.alertRadius"
+              @input="geoStore.setAlertRadius(Number($event.target.value))"
+              class="filter-range"
+            />
           </div>
 
+          <button
+            v-if="hasMyRegion"
+            :class="['btn', 'btn-ghost', 'sidebar-action-btn', { active: disasterStore.showOnlyMyRegion }]"
+            @click="disasterStore.showOnlyMyRegion = !disasterStore.showOnlyMyRegion"
+          >
+            📍 {{ disasterStore.showOnlyMyRegion ? 'Tüm Ülke' : 'Sadece Bölgem' }}
+          </button>
         </div>
       </Transition>
     </div>
 
     <!-- Last Updated -->
     <div class="sidebar-footer" v-if="!isCollapsed && disasterStore.lastUpdated">
-      <span class="footer-text">
-        {{ t('app.lastUpdated') }}:
-        {{ new Date(disasterStore.lastUpdated).toLocaleTimeString('tr-TR') }}
-      </span>
-      <span class="footer-sources" :class="getSourceStatusClass(healthySourcesCount)">
-        {{ healthySourcesCount }}/{{ totalKnownSources }} {{ t('stats.sourcesOnline') }}
-      </span>
+      <div class="footer-info">
+        <div class="footer-update-row">
+          <button
+            class="footer-refresh-icon"
+            :class="{ spinning: disasterStore.isLoading }"
+            @click="disasterStore.refreshAll()"
+            :disabled="disasterStore.isLoading"
+            :title="t('app.refreshAll')"
+            :aria-label="t('app.refreshAll')"
+          >
+            ↻
+          </button>
+          <span class="footer-text">
+            {{ t('app.lastUpdated') }}:
+            {{ new Date(disasterStore.lastUpdated).toLocaleTimeString('tr-TR') }}
+          </span>
+        </div>
+        <span class="footer-sources" :class="getSourceStatusClass(healthySourcesCount)">
+          {{ healthySourcesCount }}/{{ totalKnownSources }} {{ t('stats.sourcesOnline') }}
+        </span>
+      </div>
     </div>
 
     <button
@@ -986,7 +1015,6 @@ watch([rangeStartDate, rangeEndDate], ([start, end]) => {
 }
 
 .sidebar-section,
-.sidebar-actions,
 .sidebar-footer,
 .sidebar-icons-only {
   transition:
@@ -1361,11 +1389,11 @@ watch([rangeStartDate, rangeEndDate], ([start, end]) => {
   color: #22c55e !important;
 }
 
-.sidebar-actions {
+.view-mode-content,
+.location-content {
   display: flex;
   flex-direction: column;
   gap: var(--space-sm);
-  margin-top: auto;
 }
 
 .sidebar-action-btn {
@@ -1374,18 +1402,9 @@ watch([rangeStartDate, rangeEndDate], ([start, end]) => {
   font-size: 0.8rem;
 }
 
-.nav-links {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.map-mode-selector {
+.map-mode-selector-embedded {
   display: flex;
   width: 100%;
-  border-radius: 8px;
-  overflow: hidden;
-  border: 1px solid rgba(255, 255, 255, 0.12);
 }
 
 .mode-btn {
@@ -1418,10 +1437,6 @@ watch([rangeStartDate, rangeEndDate], ([start, end]) => {
   color: #63b3ed;
 }
 
-html[data-theme='light'] .map-mode-selector {
-  border-color: rgba(0, 0, 0, 0.12);
-}
-
 html[data-theme='light'] .mode-btn {
   color: rgba(0, 0, 0, 0.45);
   border-right-color: rgba(0, 0, 0, 0.08);
@@ -1449,23 +1464,8 @@ html[data-theme='light'] .mode-btn.active {
   border: 1px solid rgba(255, 255, 255, 0.12);
 }
 
-.hex-panel-toggle {
-  border: none;
-  border-radius: 0;
-}
-
-.hex-panel-toggle.active {
-  background: rgba(99, 179, 237, 0.2);
-  color: #63b3ed;
-}
-
 html[data-theme='light'] .hex-panel {
   border-color: rgba(0, 0, 0, 0.12);
-}
-
-html[data-theme='light'] .hex-panel-toggle.active {
-  background: rgba(49, 130, 206, 0.12);
-  color: #3182ce;
 }
 
 .hex-resolution-control {
@@ -1687,16 +1687,28 @@ html[data-theme='light'] .hex-resolution-control {
   border-top: 1px solid var(--glass-border);
   border-bottom: 1px solid var(--glass-border);
   display: flex;
-  flex-direction: column;
-  gap: 3px;
-  align-items: center;
-  text-align: center;
+  justify-content: center;
   flex-shrink: 0;
 }
 
 .sidebar-settings-bottom {
   width: 100%;
   flex-shrink: 0;
+}
+
+.footer-info {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  min-width: 0;
+}
+
+.footer-update-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
 }
 
 .footer-text {
@@ -1717,6 +1729,47 @@ html[data-theme='light'] .hex-resolution-control {
 
 html[data-theme='light'] .footer-sources {
   color: #2f4f8f;
+}
+
+.footer-refresh-icon {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--color-text-muted);
+  font-size: 0.9rem;
+  line-height: 1;
+  cursor: pointer;
+  transition:
+    color 0.15s ease,
+    transform 0.15s ease;
+}
+
+.footer-refresh-icon:hover:not(:disabled) {
+  color: var(--color-accent);
+  transform: rotate(70deg);
+}
+
+.footer-refresh-icon:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.footer-refresh-icon.spinning {
+  color: var(--color-accent);
+  animation: footer-refresh-spin 0.8s linear infinite;
+}
+
+@keyframes footer-refresh-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .sidebar-logout-btn {

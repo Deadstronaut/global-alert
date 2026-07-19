@@ -76,6 +76,12 @@
   },
   "settings": {
     "title": "Settings",
+    "appearance": "Appearance & Accessibility",
+    "quickAccess": "Quick Access",
+    "capAlerts": "CAP Alerts",
+    "incidentTracking": "Incident Tracking",
+    "shelters": "Shelters",
+    "admin": "Admin",
     "display": "Display",
     "highContrast": "High Contrast",
     "safeMode": "Safe Mode (Low GPU)",
@@ -93,7 +99,8 @@
     "showHexbinsDesc": "Honeycomb-style cluster visualization",
     "account": "Account",
     "loggedInAs": "Logged in as {email}",
-    "logout": "Log Out"
+    "logout": "Log Out",
+    "hazardEncyclopedia": "Hazard Encyclopedia"
   },
   "map": {
     "zoomIn": "Zoom In",

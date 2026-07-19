@@ -76,6 +76,12 @@
   },
   "settings": {
     "title": "Paramètres",
+    "appearance": "Apparence et Accessibilité",
+    "quickAccess": "Accès rapide",
+    "capAlerts": "Alertes CAP",
+    "incidentTracking": "Suivi des incidents",
+    "shelters": "Abris",
+    "admin": "Administration",
     "display": "Affichage",
     "highContrast": "Contraste élevé",
     "safeMode": "Mode sans échec (GPU faible)",
@@ -93,7 +99,8 @@
     "showHexbinsDesc": "Visualisation en grappes de type nid d'abeille",
     "account": "Compte",
     "loggedInAs": "Connecté en tant que {email}",
-    "logout": "Déconnexion"
+    "logout": "Déconnexion",
+    "hazardEncyclopedia": "Encyclopédie des Risques"
   },
   "map": {
     "zoomIn": "Zoomer",

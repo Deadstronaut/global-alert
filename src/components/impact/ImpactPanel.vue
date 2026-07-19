@@ -5,6 +5,7 @@ import { useAuthStore } from '@/stores/auth.js'
 import { useDisasterStore } from '@/stores/disaster.js'
 import { supabase } from '@/services/api/config.js'
 import { defaultBufferRadiusKm } from '@/lib/hazardBuffer.js'
+import { friendlyDatasetLabel } from '@/utils/exposureLayerLabel.js'
 import { classifyTrend } from '@/lib/trendSparkline.js'
 import { rowsToCsv, rowsToJson, triggerDownload } from '@/lib/auditExport.js'
 
@@ -230,7 +231,7 @@ onMounted(() => {
           <span>{{ t('impact.panel.step1') }}: {{ t('impact.panel.datasetLabel') }}</span>
           <select v-model="selectedDatasetId">
             <option :value="null">—</option>
-            <option v-for="d in datasets" :key="d.id" :value="d.id">{{ d.name }}{{ d.source_name ? ` (${d.source_name})` : '' }}</option>
+            <option v-for="d in datasets" :key="d.id" :value="d.id">{{ friendlyDatasetLabel(t, d) }}</option>
           </select>
         </label>
         <label class="impact-field">

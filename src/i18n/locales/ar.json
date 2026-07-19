@@ -76,6 +76,12 @@
   },
   "settings": {
     "title": "الإعدادات",
+    "appearance": "المظهر وإمكانية الوصول",
+    "quickAccess": "الوصول السريع",
+    "capAlerts": "تنبيهات CAP",
+    "incidentTracking": "تتبع الحوادث",
+    "shelters": "الملاجئ",
+    "admin": "الإدارة",
     "display": "العرض",
     "highContrast": "تباين عالٍ",
     "safeMode": "الوضع الآمن (GPU منخفض)",
@@ -93,7 +99,8 @@
     "showHexbinsDesc": "عرض التجمعات بأسلوب خلية النحل",
     "account": "الحساب",
     "loggedInAs": "تم تسجيل الدخول باسم {email}",
-    "logout": "تسجيل الخروج"
+    "logout": "تسجيل الخروج",
+    "hazardEncyclopedia": "موسوعة المخاطر"
   },
   "map": {
     "zoomIn": "تكبير",

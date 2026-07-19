@@ -192,7 +192,7 @@ async function addExposureLayer(dataset) {
       if (exposurePopup) exposurePopup.remove()
       exposurePopup = new maplibregl.Popup({ offset: 12, className: 'modern-popup-container' })
         .setLngLat(e.lngLat)
-        .setHTML(buildFeaturePopupHtml(dataset, __metricValue, properties))
+        .setHTML(buildFeaturePopupHtml(t, dataset, __metricValue, properties))
         .addTo(map)
     })
   }
@@ -2145,7 +2145,7 @@ onBeforeUnmount(() => {
       <svg class="map-download-icon" viewBox="0 0 24 24" aria-hidden="true">
         <path d="M12 3v12m0 0 5-5m-5 5-5-5M5 21h14a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2" />
       </svg>
-      <span>{{ t('impact.downloadMap') }}</span>
+      <span class="sr-only">{{ t('impact.downloadMap') }}</span>
     </button>
 
     <div class="layer-switcher" @click="cycleMapStyle">
@@ -2428,26 +2428,25 @@ onBeforeUnmount(() => {
   opacity: 1;
 }
 
+/* Wide, short bar sitting above the satellite thumbnail (.layer-switcher):
+   same 64px width, about a third of its height — reads as a header strip
+   for the square below it rather than a separate floating icon. */
 .map-download-btn {
   position: absolute;
-  bottom: 160px;
+  bottom: 172px;
   right: var(--map-control-offset);
   z-index: 10;
-  min-height: 44px;
-  padding: 0 14px;
-  border-radius: 8px;
+  width: 64px;
+  height: 22px;
+  padding: 0;
+  border-radius: 6px;
   border: 1px solid rgba(77, 163, 255, 0.65);
   background: rgba(20, 24, 33, 0.96);
   color: #fff;
-  font: inherit;
-  font-size: 13px;
-  font-weight: 600;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
-  white-space: nowrap;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
   transition: background 0.15s, border-color 0.15s;
 }
@@ -2460,14 +2459,25 @@ onBeforeUnmount(() => {
   outline-offset: 2px;
 }
 .map-download-icon {
-  width: 19px;
-  height: 19px;
-  flex: 0 0 19px;
+  width: 12px;
+  height: 12px;
+  flex: 0 0 12px;
   fill: none;
   stroke: currentColor;
   stroke-width: 2;
   stroke-linecap: round;
   stroke-linejoin: round;
+}
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }
 
 .layer-switcher {
@@ -2792,7 +2802,7 @@ onBeforeUnmount(() => {
   }
 
   .map-download-btn {
-    bottom: calc(var(--impact-panel-mobile-height) + 164px);
+    bottom: calc(var(--impact-panel-mobile-height) + 176px);
   }
 
   .layer-panel-stack {
@@ -2976,34 +2986,6 @@ onBeforeUnmount(() => {
   color: #b0bac5;
   margin: 0;
   line-height: 1.45;
-}
-
-.exposure-popup {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  background: #13161c;
-  border-radius: 8px;
-  padding: 10px 12px;
-  min-width: 160px;
-}
-
-.exposure-popup-title {
-  font-size: 13.5px;
-  font-weight: 600;
-  color: #ffffff;
-  margin-bottom: 2px;
-}
-
-.exposure-popup-row {
-  font-size: 12px;
-  color: #b0bac5;
-  line-height: 1.4;
-}
-
-.exposure-popup-row strong {
-  color: #dfe4ea;
-  font-weight: 600;
 }
 
 .exposure-popup-empty {

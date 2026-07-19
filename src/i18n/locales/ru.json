@@ -76,6 +76,12 @@
   },
   "settings": {
     "title": "Настройки",
+    "appearance": "Внешний вид и доступность",
+    "quickAccess": "Быстрый доступ",
+    "capAlerts": "CAP-оповещения",
+    "incidentTracking": "Отслеживание инцидентов",
+    "shelters": "Укрытия",
+    "admin": "Администрирование",
     "display": "Экран",
     "highContrast": "Высокий контраст",
     "safeMode": "Безопасный режим (Низкий GPU)",
@@ -93,7 +99,8 @@
     "showHexbinsDesc": "Визуализация кластеров в виде сот",
     "account": "Аккаунт",
     "loggedInAs": "Вход выполнен как {email}",
-    "logout": "Выйти"
+    "logout": "Выйти",
+    "hazardEncyclopedia": "Энциклопедия угроз"
   },
   "map": {
     "zoomIn": "Приблизить",

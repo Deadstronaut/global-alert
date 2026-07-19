@@ -76,6 +76,12 @@
   },
   "settings": {
     "title": "Ayarlar",
+    "appearance": "Görünüm & Erişilebilirlik",
+    "quickAccess": "Hızlı Erişim",
+    "capAlerts": "CAP Uyarılar",
+    "incidentTracking": "Olay Takip",
+    "shelters": "Sığınaklar",
+    "admin": "Yönetim",
     "display": "Görünüm",
     "highContrast": "Yüksek Kontrast",
     "safeMode": "Güvenli Mod (Düşük GPU)",
@@ -93,7 +99,8 @@
     "showHexbinsDesc": "Altıgen petekler halinde kümeleme",
     "account": "Hesap",
     "loggedInAs": "{email} olarak giriş yapıldı",
-    "logout": "Çıkış Yap"
+    "logout": "Çıkış Yap",
+    "hazardEncyclopedia": "Afet Ansiklopedisi"
   },
   "map": {
     "zoomIn": "Yakınlaştır",

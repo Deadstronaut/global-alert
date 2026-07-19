@@ -76,6 +76,12 @@
   },
   "settings": {
     "title": "Ajustes",
+    "appearance": "Apariencia y Accesibilidad",
+    "quickAccess": "Acceso rápido",
+    "capAlerts": "Alertas CAP",
+    "incidentTracking": "Seguimiento de incidentes",
+    "shelters": "Refugios",
+    "admin": "Administración",
     "display": "Pantalla",
     "highContrast": "Alto contraste",
     "safeMode": "Modo seguro (Bajo GPU)",
@@ -93,7 +99,8 @@
     "showHexbinsDesc": "Visualización de clúster tipo panal",
     "account": "Cuenta",
     "loggedInAs": "Sesión iniciada como {email}",
-    "logout": "Cerrar sesión"
+    "logout": "Cerrar sesión",
+    "hazardEncyclopedia": "Enciclopedia de Riesgos"
   },
   "map": {
     "zoomIn": "Acercar",

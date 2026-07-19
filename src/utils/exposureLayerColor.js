@@ -61,30 +61,51 @@ export function colorForDataset(dataset) {
   return PALETTE[index]
 }
 
+function quantile(sortedValues, q) {
+  const pos = (sortedValues.length - 1) * q
+  const base = Math.floor(pos)
+  const rest = pos - base
+  const next = sortedValues[base + 1]
+  return next !== undefined ? sortedValues[base] + rest * (next - sortedValues[base]) : sortedValues[base]
+}
+
 /**
- * Builds a MapLibre data-driven fill-color expression that grades each
- * feature's fill from light to dark by its __metricValue (population),
- * scaled to the actual min/max present in this dataset's fetched features
- * — a fixed color scale would either wash out a sparse country or clip a
- * dense one, so the range is computed per-dataset at render time.
+ * Builds a MapLibre data-driven fill-color expression that buckets each
+ * feature's fill by its __metricValue (population) using quantile
+ * breakpoints — each color covers roughly the same NUMBER of hexes, not an
+ * equal slice of the value range. Population density is heavily
+ * right-skewed (a handful of extreme-density hexes, e.g. a city center,
+ * next to a long tail of sparse ones); a linear min→max scale crushes that
+ * whole tail into the palette's palest 1-2%, so nearly every hex renders
+ * the same washed-out color and only the outliers stand out.
  * @param {GeoJSON.FeatureCollection} geojson
  */
 export function populationFillExpression(geojson) {
   const values = (geojson?.features ?? [])
     .map((f) => f.properties?.__metricValue)
     .filter((v) => typeof v === 'number' && Number.isFinite(v))
+    .sort((a, b) => a - b)
 
   if (values.length === 0) return POPULATION_SWATCH_COLOR
 
-  const min = Math.min(...values)
-  const max = Math.max(...values)
+  const min = values[0]
+  const max = values[values.length - 1]
   if (min === max) return POPULATION_RAMP[Math.floor(POPULATION_RAMP.length / 2)]
 
   const steps = POPULATION_RAMP.length
-  const expression = ['interpolate', ['linear'], ['coalesce', ['get', '__metricValue'], min]]
-  for (let i = 0; i < steps; i++) {
-    const stop = min + ((max - min) * i) / (steps - 1)
-    expression.push(stop, POPULATION_RAMP[i])
+  const rawBreaks = []
+  for (let i = 1; i < steps; i++) rawBreaks.push(quantile(values, i / steps))
+
+  // Low-density duplicate quantiles are common (many hexes share the same
+  // sparse value) — MapLibre's `step` stops must be strictly ascending, so
+  // collapse duplicates instead of erroring. A heavily-duplicated dataset
+  // just ends up with fewer effective buckets.
+  const breakpoints = []
+  for (const b of rawBreaks) {
+    if (breakpoints.length === 0 || b > breakpoints[breakpoints.length - 1]) breakpoints.push(b)
   }
+
+  const expression = ['step', ['coalesce', ['get', '__metricValue'], min], POPULATION_RAMP[0]]
+  breakpoints.forEach((bp, i) => expression.push(bp, POPULATION_RAMP[i + 1]))
   return expression
 }

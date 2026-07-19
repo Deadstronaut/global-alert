@@ -12,6 +12,10 @@ export const useAuthStore = defineStore('auth', () => {
   const isSuperAdmin = computed(() => session.value?.role === 'super_admin');
   const countryCode = computed(() => session.value?.countryCode ?? null);
   const regionCode = computed(() => session.value?.regionCode ?? null);
+  // spec 044: a session scoped to a single country, for map-camera/navigation
+  // purposes only — super_admin is the sees-all role (analogous to anon),
+  // so a super_admin with a countryCode is still not "locked" here.
+  const isCountryLocked = computed(() => countryCode.value != null && !isSuperAdmin.value);
 
   async function loadProfile(user) {
     const { data: profile } = await supabase
@@ -308,6 +312,7 @@ export const useAuthStore = defineStore('auth', () => {
     isSuperAdmin,
     countryCode,
     regionCode,
+    isCountryLocked,
     authError,
     init,
     login,

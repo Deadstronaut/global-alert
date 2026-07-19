@@ -200,9 +200,30 @@ function removeExposureLayerRendering(dataset) {
   if (map.getSource(sourceId)) map.removeSource(sourceId)
 }
 
+// spec 044 US3: at most one of {hazard hex grid, exposure layers} is ever
+// visible at once (FR-007/FR-008/FR-009) — exposure datasets otherwise keep
+// their existing multi-select-amongst-themselves behavior (FR-010).
+function hideAllExposureLayers() {
+  for (const dataset of exposureLayersStore.datasets) {
+    const key = exposureLayerKey(dataset)
+    if (!isLayerVisible(key)) continue
+    if (mapLoaded) removeExposureLayerRendering(dataset)
+    layerVisibility.value = { ...layerVisibility.value, [key]: false }
+  }
+}
+
+function hideHazardHexGrid() {
+  if (uiStore.mapMode !== 'hexagon') return
+  uiStore.mapMode = 'normal'
+  if (map?.getSource('country-hex-grid')) {
+    map.getSource('country-hex-grid').setData({ type: 'FeatureCollection', features: [] })
+  }
+}
+
 function toggleExposureLayer(dataset) {
   const key = exposureLayerKey(dataset)
   const next = !isLayerVisible(key)
+  if (next) hideHazardHexGrid()
   layerVisibility.value = { ...layerVisibility.value, [key]: next }
   if (!mapLoaded) return
   if (next) addExposureLayer(dataset)
@@ -994,6 +1015,46 @@ function zoomToCountry(f) {
   }
 }
 
+// spec 044 US1: for a country-locked session, fit the camera to that user's
+// own country on load — at its configured default_zoom if an admin has set
+// one, otherwise falling back to the same cameraForBounds fit zoomToCountry()
+// already uses for anon double-click navigation (research.md §4). No-op for
+// anon/global sessions (FR-006).
+async function applyCountryLockedCamera() {
+  if (!map || !mapLoaded || !auth.isCountryLocked) return
+  const code = auth.countryCode
+  const fullFeature = _allCountryFeatures.find((cf) => numericToAlpha2(cf.id) === code)
+  const geom = fullFeature?.geometry
+  if (!geom) return
+
+  const bounds = new maplibregl.LngLatBounds()
+  const processCoords = (coords) => {
+    if (typeof coords[0] === 'number') {
+      bounds.extend(coords)
+    } else {
+      coords.forEach(processCoords)
+    }
+  }
+  processCoords(geom.coordinates)
+  if (bounds.isEmpty()) return
+
+  const { data } = await supabase
+    .from('country_boundaries')
+    .select('default_zoom')
+    .eq('country_code', code)
+    .maybeSingle()
+
+  if (data?.default_zoom != null) {
+    map.flyTo({ center: bounds.getCenter(), zoom: data.default_zoom, essential: true })
+  } else {
+    const cameraOptions = map.cameraForBounds(bounds, {
+      padding: { top: 100, bottom: 100, left: 100, right: 100 },
+      maxZoom: 6,
+    })
+    if (cameraOptions) map.flyTo({ ...cameraOptions, essential: true })
+  }
+}
+
 function selectCountry(f) {
   if (!map || !mapLoaded) return
   const fid = f.id
@@ -1028,6 +1089,7 @@ function selectCountry(f) {
   // Visual state only needs updating when selecting a different country
   if (alreadySelected) return
 
+  hideAllExposureLayers() // spec 044 FR-009
   uiStore.mapMode = 'hexagon'
 
   if (selectedFeatureId !== null) {
@@ -1145,6 +1207,7 @@ function initMap() {
     updateUserMarker()
 
     setupMapInteractions()
+    applyCountryLockedCamera()
 
     // Viewport grid refresh after pan or zoom ends (clear cache so new bounds are used)
     map.on('moveend', () => {
@@ -1218,12 +1281,17 @@ function setupMapInteractions() {
   })
 
   // ── Double-click on country → zoom to fit, empty area → zoom in ──
-  map.on('dblclick', interactionLayers, (e) => {
-    e.preventDefault()
-    if (e.features.length > 0) {
-      zoomToCountry(e.features[0])
-    }
-  })
+  // spec 044 US2: a country-locked session must not be able to navigate to a
+  // different country's data — simply don't wire this handler up for that
+  // session (research.md §5), rather than registering it and guarding inside.
+  if (!auth.isCountryLocked) {
+    map.on('dblclick', interactionLayers, (e) => {
+      e.preventDefault()
+      if (e.features.length > 0) {
+        zoomToCountry(e.features[0])
+      }
+    })
+  }
 
   map.on('dblclick', (e) => {
     const features = map.queryRenderedFeatures(e.point, { layers: interactionLayers })
@@ -1687,8 +1755,11 @@ function updateHexbins() {
       if (!map || !mapLoaded) return
 
       if (data.type === 'FILL_GRID') {
-        // Country grid: apply signal colors then render
-        applySignalToCountryGrid(data.features)
+        // Country grid: apply signal colors then render. Guarded on mapMode
+        // (spec 044 FR-008) so an in-flight request from before a user
+        // switched to an exposure layer can't resurrect the hazard grid
+        // after it was just hidden.
+        if (uiStore.mapMode === 'hexagon') applySignalToCountryGrid(data.features)
       } else if (data.type === 'FILL_VIEWPORT') {
         // Cache static mesh for this resolution
         const res = data.res ?? currentHexRes.value

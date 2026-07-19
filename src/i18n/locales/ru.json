@@ -573,6 +573,12 @@
     "cancel": "Отмена",
     "panelTitle": "Слои Карты"
   },
+  "exposureLayers": {
+    "panelTitle": "Слои Уязвимости",
+    "emptyState": "Для этой территории пока нет доступных слоёв уязвимости.",
+    "featureCount": "{count} объектов",
+    "loading": "Загрузка..."
+  },
   "admin": {
     "drillResponseTime": "Время Реакции",
     "drillAckRate": "Уровень Подтверждения",

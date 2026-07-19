@@ -26,10 +26,19 @@ import { useDrillInjectedEventsStore } from '@/stores/drillInjectedEvents.js'
 import { useAuthStore } from '@/stores/auth.js'
 import { supabase } from '@/services/api/config.js'
 import { getShelterMarkerColor, getShelterMarkerIcon } from '@/services/shelterMarkerStyle.js'
+import { useExposureLayersStore } from '@/stores/exposureLayers.js'
+import { colorForDataset } from '@/utils/exposureLayerColor.js'
+import { buildFeaturePopupHtml } from '@/utils/exposureFeaturePopup.js'
 
 // spec 012: OGC WMS/WFS map layer registry — admin-registered external
 // overlays rendered live on this map (never stored/normalized, FR-008).
 const mapLayersStore = useMapLayersStore()
+// spec 042: toggleable exposure_datasets/exposure_features layers (roads,
+// population, and future river/basin sources) — read-only visualization,
+// shares the layerVisibility/layerOpacity refs below with the WMS/WFS layers.
+const exposureLayersStore = useExposureLayersStore()
+const exposureFeatureCache = new Map() // datasetId -> GeoJSON.FeatureCollection
+let exposurePopup = null
 const sheltersStore = useSheltersStore()
 const communityReportsStore = useCommunityReportsStore()
 const hazardTypesStore = useHazardTypesStore()
@@ -126,6 +135,87 @@ function setMapLayerOpacity(layer, value) {
     if (map.getLayer(`${sourceId}-line`)) map.setPaintProperty(`${sourceId}-line`, 'line-opacity', value)
     if (map.getLayer(`${sourceId}-point`)) map.setPaintProperty(`${sourceId}-point`, 'circle-opacity', value)
   }
+}
+
+// spec 042: exposure_datasets layers (roads/population/rivers/basins/...).
+// Same toggle lifecycle shape as the WFS layers above (addWfsLayer/
+// removeMapLayerRendering/toggleMapLayer), but the data source is a local
+// Postgres RPC over already-imported data, not a live external fetch, and
+// features are click-inspectable (research.md §1/§3 for spec 042).
+function exposureSourceId(dataset) { return `exposure-dataset-${dataset.id}` }
+function exposureLayerKey(dataset) { return `exposure-dataset-${dataset.id}` }
+
+const EXPOSURE_SUB_LAYER_SUFFIXES = ['-fill', '-line', '-point']
+
+async function addExposureLayer(dataset) {
+  if (!map) return
+  const sourceId = exposureSourceId(dataset)
+
+  let geojson = exposureFeatureCache.get(dataset.id)
+  if (!geojson) {
+    const { data, error } = await supabase.rpc('get_dataset_features_geojson', { dataset_id: dataset.id })
+    if (error || !data) return // silent render failure — matches addWfsLayer's existing convention
+    geojson = {
+      type: 'FeatureCollection',
+      features: data.map((row) => ({
+        type: 'Feature',
+        geometry: JSON.parse(row.geom_geojson),
+        properties: { ...row.properties, __metricValue: row.metric_value },
+      })),
+    }
+    exposureFeatureCache.set(dataset.id, geojson)
+  }
+
+  // Toggle may have been switched off again while the fetch was in flight.
+  if (!map || !isLayerVisible(exposureLayerKey(dataset)) || map.getSource(sourceId)) return
+
+  const color = colorForDataset(dataset.id)
+  const opacity = getLayerOpacity(exposureLayerKey(dataset))
+  map.addSource(sourceId, { type: 'geojson', data: geojson })
+  map.addLayer({ id: `${sourceId}-fill`, type: 'fill', source: sourceId, filter: ['==', ['geometry-type'], 'Polygon'], paint: { 'fill-color': color, 'fill-opacity': opacity * 0.4 } })
+  map.addLayer({ id: `${sourceId}-line`, type: 'line', source: sourceId, filter: ['in', ['geometry-type'], ['literal', ['LineString', 'Polygon']]], paint: { 'line-color': color, 'line-opacity': opacity, 'line-width': 2 } })
+  map.addLayer({ id: `${sourceId}-point`, type: 'circle', source: sourceId, filter: ['==', ['geometry-type'], 'Point'], paint: { 'circle-color': color, 'circle-opacity': opacity, 'circle-radius': 5 } })
+
+  for (const suffix of EXPOSURE_SUB_LAYER_SUFFIXES) {
+    map.on('click', `${sourceId}${suffix}`, (e) => {
+      const f = e.features?.[0]
+      if (!f) return
+      const { __metricValue, ...properties } = f.properties ?? {}
+      if (exposurePopup) exposurePopup.remove()
+      exposurePopup = new maplibregl.Popup({ offset: 12, className: 'modern-popup-container' })
+        .setLngLat(e.lngLat)
+        .setHTML(buildFeaturePopupHtml(dataset, __metricValue, properties))
+        .addTo(map)
+    })
+  }
+}
+
+function removeExposureLayerRendering(dataset) {
+  if (!map) return
+  const sourceId = exposureSourceId(dataset)
+  for (const suffix of EXPOSURE_SUB_LAYER_SUFFIXES) {
+    if (map.getLayer(sourceId + suffix)) map.removeLayer(sourceId + suffix)
+  }
+  if (map.getSource(sourceId)) map.removeSource(sourceId)
+}
+
+function toggleExposureLayer(dataset) {
+  const key = exposureLayerKey(dataset)
+  const next = !isLayerVisible(key)
+  layerVisibility.value = { ...layerVisibility.value, [key]: next }
+  if (!mapLoaded) return
+  if (next) addExposureLayer(dataset)
+  else removeExposureLayerRendering(dataset)
+}
+
+function setExposureLayerOpacity(dataset, value) {
+  const key = exposureLayerKey(dataset)
+  layerOpacity.value = { ...layerOpacity.value, [key]: value }
+  if (!map || !isLayerVisible(key)) return
+  const sourceId = exposureSourceId(dataset)
+  if (map.getLayer(`${sourceId}-fill`)) map.setPaintProperty(`${sourceId}-fill`, 'fill-opacity', value * 0.4)
+  if (map.getLayer(`${sourceId}-line`)) map.setPaintProperty(`${sourceId}-line`, 'line-opacity', value)
+  if (map.getLayer(`${sourceId}-point`)) map.setPaintProperty(`${sourceId}-point`, 'circle-opacity', value)
 }
 
 // Impact Analysis (spec 008): selected event for the split-view side panel,
@@ -1836,6 +1926,8 @@ onMounted(() => {
   // deactivated by an admin is absent from the panel on this map's next
   // mount, even if App.vue's boot-time fetch is stale from an earlier session.
   mapLayersStore.fetchMapLayers()
+  // spec 042: exposure_datasets layers — same idempotent-refetch rationale
+  exposureLayersStore.fetchExposureLayers()
   // spec 027: shelters are fetched here too (idempotent-safe, same rationale
   // as the map_layers re-fetch above); updateShelterMarkers() is invoked from
   // initMap()'s style-load handlers once the map itself is ready.
@@ -1974,22 +2066,48 @@ onBeforeUnmount(() => {
       <ImpactPanel v-show="!impactPanelCollapsed" :selected-event="selectedImpactEvent" />
     </div>
 
-    <!-- OGC WMS/WFS Map Layers (spec 012): toggle + opacity, session-only state -->
-    <div v-if="mapLayersStore.activeMapLayers.length" class="map-layers-panel">
-      <h4 class="map-layers-title">{{ t('mapLayers.panelTitle') }}</h4>
-      <div v-for="layer in mapLayersStore.activeMapLayers" :key="layer.id" class="map-layer-row">
-        <label class="map-layer-toggle">
-          <input type="checkbox" :checked="isLayerVisible(layer.id)" @change="toggleMapLayer(layer)" />
-          <span>{{ layer.display_name }}</span>
-          <span class="map-layer-type">{{ layer.source_type.toUpperCase() }}</span>
-        </label>
-        <input
-          v-if="isLayerVisible(layer.id)"
-          type="range" min="0" max="1" step="0.05"
-          :value="getLayerOpacity(layer.id)"
-          @input="setMapLayerOpacity(layer, Number($event.target.value))"
-          class="map-layer-opacity"
-        />
+    <!-- Layer panel stack: WMS/WFS (spec 012) + Exposure layers (spec 042) share one
+         positioned column so neither overlaps the other when both are present. -->
+    <div class="layer-panel-stack">
+      <!-- OGC WMS/WFS Map Layers (spec 012): toggle + opacity, session-only state -->
+      <div v-if="mapLayersStore.activeMapLayers.length" class="map-layers-panel">
+        <h4 class="map-layers-title">{{ t('mapLayers.panelTitle') }}</h4>
+        <div v-for="layer in mapLayersStore.activeMapLayers" :key="layer.id" class="map-layer-row">
+          <label class="map-layer-toggle">
+            <input type="checkbox" :checked="isLayerVisible(layer.id)" @change="toggleMapLayer(layer)" />
+            <span>{{ layer.display_name }}</span>
+            <span class="map-layer-type">{{ layer.source_type.toUpperCase() }}</span>
+          </label>
+          <input
+            v-if="isLayerVisible(layer.id)"
+            type="range" min="0" max="1" step="0.05"
+            :value="getLayerOpacity(layer.id)"
+            @input="setMapLayerOpacity(layer, Number($event.target.value))"
+            class="map-layer-opacity"
+          />
+        </div>
+      </div>
+
+      <!-- Exposure layers (spec 042): roads/population/rivers/basins etc, generic
+           geometry-driven rendering + click-to-inspect. Toggle + opacity share the
+           same session-only state shape as the WMS/WFS panel above. -->
+      <div v-if="exposureLayersStore.loaded" class="map-layers-panel exposure-layers-panel">
+        <h4 class="map-layers-title">{{ t('exposureLayers.panelTitle') }}</h4>
+        <p v-if="!exposureLayersStore.hasLayers" class="exposure-layers-empty">{{ t('exposureLayers.emptyState') }}</p>
+        <div v-for="dataset in exposureLayersStore.datasets" :key="dataset.id" class="map-layer-row">
+          <label class="map-layer-toggle">
+            <input type="checkbox" :checked="isLayerVisible(`exposure-dataset-${dataset.id}`)" @change="toggleExposureLayer(dataset)" />
+            <span>{{ dataset.name }}{{ dataset.source_name ? ` (${dataset.source_name})` : '' }}</span>
+            <span class="map-layer-type" v-if="dataset.feature_count">{{ t('exposureLayers.featureCount', { count: dataset.feature_count }) }}</span>
+          </label>
+          <input
+            v-if="isLayerVisible(`exposure-dataset-${dataset.id}`)"
+            type="range" min="0" max="1" step="0.05"
+            :value="getLayerOpacity(`exposure-dataset-${dataset.id}`)"
+            @input="setExposureLayerOpacity(dataset, Number($event.target.value))"
+            class="map-layer-opacity"
+          />
+        </div>
       </div>
     </div>
 
@@ -2032,11 +2150,18 @@ onBeforeUnmount(() => {
   height: 100vh;
 }
 
-.map-layers-panel {
+.layer-panel-stack {
   position: absolute;
   top: 16px;
   right: var(--map-control-offset);
   z-index: 5;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-height: calc(100% - 32px);
+  overflow-y: auto;
+}
+.map-layers-panel {
   background: rgba(15,17,23,.9);
   border: 1px solid rgba(255,255,255,.12);
   border-radius: 10px;
@@ -2051,6 +2176,7 @@ onBeforeUnmount(() => {
 .map-layer-toggle { display: flex; align-items: center; gap: 6px; cursor: pointer; }
 .map-layer-type { margin-left: auto; font-size: .68rem; color: var(--color-text-muted,#94a3b8); }
 .map-layer-opacity { width: 100%; margin-top: 4px; }
+.exposure-layers-empty { margin: 0; font-size: .72rem; color: var(--color-text-muted,#94a3b8); font-style: italic; }
 
 .shelters-layer-panel {
   position: absolute;
@@ -2518,7 +2644,7 @@ onBeforeUnmount(() => {
     bottom: calc(var(--impact-panel-mobile-height) + 164px);
   }
 
-  .map-layers-panel,
+  .layer-panel-stack,
   .country-badge {
     right: 12px;
   }
@@ -2696,6 +2822,38 @@ onBeforeUnmount(() => {
   color: #b0bac5;
   margin: 0;
   line-height: 1.45;
+}
+
+.exposure-popup {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  background: #13161c;
+  border-radius: 8px;
+  padding: 10px 12px;
+  min-width: 160px;
+}
+
+.exposure-popup-title {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: #ffffff;
+  margin-bottom: 2px;
+}
+
+.exposure-popup-row {
+  font-size: 12px;
+  color: #b0bac5;
+  line-height: 1.4;
+}
+
+.exposure-popup-row strong {
+  color: #dfe4ea;
+  font-weight: 600;
+}
+
+.exposure-popup-empty {
+  font-style: italic;
 }
 
 .popup-metrics {

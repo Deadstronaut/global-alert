@@ -573,6 +573,12 @@
     "cancel": "Annuler",
     "panelTitle": "Couches de Carte"
   },
+  "exposureLayers": {
+    "panelTitle": "Couches d'Exposition",
+    "emptyState": "Aucune couche d'exposition disponible pour cette zone pour le moment.",
+    "featureCount": "{count} éléments",
+    "loading": "Chargement..."
+  },
   "admin": {
     "drillResponseTime": "Temps de Réponse",
     "drillAckRate": "Taux d'Accusé",

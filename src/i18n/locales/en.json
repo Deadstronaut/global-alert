@@ -637,6 +637,12 @@
     "cancel": "Cancel",
     "panelTitle": "Map Layers"
   },
+  "exposureLayers": {
+    "panelTitle": "Exposure Layers",
+    "emptyState": "No exposure layers available for this area yet.",
+    "featureCount": "{count} features",
+    "loading": "Loading..."
+  },
   "admin": {
     "drillResponseTime": "Response Time",
     "drillAckRate": "Ack Rate",

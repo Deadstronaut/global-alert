@@ -637,6 +637,12 @@
     "cancel": "İptal",
     "panelTitle": "Harita Katmanları"
   },
+  "exposureLayers": {
+    "panelTitle": "Maruziyet Katmanları",
+    "emptyState": "Bu bölge için henüz maruziyet katmanı yok.",
+    "featureCount": "{count} kayıt",
+    "loading": "Yükleniyor..."
+  },
   "admin": {
     "drillResponseTime": "Tepki Süresi",
     "drillAckRate": "Onay Oranı",

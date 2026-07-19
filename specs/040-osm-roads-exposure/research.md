@@ -209,3 +209,19 @@ Four real findings surfaced only by live-testing against Turkey, each fixed or s
    by `overpass-api.de`, independent of how small the request is. No code change made — this
    reinforces the existing "no reliable in-request retry, rely on next weekly cron cycle" decision
    rather than prompting a new one.
+7. **Stale dataset metadata discovered and fixed (2026-07-19), during spec 042's own
+   investigation**: the `osm — tr` `exposure_datasets` row from finding 6's "successful" local run
+   (`feature_count: 37407`) turned out to have **zero real rows** in `exposure_features` — verified
+   directly via a service-role REST call bypassing RLS (`Content-Range: 0-0/0` for that
+   `dataset_id`), independent of any RLS/permissions artifact. Root cause not conclusively
+   determined (not investigated further, since the fix — re-running the same, already-proven-correct
+   write path — was simple and the mechanism itself was not at fault); plausible causes include an
+   interrupted/uncommitted chunked insert during the original local run, or a since-lost database
+   state change outside this session's visibility. **Fixed**: re-ran the identical local-script
+   approach (Turkey, motorway-only scope) — produced 5,233 real, verified features (`dataset_id
+   9dc057c2...`), and confirmed `writeExposureDataset`'s supersession correctly deleted the old
+   dangling `24849b2b...` row the moment the new write completed (T027, now verified — see
+   tasks.md). The 5,233 figure (vs. the earlier-cited "37,407") is itself informative: 37,407 was
+   actually finding 2's `motorway|trunk` count from *before* the second narrowing to `motorway`-only
+   — the correct number for the current, narrower scope was never actually re-measured against real
+   data until now.

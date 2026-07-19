@@ -573,6 +573,12 @@
     "cancel": "إلغاء",
     "panelTitle": "طبقات الخريطة"
   },
+  "exposureLayers": {
+    "panelTitle": "طبقات التعرض",
+    "emptyState": "لا توجد طبقات تعرض متاحة لهذه المنطقة حتى الآن.",
+    "featureCount": "{count} عنصر",
+    "loading": "جارٍ التحميل..."
+  },
   "admin": {
     "drillResponseTime": "وقت الاستجابة",
     "drillAckRate": "معدل التأكيد",

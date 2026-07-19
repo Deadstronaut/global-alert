@@ -573,6 +573,12 @@
     "cancel": "取消",
     "panelTitle": "地图图层"
   },
+  "exposureLayers": {
+    "panelTitle": "暴露层",
+    "emptyState": "该区域暂无可用的暴露层。",
+    "featureCount": "{count} 个要素",
+    "loading": "加载中..."
+  },
   "admin": {
     "drillResponseTime": "响应时间",
     "drillAckRate": "确认率",

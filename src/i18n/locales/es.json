@@ -573,6 +573,12 @@
     "cancel": "Cancelar",
     "panelTitle": "Capas de Mapa"
   },
+  "exposureLayers": {
+    "panelTitle": "Capas de Exposición",
+    "emptyState": "Aún no hay capas de exposición disponibles para esta área.",
+    "featureCount": "{count} elementos",
+    "loading": "Cargando..."
+  },
   "admin": {
     "drillResponseTime": "Tiempo de Respuesta",
     "drillAckRate": "Tasa de Confirmación",

@@ -640,6 +640,7 @@
   "exposureLayers": {
     "panelTitle": "Exposure Layers",
     "emptyState": "No exposure layers available for this area yet.",
+    "selectCountryPrompt": "Select a country on the map to see its exposure layers.",
     "featureCount": "{count} features",
     "loading": "Loading...",
     "sourceLabel": {

@@ -200,6 +200,29 @@ function removeExposureLayerRendering(dataset) {
   if (map.getSource(sourceId)) map.removeSource(sourceId)
 }
 
+// Only the currently selected country's own exposure datasets — the panel
+// used to list every served country's datasets at once (Malaysia/Madagascar/
+// Turkey all mixed together regardless of which country was selected), which
+// made toggling a layer for the "wrong" country trivially easy. `null` when
+// no country is selected, matching visibleExposureDatasets being empty then.
+const visibleExposureDatasets = computed(() =>
+  exposureLayersStore.datasets.filter((d) => d.country_code === selectedCountryCode.value),
+)
+
+// Turns off (and un-renders) any currently-visible exposure dataset that
+// does not belong to `countryCode` — called on every country
+// selection/deselection so switching countries never leaves a
+// no-longer-listed layer silently still rendered on the map.
+function hideExposureLayersNotForCountry(countryCode) {
+  for (const dataset of exposureLayersStore.datasets) {
+    if (dataset.country_code === countryCode) continue
+    const key = exposureLayerKey(dataset)
+    if (!isLayerVisible(key)) continue
+    if (mapLoaded) removeExposureLayerRendering(dataset)
+    layerVisibility.value = { ...layerVisibility.value, [key]: false }
+  }
+}
+
 function toggleExposureLayer(dataset) {
   const key = exposureLayerKey(dataset)
   const next = !isLayerVisible(key)
@@ -334,6 +357,11 @@ let hoveredFeatureSource = 'world-countries'
 let selectedFeatureSource = 'world-countries'
 const hoveredCountryName = ref(null)
 const selectedCountryName = ref(null)
+// ISO2 code of the currently selected country (alpha-2, lowercase) — drives
+// exposure-layer panel filtering below so a user only ever sees the
+// selected country's own datasets, never every served country's mixed
+// together.
+const selectedCountryCode = ref(null)
 const _symbolFilterCache = new Map()
 // Pre-compute all country features once for geometry lookups
 const _allCountryFeatures = [
@@ -1097,12 +1125,15 @@ function selectCountry(f) {
 
   if (source === 'custom-territories') {
     selectedCountryName.value = f.properties?.name || f.id
+    selectedCountryCode.value = null
   } else {
     const nameKey = String(fid).padStart(3, '0')
     selectedCountryName.value = COUNTRY_NAMES[nameKey] ?? `#${fid}`
     const alpha2 = numericToAlpha2(fid)
+    selectedCountryCode.value = alpha2
     if (alpha2) router.push(`/${alpha2}`)
   }
+  hideExposureLayersNotForCountry(selectedCountryCode.value)
 
   map.setFeatureState({ source, id: fid }, { selected: true, dimmed: false })
 
@@ -1119,6 +1150,8 @@ function selectCountry(f) {
 
 function clearCountrySelection() {
   selectedCountryName.value = null
+  selectedCountryCode.value = null
+  hideExposureLayersNotForCountry(null)
   selectedCountryBounds = null
   countryHexRes = null
   countryHexFeatures = null
@@ -2159,8 +2192,9 @@ onBeforeUnmount(() => {
            same session-only state shape as the WMS/WFS panel above. -->
       <div v-if="exposureLayersStore.loaded" class="map-layers-panel exposure-layers-panel">
         <h4 class="map-layers-title">{{ t('exposureLayers.panelTitle') }}</h4>
-        <p v-if="!exposureLayersStore.hasLayers" class="exposure-layers-empty">{{ t('exposureLayers.emptyState') }}</p>
-        <div v-for="dataset in exposureLayersStore.datasets" :key="dataset.id" class="map-layer-row exposure-layer-row">
+        <p v-if="!selectedCountryCode" class="exposure-layers-empty">{{ t('exposureLayers.selectCountryPrompt') }}</p>
+        <p v-else-if="visibleExposureDatasets.length === 0" class="exposure-layers-empty">{{ t('exposureLayers.emptyState') }}</p>
+        <div v-for="dataset in visibleExposureDatasets" :key="dataset.id" class="map-layer-row exposure-layer-row">
           <label class="map-layer-toggle">
             <input type="checkbox" :checked="isLayerVisible(`exposure-dataset-${dataset.id}`)" @change="toggleExposureLayer(dataset)" />
             <span class="exposure-layer-swatch" :style="{ background: colorForDataset(dataset.id) }"></span>

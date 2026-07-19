@@ -576,6 +576,7 @@
   "exposureLayers": {
     "panelTitle": "暴露层",
     "emptyState": "该区域暂无可用的暴露层。",
+    "selectCountryPrompt": "请在地图上选择一个国家以查看其暴露层。",
     "featureCount": "{count} 个要素",
     "loading": "加载中...",
     "sourceLabel": {

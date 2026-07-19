@@ -576,6 +576,7 @@
   "exposureLayers": {
     "panelTitle": "Capas de Exposición",
     "emptyState": "Aún no hay capas de exposición disponibles para esta área.",
+    "selectCountryPrompt": "Selecciona un país en el mapa para ver sus capas de exposición.",
     "featureCount": "{count} elementos",
     "loading": "Cargando...",
     "sourceLabel": {

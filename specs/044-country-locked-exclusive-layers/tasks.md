@@ -131,3 +131,33 @@ once populated it persisted regardless of mode.
   earlier revision.
 - [X] T016 Verified `eslint` clean and `npm run build` succeeds after the fix. Live browser
   verification not performed this session (same caveat as T012).
+
+---
+
+## Phase 8: Live-review bug fix — exposure-layer panel showed every served country's datasets at once
+
+**Found**: 2026-07-19, immediately after Phase 7 — the user pointed out that with Turkey selected,
+the exposure-layer panel still listed Madagascar's and Malaysia's datasets (e.g. Madagascar's
+road network) alongside Turkey's, with nothing preventing a user from toggling on a layer for a
+country they hadn't even selected. Root cause: `exposureLayersStore.fetchExposureLayers()`
+(spec 042) fetches every `exposure_datasets` row globally with no country filter, and the panel
+template rendered `exposureLayersStore.datasets` directly — this predates spec 044 (a spec 042
+gap, not something spec 044 introduced), but was only caught now via live map review.
+
+- [X] T017 Added `selectedCountryCode` (ISO2, lowercase) reactive ref alongside the existing
+  `selectedCountryName`, set from the same `alpha2` lookup `selectCountry()` already computes for
+  its router-push call; cleared in `clearCountrySelection()`.
+- [X] T018 Added `visibleExposureDatasets` computed — `exposureLayersStore.datasets` filtered to
+  `dataset.country_code === selectedCountryCode.value` — and swapped the panel template to render
+  it instead of the unfiltered global list.
+- [X] T019 Added `hideExposureLayersNotForCountry(countryCode)` — turns off and un-renders any
+  currently-visible exposure dataset that doesn't belong to the given country — called from both
+  `selectCountry()` (on every selection, so switching countries doesn't leave a no-longer-listed
+  layer silently still rendered) and `clearCountrySelection()` (hides everything, since no
+  dataset's `country_code` matches `null`).
+- [X] T020 Added an `exposureLayers.selectCountryPrompt` i18n key (all 7 locales:
+  en/tr/es/fr/ru/ar/zh) shown in the panel when no country is selected yet, replacing the
+  previous unconditional "no layers for this area" message for that specific case (Constitution
+  Principle VI — new UI text routed through i18n).
+- [X] T021 Verified `eslint` clean, `npm run build` succeeds, and all 7 locale JSON files still
+  parse. Live browser verification not performed this session (same caveat as T012/T016).

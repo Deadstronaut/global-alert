@@ -640,6 +640,7 @@
   "exposureLayers": {
     "panelTitle": "Maruziyet Katmanları",
     "emptyState": "Bu bölge için henüz maruziyet katmanı yok.",
+    "selectCountryPrompt": "Maruziyet katmanlarını görmek için haritadan bir ülke seçin.",
     "featureCount": "{count} kayıt",
     "loading": "Yükleniyor...",
     "sourceLabel": {

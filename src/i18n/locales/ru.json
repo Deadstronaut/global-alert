@@ -576,6 +576,7 @@
   "exposureLayers": {
     "panelTitle": "Слои Уязвимости",
     "emptyState": "Для этой территории пока нет доступных слоёв уязвимости.",
+    "selectCountryPrompt": "Выберите страну на карте, чтобы увидеть её слои уязвимости.",
     "featureCount": "{count} объектов",
     "loading": "Загрузка...",
     "sourceLabel": {

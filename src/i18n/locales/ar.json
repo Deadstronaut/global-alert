@@ -576,6 +576,7 @@
   "exposureLayers": {
     "panelTitle": "طبقات التعرض",
     "emptyState": "لا توجد طبقات تعرض متاحة لهذه المنطقة حتى الآن.",
+    "selectCountryPrompt": "اختر دولة على الخريطة لعرض طبقات التعرض الخاصة بها.",
     "featureCount": "{count} عنصر",
     "loading": "جارٍ التحميل...",
     "sourceLabel": {

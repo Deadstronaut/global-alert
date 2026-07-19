@@ -8,11 +8,11 @@
 import type { RoadRecord } from './roadRecord.ts'
 import { geometryToWkt } from './geometryToWkt.ts'
 
-// MVP-scoped road hierarchy — narrowed to motorway only after live testing
-// found both the full standard hierarchy and motorway+trunk unusable in a
-// single Edge Function invocation (research.md §8 addendum, osmRoadsFetch.ts's
-// HIGHWAY_FILTER). Kept in sync with that constant.
-const IMPORTED_HIGHWAY_VALUES = new Set(['motorway'])
+// MVP-scoped road hierarchy — widened 2026-07-19 to motorway|trunk|primary
+// (Madagascar has zero motorway-tagged OSM ways; see osmRoadsFetch.ts's
+// HIGHWAY_FILTER for the full history/trade-off). Kept in sync with that
+// constant.
+const IMPORTED_HIGHWAY_VALUES = new Set(['motorway', 'trunk', 'primary'])
 
 export type ValidationResult =
   | { valid: true }

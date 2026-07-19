@@ -577,7 +577,16 @@
     "panelTitle": "Couches d'Exposition",
     "emptyState": "Aucune couche d'exposition disponible pour cette zone pour le moment.",
     "featureCount": "{count} éléments",
-    "loading": "Chargement..."
+    "loading": "Chargement...",
+    "sourceLabel": {
+      "osm": "Réseau Routier",
+      "kontur": "Densité de Population"
+    },
+    "countryLabel": {
+      "tr": "Turquie",
+      "mg": "Madagascar",
+      "my": "Malaisie"
+    }
   },
   "admin": {
     "drillResponseTime": "Temps de Réponse",

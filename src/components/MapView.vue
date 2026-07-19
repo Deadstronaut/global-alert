@@ -29,6 +29,7 @@ import { getShelterMarkerColor, getShelterMarkerIcon } from '@/services/shelterM
 import { useExposureLayersStore } from '@/stores/exposureLayers.js'
 import { colorForDataset } from '@/utils/exposureLayerColor.js'
 import { buildFeaturePopupHtml } from '@/utils/exposureFeaturePopup.js'
+import { friendlyDatasetLabel } from '@/utils/exposureLayerLabel.js'
 
 // spec 012: OGC WMS/WFS map layer registry — admin-registered external
 // overlays rendered live on this map (never stored/normalized, FR-008).
@@ -2094,11 +2095,12 @@ onBeforeUnmount(() => {
       <div v-if="exposureLayersStore.loaded" class="map-layers-panel exposure-layers-panel">
         <h4 class="map-layers-title">{{ t('exposureLayers.panelTitle') }}</h4>
         <p v-if="!exposureLayersStore.hasLayers" class="exposure-layers-empty">{{ t('exposureLayers.emptyState') }}</p>
-        <div v-for="dataset in exposureLayersStore.datasets" :key="dataset.id" class="map-layer-row">
+        <div v-for="dataset in exposureLayersStore.datasets" :key="dataset.id" class="map-layer-row exposure-layer-row">
           <label class="map-layer-toggle">
             <input type="checkbox" :checked="isLayerVisible(`exposure-dataset-${dataset.id}`)" @change="toggleExposureLayer(dataset)" />
-            <span>{{ dataset.name }}{{ dataset.source_name ? ` (${dataset.source_name})` : '' }}</span>
-            <span class="map-layer-type" v-if="dataset.feature_count">{{ t('exposureLayers.featureCount', { count: dataset.feature_count }) }}</span>
+            <span class="exposure-layer-swatch" :style="{ background: colorForDataset(dataset.id) }"></span>
+            <span class="exposure-layer-name">{{ friendlyDatasetLabel(t, dataset) }}</span>
+            <span class="map-layer-type exposure-layer-count" v-if="dataset.feature_count">{{ t('exposureLayers.featureCount', { count: dataset.feature_count.toLocaleString() }) }}</span>
           </label>
           <input
             v-if="isLayerVisible(`exposure-dataset-${dataset.id}`)"
@@ -2106,6 +2108,7 @@ onBeforeUnmount(() => {
             :value="getLayerOpacity(`exposure-dataset-${dataset.id}`)"
             @input="setExposureLayerOpacity(dataset, Number($event.target.value))"
             class="map-layer-opacity"
+            :style="{ accentColor: colorForDataset(dataset.id) }"
           />
         </div>
       </div>
@@ -2177,6 +2180,29 @@ onBeforeUnmount(() => {
 .map-layer-type { margin-left: auto; font-size: .68rem; color: var(--color-text-muted,#94a3b8); }
 .map-layer-opacity { width: 100%; margin-top: 4px; }
 .exposure-layers-empty { margin: 0; font-size: .72rem; color: var(--color-text-muted,#94a3b8); font-style: italic; }
+.exposure-layer-row {
+  padding: 6px 8px;
+  border-radius: 8px;
+  transition: background .15s ease;
+}
+.exposure-layer-row:hover { background: rgba(255,255,255,.05); }
+.exposure-layer-swatch {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  box-shadow: 0 0 0 2px rgba(255,255,255,.15);
+}
+.exposure-layer-name {
+  font-weight: 600;
+  color: #e8edf4;
+}
+.exposure-layer-count {
+  font-variant-numeric: tabular-nums;
+  background: rgba(255,255,255,.08);
+  padding: 2px 7px;
+  border-radius: 10px;
+}
 
 .shelters-layer-panel {
   position: absolute;

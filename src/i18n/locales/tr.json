@@ -641,7 +641,16 @@
     "panelTitle": "Maruziyet Katmanları",
     "emptyState": "Bu bölge için henüz maruziyet katmanı yok.",
     "featureCount": "{count} kayıt",
-    "loading": "Yükleniyor..."
+    "loading": "Yükleniyor...",
+    "sourceLabel": {
+      "osm": "Yol Ağı",
+      "kontur": "Nüfus Yoğunluğu"
+    },
+    "countryLabel": {
+      "tr": "Türkiye",
+      "mg": "Madagaskar",
+      "my": "Malezya"
+    }
   },
   "admin": {
     "drillResponseTime": "Tepki Süresi",

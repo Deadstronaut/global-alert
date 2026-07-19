@@ -577,7 +577,16 @@
     "panelTitle": "暴露层",
     "emptyState": "该区域暂无可用的暴露层。",
     "featureCount": "{count} 个要素",
-    "loading": "加载中..."
+    "loading": "加载中...",
+    "sourceLabel": {
+      "osm": "道路网络",
+      "kontur": "人口密度"
+    },
+    "countryLabel": {
+      "tr": "土耳其",
+      "mg": "马达加斯加",
+      "my": "马来西亚"
+    }
   },
   "admin": {
     "drillResponseTime": "响应时间",

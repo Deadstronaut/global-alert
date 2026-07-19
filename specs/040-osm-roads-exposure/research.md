@@ -225,3 +225,18 @@ Four real findings surfaced only by live-testing against Turkey, each fixed or s
    actually finding 2's `motorway|trunk` count from *before* the second narrowing to `motorway`-only
    — the correct number for the current, narrower scope was never actually re-measured against real
    data until now.
+8. **Classification re-widened to `motorway|trunk|primary` (2026-07-19)**: while loading real demo
+   data for Madagascar, live-verified that Madagascar has **zero** OSM ways tagged
+   `highway=motorway` — the `motorway`-only scope (finding 5) returns a legitimately empty result
+   for that country, not an error. Widened `HIGHWAY_FILTER`/`IMPORTED_HIGHWAY_VALUES` to
+   `motorway|trunk|primary` for both served countries (kept generic/country-agnostic per FR-010 —
+   no Madagascar-specific branch). Live counts at this width: Madagascar 2,192 ways (small, safe),
+   Turkey 65,010 ways (large — written successfully via local script, no memory ceiling there).
+   **Accepted, explicitly-flagged trade-off**: this reopens the `WORKER_RESOURCE_LIMIT` risk
+   (finding 5) for Turkey specifically *if and when* the deployed Edge Function's Overpass
+   reachability (T018) is restored — not a concern today since nothing currently succeeds through
+   the deployed function regardless of query size. Before relying on the Edge Function path again
+   at this width, the deferred query-splitting/streaming approach (plan.md Complexity Tracking)
+   would need to be revisited for Turkey; Madagascar's small count is not at risk. The Edge Function
+   was redeployed with this change for code-consistency, even though it cannot presently exercise
+   it end-to-end.

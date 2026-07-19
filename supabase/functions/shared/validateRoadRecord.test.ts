@@ -55,21 +55,28 @@ Deno.test('validateRoadRecord: unsupported highway value is rejected', () => {
   assertEquals(result.valid, false)
 })
 
-Deno.test('validateRoadRecord: out-of-MVP-scope highway value (e.g. primary) is rejected', () => {
-  // MVP scope is motorway only (research.md §8 addendum, narrowed twice
-  // after live Edge Function memory-limit findings) — trunk/primary and
-  // below are out of scope for now, not merely "unsupported" in the generic
-  // sense; this is a deliberate scope narrowing, not a bug.
+Deno.test('validateRoadRecord: primary is in MVP scope and accepted', () => {
+  // MVP scope widened 2026-07-19 to motorway|trunk|primary (Madagascar has
+  // zero motorway-tagged OSM ways — see osmRoadsFetch.ts's HIGHWAY_FILTER
+  // for the full history). secondary and below remain out of scope.
   const result = validateRoadRecord(
     validRecord({ properties: { highway: 'primary', osmId: 2 } }),
     SERVED,
   )
-  assertEquals(result.valid, false)
+  assertEquals(result.valid, true)
 })
 
-Deno.test('validateRoadRecord: trunk is out of MVP scope and rejected', () => {
+Deno.test('validateRoadRecord: trunk is in MVP scope and accepted', () => {
   const result = validateRoadRecord(
     validRecord({ properties: { highway: 'trunk', osmId: 3 } }),
+    SERVED,
+  )
+  assertEquals(result.valid, true)
+})
+
+Deno.test('validateRoadRecord: secondary is out of MVP scope and rejected', () => {
+  const result = validateRoadRecord(
+    validRecord({ properties: { highway: 'secondary', osmId: 4 } }),
     SERVED,
   )
   assertEquals(result.valid, false)

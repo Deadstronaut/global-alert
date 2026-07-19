@@ -577,7 +577,16 @@
     "panelTitle": "Capas de Exposición",
     "emptyState": "Aún no hay capas de exposición disponibles para esta área.",
     "featureCount": "{count} elementos",
-    "loading": "Cargando..."
+    "loading": "Cargando...",
+    "sourceLabel": {
+      "osm": "Red de Carreteras",
+      "kontur": "Densidad de Población"
+    },
+    "countryLabel": {
+      "tr": "Turquía",
+      "mg": "Madagascar",
+      "my": "Malasia"
+    }
   },
   "admin": {
     "drillResponseTime": "Tiempo de Respuesta",

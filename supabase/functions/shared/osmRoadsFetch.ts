@@ -15,17 +15,23 @@ import type { RoadRecord } from './roadRecord.ts'
 
 const OVERPASS_ENDPOINT = 'https://overpass-api.de/api/interpreter'
 
-// MVP-scoped road hierarchy (research.md §8 addendum) — narrowed twice after
-// live testing against Turkey: first from the full motorway..unclassified
-// set (1.58M ways, unusable in one request), then from motorway+trunk
-// (37,407 ways / 52MB — Overpass itself handled this fine, but the deployed
-// Edge Function crashed with WORKER_RESOURCE_LIMIT parsing/mapping that much
-// JSON in one invocation) down to motorway only. Expanding coverage is
-// future work requiring either a streaming/paginated Overpass response
-// approach or the admin-boundary query-splitting plan.md's Complexity
-// Tracking already flagged as deferred — not a silent limitation.
-// Kept in sync with validateRoadRecord.ts's IMPORTED_HIGHWAY_VALUES.
-const HIGHWAY_FILTER = 'motorway'
+// MVP-scoped road hierarchy (research.md §8 addendum, widened again 2026-07-19
+// per spec 042's Madagascar data-loading finding). History: full
+// motorway..unclassified set (1.58M ways, unusable) -> motorway+trunk
+// (37,407 ways/52MB, crashed the deployed Edge Function with
+// WORKER_RESOURCE_LIMIT) -> motorway only (safe, but Madagascar has ZERO
+// motorway-tagged ways in OSM — live-verified, returns empty). Widened back
+// to motorway|trunk|primary (Madagascar: 5,145 ways total across all three
+// classes — small; Turkey: previously measured at 85MB/36s at the Overpass
+// level, not yet re-tested against the Edge Function at this exact width).
+// Accepted trade-off, not a silent regression: this reintroduces the
+// WORKER_RESOURCE_LIMIT risk for Turkey via the *deployed Edge Function*
+// specifically, if/when Overpass reachability there is restored (T018 is
+// still unresolved) — deferred until that's the active bottleneck again;
+// today's real data for both countries was written via local script, which
+// has no such memory ceiling. Kept in sync with validateRoadRecord.ts's
+// IMPORTED_HIGHWAY_VALUES.
+const HIGHWAY_FILTER = 'motorway|trunk|primary'
 
 interface OverpassNode {
   lat: number

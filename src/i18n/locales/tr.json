@@ -646,7 +646,8 @@
       "osm": "Yol Ağı",
       "kontur": "Nüfus Yoğunluğu",
       "hydrorivers": "Nehir Ağı",
-      "hydrobasins": "Havza Sınırları"
+      "hydrobasins": "Havza Sınırları",
+      "worldpop": "Nüfus (WorldPop)"
     },
     "countryLabel": {
       "tr": "Türkiye",

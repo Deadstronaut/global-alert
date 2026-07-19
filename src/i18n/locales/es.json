@@ -582,7 +582,8 @@
       "osm": "Red de Carreteras",
       "kontur": "Densidad de Población",
       "hydrorivers": "Red Fluvial",
-      "hydrobasins": "Límites de Cuencas"
+      "hydrobasins": "Límites de Cuencas",
+      "worldpop": "Población (WorldPop)"
     },
     "countryLabel": {
       "tr": "Turquía",

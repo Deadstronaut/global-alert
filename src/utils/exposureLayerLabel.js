@@ -12,6 +12,7 @@ const SOURCE_LABEL_KEYS = {
   kontur: 'exposureLayers.sourceLabel.kontur',
   hydrorivers: 'exposureLayers.sourceLabel.hydrorivers',
   hydrobasins: 'exposureLayers.sourceLabel.hydrobasins',
+  worldpop: 'exposureLayers.sourceLabel.worldpop',
 }
 
 const COUNTRY_LABEL_KEYS = {

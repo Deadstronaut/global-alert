@@ -582,7 +582,8 @@
       "osm": "道路网络",
       "kontur": "人口密度",
       "hydrorivers": "河流网络",
-      "hydrobasins": "流域边界"
+      "hydrobasins": "流域边界",
+      "worldpop": "人口（WorldPop）"
     },
     "countryLabel": {
       "tr": "土耳其",

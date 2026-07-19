@@ -582,7 +582,8 @@
       "osm": "Дорожная Сеть",
       "kontur": "Плотность Населения",
       "hydrorivers": "Речная Сеть",
-      "hydrobasins": "Границы Водосборов"
+      "hydrobasins": "Границы Водосборов",
+      "worldpop": "Население (WorldPop)"
     },
     "countryLabel": {
       "tr": "Турция",

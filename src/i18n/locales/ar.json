@@ -582,7 +582,8 @@
       "osm": "شبكة الطرق",
       "kontur": "الكثافة السكانية",
       "hydrorivers": "شبكة الأنهار",
-      "hydrobasins": "حدود الأحواض المائية"
+      "hydrobasins": "حدود الأحواض المائية",
+      "worldpop": "السكان (WorldPop)"
     },
     "countryLabel": {
       "tr": "تركيا",

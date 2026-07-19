@@ -40,6 +40,12 @@ enabled = true
 verify_jwt = true
 entrypoint = "./functions/import-hydrobasins/index.ts"
 
+# spec 043 — same explicit-verify_jwt convention as import-osm-roads above.
+[functions.import-worldpop]
+enabled = true
+verify_jwt = true
+entrypoint = "./functions/import-worldpop/index.ts"
+
 # spec 036 remaining item: live SSE notification stream. Uses the caller's own
 # JWT (not service-role) so existing community_reports RLS applies as-is.
 [functions.community-reports-stream]

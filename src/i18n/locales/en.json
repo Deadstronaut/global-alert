@@ -646,7 +646,8 @@
       "osm": "Road Network",
       "kontur": "Population Density",
       "hydrorivers": "River Network",
-      "hydrobasins": "Watershed Boundaries"
+      "hydrobasins": "Watershed Boundaries",
+      "worldpop": "Population (WorldPop)"
     },
     "countryLabel": {
       "tr": "Turkey",

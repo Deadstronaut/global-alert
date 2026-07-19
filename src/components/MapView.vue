@@ -27,7 +27,7 @@ import { useAuthStore } from '@/stores/auth.js'
 import { supabase } from '@/services/api/config.js'
 import { getShelterMarkerColor, getShelterMarkerIcon } from '@/services/shelterMarkerStyle.js'
 import { useExposureLayersStore } from '@/stores/exposureLayers.js'
-import { colorForDataset } from '@/utils/exposureLayerColor.js'
+import { colorForDataset, isPopulationSource, populationFillExpression } from '@/utils/exposureLayerColor.js'
 import { buildFeaturePopupHtml } from '@/utils/exposureFeaturePopup.js'
 import { friendlyDatasetLabel } from '@/utils/exposureLayerLabel.js'
 
@@ -154,7 +154,12 @@ async function addExposureLayer(dataset) {
 
   let geojson = exposureFeatureCache.get(dataset.id)
   if (!geojson) {
-    const { data, error } = await supabase.rpc('get_dataset_features_geojson', { dataset_id: dataset.id })
+    // ~55m tolerance at the equator — imprecise at country-scale zoom levels
+    // this panel renders at, but meaningfully shrinks the ST_AsGeoJSON
+    // payload/serialization cost for line-heavy datasets (live-verified:
+    // Turkey's 65,010-feature road network went from timing out
+    // server-side to completing in ~11s once this was passed).
+    const { data, error } = await supabase.rpc('get_dataset_features_geojson', { dataset_id: dataset.id, simplify_tolerance: 0.0005 })
     if (error || !data) return // silent render failure — matches addWfsLayer's existing convention
     geojson = {
       type: 'FeatureCollection',
@@ -170,11 +175,13 @@ async function addExposureLayer(dataset) {
   // Toggle may have been switched off again while the fetch was in flight.
   if (!map || !isLayerVisible(exposureLayerKey(dataset)) || map.getSource(sourceId)) return
 
-  const color = colorForDataset(dataset.id)
+  const color = colorForDataset(dataset)
   const opacity = getLayerOpacity(exposureLayerKey(dataset))
+  const isPopulation = isPopulationSource(dataset.source_name)
+  const fillColor = isPopulation ? populationFillExpression(geojson) : color
   map.addSource(sourceId, { type: 'geojson', data: geojson })
-  map.addLayer({ id: `${sourceId}-fill`, type: 'fill', source: sourceId, filter: ['==', ['geometry-type'], 'Polygon'], paint: { 'fill-color': color, 'fill-opacity': opacity * 0.4 } })
-  map.addLayer({ id: `${sourceId}-line`, type: 'line', source: sourceId, filter: ['in', ['geometry-type'], ['literal', ['LineString', 'Polygon']]], paint: { 'line-color': color, 'line-opacity': opacity, 'line-width': 2 } })
+  map.addLayer({ id: `${sourceId}-fill`, type: 'fill', source: sourceId, filter: ['==', ['geometry-type'], 'Polygon'], paint: { 'fill-color': fillColor, 'fill-opacity': opacity * (isPopulation ? 0.75 : 0.4) } })
+  map.addLayer({ id: `${sourceId}-line`, type: 'line', source: sourceId, filter: ['in', ['geometry-type'], ['literal', ['LineString', 'Polygon']]], paint: { 'line-color': isPopulation ? '#7f0000' : color, 'line-opacity': opacity * (isPopulation ? 0.3 : 1), 'line-width': isPopulation ? 0.5 : 2 } })
   map.addLayer({ id: `${sourceId}-point`, type: 'circle', source: sourceId, filter: ['==', ['geometry-type'], 'Point'], paint: { 'circle-color': color, 'circle-opacity': opacity, 'circle-radius': 5 } })
 
   for (const suffix of EXPOSURE_SUB_LAYER_SUFFIXES) {
@@ -245,7 +252,6 @@ function setExposureLayerOpacity(dataset, value) {
 // Impact Analysis (spec 008): selected event for the split-view side panel,
 // set from marker clicks below — independent of the existing popup behavior.
 const selectedImpactEvent = ref(null)
-const impactPanelCollapsed = ref(false)
 
 function onLocationSelected(location) {
   if (!map) return
@@ -356,6 +362,7 @@ let selectedFeatureId = null
 let hoveredFeatureSource = 'world-countries'
 let selectedFeatureSource = 'world-countries'
 const hoveredCountryName = ref(null)
+const hoveredCountryPoint = ref({ x: 0, y: 0 })
 const selectedCountryName = ref(null)
 // ISO2 code of the currently selected country (alpha-2, lowercase) — drives
 // exposure-layer panel filtering below so a user only ever sees the
@@ -1281,6 +1288,7 @@ function setupMapInteractions() {
     } else {
       hoveredCountryName.value = COUNTRY_NAMES[String(f.id).padStart(3, '0')] ?? null
     }
+    hoveredCountryPoint.value = { x: e.point.x, y: e.point.y }
     map.getCanvas().style.cursor = 'default'
   })
 
@@ -2080,7 +2088,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="map-view-wrapper" :class="{ 'impact-panel-collapsed': impactPanelCollapsed }">
+  <div class="map-view-wrapper" :class="{ 'impact-panel-collapsed': uiStore.impactPanelCollapsed }">
     <div ref="mapContainer" class="map-leaflet"></div>
     <div class="zoom-indicator">x {{ currentZoom }}</div>
 
@@ -2153,7 +2161,11 @@ onBeforeUnmount(() => {
 
     <!-- Country hover tooltip -->
     <Transition name="hover-label">
-      <div v-if="hoveredCountryName" class="country-hover-label">{{ hoveredCountryName }}</div>
+      <div
+        v-if="hoveredCountryName"
+        class="country-hover-label"
+        :style="{ left: (hoveredCountryPoint.x + 18) + 'px', top: hoveredCountryPoint.y + 'px' }"
+      >{{ hoveredCountryName }}</div>
     </Transition>
 
     <!-- Selected country badge -->
@@ -2166,18 +2178,18 @@ onBeforeUnmount(() => {
 
     <!-- Impact Analysis (spec 008): geocoding search + split-view side panel -->
     <GeocodingSearch @location-selected="onLocationSelected" />
-    <div class="impact-panel-dock" :class="{ collapsed: impactPanelCollapsed }">
+    <div class="impact-panel-dock" :class="{ collapsed: uiStore.impactPanelCollapsed }">
       <button
         class="impact-panel-toggle"
         type="button"
-        :title="impactPanelCollapsed ? t('impact.panel.expand') : t('impact.panel.collapse')"
-        :aria-label="impactPanelCollapsed ? t('impact.panel.expand') : t('impact.panel.collapse')"
-        :aria-expanded="!impactPanelCollapsed"
-        @click="impactPanelCollapsed = !impactPanelCollapsed"
+        :title="uiStore.impactPanelCollapsed ? t('impact.panel.expand') : t('impact.panel.collapse')"
+        :aria-label="uiStore.impactPanelCollapsed ? t('impact.panel.expand') : t('impact.panel.collapse')"
+        :aria-expanded="!uiStore.impactPanelCollapsed"
+        @click="uiStore.toggleImpactPanel()"
       >
-        {{ impactPanelCollapsed ? '‹' : '›' }}
+        {{ uiStore.impactPanelCollapsed ? '‹' : '›' }}
       </button>
-      <ImpactPanel v-show="!impactPanelCollapsed" :selected-event="selectedImpactEvent" />
+      <ImpactPanel v-show="!uiStore.impactPanelCollapsed" :selected-event="selectedImpactEvent" />
     </div>
 
     <!-- Layer panel stack: WMS/WFS (spec 012) + Exposure layers (spec 042) share one
@@ -2212,7 +2224,7 @@ onBeforeUnmount(() => {
         <div v-for="dataset in visibleExposureDatasets" :key="dataset.id" class="map-layer-row exposure-layer-row">
           <label class="map-layer-toggle">
             <input type="checkbox" :checked="isLayerVisible(`exposure-dataset-${dataset.id}`)" @change="toggleExposureLayer(dataset)" />
-            <span class="exposure-layer-swatch" :style="{ background: colorForDataset(dataset.id) }"></span>
+            <span class="exposure-layer-swatch" :style="{ background: colorForDataset(dataset) }"></span>
             <span class="exposure-layer-name">{{ friendlyDatasetLabel(t, dataset) }}</span>
             <span class="map-layer-type exposure-layer-count" v-if="dataset.feature_count">{{ t('exposureLayers.featureCount', { count: dataset.feature_count.toLocaleString() }) }}</span>
           </label>
@@ -2222,7 +2234,7 @@ onBeforeUnmount(() => {
             :value="getLayerOpacity(`exposure-dataset-${dataset.id}`)"
             @input="setExposureLayerOpacity(dataset, Number($event.target.value))"
             class="map-layer-opacity"
-            :style="{ accentColor: colorForDataset(dataset.id) }"
+            :style="{ accentColor: colorForDataset(dataset) }"
           />
         </div>
       </div>
@@ -2571,12 +2583,10 @@ onBeforeUnmount(() => {
   flex-shrink: 0;
 }
 
-/* ── Country hover label ── */
+/* ── Country hover label: follows the cursor, offset to its right ── */
 .country-hover-label {
   position: absolute;
-  bottom: 20px;
-  left: 50%;
-  transform: translateX(-50%);
+  transform: translateY(-50%);
   background: rgba(20, 24, 33, 0.88);
   color: #e8ecf0;
   font-size: 12px;
@@ -2599,14 +2609,15 @@ onBeforeUnmount(() => {
 .hover-label-enter-from,
 .hover-label-leave-to {
   opacity: 0;
-  transform: translateX(-50%) translateY(6px);
+  transform: translateY(-50%) translateX(4px);
 }
 
 /* ── Selected country badge ── */
 .country-badge {
   position: absolute;
-  top: 24px;
-  right: calc(var(--impact-panel-width) + 24px);
+  bottom: 28px;
+  left: 50%;
+  transform: translateX(-50%);
   background: var(--glass-bg);
   backdrop-filter: blur(24px) saturate(180%);
   -webkit-backdrop-filter: blur(24px) saturate(180%);
@@ -2629,11 +2640,11 @@ onBeforeUnmount(() => {
 @keyframes badgeIn {
   from {
     opacity: 0;
-    transform: translateY(-10px) scale(0.95);
+    transform: translateX(-50%) translateY(10px) scale(0.95);
   }
   to {
     opacity: 1;
-    transform: translateY(0) scale(1);
+    transform: translateX(-50%) translateY(0) scale(1);
   }
 }
 
@@ -2677,7 +2688,7 @@ onBeforeUnmount(() => {
 .country-badge-enter-from,
 .country-badge-leave-to {
   opacity: 0;
-  transform: translateY(-8px);
+  transform: translateX(-50%) translateY(8px);
 }
 
 /* Impact Analysis (spec 008): split-view side panel dock */
@@ -2784,9 +2795,12 @@ onBeforeUnmount(() => {
     bottom: calc(var(--impact-panel-mobile-height) + 164px);
   }
 
-  .layer-panel-stack,
-  .country-badge {
+  .layer-panel-stack {
     right: 12px;
+  }
+
+  .country-badge {
+    bottom: calc(var(--impact-panel-mobile-height, 0px) + 16px);
   }
 }
 </style>

@@ -15,7 +15,22 @@ import { getServedCountryCodes } from '../shared/servedCountries.ts'
 import { fetchKonturPopulation } from '../shared/konturFetch.ts'
 import { partitionPopulationRecords } from '../shared/populationImportPartition.ts'
 import { writePopulationDataset } from '../shared/supersedeExposureDataset.ts'
+import { aggregatePopulationRecordsToHexagons } from '../shared/populationCellAggregation.ts'
+import { WORLDPOP_SOURCE_CONFIG } from '../shared/rasterSourceConfig.ts'
 import type { PopulationRecord } from '../shared/populationRecord.ts'
+
+// Kontur ships population pre-aggregated at its own native H3 resolution
+// (~458K rows for Turkey) — far too many features for
+// get_dataset_features_geojson to serialize within the DB statement
+// timeout (live-verified during triage: >2 minutes, always fails).
+// Aggregating to WorldPop's own resolution (7) was tried first but still
+// produced 118,718 cells for Turkey (vs. WorldPop's 32K) and still timed
+// out (live-verified: 22.7s, canceled by statement_timeout) — Kontur's
+// native grid has near-complete land coverage, unlike WorldPop's raster
+// which only yields a cell where at least one pixel has population, so the
+// two sources need different target resolutions to land in the same
+// query-time budget. One level coarser (6) is used instead.
+const KONTUR_TARGET_RESOLUTION = WORLDPOP_SOURCE_CONFIG.h3Resolution - 1
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
@@ -31,7 +46,19 @@ Deno.serve(async (req) => {
     return json({ meta: { status: 'skipped', reason: 'source inactive' } })
   }
 
-  const servedCountryCodes = await getServedCountryCodes()
+  let servedCountryCodes = await getServedCountryCodes()
+
+  // Optional per-country scoping (mirrors import-worldpop/index.ts) — each
+  // country's ~90MB GeoPackage download + sql.js parse is memory-heavy
+  // enough that processing all served countries in one invocation hits the
+  // Edge Function's WORKER_RESOURCE_LIMIT (live-verified during triage,
+  // 2026-07-19); invoking once per country keeps each run's footprint to a
+  // single country's data.
+  const body = await req.json().catch(() => ({}))
+  const requestedCountryCode = typeof body?.countryCode === 'string' ? body.countryCode : undefined
+  if (requestedCountryCode) {
+    servedCountryCodes = servedCountryCodes.filter((c) => c === requestedCountryCode)
+  }
 
   let countryRecords: Map<string, PopulationRecord[]>
   try {
@@ -68,7 +95,8 @@ Deno.serve(async (req) => {
       continue
     }
 
-    const { featureCount } = await writePopulationDataset('kontur', countryCode, validRecords)
+    const aggregated = aggregatePopulationRecordsToHexagons(validRecords, KONTUR_TARGET_RESOLUTION)
+    const { featureCount } = await writePopulationDataset('kontur', countryCode, aggregated)
     countriesProcessed += 1
     featuresImported += featureCount
   }

@@ -281,6 +281,18 @@ watch([rangeStartDate, rangeEndDate], ([start, end]) => {
       'sidebar-collapsed': uiStore.sidebarCollapsed,
     }"
   >
+    <!-- Positioned against .sidebar itself (not the scroll wrapper) so it can
+         float half-outside the right edge, matching .impact-panel-toggle —
+         same chevron characters too ('‹'/'›', not a straight arrow). -->
+    <button
+      class="sidebar-toggle"
+      @click="uiStore.toggleSidebar()"
+      :title="isCollapsed ? 'Expand' : 'Collapse'"
+    >
+      {{ isCollapsed ? '›' : '‹' }}
+    </button>
+
+    <div class="sidebar-scroll">
     <!-- Header -->
     <div class="sidebar-header">
       <div class="sidebar-brand">
@@ -290,13 +302,6 @@ watch([rangeStartDate, rangeEndDate], ([start, end]) => {
           <p class="brand-subtitle">{{ t('app.subtitle') }}</p>
         </div>
       </div>
-      <button
-        class="btn-icon btn-ghost sidebar-toggle"
-        @click="uiStore.toggleSidebar()"
-        :title="isCollapsed ? 'Expand' : 'Collapse'"
-      >
-        {{ isCollapsed ? '→' : '←' }}
-      </button>
     </div>
 
     <!-- Country Context Banner -->
@@ -855,6 +860,7 @@ watch([rangeStartDate, rangeEndDate], ([start, end]) => {
       <span>⎋</span>
       <span v-if="!isCollapsed">{{ t('settings.logout') }}</span>
     </button>
+    </div>
   </aside>
 </template>
 
@@ -866,15 +872,10 @@ watch([rangeStartDate, rangeEndDate], ([start, end]) => {
   width: var(--sidebar-width);
   height: 100vh;
   z-index: var(--z-sidebar);
-  display: flex;
-  flex-direction: column;
-  padding: var(--space-md);
-  gap: var(--space-md);
   border-radius: 0;
   border-left: none;
   border-top: none;
   border-bottom: none;
-  overflow-y: auto;
   transition:
     width 0.35s ease,
     transform 0.35s ease,
@@ -882,8 +883,28 @@ watch([rangeStartDate, rangeEndDate], ([start, end]) => {
     box-shadow 0.35s ease;
 }
 
+/* Kept overflow off .sidebar itself (no clipping box) so .sidebar-toggle can
+   float half-outside the right edge; the scrollable content lives in here
+   instead — same padding/gap .sidebar used to carry directly. */
+.sidebar-scroll {
+  height: 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  padding: var(--space-md);
+  gap: var(--space-md);
+  overflow-y: auto;
+  /* .sidebar no longer clips (the toggle needs to float past its edge), so
+     this has to clip itself to match — matters on the mobile bottom sheet
+     where .sidebar gets rounded top corners. */
+  border-radius: inherit;
+}
+
 .sidebar-collapsed {
   width: var(--sidebar-collapsed);
+}
+
+.sidebar-collapsed .sidebar-scroll {
   padding: var(--space-sm);
 }
 
@@ -977,21 +998,39 @@ watch([rangeStartDate, rangeEndDate], ([start, end]) => {
   white-space: nowrap;
 }
 
+/* Matches .impact-panel-toggle (MapView.vue) — same round pill, size,
+   colors, hover accent and "floats half-outside the panel edge" placement,
+   so the two collapse/expand controls read as one consistent control type
+   instead of two different button styles in two different spots. */
 .sidebar-toggle {
-  flex-shrink: 0;
-  width: 30px;
-  height: 30px;
-  min-width: 30px;
+  position: absolute;
+  top: 14px;
+  right: -18px;
+  z-index: 2;
+  width: 36px;
+  height: 36px;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 0.95rem;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: rgba(20, 24, 33, 0.92);
+  color: #e2e8f0;
+  font-size: 1.35rem;
   font-weight: 700;
-  opacity: 0.85;
+  line-height: 1;
+  cursor: pointer;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.28);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease;
 }
 
 .sidebar-toggle:hover {
-  opacity: 1;
+  background: rgba(77, 163, 255, 0.28);
+  border-color: rgba(77, 163, 255, 0.42);
 }
 
 .sidebar-collapsed .sidebar-header {
@@ -1006,12 +1045,10 @@ watch([rangeStartDate, rangeEndDate], ([start, end]) => {
 }
 
 .sidebar-collapsed .sidebar-toggle {
-  align-self: center;
   border-color: var(--color-accent, #4aa3ff);
   color: var(--color-accent, #4aa3ff);
   background: rgba(77, 163, 255, 0.12);
   box-shadow: 0 0 10px rgba(77, 163, 255, 0.25);
-  opacity: 1;
 }
 
 .sidebar-section,
@@ -1829,6 +1866,9 @@ html[data-theme='light'] .footer-sources {
 
   .sidebar-collapsed {
     width: 100%;
+  }
+
+  .sidebar-collapsed .sidebar-scroll {
     padding: var(--space-md);
   }
 
@@ -1836,6 +1876,13 @@ html[data-theme='light'] .footer-sources {
     padding-bottom: var(--space-sm);
     margin-bottom: var(--space-xs);
     border-bottom: 2px solid rgba(255, 255, 255, 0.05);
+  }
+
+  /* The sheet spans the full viewport width here, so there's no right edge
+     to float past — sit fully inside instead of hanging off-screen. */
+  .sidebar-toggle {
+    top: 20px;
+    right: 14px;
   }
 
   /* Handle for the bottom sheet */

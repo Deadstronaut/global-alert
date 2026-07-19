@@ -5,7 +5,6 @@ const GlobeView = defineAsyncComponent(() => import('@/components/GlobeView.vue'
 const MapView = defineAsyncComponent(() => import('@/components/MapView.vue'))
 import SidebarPanel from '@/components/SidebarPanel.vue'
 import AlertPanel from '@/components/AlertPanel.vue'
-import StatsOverlay from '@/components/StatsOverlay.vue'
 import SettingsPanel from '@/components/SettingsPanel.vue'
 import { useDisasterStore } from '@/stores/disaster.js'
 import { useUIStore } from '@/stores/ui.js'
@@ -94,7 +93,6 @@ watch(
 
     <!-- UI Overlays -->
     <SidebarPanel />
-    <StatsOverlay />
     <AlertPanel />
     <SettingsPanel />
     <EmergencyPopup />

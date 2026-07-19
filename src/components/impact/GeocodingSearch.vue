@@ -376,20 +376,17 @@ function clearQuery() {
 
 <style scoped>
 .geocoding-search {
-  /* Sits a fixed gap below StatsOverlay's chip row, whose height varies as
-     it wraps — --stats-bar-height is published by that component so the
-     two never overlap regardless of row count. */
-  position: absolute; top: calc(var(--stats-bar-height, 64px) + var(--space-md) + 20px);
+  position: absolute; top: var(--space-md);
   left: 50%; transform: translateX(-50%);
   z-index: 20; display: flex; flex-direction: column; align-items: center; gap: 4px;
   transition: top 0.2s ease;
 }
 .geocoding-row { display: flex; }
-.geocoding-input-wrap { position: relative; width: 280px; }
+.geocoding-input-wrap { position: relative; width: 360px; }
 .geocoding-input {
-  width: 100%; padding: 8px 30px 8px 14px; border-radius: 20px 0 0 20px;
+  width: 100%; padding: 11px 34px 11px 16px; border-radius: 22px 0 0 22px;
   border: 1px solid rgba(255,255,255,.2); background: rgba(15,17,23,.85);
-  color: #e2e8f0; font-size: .85rem; box-sizing: border-box;
+  color: #e2e8f0; font-size: .92rem; box-sizing: border-box;
 }
 .geocoding-clear {
   position: absolute; right: 8px; top: 50%; transform: translateY(-50%);
@@ -410,8 +407,8 @@ function clearQuery() {
 .geocoding-suggestion--active,
 .geocoding-suggestion:hover { background: rgba(77,163,255,.2); }
 .geocoding-btn {
-  padding: 8px 16px; border-radius: 0 20px 20px 0; border: 1px solid rgba(255,255,255,.2);
-  border-left: none; background: rgba(77,163,255,.25); color: #4da3ff; font-size: .8rem;
+  padding: 11px 20px; border-radius: 0 22px 22px 0; border: 1px solid rgba(255,255,255,.2);
+  border-left: none; background: rgba(77,163,255,.25); color: #4da3ff; font-size: .88rem;
   font-weight: 600; cursor: pointer;
 }
 .geocoding-btn:disabled { opacity: .5; cursor: not-allowed; }
@@ -427,7 +424,7 @@ function clearQuery() {
 
 @media (max-width: 768px) {
   .geocoding-search {
-    top: calc(var(--stats-bar-height, 90px) + var(--space-sm) + 20px);
+    top: var(--space-sm);
     left: var(--space-sm);
     right: var(--space-sm);
     transform: none;

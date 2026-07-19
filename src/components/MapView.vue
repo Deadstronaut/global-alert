@@ -2106,12 +2106,10 @@ onBeforeUnmount(() => {
       </div>
     </div>
 
-    <!-- Hexbin / marker severity legend — only shown when sidebar legend is hidden -->
+    <!-- Hexbin / marker severity legend — slides clear of the sidebar (like
+         the heatmap legend above) instead of disappearing while it's open. -->
     <div
-      v-else-if="
-        (uiStore.showHexbins || (!uiStore.showHeatmap && !uiStore.showHexbins)) &&
-        (uiStore.sidebarCollapsed || !uiStore.sidebarOpen)
-      "
+      v-else-if="uiStore.showHexbins || (!uiStore.showHeatmap && !uiStore.showHexbins)"
       class="map-legend"
       :class="{ 'legend-sidebar-collapsed': uiStore.sidebarCollapsed }"
     >
@@ -2240,8 +2238,11 @@ onBeforeUnmount(() => {
       </div>
     </div>
 
-    <!-- Shelter map layer toggle (spec 027) — always visible, independent of WMS/WFS layers -->
-    <div class="shelters-layer-panel">
+    <!-- Shelter map layer toggle (spec 027) — always visible, independent of WMS/WFS layers.
+         Slides clear of the sidebar the same way .map-legend does instead of
+         sitting underneath it (it used to be pinned at left:16px, directly
+         behind the sidebar whenever it was open). -->
+    <div class="shelters-layer-panel" :class="{ 'legend-sidebar-collapsed': uiStore.sidebarCollapsed }">
       <label class="map-layer-toggle">
         <input type="checkbox" :checked="uiStore.showShelters" @change="uiStore.toggleShelters()" />
         <span>{{ t('shelters.map.toggleLabel') }}</span>
@@ -2333,7 +2334,8 @@ onBeforeUnmount(() => {
 .shelters-layer-panel {
   position: absolute;
   top: 16px;
-  left: 16px;
+  left: calc(var(--sidebar-width, 280px) + 12px);
+  transition: left 0.35s ease;
   z-index: 5;
   background: rgba(15,17,23,.9);
   border: 1px solid rgba(255,255,255,.12);
@@ -2341,6 +2343,10 @@ onBeforeUnmount(() => {
   padding: 10px 12px;
   color: #e2e8f0;
   font-size: .8rem;
+}
+
+.shelters-layer-panel.legend-sidebar-collapsed {
+  left: calc(var(--sidebar-collapsed, 56px) + 12px);
 }
 
 .shelter-marker-dot {
@@ -2811,6 +2817,17 @@ onBeforeUnmount(() => {
 
   .country-badge {
     bottom: calc(var(--impact-panel-mobile-height, 0px) + 16px);
+  }
+
+  /* The sidebar is a bottom sheet here, not a left rail — --sidebar-width
+     doesn't apply, so the calc()-based offset would push these toward the
+     right edge (or off narrow screens) for no reason. Pin near the left
+     edge regardless of the (desktop-only) collapsed state. */
+  .map-legend,
+  .map-legend.legend-sidebar-collapsed,
+  .shelters-layer-panel,
+  .shelters-layer-panel.legend-sidebar-collapsed {
+    left: 12px;
   }
 }
 </style>

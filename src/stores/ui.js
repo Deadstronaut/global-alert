@@ -29,9 +29,8 @@ export const useUIStore = defineStore('ui', () => {
     const sidebarCollapsed = ref(false);
 
     // Impact-analysis dock on the map (spec 008) — collapsed state lifted
-    // here (rather than kept local to MapView.vue) so StatsOverlay.vue can
-    // keep the top stat strip clear of the dock's right-hand column without
-    // the two components needing a direct reference to each other.
+    // here so sibling map overlays can react to the dock's width without a
+    // direct reference to MapView.vue.
     const impactPanelCollapsed = ref(false);
     function toggleImpactPanel() {
         impactPanelCollapsed.value = !impactPanelCollapsed.value;

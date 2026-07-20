@@ -73,20 +73,13 @@ defineEmits(['click'])
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.28);
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
-  transition: box-shadow 0.4s ease, padding 0.35s ease;
+  transition: box-shadow 0.4s ease;
 }
 
 .panel-collapse-toggle-btn:hover,
 .panel-collapse-toggle-btn:focus-visible {
   box-shadow: 0 0 0 3px rgba(77, 163, 255, 0.18), 0 8px 24px rgba(0, 0, 0, 0.28);
   outline: none;
-}
-
-/* Rotating the icon 180° flips which side the compressed chevron mass sits
-   on, so the button's own left/right padding has to flip with it — otherwise
-   the glyph reads as off-center once collapsed. */
-.panel-collapse-toggle--collapsed .panel-collapse-toggle-btn {
-  padding: 6px 12px 6px 0px;
 }
 
 .panel-collapse-toggle-icon {
@@ -96,8 +89,23 @@ defineEmits(['click'])
     transform 0.35s ease;
 }
 
+/* The resting (uncollapsed) glyph reads as centered only because the
+   button's own padding (12px left, 0px right, above) compensates for the
+   triple-chevron cluster's compressed mass sitting flush against the
+   icon's own left edge. Rotating 180° flips which edge that mass sits
+   against, so a plain rotate() re-introduces the same imbalance the
+   padding was compensating for — a second, independent transition on the
+   button's padding used to "fix" this, but animating rotation (transform,
+   on the icon) and the compensating shift (padding, on the parent button)
+   as two separate transitions made the icon swing outward before the
+   overflow:hidden clip snapped it back, reading as unstable/overflowing
+   mid-animation. Folding the compensation into the SAME transform as the
+   rotation keeps the icon glyph landing on the exact same screen pixels
+   in both states — it flips in place instead of sliding — and both
+   animate as one coordinated motion instead of two independent ones.
+*/
 .panel-collapse-toggle--collapsed .panel-collapse-toggle-icon {
-  transform: rotate(180deg);
+  transform: rotate(180deg) translateX(12px);
 }
 
 .panel-collapse-toggle-btn:hover .panel-collapse-toggle-icon {

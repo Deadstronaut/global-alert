@@ -2,8 +2,16 @@
 import { ref, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { supabase } from '@/services/api/config.js'
+import { useHazardTypesStore } from '@/stores/hazardTypes.js'
 
 const { t } = useI18n()
+const hazardTypesStore = useHazardTypesStore()
+
+// Mirrors supabase/functions/shared/hazardFootprint.ts's FOOTPRINT_STRATEGIES keys —
+// the only hazard types the simulate-hazard-scenario function can actually compute.
+// Kept in sync manually since the edge function has no client-callable "list supported
+// types" endpoint; update both places together when a new formula is added.
+const SIMULATABLE_HAZARD_TYPES = ['earthquake']
 
 const datasets = ref([])
 const scenarios = ref([])
@@ -23,6 +31,7 @@ const form = ref({
 
 async function loadData() {
   loading.value = true
+  if (!hazardTypesStore.loaded) hazardTypesStore.fetchHazardTypes()
   const [datasetsRes, scenariosRes] = await Promise.all([
     supabase.from('exposure_datasets').select('id, name').order('created_at', { ascending: false }),
     supabase.from('hazard_scenarios').select('*').order('created_at', { ascending: false }),
@@ -115,28 +124,37 @@ onMounted(loadData)
   <div class="scenario-builder">
     <div class="scenario-form">
       <h4>{{ t('risk.scenario.formTitle') }}</h4>
+      <p class="risk-intro">{{ t('risk.scenario.intro') }}</p>
       <label class="risk-field">
         <span>{{ t('risk.scenario.name') }}</span>
-        <input v-model="form.name" />
+        <input v-model="form.name" :placeholder="t('risk.scenario.namePlaceholder')" />
       </label>
       <label class="risk-field">
         <span>{{ t('risk.scenario.hazardType') }}</span>
-        <input v-model="form.hazardType" />
+        <select v-model="form.hazardType">
+          <option v-for="h in hazardTypesStore.alertableHazardTypes" :key="h.code" :value="h.code">
+            {{ h.display_name }}{{ SIMULATABLE_HAZARD_TYPES.includes(h.code) ? '' : ' ' + t('risk.scenario.notSimulatedYet') }}
+          </option>
+        </select>
+        <span class="risk-hint">{{ t('risk.scenario.hazardTypeHint') }}</span>
       </label>
       <label class="risk-field">
         <span>{{ t('risk.scenario.magnitude') }}</span>
-        <input v-model="form.magnitude" type="number" step="0.1" />
+        <input v-model="form.magnitude" type="number" step="0.1" :placeholder="t('risk.scenario.magnitudePlaceholder')" />
+        <span class="risk-hint">{{ t('risk.scenario.magnitudeHint') }}</span>
       </label>
       <label class="risk-field">
         <span>{{ t('risk.scenario.epicenterLat') }}</span>
-        <input v-model="form.epicenterLat" type="number" step="any" />
+        <input v-model="form.epicenterLat" type="number" step="any" placeholder="41.0082" />
       </label>
       <label class="risk-field">
         <span>{{ t('risk.scenario.epicenterLng') }}</span>
-        <input v-model="form.epicenterLng" type="number" step="any" />
+        <input v-model="form.epicenterLng" type="number" step="any" placeholder="28.9784" />
+        <span class="risk-hint">{{ t('risk.scenario.epicenterHint') }}</span>
       </label>
       <div class="risk-field">
         <span>{{ t('risk.scenario.datasets') }}</span>
+        <span class="risk-hint">{{ t('risk.scenario.datasetsHint') }}</span>
         <div v-if="datasets.length === 0" class="tab-empty">{{ t('risk.scenario.noDatasets') }}</div>
         <label v-for="d in datasets" :key="d.id" class="risk-checkbox-row">
           <input type="checkbox" :value="d.id" v-model="form.exposureDatasetIds" />
@@ -151,6 +169,7 @@ onMounted(loadData)
 
     <div v-if="result" class="scenario-result">
       <h4>{{ t('risk.scenario.resultTitle') }}</h4>
+      <p class="risk-hint">{{ t('risk.scenario.resultHint') }}</p>
       <p v-if="result.formula_range_warning" class="risk-warning">{{ t('risk.scenario.rangeWarning') }}</p>
       <div v-for="impact in result.estimated_impact" :key="impact.exposure_dataset_id" class="risk-row">
         <span>{{ t('risk.scenario.totalValue') }}: {{ impact.total_value }}</span>
@@ -177,11 +196,13 @@ onMounted(loadData)
   background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.1);
   border-radius: 12px; padding: 16px;
 }
+.risk-intro { font-size: .8rem; color: var(--color-text-muted, #94a3b8); margin: 0 0 14px; line-height: 1.4; }
 .risk-field { display: flex; flex-direction: column; gap: 4px; font-size: .78rem; color: var(--color-text-muted, #94a3b8); margin-bottom: 10px; }
 .risk-field input, .risk-field select {
   background: #1e2330; border: 1px solid rgba(255,255,255,.15); border-radius: 8px;
   padding: 6px 10px; color: #e2e8f0; font-size: .82rem;
 }
+.risk-hint { font-size: .72rem; color: var(--color-text-muted, #94a3b8); opacity: .8; line-height: 1.35; }
 .risk-error { color: #ef4444; font-size: .8rem; }
 .risk-warning { color: #f59e0b; font-size: .8rem; }
 .risk-checkbox-row { display: flex; align-items: center; gap: 8px; padding: 4px 0; font-size: .82rem; color: #e2e8f0; }

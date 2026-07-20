@@ -97,6 +97,7 @@ onMounted(loadDatasets)
   <div class="exposure-manager">
     <div class="exposure-form">
       <h4>{{ t('impact.exposure.uploadTitle') }}</h4>
+      <p class="exposure-intro">{{ t('impact.exposure.uploadIntro') }}</p>
       <label class="exposure-field">
         <span>{{ t('impact.exposure.name') }}</span>
         <input v-model="form.name" />
@@ -108,6 +109,7 @@ onMounted(loadDatasets)
       <label class="exposure-field">
         <span>{{ t('impact.exposure.metricProperty') }}</span>
         <input v-model="form.metricPropertyName" :placeholder="t('impact.exposure.metricPropertyPlaceholder')" />
+        <span class="exposure-hint">{{ t('impact.exposure.metricPropertyHint') }}</span>
       </label>
       <label class="exposure-field">
         <span>{{ t('impact.exposure.file') }}</span>
@@ -148,6 +150,8 @@ onMounted(loadDatasets)
   border-radius: 12px; padding: 16px;
 }
 .exposure-form h4, .exposure-list h4 { margin: 0 0 12px; font-size: .95rem; }
+.exposure-intro { font-size: .8rem; color: var(--color-text-muted, #94a3b8); margin: 0 0 14px; line-height: 1.4; }
+.exposure-hint { font-size: .72rem; color: var(--color-text-muted, #94a3b8); opacity: .8; line-height: 1.35; }
 .exposure-field { display: flex; flex-direction: column; gap: 4px; font-size: .78rem; color: var(--color-text-muted, #94a3b8); margin-bottom: 10px; }
 .exposure-field input {
   background: #1e2330; border: 1px solid rgba(255,255,255,.15); border-radius: 8px;

@@ -81,6 +81,13 @@ defineEmits(['click'])
   outline: none;
 }
 
+/* Rotating the icon 180° flips which side the compressed chevron mass sits
+   on, so the button's own left/right padding has to flip with it — otherwise
+   the glyph reads as off-center once collapsed. */
+.panel-collapse-toggle--collapsed .panel-collapse-toggle-btn {
+  padding: 6px 12px 6px 0px;
+}
+
 .panel-collapse-toggle-icon {
   display: flex;
   transition:

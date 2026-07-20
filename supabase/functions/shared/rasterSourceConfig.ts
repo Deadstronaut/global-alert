@@ -24,3 +24,17 @@ export const WORLDPOP_SOURCE_CONFIG: RasterSourceConfig = {
   h3Resolution: 7,
   pixelValueMeaning: 'count',
 }
+
+// Meta/HDX Population — NOT currently used by any fetch module (spec 044
+// attempt abandoned: Meta's per-country GeoTIFFs are ~10-11GB uncompressed,
+// too large for this pipeline's Edge Function-based download step — see
+// 20260720160000_meta_hdx_population_exposure_source.sql for the full
+// finding). Left here, resolution matching WorldPop's, for whoever
+// eventually builds a working import path (likely needs disk-streaming or
+// server-side processing this repo doesn't have yet, not just a fetch
+// module).
+export const META_SOURCE_CONFIG: RasterSourceConfig = {
+  sourceName: 'meta_hdx',
+  h3Resolution: 7,
+  pixelValueMeaning: 'count',
+}

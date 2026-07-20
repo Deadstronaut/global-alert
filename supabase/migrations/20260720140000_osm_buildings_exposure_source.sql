@@ -17,7 +17,7 @@ ALTER TABLE data_sources ADD CONSTRAINT data_sources_hazard_type_check
   CHECK (hazard_type IN (
     'earthquake', 'wildfire', 'flood', 'drought', 'food_security',
     'tsunami', 'epidemic', 'multi_hazard',
-    'population', 'roads', 'rivers', 'basins', 'buildings'
+    'population', 'roads', 'rivers', 'basins', 'population_raster', 'buildings'
   ));
 
 ALTER TABLE rejected_payloads DROP CONSTRAINT IF EXISTS rejected_payloads_hazard_type_check;
@@ -25,7 +25,7 @@ ALTER TABLE rejected_payloads ADD CONSTRAINT rejected_payloads_hazard_type_check
   CHECK (hazard_type IN (
     'earthquake', 'wildfire', 'flood', 'drought', 'food_security',
     'tsunami', 'epidemic', 'multi_hazard',
-    'population', 'roads', 'rivers', 'basins', 'buildings'
+    'population', 'roads', 'rivers', 'basins', 'population_raster', 'buildings'
   ));
 
 -- ── 2. hazard_types row ───────────────────────────────────────────────────────

@@ -329,7 +329,8 @@
       "deleteWarningTitle": "Cette action est irréversible",
       "deleteWarningBody": "\"Supprimer\" a été sélectionné — les enregistrements expirés seront définitivement supprimés, non archivés. Continuer ?",
       "cancel": "Annuler",
-      "confirmDelete": "Je confirme, supprimer"
+      "confirmDelete": "Je confirme, supprimer",
+      "daysPlaceholder": "ex. 90"
     },
     "deletion": {
       "title": "Justification Requise",
@@ -444,7 +445,10 @@
       "save": "Enregistrer l'Indicateur",
       "saving": "Enregistrement...",
       "listTitle": "Indicateurs Configurés",
-      "empty": "Aucun indicateur de risque configuré pour l'instant."
+      "empty": "Aucun indicateur de risque configuré pour l'instant.",
+      "weightPlaceholder": "ex. 0.30",
+      "normalizeMinPlaceholder": "ex. 0",
+      "normalizeMaxPlaceholder": "ex. 100"
     },
     "dashboard": {
       "countryCode": "Pays",
@@ -464,7 +468,8 @@
       "loadCurve": "Charger la Courbe",
       "impactLevel": "Niveau d'impact",
       "recordCount": "Basé sur {count} événements historiques",
-      "insufficientData": "Données historiques insuffisantes ({count} sur {minimum} enregistrements minimum) pour générer une courbe fiable."
+      "insufficientData": "Données historiques insuffisantes ({count} sur {minimum} enregistrements minimum) pour générer une courbe fiable.",
+      "hazardTypePlaceholder": "ex. earthquake"
     },
     "scenario": {
       "formTitle": "Simuler un Scénario Hypothétique",
@@ -539,7 +544,9 @@
     "channels": "Canaux",
     "status": "Statut",
     "anonymize": "anonymiser",
-    "anonymizeConfirm": "Êtes-vous sûr de vouloir supprimer définitivement et irréversiblement les données personnelles (e-mail, numéro WhatsApp) de {name} ?"
+    "anonymizeConfirm": "Êtes-vous sûr de vouloir supprimer définitivement et irréversiblement les données personnelles (e-mail, numéro WhatsApp) de {name} ?",
+    "fullNamePlaceholder": "ex. Ahmet Yılmaz",
+    "emailPlaceholder": "ex. ahmet@example.com"
   },
   "dispatch": {
     "panelTitle": "Suivi des Envois",
@@ -617,7 +624,10 @@
       "partOf": "Fait partie de : {name}",
       "includes": "Comprend : {names}",
       "thresholdsTitle": "Seuils de gravité"
-    }
+    },
+    "displayNamePlaceholder": "ex. Glissement de terrain",
+    "descriptionPlaceholder": "Brève description de ce type de danger",
+    "minValuePlaceholder": "ex. 6.0"
   },
   "incidentTracking": {
     "aarLabel": "Notes post-action",
@@ -661,7 +671,10 @@
     "sopAllCategories": "— toutes les catégories —",
     "sopVersionHistory": "historique des versions",
     "sopVersionHistoryTitle": "\"{title}\" — Historique des Versions",
-    "sopNoVersionHistory": "Aucune version précédente pour l'instant."
+    "sopNoVersionHistory": "Aucune version précédente pour l'instant.",
+    "sopTitlePlaceholder": "ex. Procédure d'Intervention en cas de Séisme",
+    "sopBodyContentPlaceholder": "Texte de la procédure étape par étape...",
+    "sopCategoryPlaceholder": "ex. Intervention, Évacuation"
   },
   "mapLayers": {
     "tabLabel": "Couches de Carte",
@@ -685,7 +698,8 @@
     "unsafeUrl": "Cette URL de point d'accès n'est pas autorisée (doit être HTTPS et une adresse publique).",
     "save": "Enregistrer",
     "cancel": "Annuler",
-    "panelTitle": "Couches de Carte"
+    "panelTitle": "Couches de Carte",
+    "displayNamePlaceholder": "ex. Étendue de l'Inondation (En Direct)"
   },
   "exposureLayers": {
     "panelTitle": "Couches d'Exposition",
@@ -853,7 +867,8 @@
       "assignOrgNone": "— aucune assignation —",
       "submittedAt": "Envoyé le",
       "viewPhoto": "Voir la photo",
-      "playAudio": "Écouter la note vocale"
+      "playAudio": "Écouter la note vocale",
+      "rejectReasonPlaceholder": "Expliquez brièvement pourquoi ce signalement est rejeté..."
     },
     "map": {
       "toggleLabel": "Afficher/Masquer les Signalements Communautaires",
@@ -931,7 +946,8 @@
     "noCountry": "Le pays est requis.",
     "noType": "Le type d'intégration est requis.",
     "allFieldsRequired": "Tous les champs sont obligatoires.",
-    "customFieldIncomplete": "Un champ personnalisé doit avoir un nom et une valeur."
+    "customFieldIncomplete": "Un champ personnalisé doit avoir un nom et une valeur.",
+    "credentialValuePlaceholder": "Collez ou saisissez la valeur de l'identifiant"
   },
   "login": {
     "accountLocked": "Votre compte a été temporairement verrouillé en raison de trop nombreuses tentatives de connexion échouées. Réessayez après {until}, ou demandez à un administrateur de le déverrouiller."

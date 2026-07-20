@@ -189,7 +189,7 @@ async function confirmReject(id) {
         <div v-if="rejectingId === report.id" class="reject-form">
           <label class="form-field">
             <span>{{ t('communityReport.moderation.rejectReasonLabel') }}</span>
-            <textarea v-model="rejectReason" rows="2" />
+            <textarea v-model="rejectReason" rows="2" :placeholder="t('communityReport.moderation.rejectReasonPlaceholder')" />
           </label>
           <p v-if="rejectError" class="error-message">{{ rejectError }}</p>
           <button @click="confirmReject(report.id)">{{ t('communityReport.moderation.reject') }}</button>

@@ -329,7 +329,8 @@
       "deleteWarningTitle": "هذا الإجراء لا يمكن التراجع عنه",
       "deleteWarningBody": "تم اختيار \"حذف\" — سيتم حذف السجلات المنتهية نهائيًا، دون أرشفة. هل تريد المتابعة؟",
       "cancel": "إلغاء",
-      "confirmDelete": "أؤكد، احذف"
+      "confirmDelete": "أؤكد، احذف",
+      "daysPlaceholder": "مثال: 90"
     },
     "deletion": {
       "title": "التبرير مطلوب",
@@ -444,7 +445,10 @@
       "save": "حفظ المؤشر",
       "saving": "جارٍ الحفظ...",
       "listTitle": "المؤشرات المكوَّنة",
-      "empty": "لم يتم تكوين أي مؤشرات مخاطر بعد."
+      "empty": "لم يتم تكوين أي مؤشرات مخاطر بعد.",
+      "weightPlaceholder": "مثال: 0.30",
+      "normalizeMinPlaceholder": "مثال: 0",
+      "normalizeMaxPlaceholder": "مثال: 100"
     },
     "dashboard": {
       "countryCode": "الدولة",
@@ -464,7 +468,8 @@
       "loadCurve": "تحميل المنحنى",
       "impactLevel": "مستوى التأثير",
       "recordCount": "استنادًا إلى {count} حدثًا تاريخيًا",
-      "insufficientData": "بيانات تاريخية غير كافية ({count} من أصل {minimum} سجل كحد أدنى) لإنشاء منحنى موثوق."
+      "insufficientData": "بيانات تاريخية غير كافية ({count} من أصل {minimum} سجل كحد أدنى) لإنشاء منحنى موثوق.",
+      "hazardTypePlaceholder": "مثال: earthquake"
     },
     "scenario": {
       "formTitle": "محاكاة سيناريو افتراضي",
@@ -539,7 +544,9 @@
     "channels": "القنوات",
     "status": "الحالة",
     "anonymize": "إخفاء الهوية",
-    "anonymizeConfirm": "هل أنت متأكد من أنك تريد إزالة البيانات الشخصية (البريد الإلكتروني، رقم واتساب) الخاصة بـ {name} بشكل دائم ولا رجعة فيه؟"
+    "anonymizeConfirm": "هل أنت متأكد من أنك تريد إزالة البيانات الشخصية (البريد الإلكتروني، رقم واتساب) الخاصة بـ {name} بشكل دائم ولا رجعة فيه؟",
+    "fullNamePlaceholder": "مثال: أحمد يلماز",
+    "emailPlaceholder": "مثال: ahmed@example.com"
   },
   "dispatch": {
     "panelTitle": "مراقبة الإرسال",
@@ -617,7 +624,10 @@
       "partOf": "جزء من: {name}",
       "includes": "يشمل: {names}",
       "thresholdsTitle": "عتبات الشدة"
-    }
+    },
+    "displayNamePlaceholder": "مثال: انهيار أرضي",
+    "descriptionPlaceholder": "وصف موجز لنوع الخطر هذا",
+    "minValuePlaceholder": "مثال: 6.0"
   },
   "incidentTracking": {
     "aarLabel": "ملاحظات ما بعد الإجراء",
@@ -661,7 +671,10 @@
     "sopAllCategories": "— جميع الفئات —",
     "sopVersionHistory": "سجل الإصدارات",
     "sopVersionHistoryTitle": "\"{title}\" — سجل الإصدارات",
-    "sopNoVersionHistory": "لا توجد إصدارات سابقة بعد."
+    "sopNoVersionHistory": "لا توجد إصدارات سابقة بعد.",
+    "sopTitlePlaceholder": "مثال: إجراء الاستجابة للزلازل",
+    "sopBodyContentPlaceholder": "نص الإجراء خطوة بخطوة...",
+    "sopCategoryPlaceholder": "مثال: الاستجابة، الإخلاء"
   },
   "mapLayers": {
     "tabLabel": "طبقات الخريطة",
@@ -685,7 +698,8 @@
     "unsafeUrl": "رابط نقطة النهاية هذا غير مسموح به (يجب أن يكون HTTPS وعنوانًا عامًا).",
     "save": "حفظ",
     "cancel": "إلغاء",
-    "panelTitle": "طبقات الخريطة"
+    "panelTitle": "طبقات الخريطة",
+    "displayNamePlaceholder": "مثال: نطاق الفيضان (مباشر)"
   },
   "exposureLayers": {
     "panelTitle": "طبقات التعرض",
@@ -853,7 +867,8 @@
       "assignOrgNone": "— بدون تعيين —",
       "submittedAt": "وقت الإرسال",
       "viewPhoto": "عرض الصورة",
-      "playAudio": "تشغيل الملاحظة الصوتية"
+      "playAudio": "تشغيل الملاحظة الصوتية",
+      "rejectReasonPlaceholder": "اشرح باختصار سبب رفض هذا البلاغ..."
     },
     "map": {
       "toggleLabel": "إظهار/إخفاء بلاغات المجتمع",
@@ -931,7 +946,8 @@
     "noCountry": "الدولة مطلوبة.",
     "noType": "نوع التكامل مطلوب.",
     "allFieldsRequired": "جميع الحقول مطلوبة.",
-    "customFieldIncomplete": "يجب أن يحتوي الحقل المخصص على اسم وقيمة معًا."
+    "customFieldIncomplete": "يجب أن يحتوي الحقل المخصص على اسم وقيمة معًا.",
+    "credentialValuePlaceholder": "الصق أو اكتب قيمة بيانات الاعتماد"
   },
   "login": {
     "accountLocked": "تم قفل حسابك مؤقتًا بسبب كثرة محاولات تسجيل الدخول الفاشلة. حاول مرة أخرى بعد {until}، أو اطلب من المسؤول إلغاء القفل."

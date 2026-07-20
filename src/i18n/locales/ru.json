@@ -329,7 +329,8 @@
       "deleteWarningTitle": "Это действие необратимо",
       "deleteWarningBody": "Выбрано \"Удалить\" — просроченные записи будут удалены безвозвратно, а не архивированы. Продолжить?",
       "cancel": "Отмена",
-      "confirmDelete": "Подтверждаю, удалить"
+      "confirmDelete": "Подтверждаю, удалить",
+      "daysPlaceholder": "напр. 90"
     },
     "deletion": {
       "title": "Требуется Обоснование",
@@ -444,7 +445,10 @@
       "save": "Сохранить индикатор",
       "saving": "Сохранение...",
       "listTitle": "Настроенные индикаторы",
-      "empty": "Индикаторы риска ещё не настроены."
+      "empty": "Индикаторы риска ещё не настроены.",
+      "weightPlaceholder": "напр. 0.30",
+      "normalizeMinPlaceholder": "напр. 0",
+      "normalizeMaxPlaceholder": "напр. 100"
     },
     "dashboard": {
       "countryCode": "Страна",
@@ -464,7 +468,8 @@
       "loadCurve": "Загрузить кривую",
       "impactLevel": "Уровень воздействия",
       "recordCount": "На основе {count} исторических событий",
-      "insufficientData": "Недостаточно исторических данных ({count} из {minimum} минимально необходимых записей) для построения надёжной кривой."
+      "insufficientData": "Недостаточно исторических данных ({count} из {minimum} минимально необходимых записей) для построения надёжной кривой.",
+      "hazardTypePlaceholder": "напр. earthquake"
     },
     "scenario": {
       "formTitle": "Смоделировать гипотетический сценарий",
@@ -539,7 +544,9 @@
     "channels": "Каналы",
     "status": "Статус",
     "anonymize": "анонимизировать",
-    "anonymizeConfirm": "Вы уверены, что хотите безвозвратно удалить личные данные (email, номер WhatsApp) контакта {name}?"
+    "anonymizeConfirm": "Вы уверены, что хотите безвозвратно удалить личные данные (email, номер WhatsApp) контакта {name}?",
+    "fullNamePlaceholder": "напр. Ахмет Йылмаз",
+    "emailPlaceholder": "напр. ahmet@example.com"
   },
   "dispatch": {
     "panelTitle": "Мониторинг Рассылки",
@@ -617,7 +624,10 @@
       "partOf": "Часть: {name}",
       "includes": "Включает: {names}",
       "thresholdsTitle": "Пороги серьёзности"
-    }
+    },
+    "displayNamePlaceholder": "напр. Оползень",
+    "descriptionPlaceholder": "Краткое описание этого типа опасности",
+    "minValuePlaceholder": "напр. 6.0"
   },
   "incidentTracking": {
     "aarLabel": "Заметки после действия",
@@ -661,7 +671,10 @@
     "sopAllCategories": "— все категории —",
     "sopVersionHistory": "история версий",
     "sopVersionHistoryTitle": "\"{title}\" — История Версий",
-    "sopNoVersionHistory": "Предыдущих версий пока нет."
+    "sopNoVersionHistory": "Предыдущих версий пока нет.",
+    "sopTitlePlaceholder": "напр. Порядок действий при землетрясении",
+    "sopBodyContentPlaceholder": "Пошаговый текст процедуры...",
+    "sopCategoryPlaceholder": "напр. Реагирование, Эвакуация"
   },
   "mapLayers": {
     "tabLabel": "Слои Карты",
@@ -685,7 +698,8 @@
     "unsafeUrl": "Этот URL конечной точки не разрешен (должен быть HTTPS и публичным адресом).",
     "save": "Сохранить",
     "cancel": "Отмена",
-    "panelTitle": "Слои Карты"
+    "panelTitle": "Слои Карты",
+    "displayNamePlaceholder": "напр. Зона затопления (в реальном времени)"
   },
   "exposureLayers": {
     "panelTitle": "Слои Уязвимости",
@@ -853,7 +867,8 @@
       "assignOrgNone": "— без назначения —",
       "submittedAt": "Отправлено",
       "viewPhoto": "Просмотреть фото",
-      "playAudio": "Прослушать голосовую заметку"
+      "playAudio": "Прослушать голосовую заметку",
+      "rejectReasonPlaceholder": "Кратко объясните, почему это сообщение отклоняется..."
     },
     "map": {
       "toggleLabel": "Показать/Скрыть сообщения от граждан",
@@ -931,7 +946,8 @@
     "noCountry": "Страна обязательна.",
     "noType": "Тип интеграции обязателен.",
     "allFieldsRequired": "Все поля обязательны.",
-    "customFieldIncomplete": "У пользовательского поля должны быть заполнены и имя, и значение."
+    "customFieldIncomplete": "У пользовательского поля должны быть заполнены и имя, и значение.",
+    "credentialValuePlaceholder": "Вставьте или введите значение учётных данных"
   },
   "login": {
     "accountLocked": "Ваша учётная запись временно заблокирована из-за слишком большого количества неудачных попыток входа. Повторите попытку после {until} или попросите администратора разблокировать её."

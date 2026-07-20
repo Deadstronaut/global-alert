@@ -329,7 +329,8 @@
       "deleteWarningTitle": "此操作不可逆",
       "deleteWarningBody": "已选择\"删除\" —— 过期记录将被永久删除,不会归档。是否继续?",
       "cancel": "取消",
-      "confirmDelete": "确认删除"
+      "confirmDelete": "确认删除",
+      "daysPlaceholder": "例如：90"
     },
     "deletion": {
       "title": "需要理由",
@@ -444,7 +445,10 @@
       "save": "保存指标",
       "saving": "保存中...",
       "listTitle": "已配置的指标",
-      "empty": "尚未配置任何风险指标。"
+      "empty": "尚未配置任何风险指标。",
+      "weightPlaceholder": "例如：0.30",
+      "normalizeMinPlaceholder": "例如：0",
+      "normalizeMaxPlaceholder": "例如：100"
     },
     "dashboard": {
       "countryCode": "国家",
@@ -464,7 +468,8 @@
       "loadCurve": "加载曲线",
       "impactLevel": "影响等级",
       "recordCount": "基于 {count} 次历史事件",
-      "insufficientData": "历史数据不足（{count} / 至少需要 {minimum} 条记录），无法生成可靠曲线。"
+      "insufficientData": "历史数据不足（{count} / 至少需要 {minimum} 条记录），无法生成可靠曲线。",
+      "hazardTypePlaceholder": "例如：earthquake"
     },
     "scenario": {
       "formTitle": "模拟假设情景",
@@ -539,7 +544,9 @@
     "channels": "渠道",
     "status": "状态",
     "anonymize": "匿名化",
-    "anonymizeConfirm": "您确定要永久且不可逆地删除 {name} 的个人数据(电子邮件、WhatsApp 号码)吗?"
+    "anonymizeConfirm": "您确定要永久且不可逆地删除 {name} 的个人数据(电子邮件、WhatsApp 号码)吗?",
+    "fullNamePlaceholder": "例如：Ahmet Yılmaz",
+    "emailPlaceholder": "例如：ahmet@example.com"
   },
   "dispatch": {
     "panelTitle": "发送监控",
@@ -617,7 +624,10 @@
       "partOf": "属于：{name}",
       "includes": "包含：{names}",
       "thresholdsTitle": "严重程度阈值"
-    }
+    },
+    "displayNamePlaceholder": "例如：滑坡",
+    "descriptionPlaceholder": "该灾害类型的简要说明",
+    "minValuePlaceholder": "例如：6.0"
   },
   "incidentTracking": {
     "aarLabel": "事后总结",
@@ -661,7 +671,10 @@
     "sopAllCategories": "— 所有分类 —",
     "sopVersionHistory": "版本历史",
     "sopVersionHistoryTitle": "\"{title}\" — 版本历史",
-    "sopNoVersionHistory": "尚无历史版本。"
+    "sopNoVersionHistory": "尚无历史版本。",
+    "sopTitlePlaceholder": "例如：地震响应程序",
+    "sopBodyContentPlaceholder": "分步操作说明……",
+    "sopCategoryPlaceholder": "例如：响应、疏散"
   },
   "mapLayers": {
     "tabLabel": "地图图层",
@@ -685,7 +698,8 @@
     "unsafeUrl": "不允许使用此端点URL（必须是HTTPS且为公共地址）。",
     "save": "保存",
     "cancel": "取消",
-    "panelTitle": "地图图层"
+    "panelTitle": "地图图层",
+    "displayNamePlaceholder": "例如：洪水淹没范围（实时）"
   },
   "exposureLayers": {
     "panelTitle": "暴露层",
@@ -853,7 +867,8 @@
       "assignOrgNone": "— 未分配 —",
       "submittedAt": "提交时间",
       "viewPhoto": "查看照片",
-      "playAudio": "播放语音留言"
+      "playAudio": "播放语音留言",
+      "rejectReasonPlaceholder": "简要说明拒绝此报告的原因……"
     },
     "map": {
       "toggleLabel": "显示/隐藏民众报告",
@@ -931,7 +946,8 @@
     "noCountry": "国家为必填项。",
     "noType": "集成类型为必填项。",
     "allFieldsRequired": "所有字段均为必填项。",
-    "customFieldIncomplete": "自定义字段必须同时填写名称和值。"
+    "customFieldIncomplete": "自定义字段必须同时填写名称和值。",
+    "credentialValuePlaceholder": "粘贴或输入凭证值"
   },
   "login": {
     "accountLocked": "由于登录失败次数过多，您的账户已被暂时锁定。请在 {until} 之后重试，或请管理员为您解锁。"

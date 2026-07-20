@@ -79,15 +79,15 @@ onMounted(loadData)
       </label>
       <label class="risk-field">
         <span>{{ t('risk.indicators.weight') }} ({{ t('risk.indicators.weightHint', { sum: categoryWeightSum(form.category).toFixed(2) }) }})</span>
-        <input v-model="form.weight" type="number" min="0" max="1" step="0.01" />
+        <input v-model="form.weight" type="number" min="0" max="1" step="0.01" :placeholder="t('risk.indicators.weightPlaceholder')" />
       </label>
       <label class="risk-field">
         <span>{{ t('risk.indicators.normalizeMin') }}</span>
-        <input v-model="form.normalizeMin" type="number" step="any" />
+        <input v-model="form.normalizeMin" type="number" step="any" :placeholder="t('risk.indicators.normalizeMinPlaceholder')" />
       </label>
       <label class="risk-field">
         <span>{{ t('risk.indicators.normalizeMax') }}</span>
-        <input v-model="form.normalizeMax" type="number" step="any" />
+        <input v-model="form.normalizeMax" type="number" step="any" :placeholder="t('risk.indicators.normalizeMaxPlaceholder')" />
       </label>
       <p v-if="error" class="risk-error">{{ error }}</p>
       <button class="btn-save" :disabled="saving" @click="saveIndicator">

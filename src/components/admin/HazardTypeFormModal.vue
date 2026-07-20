@@ -74,7 +74,7 @@ function save() {
           <input v-model="code" :disabled="!!hazardType" placeholder="landslide" />
         </label>
         <label class="form-field span-2"><span>{{ t('hazardTaxonomy.displayName') }} *</span>
-          <input v-model="displayName" />
+          <input v-model="displayName" :placeholder="t('hazardTaxonomy.displayNamePlaceholder')" />
         </label>
         <label class="form-field"><span>{{ t('hazardTaxonomy.category') }}</span>
           <select v-model="category">
@@ -82,7 +82,7 @@ function save() {
           </select>
         </label>
         <label class="form-field span-2"><span>{{ t('hazardTaxonomy.description') }}</span>
-          <input v-model="description" />
+          <input v-model="description" :placeholder="t('hazardTaxonomy.descriptionPlaceholder')" />
         </label>
         <label class="form-field span-2"><span>{{ t('hazardTaxonomy.hierarchy.parentLabel') }}</span>
           <select v-model="parentCode">

@@ -329,7 +329,8 @@
       "deleteWarningTitle": "Esta acción es irreversible",
       "deleteWarningBody": "Se seleccionó \"Eliminar\" — los registros vencidos se eliminarán permanentemente, no se archivarán. ¿Continuar?",
       "cancel": "Cancelar",
-      "confirmDelete": "Confirmo, eliminar"
+      "confirmDelete": "Confirmo, eliminar",
+      "daysPlaceholder": "ej. 90"
     },
     "deletion": {
       "title": "Justificación Requerida",
@@ -444,7 +445,10 @@
       "save": "Guardar Indicador",
       "saving": "Guardando...",
       "listTitle": "Indicadores Configurados",
-      "empty": "Aún no hay indicadores de riesgo configurados."
+      "empty": "Aún no hay indicadores de riesgo configurados.",
+      "weightPlaceholder": "ej. 0.30",
+      "normalizeMinPlaceholder": "ej. 0",
+      "normalizeMaxPlaceholder": "ej. 100"
     },
     "dashboard": {
       "countryCode": "País",
@@ -464,7 +468,8 @@
       "loadCurve": "Cargar Curva",
       "impactLevel": "Nivel de impacto",
       "recordCount": "Basado en {count} eventos históricos",
-      "insufficientData": "Datos históricos insuficientes ({count} de {minimum} registros mínimos) para generar una curva fiable."
+      "insufficientData": "Datos históricos insuficientes ({count} de {minimum} registros mínimos) para generar una curva fiable.",
+      "hazardTypePlaceholder": "ej. earthquake"
     },
     "scenario": {
       "formTitle": "Simular Escenario Hipotético",
@@ -539,7 +544,9 @@
     "channels": "Canales",
     "status": "Estado",
     "anonymize": "anonimizar",
-    "anonymizeConfirm": "¿Está seguro de que desea eliminar de forma permanente e irreversible los datos personales (correo electrónico, número de WhatsApp) de {name}?"
+    "anonymizeConfirm": "¿Está seguro de que desea eliminar de forma permanente e irreversible los datos personales (correo electrónico, número de WhatsApp) de {name}?",
+    "fullNamePlaceholder": "ej. Ahmet Yılmaz",
+    "emailPlaceholder": "ej. ahmet@example.com"
   },
   "dispatch": {
     "panelTitle": "Monitor de Envíos",
@@ -617,7 +624,10 @@
       "partOf": "Parte de: {name}",
       "includes": "Incluye: {names}",
       "thresholdsTitle": "Umbrales de Severidad"
-    }
+    },
+    "displayNamePlaceholder": "ej. Deslizamiento de tierra",
+    "descriptionPlaceholder": "Breve descripción de este tipo de peligro",
+    "minValuePlaceholder": "ej. 6.0"
   },
   "incidentTracking": {
     "aarLabel": "Notas post-acción",
@@ -661,7 +671,10 @@
     "sopAllCategories": "— todas las categorías —",
     "sopVersionHistory": "historial de versiones",
     "sopVersionHistoryTitle": "\"{title}\" — Historial de Versiones",
-    "sopNoVersionHistory": "Aún no hay versiones anteriores."
+    "sopNoVersionHistory": "Aún no hay versiones anteriores.",
+    "sopTitlePlaceholder": "ej. Procedimiento de Respuesta a Terremotos",
+    "sopBodyContentPlaceholder": "Texto del procedimiento paso a paso...",
+    "sopCategoryPlaceholder": "ej. Respuesta, Evacuación"
   },
   "mapLayers": {
     "tabLabel": "Capas de Mapa",
@@ -685,7 +698,8 @@
     "unsafeUrl": "Esta URL de endpoint no está permitida (debe ser HTTPS y una dirección pública).",
     "save": "Guardar",
     "cancel": "Cancelar",
-    "panelTitle": "Capas de Mapa"
+    "panelTitle": "Capas de Mapa",
+    "displayNamePlaceholder": "ej. Extensión de Inundación (En Vivo)"
   },
   "exposureLayers": {
     "panelTitle": "Capas de Exposición",
@@ -853,7 +867,8 @@
       "assignOrgNone": "— sin asignar —",
       "submittedAt": "Enviado el",
       "viewPhoto": "Ver foto",
-      "playAudio": "Reproducir nota de voz"
+      "playAudio": "Reproducir nota de voz",
+      "rejectReasonPlaceholder": "Explica brevemente por qué se rechaza este informe..."
     },
     "map": {
       "toggleLabel": "Mostrar/Ocultar Reportes Comunitarios",
@@ -931,7 +946,8 @@
     "noCountry": "El país es obligatorio.",
     "noType": "El tipo de integración es obligatorio.",
     "allFieldsRequired": "Todos los campos son obligatorios.",
-    "customFieldIncomplete": "Un campo personalizado debe tener nombre y valor."
+    "customFieldIncomplete": "Un campo personalizado debe tener nombre y valor.",
+    "credentialValuePlaceholder": "Pega o escribe el valor de la credencial"
   },
   "login": {
     "accountLocked": "Su cuenta ha sido bloqueada temporalmente debido a demasiados intentos fallidos de inicio de sesión. Vuelva a intentarlo después de las {until}, o pida a un administrador que la desbloquee."

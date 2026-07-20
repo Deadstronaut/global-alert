@@ -123,7 +123,7 @@ async function save() {
         <div class="form-grid">
           <label v-for="field in selectedType.field_template" :key="field.key" class="form-field">
             <span>{{ field.label }} *</span>
-            <input v-model="templateValues[field.key]" type="password" autocomplete="off" />
+            <input v-model="templateValues[field.key]" type="password" autocomplete="off" :placeholder="t('integrations.credentialValuePlaceholder')" />
           </label>
         </div>
 

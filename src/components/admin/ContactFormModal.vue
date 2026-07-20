@@ -98,10 +98,10 @@ function save() {
 
       <div class="form-grid">
         <label class="form-field span-2"><span>{{ t('contacts.fullName') }} *</span>
-          <input v-model="fullName" />
+          <input v-model="fullName" :placeholder="t('contacts.fullNamePlaceholder')" />
         </label>
         <label class="form-field"><span>{{ t('contacts.email') }}</span>
-          <input v-model="email" type="email" />
+          <input v-model="email" type="email" :placeholder="t('contacts.emailPlaceholder')" />
         </label>
         <label class="form-field"><span>{{ t('contacts.whatsapp') }}</span>
           <input v-model="whatsappNumber" placeholder="+905551234567" />

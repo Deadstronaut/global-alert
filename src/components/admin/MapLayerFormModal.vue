@@ -56,7 +56,7 @@ function save() {
 
       <div class="form-grid">
         <label class="form-field span-2"><span>{{ t('mapLayers.displayName') }} *</span>
-          <input v-model="displayName" />
+          <input v-model="displayName" :placeholder="t('mapLayers.displayNamePlaceholder')" />
         </label>
         <label class="form-field"><span>{{ t('mapLayers.sourceType') }}</span>
           <select v-model="sourceType">

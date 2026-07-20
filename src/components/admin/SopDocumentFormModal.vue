@@ -61,7 +61,7 @@ function save() {
 
       <div class="form-grid">
         <label class="form-field span-2"><span>{{ t('incidentTracking.sopTitle') }} *</span>
-          <input v-model="title" />
+          <input v-model="title" :placeholder="t('incidentTracking.sopTitlePlaceholder')" />
         </label>
         <label class="form-field span-2"><span>{{ t('incidentTracking.sopHazardType') }} *</span>
           <select v-model="hazardTypeCode">
@@ -69,13 +69,13 @@ function save() {
           </select>
         </label>
         <label class="form-field span-2"><span>{{ t('incidentTracking.sopCategory') }}</span>
-          <input v-model="category" list="sop-category-suggestions" />
+          <input v-model="category" list="sop-category-suggestions" :placeholder="t('incidentTracking.sopCategoryPlaceholder')" />
           <datalist id="sop-category-suggestions">
             <option v-for="c in existingCategories" :key="c" :value="c" />
           </datalist>
         </label>
         <label class="form-field span-2"><span>{{ t('incidentTracking.sopBodyContent') }}</span>
-          <textarea v-model="bodyContent" rows="4" />
+          <textarea v-model="bodyContent" rows="4" :placeholder="t('incidentTracking.sopBodyContentPlaceholder')" />
         </label>
         <label class="form-field span-2"><span>{{ t('incidentTracking.sopReferenceUrl') }}</span>
           <input v-model="referenceUrl" placeholder="https://..." />

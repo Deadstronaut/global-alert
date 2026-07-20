@@ -84,7 +84,7 @@ onMounted(loadPolicies)
       </label>
       <label class="retention-field">
         <span>{{ t('audit.retention.days') }}</span>
-        <input type="number" min="1" v-model="form.retentionDays" />
+        <input type="number" min="1" v-model="form.retentionDays" :placeholder="t('audit.retention.daysPlaceholder')" />
       </label>
       <label class="retention-field">
         <span>{{ t('audit.retention.action') }}</span>

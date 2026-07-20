@@ -80,7 +80,7 @@ function save() {
       <div class="breakpoints-section">
         <p class="mapping-hint">{{ t('hazardTaxonomy.breakpointsHint') }}</p>
         <div v-for="(row, idx) in rows" :key="idx" class="breakpoint-row">
-          <input v-model.number="row.min_value" type="number" step="any" class="bp-value" />
+          <input v-model.number="row.min_value" type="number" step="any" class="bp-value" :placeholder="t('hazardTaxonomy.minValuePlaceholder')" />
           <select v-model="row.severity" class="bp-severity">
             <option v-for="s in SEVERITIES" :key="s" :value="s">{{ s }}</option>
           </select>

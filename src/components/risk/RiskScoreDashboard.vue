@@ -93,7 +93,7 @@ async function loadExceedanceCurve() {
       </label>
       <label class="risk-field">
         <span>{{ t('risk.dashboard.hazardType') }}</span>
-        <input v-model="hazardType" />
+        <input v-model="hazardType" :placeholder="t('risk.dashboard.hazardTypePlaceholder')" />
       </label>
       <button class="btn-compute" :disabled="scoring" @click="computeScore">
         {{ scoring ? t('risk.dashboard.computing') : t('risk.dashboard.computeScore') }}

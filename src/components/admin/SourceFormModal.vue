@@ -156,7 +156,7 @@ function submit() {
         <span>Poll Aralığı (saniye) *</span>
         <input
           v-model.number="form.poll_interval_seconds"
-          type="number" min="1"
+          type="number" min="1" placeholder="örn. 60"
           :disabled="WEBSOCKET_SOURCE_TYPES.includes(form.source_type)"
           :title="WEBSOCKET_SOURCE_TYPES.includes(form.source_type) ? 'Bu kaynak WebSocket üzerinden çalışır, aralık ayarı geçerli değildir' : ''"
         />
@@ -191,7 +191,7 @@ function submit() {
         <input v-model.number="form.staleness_threshold_seconds" type="number" min="1" placeholder="varsayılan: 3x poll aralığı" />
       </label>
       <label class="form-field"><span>Down Eşiği (ardışık hata sayısı)</span>
-        <input v-model.number="form.down_after_consecutive_failures" type="number" min="1" />
+        <input v-model.number="form.down_after_consecutive_failures" type="number" min="1" placeholder="örn. 3" />
       </label>
       <label class="form-field span-2 checkbox-field">
         <input v-model="form.is_custom" type="checkbox" />

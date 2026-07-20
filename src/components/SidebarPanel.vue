@@ -296,7 +296,11 @@ watch([rangeStartDate, rangeEndDate], ([start, end]) => {
         </div>
       </div>
       <div class="panel-collapse-toggle-slot">
-        <PanelCollapseToggle @click="uiStore.toggleSidebar()" :title="isCollapsed ? t('sidebar.expand') : t('sidebar.collapse')" />
+        <PanelCollapseToggle
+          :collapsed="isCollapsed"
+          @click="uiStore.toggleSidebar()"
+          :title="isCollapsed ? t('sidebar.expand') : t('sidebar.collapse')"
+        />
       </div>
     </div>
 

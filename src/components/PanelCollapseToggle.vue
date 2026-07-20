@@ -7,12 +7,21 @@
 // and made a reusable component instead of a copy-pasted snippet.
 defineProps({
   mirrored: { type: Boolean, default: false },
+  // Rotates the chevrons 180° so they point the other way once the panel
+  // they control is collapsed — reversed again on click, back to expanded.
+  collapsed: { type: Boolean, default: false },
 })
 defineEmits(['click'])
 </script>
 
 <template>
-  <div class="panel-collapse-toggle" :class="{ 'panel-collapse-toggle--mirrored': mirrored }">
+  <div
+    class="panel-collapse-toggle"
+    :class="{
+      'panel-collapse-toggle--mirrored': mirrored,
+      'panel-collapse-toggle--collapsed': collapsed,
+    }"
+  >
     <button type="button" class="panel-collapse-toggle-btn" @click="$emit('click')">
       <span class="panel-collapse-toggle-icon">
         <svg viewBox="0 0 66 43" height="20" width="20" aria-hidden="true">
@@ -74,7 +83,13 @@ defineEmits(['click'])
 
 .panel-collapse-toggle-icon {
   display: flex;
-  transition: margin 0.35s ease;
+  transition:
+    margin 0.35s ease,
+    transform 0.35s ease;
+}
+
+.panel-collapse-toggle--collapsed .panel-collapse-toggle-icon {
+  transform: rotate(180deg);
 }
 
 .panel-collapse-toggle-btn:hover .panel-collapse-toggle-icon {

@@ -2215,6 +2215,7 @@ onBeforeUnmount(() => {
         <div class="panel-collapse-toggle-slot">
           <PanelCollapseToggle
             mirrored
+            :collapsed="uiStore.impactPanelCollapsed"
             :title="uiStore.impactPanelCollapsed ? t('impact.panel.expand') : t('impact.panel.collapse')"
             @click="uiStore.toggleImpactPanel()"
           />

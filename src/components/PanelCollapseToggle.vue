@@ -63,6 +63,7 @@ defineEmits(['click'])
 .panel-collapse-toggle-btn {
   display: flex;
   align-items: center;
+  overflow: hidden;
   padding: 6px 0px 6px 12px;
   border: 1px solid rgba(255, 255, 255, 0.18);
   border-radius: 999px;
@@ -72,7 +73,7 @@ defineEmits(['click'])
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.28);
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
-  transition: box-shadow 0.4s ease;
+  transition: box-shadow 0.4s ease, padding 0.35s ease;
 }
 
 .panel-collapse-toggle-btn:hover,

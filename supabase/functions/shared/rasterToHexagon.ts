@@ -41,15 +41,42 @@
 import './workerPolyfill.ts'
 import { fromArrayBuffer } from 'https://esm.sh/geotiff@2.1.3'
 import { latLngToCell, cellToBoundary, cellToLatLng } from 'https://esm.sh/h3-js@4.1.0'
-// deno-lint-ignore no-explicit-any
-import booleanPointInPolygonImport from 'https://esm.sh/@turf/boolean-point-in-polygon@7'
 import type { RasterSourceConfig } from './rasterSourceConfig.ts'
 import type { PopulationRasterRecord } from './populationRasterRecord.ts'
 
-// deno-lint-ignore no-explicit-any
-const booleanPointInPolygon = booleanPointInPolygonImport as any
-
 const ROW_BLOCK_SIZE = 512
+
+// Standard ray-casting point-in-polygon (handles holes: a point inside an
+// odd number of rings — the outer ring plus any hole rings — is inside).
+// Replaces @turf/boolean-point-in-polygon (removed live-testing spec 044's
+// GHSL attempt, trying to reduce this function's baseline memory footprint
+// against a deployed Edge Function memory ceiling that a bare Worker-fixed
+// geotiff+h3-js+turf+supabase-js import graph was hitting within ~7s,
+// before any real per-tile work even started).
+function pointInRing(point: [number, number], ring: number[][]): boolean {
+  const [x, y] = point
+  let inside = false
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const [xi, yi] = ring[i]
+    const [xj, yj] = ring[j]
+    const intersects = yi > y !== yj > y && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi
+    if (intersects) inside = !inside
+  }
+  return inside
+}
+
+function pointInPolygon(point: [number, number], coordinates: number[][][]): boolean {
+  if (coordinates.length === 0) return false
+  if (!pointInRing(point, coordinates[0])) return false
+  for (let i = 1; i < coordinates.length; i++) {
+    if (pointInRing(point, coordinates[i])) return false // inside a hole
+  }
+  return true
+}
+
+function pointInMultiPolygon(point: [number, number], coordinates: number[][][][]): boolean {
+  return coordinates.some((polygon) => pointInPolygon(point, polygon))
+}
 
 function isValidPixel(value: number, noData: number | null): boolean {
   if (!Number.isFinite(value)) return false
@@ -60,27 +87,25 @@ function isValidPixel(value: number, noData: number | null): boolean {
 
 // country_boundaries rows may be a FeatureCollection normalized into a
 // GeometryCollection (hydroRiversFetch.ts's fetchCountryBoundary
-// convention) or a plain Polygon/MultiPolygon — turf's
-// booleanPointInPolygon only accepts the latter, so a GeometryCollection is
+// convention) or a plain Polygon/MultiPolygon — a GeometryCollection is
 // checked sub-geometry by sub-geometry.
 function pointWithinBoundary(point: [number, number], boundary: GeoJSON.Geometry): boolean {
-  const pointFeature = { type: 'Feature' as const, properties: {}, geometry: { type: 'Point' as const, coordinates: point } }
   if (boundary.type === 'GeometryCollection') {
     return boundary.geometries.some((geometry) => {
-      if (geometry.type !== 'Polygon' && geometry.type !== 'MultiPolygon') return false
       try {
-        return booleanPointInPolygon(pointFeature, geometry)
+        return pointWithinBoundary(point, geometry)
       } catch {
         return false
       }
     })
   }
-  if (boundary.type !== 'Polygon' && boundary.type !== 'MultiPolygon') return false
   try {
-    return booleanPointInPolygon(pointFeature, boundary)
+    if (boundary.type === 'Polygon') return pointInPolygon(point, boundary.coordinates as number[][][])
+    if (boundary.type === 'MultiPolygon') return pointInMultiPolygon(point, boundary.coordinates as number[][][][])
   } catch {
     return false
   }
+  return false
 }
 
 // Flattens any GeoJSON geometry (including a GeometryCollection, this

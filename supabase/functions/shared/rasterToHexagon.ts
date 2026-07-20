@@ -89,12 +89,7 @@ function isValidPixel(value: number, noData: number | null): boolean {
 // GeometryCollection (hydroRiversFetch.ts's fetchCountryBoundary
 // convention) or a plain Polygon/MultiPolygon — a GeometryCollection is
 // checked sub-geometry by sub-geometry.
-// Exported so gdoSpiFetch.ts (spec 045, SPI/GPCC grid-cell import — not a
-// hexagon-aggregation source, so it doesn't call aggregateRasterToHexagons
-// itself, only needs this one boundary check) can reuse the same
-// GeometryCollection-aware point-in-boundary logic instead of duplicating
-// the ray-casting functions above.
-export function pointWithinBoundary(point: [number, number], boundary: GeoJSON.Geometry): boolean {
+function pointWithinBoundary(point: [number, number], boundary: GeoJSON.Geometry): boolean {
   if (boundary.type === 'GeometryCollection') {
     return boundary.geometries.some((geometry) => {
       try {

@@ -56,8 +56,87 @@
 import './workerPolyfill.ts'
 import { fromArrayBuffer } from 'https://esm.sh/geotiff@2.1.3'
 import { getServiceClient } from './upsert.ts'
-import { geometryBoundingBox, pointWithinBoundary } from './rasterToHexagon.ts'
 import type { ExposureFeatureInput } from './writeExposureDataset.ts'
+
+// Duplicated from rasterToHexagon.ts rather than imported: that module's
+// top-level imports also pull in h3-js (for hexagon aggregation this
+// function never uses) — live-verified 2026-07-20 that importing it here
+// alone was enough to hit this Edge Function's WORKER_RESOURCE_LIMIT before
+// any real work started, the same ceiling GHSL's attempt hit (spec 044).
+// Dropping the unused h3-js from this function's import graph fixed it.
+// Keep these two functions behaviorally identical to rasterToHexagon.ts's
+// copies if either changes.
+function pointInRing(point: [number, number], ring: number[][]): boolean {
+  const [x, y] = point
+  let inside = false
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const [xi, yi] = ring[i]
+    const [xj, yj] = ring[j]
+    const intersects = yi > y !== yj > y && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi
+    if (intersects) inside = !inside
+  }
+  return inside
+}
+
+function pointInPolygon(point: [number, number], coordinates: number[][][]): boolean {
+  if (coordinates.length === 0) return false
+  if (!pointInRing(point, coordinates[0])) return false
+  for (let i = 1; i < coordinates.length; i++) {
+    if (pointInRing(point, coordinates[i])) return false // inside a hole
+  }
+  return true
+}
+
+function pointInMultiPolygon(point: [number, number], coordinates: number[][][][]): boolean {
+  return coordinates.some((polygon) => pointInPolygon(point, polygon))
+}
+
+function pointWithinBoundary(point: [number, number], boundary: GeoJSON.Geometry): boolean {
+  if (boundary.type === 'GeometryCollection') {
+    return boundary.geometries.some((geometry) => {
+      try {
+        return pointWithinBoundary(point, geometry)
+      } catch {
+        return false
+      }
+    })
+  }
+  try {
+    if (boundary.type === 'Polygon') return pointInPolygon(point, boundary.coordinates as number[][][])
+    if (boundary.type === 'MultiPolygon') return pointInMultiPolygon(point, boundary.coordinates as number[][][][])
+  } catch {
+    return false
+  }
+  return false
+}
+
+function geometryBoundingBox(geometry: GeoJSON.Geometry): [number, number, number, number] {
+  let minLng = Infinity, minLat = Infinity, maxLng = -Infinity, maxLat = -Infinity
+  const visit = (coords: unknown): void => {
+    if (typeof coords[0] === 'number') {
+      const [lng, lat] = coords as [number, number]
+      if (lng < minLng) minLng = lng
+      if (lng > maxLng) maxLng = lng
+      if (lat < minLat) minLat = lat
+      if (lat > maxLat) maxLat = lat
+      return
+    }
+    for (const c of coords as unknown[]) visit(c)
+  }
+  if (geometry.type === 'GeometryCollection') {
+    for (const g of geometry.geometries) {
+      const [gMinLng, gMinLat, gMaxLng, gMaxLat] = geometryBoundingBox(g)
+      if (gMinLng < minLng) minLng = gMinLng
+      if (gMaxLng > maxLng) maxLng = gMaxLng
+      if (gMinLat < minLat) minLat = gMinLat
+      if (gMaxLat > maxLat) maxLat = gMaxLat
+    }
+  } else {
+    // deno-lint-ignore no-explicit-any
+    visit((geometry as any).coordinates)
+  }
+  return [minLng, minLat, maxLng, maxLat]
+}
 
 const WCS_BASE = 'https://drought.emergency.copernicus.eu/api/wcs'
 const COVERAGE_ID = 'spgTS' // SPI GPCC, per this module's header comment

@@ -3,6 +3,7 @@ import { ref, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { supabase } from '@/services/api/config.js'
 import { useHazardTypesStore } from '@/stores/hazardTypes.js'
+import { friendlyDatasetLabel } from '@/utils/exposureLayerLabel.js'
 
 const { t } = useI18n()
 const hazardTypesStore = useHazardTypesStore()
@@ -33,7 +34,10 @@ async function loadData() {
   loading.value = true
   if (!hazardTypesStore.loaded) hazardTypesStore.fetchHazardTypes()
   const [datasetsRes, scenariosRes] = await Promise.all([
-    supabase.from('exposure_datasets').select('id, name').order('created_at', { ascending: false }),
+    supabase
+      .from('exposure_datasets')
+      .select('id, name, source_name, country_code')
+      .order('created_at', { ascending: false }),
     supabase.from('hazard_scenarios').select('*').order('created_at', { ascending: false }),
   ])
   if (!datasetsRes.error) datasets.value = datasetsRes.data || []
@@ -158,7 +162,7 @@ onMounted(loadData)
         <div v-if="datasets.length === 0" class="tab-empty">{{ t('risk.scenario.noDatasets') }}</div>
         <label v-for="d in datasets" :key="d.id" class="risk-checkbox-row">
           <input type="checkbox" :value="d.id" v-model="form.exposureDatasetIds" />
-          <span>{{ d.name }}</span>
+          <span>{{ friendlyDatasetLabel(t, d) }}</span>
         </label>
       </div>
       <p v-if="error" class="risk-error">{{ error }}</p>

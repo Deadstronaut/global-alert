@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n'
 import { useAuthStore } from '@/stores/auth.js'
 import { supabase } from '@/services/api/config.js'
 import { parseExposureFile } from '@/utils/exposureFileParser.js'
+import { friendlyDatasetLabel } from '@/utils/exposureLayerLabel.js'
 import DeletionJustificationModal from '@/components/admin/DeletionJustificationModal.vue'
 
 const { t } = useI18n()
@@ -127,7 +128,7 @@ onMounted(loadDatasets)
       <div v-else-if="datasets.length === 0" class="tab-empty">{{ t('impact.exposure.empty') }}</div>
       <div v-else v-for="d in datasets" :key="d.id" class="exposure-row">
         <div>
-          <strong>{{ d.name }}</strong>
+          <strong>{{ friendlyDatasetLabel(t, d) }}</strong>
           <span class="exposure-meta">{{ d.feature_count }} {{ t('impact.exposure.features') }}</span>
         </div>
         <button class="btn-delete" @click="requestDelete(d)">{{ t('impact.exposure.delete') }}</button>

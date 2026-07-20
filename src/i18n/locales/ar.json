@@ -712,12 +712,20 @@
       "kontur": "الكثافة السكانية",
       "hydrorivers": "شبكة الأنهار",
       "hydrobasins": "حدود الأحواض المائية",
-      "worldpop": "السكان (WorldPop)"
+      "worldpop": "السكان (WorldPop)",
+      "gdoSpi": "شدة الجفاف (SPI)"
     },
     "countryLabel": {
       "tr": "تركيا",
       "mg": "مدغشقر",
       "my": "ماليزيا"
+    },
+    "metaNote": {
+      "resolution": "دقة تقريبية: شبكة {deg}°",
+      "baseline": "الفترة المرجعية: {period}",
+      "frequency": {
+        "monthly": "يُحدَّث شهريًا"
+      }
     }
   },
   "admin": {

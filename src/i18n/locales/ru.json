@@ -712,12 +712,20 @@
       "kontur": "Плотность Населения",
       "hydrorivers": "Речная Сеть",
       "hydrobasins": "Границы Водосборов",
-      "worldpop": "Население (WorldPop)"
+      "worldpop": "Население (WorldPop)",
+      "gdoSpi": "Интенсивность засухи (SPI)"
     },
     "countryLabel": {
       "tr": "Турция",
       "mg": "Мадагаскар",
       "my": "Малайзия"
+    },
+    "metaNote": {
+      "resolution": "Грубое разрешение: сетка {deg}°",
+      "baseline": "Опорный период: {period}",
+      "frequency": {
+        "monthly": "Обновляется ежемесячно"
+      }
     }
   },
   "admin": {

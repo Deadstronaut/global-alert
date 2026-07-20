@@ -712,12 +712,20 @@
       "kontur": "人口密度",
       "hydrorivers": "河流网络",
       "hydrobasins": "流域边界",
-      "worldpop": "人口（WorldPop）"
+      "worldpop": "人口（WorldPop）",
+      "gdoSpi": "干旱强度（SPI）"
     },
     "countryLabel": {
       "tr": "土耳其",
       "mg": "马达加斯加",
       "my": "马来西亚"
+    },
+    "metaNote": {
+      "resolution": "分辨率较粗：{deg}° 网格",
+      "baseline": "参考期：{period}",
+      "frequency": {
+        "monthly": "每月更新"
+      }
     }
   },
   "admin": {

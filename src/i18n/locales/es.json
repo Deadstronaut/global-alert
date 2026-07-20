@@ -712,12 +712,20 @@
       "kontur": "Densidad de Población",
       "hydrorivers": "Red Fluvial",
       "hydrobasins": "Límites de Cuencas",
-      "worldpop": "Población (WorldPop)"
+      "worldpop": "Población (WorldPop)",
+      "gdoSpi": "Intensidad de Sequía (SPI)"
     },
     "countryLabel": {
       "tr": "Turquía",
       "mg": "Madagascar",
       "my": "Malasia"
+    },
+    "metaNote": {
+      "resolution": "Resolución baja: cuadrícula de {deg}°",
+      "baseline": "Período de referencia: {period}",
+      "frequency": {
+        "monthly": "Se actualiza mensualmente"
+      }
     }
   },
   "admin": {

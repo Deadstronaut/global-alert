@@ -712,12 +712,20 @@
       "kontur": "Nüfus Yoğunluğu",
       "hydrorivers": "Nehir Ağı",
       "hydrobasins": "Havza Sınırları",
-      "worldpop": "Nüfus (WorldPop)"
+      "worldpop": "Nüfus (WorldPop)",
+      "gdoSpi": "Kuraklık Şiddeti (SPI)"
     },
     "countryLabel": {
       "tr": "Türkiye",
       "mg": "Madagaskar",
       "my": "Malezya"
+    },
+    "metaNote": {
+      "resolution": "Kaba çözünürlük: {deg}° grid",
+      "baseline": "Referans dönem: {period}",
+      "frequency": {
+        "monthly": "Aylık güncellenir"
+      }
     }
   },
   "admin": {

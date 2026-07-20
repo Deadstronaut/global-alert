@@ -4,7 +4,7 @@ import { useI18n } from 'vue-i18n'
 import { useAuthStore } from '@/stores/auth.js'
 import { supabase } from '@/services/api/config.js'
 import { parseExposureFile } from '@/utils/exposureFileParser.js'
-import { friendlyDatasetLabel } from '@/utils/exposureLayerLabel.js'
+import { friendlyDatasetLabel, coarseResolutionNote } from '@/utils/exposureLayerLabel.js'
 import DeletionJustificationModal from '@/components/admin/DeletionJustificationModal.vue'
 
 const { t } = useI18n()
@@ -130,6 +130,7 @@ onMounted(loadDatasets)
         <div>
           <strong>{{ friendlyDatasetLabel(t, d) }}</strong>
           <span class="exposure-meta">{{ d.feature_count }} {{ t('impact.exposure.features') }}</span>
+          <span v-if="coarseResolutionNote(t, d)" class="exposure-caveat">{{ coarseResolutionNote(t, d) }}</span>
         </div>
         <button class="btn-delete" @click="requestDelete(d)">{{ t('impact.exposure.delete') }}</button>
       </div>
@@ -159,6 +160,7 @@ onMounted(loadDatasets)
   padding: 6px 10px; color: #e2e8f0; font-size: .82rem;
 }
 .exposure-error { color: #ef4444; font-size: .8rem; }
+.exposure-caveat { display: block; font-size: .7rem; color: #f59e0b; opacity: .9; margin-top: 2px; }
 .btn-upload {
   padding: 8px 18px; background: rgba(34,197,94,.2); border: 1px solid rgba(34,197,94,.4);
   border-radius: 8px; color: #22c55e; font-weight: 600; cursor: pointer;

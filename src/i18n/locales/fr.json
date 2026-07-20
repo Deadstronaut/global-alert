@@ -712,12 +712,20 @@
       "kontur": "Densité de Population",
       "hydrorivers": "Réseau Fluvial",
       "hydrobasins": "Limites des Bassins",
-      "worldpop": "Population (WorldPop)"
+      "worldpop": "Population (WorldPop)",
+      "gdoSpi": "Intensité de Sécheresse (SPI)"
     },
     "countryLabel": {
       "tr": "Turquie",
       "mg": "Madagascar",
       "my": "Malaisie"
+    },
+    "metaNote": {
+      "resolution": "Résolution grossière : grille de {deg}°",
+      "baseline": "Période de référence : {period}",
+      "frequency": {
+        "monthly": "Mise à jour mensuelle"
+      }
     }
   },
   "admin": {

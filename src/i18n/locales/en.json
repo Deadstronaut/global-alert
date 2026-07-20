@@ -712,12 +712,20 @@
       "kontur": "Population Density",
       "hydrorivers": "River Network",
       "hydrobasins": "Watershed Boundaries",
-      "worldpop": "Population (WorldPop)"
+      "worldpop": "Population (WorldPop)",
+      "gdoSpi": "Drought Intensity (SPI)"
     },
     "countryLabel": {
       "tr": "Turkey",
       "mg": "Madagascar",
       "my": "Malaysia"
+    },
+    "metaNote": {
+      "resolution": "Coarse resolution: {deg}° grid",
+      "baseline": "Reference period: {period}",
+      "frequency": {
+        "monthly": "Updated monthly"
+      }
     }
   },
   "admin": {

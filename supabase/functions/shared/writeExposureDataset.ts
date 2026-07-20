@@ -43,6 +43,16 @@ export async function writeExposureDataset(
   countryCode: string,
   metricPropertyName: string,
   features: ExposureFeatureInput[],
+  // Machine-readable dataset-level caveats (resolution/baseline period/
+  // update frequency/fit method etc.) — added for the GDO SPI source (spec
+  // 045), which is a genuinely coarser and differently-defined statistic
+  // than WorldPop/GHSL's pixel counts, per explicit user requirement that
+  // this NOT live only as a code comment: it must be queryable by whatever
+  // consumes exposure_datasets (the admin UI's dataset list today, some
+  // other service tomorrow) without re-deriving it from GDO's own
+  // documentation each time. Omitted (column stays NULL) by every source
+  // that doesn't need it — WorldPop/GHSL/roads/buildings etc. are unaffected.
+  sourceMetadata?: Record<string, unknown> | null,
 ): Promise<{ datasetId: string; featureCount: number }> {
   const supabase = getServiceClient()
 
@@ -57,6 +67,7 @@ export async function writeExposureDataset(
       org_id: null,
       created_by: null,
       source_name: sourceName,
+      source_metadata: sourceMetadata ?? null,
     })
     .select('id')
     .single()

@@ -13,6 +13,7 @@ const SOURCE_LABEL_KEYS = {
   hydrorivers: 'exposureLayers.sourceLabel.hydrorivers',
   hydrobasins: 'exposureLayers.sourceLabel.hydrobasins',
   worldpop: 'exposureLayers.sourceLabel.worldpop',
+  gdo_spi: 'exposureLayers.sourceLabel.gdoSpi',
 }
 
 const COUNTRY_LABEL_KEYS = {
@@ -36,4 +37,24 @@ export function friendlyDatasetLabel(t, dataset) {
   const sourceLabel = t(sourceKey)
   const countryLabel = countryKey ? t(countryKey) : dataset.country_code?.toUpperCase()
   return countryLabel ? `${sourceLabel} (${countryLabel})` : sourceLabel
+}
+
+/**
+ * Machine-readable dataset.source_metadata (resolution/baseline period/
+ * update frequency — see gdoSpiFetch.ts) rendered as a short, localized
+ * caveat line. Returns '' (nothing shown) for every dataset without
+ * source_metadata — i.e. every source except GDO SPI today — so this is
+ * additive and never affects existing dataset rows.
+ *
+ * @param {(key: string, params?: object) => string} t
+ * @param {{ source_metadata?: Record<string, unknown>|null }} dataset
+ */
+export function coarseResolutionNote(t, dataset) {
+  const meta = dataset?.source_metadata
+  if (!meta) return ''
+  const parts = []
+  if (meta.resolutionDeg) parts.push(t('exposureLayers.metaNote.resolution', { deg: meta.resolutionDeg }))
+  if (meta.baselinePeriod) parts.push(t('exposureLayers.metaNote.baseline', { period: meta.baselinePeriod }))
+  if (meta.updateFrequency) parts.push(t(`exposureLayers.metaNote.frequency.${meta.updateFrequency}`))
+  return parts.join(' • ')
 }

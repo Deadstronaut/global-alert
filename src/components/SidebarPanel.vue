@@ -7,6 +7,7 @@ import { useGeolocationStore } from '@/stores/geolocation.js'
 import { useAuthStore } from '@/stores/auth.js'
 import { useSourcesStore } from '@/stores/sources.js'
 import { useI18n } from 'vue-i18n'
+import PanelCollapseToggle from '@/components/PanelCollapseToggle.vue'
 
 const { t } = useI18n()
 const router = useRouter()
@@ -32,6 +33,7 @@ onMounted(() => {
   // AdminView zaten bir kere çekmişse (aynı oturumda) tekrar sorgu atma.
   if (!sourcesStore.sources.length) sourcesStore.fetchSources()
 })
+
 
 const hasMyRegion = computed(() => !!disasterStore.myRegionGeometry)
 
@@ -281,19 +283,10 @@ watch([rangeStartDate, rangeEndDate], ([start, end]) => {
       'sidebar-collapsed': uiStore.sidebarCollapsed,
     }"
   >
-    <!-- Positioned against .sidebar itself (not the scroll wrapper) so it can
-         float half-outside the right edge, matching .impact-panel-toggle —
-         same chevron characters too ('‹'/'›', not a straight arrow). -->
-    <button
-      class="sidebar-toggle"
-      @click="uiStore.toggleSidebar()"
-      :title="isCollapsed ? 'Expand' : 'Collapse'"
-    >
-      {{ isCollapsed ? '›' : '‹' }}
-    </button>
-
-    <div class="sidebar-scroll">
-    <!-- Header -->
+    <!-- Header lives outside .sidebar-scroll (not clipped by its overflow),
+         so the toggle can be a genuine CSS child of it — anchored to its
+         bottom-right corner (top:100%/left:100% + centering transform)
+         instead of a guessed/synced pixel value. -->
     <div class="sidebar-header">
       <div class="sidebar-brand">
         <span class="brand-icon">🌍</span>
@@ -302,16 +295,20 @@ watch([rangeStartDate, rangeEndDate], ([start, end]) => {
           <p class="brand-subtitle">{{ t('app.subtitle') }}</p>
         </div>
       </div>
+      <div class="panel-collapse-toggle-slot">
+        <PanelCollapseToggle @click="uiStore.toggleSidebar()" :title="isCollapsed ? t('sidebar.expand') : t('sidebar.collapse')" />
+      </div>
     </div>
 
+    <div class="sidebar-scroll">
     <!-- Country Context Banner -->
     <div v-if="activeCountryConfig && !isCollapsed" class="country-banner">
       <span class="country-banner-flag">{{ getFlagEmoji(activeCountryConfig.countryCode) }}</span>
       <div class="country-banner-info">
         <span class="country-banner-name">{{ activeCountryConfig.nameEn }}</span>
-        <span class="country-banner-label">Country Filter Active</span>
+        <span class="country-banner-label">{{ t('sidebar.countryFilterActive') }}</span>
       </div>
-      <button class="country-banner-clear" @click="router.push('/')" title="Back to global">✕</button>
+      <button class="country-banner-clear" @click="router.push('/')" :title="t('sidebar.backToGlobal')">✕</button>
     </div>
 
     <!-- Disaster Accordion -->
@@ -330,7 +327,7 @@ watch([rangeStartDate, rangeEndDate], ([start, end]) => {
               :class="{ active: disasterTypeView === 'active' }"
               @click="disasterTypeView = 'active'"
             >
-              Aktif
+              {{ t('sidebar.viewActive') }}
             </button>
             <button
               type="button"
@@ -338,7 +335,7 @@ watch([rangeStartDate, rangeEndDate], ([start, end]) => {
               :class="{ active: disasterTypeView === 'all' }"
               @click="disasterTypeView = 'all'"
             >
-              Tümü
+              {{ t('sidebar.viewAll') }}
             </button>
           </div>
 
@@ -390,7 +387,7 @@ watch([rangeStartDate, rangeEndDate], ([start, end]) => {
                   @click.stop
                   @change="disasterStore.toggleLayer(dtype.key)"
                   :title="
-                    disasterStore.isLayerActive(dtype.key) ? 'Katmanı Gizle' : 'Katmanı Göster'
+                    disasterStore.isLayerActive(dtype.key) ? t('sidebar.hideLayer') : t('sidebar.showLayer')
                   "
                 />
               </div>
@@ -402,29 +399,29 @@ watch([rangeStartDate, rangeEndDate], ([start, end]) => {
                       class="sev-chip critical"
                       v-if="severityBreakdown[dtype.key].critical > 0"
                     >
-                      ● {{ severityBreakdown[dtype.key].critical }} Kritik
+                      ● {{ severityBreakdown[dtype.key].critical }} {{ t('severity.critical') }}
                     </span>
                     <span class="sev-chip high" v-if="severityBreakdown[dtype.key].high > 0">
-                      ● {{ severityBreakdown[dtype.key].high }} Yüksek
+                      ● {{ severityBreakdown[dtype.key].high }} {{ t('severity.high') }}
                     </span>
                     <span
                       class="sev-chip moderate"
                       v-if="severityBreakdown[dtype.key].moderate > 0"
                     >
-                      ● {{ severityBreakdown[dtype.key].moderate }} Orta
+                      ● {{ severityBreakdown[dtype.key].moderate }} {{ t('severity.moderate') }}
                     </span>
                     <span class="sev-chip low" v-if="severityBreakdown[dtype.key].low > 0">
-                      ● {{ severityBreakdown[dtype.key].low }} Düşük
+                      ● {{ severityBreakdown[dtype.key].low }} {{ t('severity.low') }}
                     </span>
                     <span class="sev-chip minimal" v-if="severityBreakdown[dtype.key].minimal > 0">
-                      • {{ severityBreakdown[dtype.key].minimal }} Minimum
+                      • {{ severityBreakdown[dtype.key].minimal }} {{ t('severity.minimal') }}
                     </span>
                     <span class="sev-chip none" v-if="severityBreakdown[dtype.key].total === 0">
-                      Henüz veri yok
+                      {{ t('sidebar.noDataYet') }}
                     </span>
                   </div>
                   <div class="accordion-loading" v-if="disasterStore.supabaseLoading">
-                    <span class="loading-pulse">⏳ Yükleniyor…</span>
+                    <span class="loading-pulse">⏳ {{ t('sidebar.loadingEllipsis') }}</span>
                   </div>
                 </div>
               </Transition>
@@ -501,14 +498,14 @@ watch([rangeStartDate, rangeEndDate], ([start, end]) => {
             .replace(' Yıl', 'y')
         }}
       </button>
-      <button class="btn-icon collapsed-action calendar-mini" title="Takvim">📅</button>
+      <button class="btn-icon collapsed-action calendar-mini" :title="t('sidebar.calendar')">📅</button>
 
       <div class="collapsed-divider"></div>
 
       <!-- 4) 2D/3D -->
       <button
         class="btn-icon collapsed-action"
-        :title="isGlobeMode ? 'View 2D' : 'View 3D'"
+        :title="isGlobeMode ? t('sidebar.view2D') : t('sidebar.view3D')"
         @click="isGlobeMode ? uiStore.transitionToMap(20, 30, 3) : uiStore.transitionToGlobe()"
       >
         {{ isGlobeMode ? '🗺️' : '🌐' }}
@@ -530,7 +527,7 @@ watch([rangeStartDate, rangeEndDate], ([start, end]) => {
         class="btn-icon collapsed-action"
         :class="{ active: uiStore.mapMode === 'normal' }"
         @click="uiStore.mapMode = 'normal'"
-        title="Durum (Event)"
+        :title="t('sidebar.modeNormal')"
       >
         📍
       </button>
@@ -538,7 +535,7 @@ watch([rangeStartDate, rangeEndDate], ([start, end]) => {
         class="btn-icon collapsed-action"
         :class="{ active: uiStore.mapMode === 'hexagon' }"
         @click="uiStore.mapMode = 'hexagon'"
-        title="Petek (Hex)"
+        :title="t('sidebar.modeHexagon')"
       >
         ⬡
       </button>
@@ -546,7 +543,7 @@ watch([rangeStartDate, rangeEndDate], ([start, end]) => {
         class="btn-icon collapsed-action"
         :class="{ active: uiStore.mapMode === 'heatmap' }"
         @click="uiStore.mapMode = 'heatmap'"
-        title="Isı (Heat)"
+        :title="t('sidebar.modeHeatmap')"
       >
         🔥
       </button>
@@ -595,14 +592,14 @@ watch([rangeStartDate, rangeEndDate], ([start, end]) => {
     <!-- Magnitude & Depth Filters -->
     <div class="sidebar-section filter-sliders" v-if="!isCollapsed">
       <button class="section-toggle" @click="toggleSection('magnitudeDepth')">
-        <span class="section-title">Filtreler</span>
+        <span class="section-title">{{ t('sidebar.filters') }}</span>
         <span class="section-arrow" :class="{ open: openSections.magnitudeDepth }">›</span>
       </button>
       <Transition name="section-accordion">
         <div v-if="openSections.magnitudeDepth">
           <div class="filter-row">
             <div class="filter-label">
-              <span>BÜYÜKLÜK</span>
+              <span>{{ t('sidebar.magnitude') }}</span>
               <span class="filter-val accent">{{
                 disasterStore.minMagnitude > 0 ? `M${disasterStore.minMagnitude}+` : '0+'
               }}</span>
@@ -621,9 +618,9 @@ watch([rangeStartDate, rangeEndDate], ([start, end]) => {
 
           <div class="filter-row">
             <div class="filter-label">
-              <span>DERİNLİK</span>
+              <span>{{ t('sidebar.depth') }}</span>
               <span class="filter-val accent">{{
-                disasterStore.maxDepth === null ? 'TÜMÜ' : `≤${disasterStore.maxDepth} km`
+                disasterStore.maxDepth === null ? t('sidebar.depthAll') : `≤${disasterStore.maxDepth} km`
               }}</span>
             </div>
             <input
@@ -643,7 +640,7 @@ watch([rangeStartDate, rangeEndDate], ([start, end]) => {
 
           <div class="filter-row time-slider-row">
             <div class="filter-label">
-              <span>SÜRE</span>
+              <span>{{ t('sidebar.duration') }}</span>
               <span class="filter-val accent">{{ selectedTimeRange }}</span>
             </div>
             <input
@@ -662,12 +659,12 @@ watch([rangeStartDate, rangeEndDate], ([start, end]) => {
 
           <div class="date-filter-card inline-date-filter">
             <div class="filter-label">
-              <span>ZAMAN ARALIĞI</span>
+              <span>{{ t('sidebar.dateRange') }}</span>
               <span class="filter-val accent">{{ selectedRangeLabel }}</span>
             </div>
             <div class="date-filters">
               <label class="date-label">
-                <span>Takvim (Tek Gün / Aralık)</span>
+                <span>{{ t('sidebar.calendarSingleRange') }}</span>
                 <input
                   type="date"
                   class="date-input"
@@ -676,7 +673,7 @@ watch([rangeStartDate, rangeEndDate], ([start, end]) => {
                 />
               </label>
               <span class="date-hint">
-                1 seçim: tek gün. 2 seçim: aralık. Sonraki seçim yeni aralık başlatır.
+                {{ t('sidebar.dateRangeHint') }}
               </span>
             </div>
           </div>
@@ -687,7 +684,7 @@ watch([rangeStartDate, rangeEndDate], ([start, end]) => {
     <!-- View Mode: 2D/3D + Durum/Petek/Isı + hex resolution, all in one place -->
     <div class="sidebar-section" v-if="!isCollapsed">
       <button class="section-toggle" @click="toggleSection('viewMode')">
-        <span class="section-title">Görünüm Modu</span>
+        <span class="section-title">{{ t('sidebar.viewModeSection') }}</span>
         <span class="section-arrow" :class="{ open: openSections.viewMode }">›</span>
       </button>
       <Transition name="section-accordion">
@@ -699,11 +696,11 @@ watch([rangeStartDate, rangeEndDate], ([start, end]) => {
                 class="switch-input"
                 :checked="isGlobeMode"
                 @change="handleViewModeSwitch"
-                aria-label="Toggle 3D Globe Mode"
+                :aria-label="t('sidebar.toggle3DAria')"
               />
               <div class="switch-track">
-                <span class="track-text text-3d">View 3D</span>
-                <span class="track-text text-2d">View 2D</span>
+                <span class="track-text text-3d">{{ t('sidebar.view3D') }}</span>
+                <span class="track-text text-2d">{{ t('sidebar.view2D') }}</span>
                 <div class="switch-knob">
                   <div class="cube">
                     <div class="face front"></div>
@@ -728,25 +725,25 @@ watch([rangeStartDate, rangeEndDate], ([start, end]) => {
                 class="mode-btn"
                 :class="{ active: uiStore.mapMode === 'normal' }"
                 @click="uiStore.mapMode = 'normal'"
-                title="Durum (1)"
+                :title="`${t('sidebar.modeNormal')} (1)`"
               >
-                📍 Durum
+                📍 {{ t('sidebar.modeNormal') }}
               </button>
               <button
                 class="mode-btn"
                 :class="{ active: uiStore.mapMode === 'hexagon' }"
                 @click="uiStore.mapMode = 'hexagon'"
-                title="Petek (2)"
+                :title="`${t('sidebar.modeHexagon')} (2)`"
               >
-                ⬡ Petek
+                ⬡ {{ t('sidebar.modeHexagon') }}
               </button>
               <button
                 class="mode-btn"
                 :class="{ active: uiStore.mapMode === 'heatmap' }"
                 @click="uiStore.mapMode = 'heatmap'"
-                title="Isı (3)"
+                :title="`${t('sidebar.modeHeatmap')} (3)`"
               >
-                🔥 Isı
+                🔥 {{ t('sidebar.modeHeatmap') }}
               </button>
             </div>
             <div class="hex-resolution-control">
@@ -773,7 +770,7 @@ watch([rangeStartDate, rangeEndDate], ([start, end]) => {
          region filter grouped together instead of scattered across panels. -->
     <div class="sidebar-section" v-if="!isCollapsed">
       <button class="section-toggle" @click="toggleSection('location')">
-        <span class="section-title">Konum &amp; Uyarı</span>
+        <span class="section-title">{{ t('sidebar.locationAlertSection') }}</span>
         <span class="section-arrow" :class="{ open: openSections.location }">›</span>
       </button>
       <Transition name="section-accordion">
@@ -810,7 +807,7 @@ watch([rangeStartDate, rangeEndDate], ([start, end]) => {
             :class="['btn', 'btn-ghost', 'sidebar-action-btn', { active: disasterStore.showOnlyMyRegion }]"
             @click="disasterStore.showOnlyMyRegion = !disasterStore.showOnlyMyRegion"
           >
-            📍 {{ disasterStore.showOnlyMyRegion ? 'Tüm Ülke' : 'Sadece Bölgem' }}
+            📍 {{ disasterStore.showOnlyMyRegion ? t('sidebar.wholeCountry') : t('sidebar.onlyMyRegion') }}
           </button>
         </div>
       </Transition>
@@ -872,6 +869,8 @@ watch([rangeStartDate, rangeEndDate], ([start, end]) => {
   width: var(--sidebar-width);
   height: 100vh;
   z-index: var(--z-sidebar);
+  display: flex;
+  flex-direction: column;
   border-radius: 0;
   border-left: none;
   border-top: none;
@@ -883,11 +882,11 @@ watch([rangeStartDate, rangeEndDate], ([start, end]) => {
     box-shadow 0.35s ease;
 }
 
-/* Kept overflow off .sidebar itself (no clipping box) so .sidebar-toggle can
-   float half-outside the right edge; the scrollable content lives in here
-   instead — same padding/gap .sidebar used to carry directly. */
+/* Kept overflow off .sidebar itself (no clipping box) so the collapse
+   toggle — a child of .sidebar-header below, positioned past its edge —
+   isn't clipped. The scrollable body lives in here instead. */
 .sidebar-scroll {
-  height: 100%;
+  flex: 1;
   min-height: 0;
   display: flex;
   flex-direction: column;
@@ -908,11 +907,23 @@ watch([rangeStartDate, rangeEndDate], ([start, end]) => {
   padding: var(--space-sm);
 }
 
+/* Not inside .sidebar-scroll — sits outside its clipped, scrolling area so
+   .panel-collapse-toggle-slot (a child of this, below) can float past the
+   sidebar's right edge without being cut off. flex-shrink:0 so .sidebar's
+   flex layout never squeezes it. */
 .sidebar-header {
+  position: relative;
+  flex-shrink: 0;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding-bottom: var(--space-md);
+  /* Fixed height (not just padding) so this lines up exactly with
+     .dock-header in MapView.vue — their content differs (icon+title+
+     subtitle vs a single title line), so matching padding alone wouldn't
+     make the two boxes — and the toggles anchored to each — the same
+     height. Keep both in sync if either changes. */
+  min-height: 63px;
+  padding: var(--space-md);
   border-bottom: 1px solid var(--glass-border);
 }
 
@@ -998,39 +1009,18 @@ watch([rangeStartDate, rangeEndDate], ([start, end]) => {
   white-space: nowrap;
 }
 
-/* Matches .impact-panel-toggle (MapView.vue) — same round pill, size,
-   colors, hover accent and "floats half-outside the panel edge" placement,
-   so the two collapse/expand controls read as one consistent control type
-   instead of two different button styles in two different spots. */
-.sidebar-toggle {
+/* Anchored to .sidebar-header's own bottom-right corner (top:100%/
+   left:100%, both relative to the header, then centered on that point) —
+   a genuine CSS child of the menu it sits next to, not a guessed or
+   JS-measured pixel value. Straddles the header's border-bottom/the
+   sidebar's edge line the same way .panel-collapse-toggle-slot in
+   MapView.vue straddles the dock's edge line. */
+.panel-collapse-toggle-slot {
   position: absolute;
-  top: 14px;
-  right: -18px;
+  top: 100%;
+  left: 100%;
   z-index: 2;
-  width: 36px;
-  height: 36px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 999px;
-  border: 1px solid rgba(255, 255, 255, 0.18);
-  background: rgba(20, 24, 33, 0.92);
-  color: #e2e8f0;
-  font-size: 1.35rem;
-  font-weight: 700;
-  line-height: 1;
-  cursor: pointer;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.28);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
-  transition:
-    background 0.15s ease,
-    border-color 0.15s ease;
-}
-
-.sidebar-toggle:hover {
-  background: rgba(77, 163, 255, 0.28);
-  border-color: rgba(77, 163, 255, 0.42);
+  transform: translate(-50%, -50%);
 }
 
 .sidebar-collapsed .sidebar-header {
@@ -1042,13 +1032,6 @@ watch([rangeStartDate, rangeEndDate], ([start, end]) => {
 
 .sidebar-collapsed .sidebar-brand {
   justify-content: center;
-}
-
-.sidebar-collapsed .sidebar-toggle {
-  border-color: var(--color-accent, #4aa3ff);
-  color: var(--color-accent, #4aa3ff);
-  background: rgba(77, 163, 255, 0.12);
-  box-shadow: 0 0 10px rgba(77, 163, 255, 0.25);
 }
 
 .sidebar-section,
@@ -1879,10 +1862,13 @@ html[data-theme='light'] .footer-sources {
   }
 
   /* The sheet spans the full viewport width here, so there's no right edge
-     to float past — sit fully inside instead of hanging off-screen. */
-  .sidebar-toggle {
+     to sit past — pin inside instead of hanging off-screen. */
+  .panel-collapse-toggle-slot {
     top: 20px;
+    left: auto;
     right: 14px;
+    margin-left: 0;
+    transform: none;
   }
 
   /* Handle for the bottom sheet */

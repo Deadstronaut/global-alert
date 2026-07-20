@@ -44,7 +44,36 @@
     "locationDenied": "位置权限被拒绝",
     "hexResolution": {
       "label": "六边形大小"
-    }
+    },
+    "countryFilterActive": "国家筛选已启用",
+    "backToGlobal": "返回全局",
+    "viewActive": "活跃",
+    "viewAll": "全部",
+    "hideLayer": "隐藏图层",
+    "showLayer": "显示图层",
+    "noDataYet": "暂无数据",
+    "loadingEllipsis": "加载中…",
+    "calendar": "日历",
+    "view2D": "2D 视图",
+    "view3D": "3D 视图",
+    "toggle3DAria": "切换 3D 地球模式",
+    "filters": "筛选条件",
+    "magnitude": "震级",
+    "depth": "深度",
+    "depthAll": "全部",
+    "duration": "时长",
+    "dateRange": "日期范围",
+    "calendarSingleRange": "日历（单日/范围）",
+    "dateRangeHint": "选择1次：单日。选择2次：范围。再次选择将开始新范围。",
+    "viewModeSection": "视图模式",
+    "modeNormal": "状态",
+    "modeHexagon": "六边形",
+    "modeHeatmap": "热图",
+    "locationAlertSection": "位置与警报",
+    "wholeCountry": "全国",
+    "onlyMyRegion": "仅我的地区",
+    "expand": "展开",
+    "collapse": "收起"
   },
   "alerts": {
     "title": "最近威胁",
@@ -629,7 +658,48 @@
     "drillLessonsLearned": "经验教训记录",
     "drillRelatedHazard": "相关灾害类型(可选)",
     "drillSaveFeedback": "保存",
-    "drillGoToThresholdEditor": "前往阈值编辑器 →"
+    "drillGoToThresholdEditor": "前往阈值编辑器 →",
+    "categories": {
+      "identity": "身份与访问",
+      "data": "数据管理",
+      "operations": "运营与响应",
+      "config": "配置",
+      "audit": "审计"
+    },
+    "tabs": {
+      "users": "用户",
+      "orgs": "组织",
+      "sources": "数据源",
+      "csv": "上传文件",
+      "manual": "手动录入",
+      "boundaries": "边界数据",
+      "drill": "演练"
+    },
+    "table": {
+      "email": "邮箱",
+      "fullName": "姓名",
+      "role": "角色",
+      "country": "国家",
+      "org": "组织",
+      "registered": "注册时间",
+      "action": "操作",
+      "exportCsv": "导出 CSV",
+      "exportJson": "导出 JSON"
+    },
+    "header": {
+      "title": "管理面板",
+      "subtitle": "管理与访问控制",
+      "backToMap": "地图",
+      "logout": "退出登录"
+    },
+    "metrics": {
+      "users": "用户",
+      "orgs": "组织",
+      "activeSources": "活跃数据源",
+      "liveFeed": "实时数据流",
+      "activeDrills": "进行中的演练",
+      "auditRecords": "审计记录"
+    }
   },
   "shelters": {
     "tabLabel": "避难所",

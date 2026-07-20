@@ -44,7 +44,36 @@
     "locationDenied": "Autorisation de localisation refusée",
     "hexResolution": {
       "label": "Taille de l'hexagone"
-    }
+    },
+    "countryFilterActive": "Filtre Pays Actif",
+    "backToGlobal": "Retour au global",
+    "viewActive": "Actif",
+    "viewAll": "Tous",
+    "hideLayer": "Masquer la Couche",
+    "showLayer": "Afficher la Couche",
+    "noDataYet": "Pas encore de données",
+    "loadingEllipsis": "Chargement…",
+    "calendar": "Calendrier",
+    "view2D": "Vue 2D",
+    "view3D": "Vue 3D",
+    "toggle3DAria": "Basculer le Mode Globe 3D",
+    "filters": "Filtres",
+    "magnitude": "MAGNITUDE",
+    "depth": "PROFONDEUR",
+    "depthAll": "TOUS",
+    "duration": "DURÉE",
+    "dateRange": "PLAGE DE DATES",
+    "calendarSingleRange": "Calendrier (Jour Unique / Plage)",
+    "dateRangeHint": "1 sélection : un jour. 2 sélections : une plage. La sélection suivante démarre une nouvelle plage.",
+    "viewModeSection": "Mode d'Affichage",
+    "modeNormal": "État",
+    "modeHexagon": "Hexagones",
+    "modeHeatmap": "Carte thermique",
+    "locationAlertSection": "Position et Alertes",
+    "wholeCountry": "Tout le Pays",
+    "onlyMyRegion": "Seulement Ma Région",
+    "expand": "Développer",
+    "collapse": "Réduire"
   },
   "alerts": {
     "title": "Menaces les plus proches",
@@ -629,7 +658,48 @@
     "drillLessonsLearned": "Note de Leçons Apprises",
     "drillRelatedHazard": "Type de Risque Associé (facultatif)",
     "drillSaveFeedback": "Enregistrer",
-    "drillGoToThresholdEditor": "Aller à l'Éditeur de Seuils →"
+    "drillGoToThresholdEditor": "Aller à l'Éditeur de Seuils →",
+    "categories": {
+      "identity": "Identité et Accès",
+      "data": "Gestion des Données",
+      "operations": "Opérations et Réponse",
+      "config": "Configuration",
+      "audit": "Audit"
+    },
+    "tabs": {
+      "users": "Utilisateurs",
+      "orgs": "Organisations",
+      "sources": "Sources de Données",
+      "csv": "Téléverser un Fichier",
+      "manual": "Saisie Manuelle",
+      "boundaries": "Données de Limites",
+      "drill": "Exercice"
+    },
+    "table": {
+      "email": "E-mail",
+      "fullName": "Nom Complet",
+      "role": "Rôle",
+      "country": "Pays",
+      "org": "Org",
+      "registered": "Inscrit",
+      "action": "Action",
+      "exportCsv": "Exporter CSV",
+      "exportJson": "Exporter JSON"
+    },
+    "header": {
+      "title": "Panneau d'Administration",
+      "subtitle": "Administration et Contrôle d'Accès",
+      "backToMap": "Carte",
+      "logout": "Déconnexion"
+    },
+    "metrics": {
+      "users": "Utilisateurs",
+      "orgs": "Organisations",
+      "activeSources": "Sources Actives",
+      "liveFeed": "Flux en Direct",
+      "activeDrills": "Exercices Actifs",
+      "auditRecords": "Registres d'Audit"
+    }
   },
   "shelters": {
     "tabLabel": "Abris",

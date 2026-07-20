@@ -44,7 +44,36 @@
     "locationDenied": "تم رفض إذن الوصول إلى الموقع",
     "hexResolution": {
       "label": "حجم السداسي"
-    }
+    },
+    "countryFilterActive": "تصفية الدولة نشطة",
+    "backToGlobal": "العودة إلى العالمي",
+    "viewActive": "نشط",
+    "viewAll": "الكل",
+    "hideLayer": "إخفاء الطبقة",
+    "showLayer": "إظهار الطبقة",
+    "noDataYet": "لا توجد بيانات بعد",
+    "loadingEllipsis": "جارٍ التحميل…",
+    "calendar": "التقويم",
+    "view2D": "عرض ثنائي الأبعاد",
+    "view3D": "عرض ثلاثي الأبعاد",
+    "toggle3DAria": "تبديل وضع الكرة الأرضية ثلاثي الأبعاد",
+    "filters": "المرشحات",
+    "magnitude": "الشدة",
+    "depth": "العمق",
+    "depthAll": "الكل",
+    "duration": "المدة",
+    "dateRange": "نطاق التاريخ",
+    "calendarSingleRange": "التقويم (يوم واحد / نطاق)",
+    "dateRangeHint": "اختيار واحد: يوم واحد. اختياران: نطاق. الاختيار التالي يبدأ نطاقًا جديدًا.",
+    "viewModeSection": "وضع العرض",
+    "modeNormal": "الحالة",
+    "modeHexagon": "خلايا سداسية",
+    "modeHeatmap": "خريطة حرارية",
+    "locationAlertSection": "الموقع والتنبيهات",
+    "wholeCountry": "الدولة بأكملها",
+    "onlyMyRegion": "منطقتي فقط",
+    "expand": "توسيع",
+    "collapse": "طي"
   },
   "alerts": {
     "title": "أقرب التهديدات",
@@ -629,7 +658,48 @@
     "drillLessonsLearned": "ملاحظة الدروس المستفادة",
     "drillRelatedHazard": "نوع الخطر المرتبط (اختياري)",
     "drillSaveFeedback": "حفظ",
-    "drillGoToThresholdEditor": "الانتقال إلى محرر العتبات ←"
+    "drillGoToThresholdEditor": "الانتقال إلى محرر العتبات ←",
+    "categories": {
+      "identity": "الهوية والوصول",
+      "data": "إدارة البيانات",
+      "operations": "العمليات والاستجابة",
+      "config": "الإعدادات",
+      "audit": "التدقيق"
+    },
+    "tabs": {
+      "users": "المستخدمون",
+      "orgs": "المؤسسات",
+      "sources": "مصادر البيانات",
+      "csv": "رفع ملف",
+      "manual": "إدخال يدوي",
+      "boundaries": "بيانات الحدود",
+      "drill": "تمرين"
+    },
+    "table": {
+      "email": "البريد الإلكتروني",
+      "fullName": "الاسم الكامل",
+      "role": "الدور",
+      "country": "الدولة",
+      "org": "المؤسسة",
+      "registered": "تاريخ التسجيل",
+      "action": "الإجراء",
+      "exportCsv": "تصدير CSV",
+      "exportJson": "تصدير JSON"
+    },
+    "header": {
+      "title": "لوحة الإدارة",
+      "subtitle": "الإدارة والتحكم في الوصول",
+      "backToMap": "الخريطة",
+      "logout": "تسجيل الخروج"
+    },
+    "metrics": {
+      "users": "المستخدمون",
+      "orgs": "المؤسسات",
+      "activeSources": "المصادر النشطة",
+      "liveFeed": "البث المباشر",
+      "activeDrills": "التمارين النشطة",
+      "auditRecords": "سجلات التدقيق"
+    }
   },
   "shelters": {
     "tabLabel": "الملاجئ",

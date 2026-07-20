@@ -44,7 +44,36 @@
     "locationDenied": "Permiso de ubicación denegado",
     "hexResolution": {
       "label": "Tamaño del hexágono"
-    }
+    },
+    "countryFilterActive": "Filtro de País Activo",
+    "backToGlobal": "Volver al global",
+    "viewActive": "Activo",
+    "viewAll": "Todos",
+    "hideLayer": "Ocultar Capa",
+    "showLayer": "Mostrar Capa",
+    "noDataYet": "Aún no hay datos",
+    "loadingEllipsis": "Cargando…",
+    "calendar": "Calendario",
+    "view2D": "Vista 2D",
+    "view3D": "Vista 3D",
+    "toggle3DAria": "Alternar Modo Globo 3D",
+    "filters": "Filtros",
+    "magnitude": "MAGNITUD",
+    "depth": "PROFUNDIDAD",
+    "depthAll": "TODOS",
+    "duration": "DURACIÓN",
+    "dateRange": "RANGO DE FECHAS",
+    "calendarSingleRange": "Calendario (Un Día / Rango)",
+    "dateRangeHint": "1 selección: un día. 2 selecciones: rango. La siguiente selección inicia un nuevo rango.",
+    "viewModeSection": "Modo de Vista",
+    "modeNormal": "Estado",
+    "modeHexagon": "Hexágonos",
+    "modeHeatmap": "Mapa de calor",
+    "locationAlertSection": "Ubicación y Alertas",
+    "wholeCountry": "Todo el País",
+    "onlyMyRegion": "Solo Mi Región",
+    "expand": "Expandir",
+    "collapse": "Contraer"
   },
   "alerts": {
     "title": "Amenazas más cercanas",
@@ -629,7 +658,48 @@
     "drillLessonsLearned": "Nota de Lecciones Aprendidas",
     "drillRelatedHazard": "Tipo de Riesgo Relacionado (opcional)",
     "drillSaveFeedback": "Guardar",
-    "drillGoToThresholdEditor": "Ir al Editor de Umbrales →"
+    "drillGoToThresholdEditor": "Ir al Editor de Umbrales →",
+    "categories": {
+      "identity": "Identidad y Acceso",
+      "data": "Gestión de Datos",
+      "operations": "Operaciones y Respuesta",
+      "config": "Configuración",
+      "audit": "Auditoría"
+    },
+    "tabs": {
+      "users": "Usuarios",
+      "orgs": "Organizaciones",
+      "sources": "Fuentes de Datos",
+      "csv": "Subir Archivo",
+      "manual": "Entrada Manual",
+      "boundaries": "Datos de Límites",
+      "drill": "Simulacro"
+    },
+    "table": {
+      "email": "Correo",
+      "fullName": "Nombre Completo",
+      "role": "Rol",
+      "country": "País",
+      "org": "Org",
+      "registered": "Registrado",
+      "action": "Acción",
+      "exportCsv": "Exportar CSV",
+      "exportJson": "Exportar JSON"
+    },
+    "header": {
+      "title": "Panel de Administración",
+      "subtitle": "Administración y Control de Acceso",
+      "backToMap": "Mapa",
+      "logout": "Cerrar sesión"
+    },
+    "metrics": {
+      "users": "Usuarios",
+      "orgs": "Organizaciones",
+      "activeSources": "Fuentes Activas",
+      "liveFeed": "Feed en Vivo",
+      "activeDrills": "Simulacros Activos",
+      "auditRecords": "Registros de Auditoría"
+    }
   },
   "shelters": {
     "tabLabel": "Refugios",

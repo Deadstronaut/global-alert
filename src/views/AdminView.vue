@@ -903,6 +903,62 @@ function openAuditTab() {
   loadDeadLetterCount()
 }
 
+// Two-tier nav: 17 flat tabs used to wrap onto two crowded rows with no
+// structure. Grouped into categories here; clicking a category shows only
+// its own tabs below, picking one automatically if the current tab isn't
+// in that category (or isn't visible under the current permissions).
+const CATEGORIES = [
+  { id: 'identity', icon: '👥', labelKey: 'admin.categories.identity' },
+  { id: 'data', icon: '📡', labelKey: 'admin.categories.data' },
+  { id: 'operations', icon: '🎯', labelKey: 'admin.categories.operations' },
+  { id: 'config', icon: '⚙️', labelKey: 'admin.categories.config' },
+  { id: 'audit', icon: '🛡️', labelKey: 'admin.categories.audit' },
+]
+
+const ADMIN_TABS = [
+  { id: 'users', category: 'identity', icon: '👥', labelKey: 'admin.tabs.users', visible: () => true },
+  { id: 'orgs', category: 'identity', icon: '🏢', labelKey: 'admin.tabs.orgs', visible: () => true },
+  { id: 'contacts', category: 'identity', icon: '📇', labelKey: 'contacts.tabLabel', visible: () => canCreateUsers.value },
+  { id: 'sources', category: 'data', icon: '📡', labelKey: 'admin.tabs.sources', visible: () => true },
+  { id: 'csv', category: 'data', icon: '📁', labelKey: 'admin.tabs.csv', visible: () => canAdmin.value },
+  { id: 'manual', category: 'data', icon: '✍️', labelKey: 'admin.tabs.manual', visible: () => canAdmin.value },
+  { id: 'boundaries', category: 'data', icon: '🗺️', labelKey: 'admin.tabs.boundaries', visible: () => canAdmin.value },
+  { id: 'mapLayers', category: 'data', icon: '🗺️', labelKey: 'mapLayers.tabLabel', visible: () => hasCapability('map_layers') },
+  { id: 'exposure', category: 'data', icon: '📊', labelKey: 'impact.exposure.tabLabel', visible: () => canAdmin.value },
+  { id: 'drill', category: 'operations', icon: '🎯', labelKey: 'admin.tabs.drill', visible: () => true },
+  { id: 'dispatch', category: 'operations', icon: '📨', labelKey: 'dispatch.panelTitle', visible: () => canCreateUsers.value },
+  { id: 'communityReports', category: 'operations', icon: '📢', labelKey: 'communityReport.moderation.tabLabel', visible: () => canAdmin.value },
+  { id: 'assignedCommunityReports', category: 'operations', icon: '📢', labelKey: 'communityReport.assigned.tabLabel', visible: () => isOrgAdmin.value },
+  { id: 'risk', category: 'operations', icon: '🧭', labelKey: 'risk.tabLabel', visible: () => canAdmin.value },
+  { id: 'hazardTaxonomy', category: 'config', icon: '🌋', labelKey: 'hazardTaxonomy.tabLabel', visible: () => hasCapability('hazard_taxonomy') },
+  { id: 'sopRepository', category: 'config', icon: '📋', labelKey: 'incidentTracking.sopTabLabel', visible: () => hasCapability('sop_repository') },
+  { id: 'integrations', category: 'config', icon: '🔌', labelKey: 'integrations.tabLabel', visible: () => canCreateUsers.value },
+  { id: 'audit', category: 'audit', icon: '🛡️', labelKey: 'audit.tabLabel', visible: () => hasCapability('audit'), onClick: openAuditTab },
+]
+
+const activeCategory = ref(CATEGORIES[0].id)
+
+watch(tab, (newTab) => {
+  const found = ADMIN_TABS.find((item) => item.id === newTab)
+  if (found) activeCategory.value = found.category
+})
+
+const visibleCategories = computed(() =>
+  CATEGORIES.filter((cat) => ADMIN_TABS.some((item) => item.category === cat.id && item.visible()))
+)
+
+const visibleTabsInActiveCategory = computed(() =>
+  ADMIN_TABS.filter((item) => item.category === activeCategory.value && item.visible())
+)
+
+function selectCategory(catId) {
+  activeCategory.value = catId
+  const stillValid = ADMIN_TABS.some((item) => item.id === tab.value && item.category === catId && item.visible())
+  if (stillValid) return
+  const firstVisible = ADMIN_TABS.find((item) => item.category === catId && item.visible())
+  if (firstVisible) (firstVisible.onClick ?? (() => { tab.value = firstVisible.id }))()
+}
+
 function prevAuditPage() {
   auditPage.value--
   loadAuditLog()
@@ -970,20 +1026,20 @@ const adminMetrics = computed(() => {
   const healthyTier1 = tier1Sources.filter((source) => source.health_state === 'healthy').length
 
   return [
-    { label: 'Kullanıcı', value: users.value.length, tone: usersError.value ? 'danger' : 'info' },
-    { label: 'Organizasyon', value: orgs.value.length, tone: orgsError.value ? 'danger' : 'neutral' },
+    { label: t('admin.metrics.users'), value: users.value.length, tone: usersError.value ? 'danger' : 'info' },
+    { label: t('admin.metrics.orgs'), value: orgs.value.length, tone: orgsError.value ? 'danger' : 'neutral' },
     {
-      label: 'Aktif Kaynak',
+      label: t('admin.metrics.activeSources'),
       value: `${activeSources}/${sourcesStore.sources.length || 0}`,
       tone: sourcesStore.error ? 'danger' : 'success',
     },
     {
-      label: 'Canlı Feed',
+      label: t('admin.metrics.liveFeed'),
       value: `${healthyTier1}/${tier1Sources.length || 0}`,
       tone: healthyTier1 >= tier1Sources.length * 0.8 ? 'success' : 'warning',
     },
-    { label: 'Aktif Tatbikat', value: runningDrills, tone: runningDrills ? 'warning' : 'neutral' },
-    { label: 'Audit Kayıt', value: auditTotalCount.value, tone: auditError.value ? 'danger' : 'info' },
+    { label: t('admin.metrics.activeDrills'), value: runningDrills, tone: runningDrills ? 'warning' : 'neutral' },
+    { label: t('admin.metrics.auditRecords'), value: auditTotalCount.value, tone: auditError.value ? 'danger' : 'info' },
   ]
 })
 
@@ -1005,13 +1061,13 @@ onUnmounted(() => {
   <div class="admin-page">
     <div class="admin-header">
       <div class="admin-header-top">
-        <button class="btn-back" @click="router.push('/')">← Harita</button>
+        <button class="btn-back" @click="router.push('/')">← {{ t('admin.header.backToMap') }}</button>
         <button class="btn-back" @click="handleLogout">
-          ⎋ Çıkış Yap
+          ⎋ {{ t('admin.header.logout') }}
         </button>
       </div>
-      <h1 class="admin-title">⚙️ Yönetim Paneli</h1>
-      <span class="admin-subtitle">Administration &amp; Access Control</span>
+      <h1 class="admin-title">⚙️ {{ t('admin.header.title') }}</h1>
+      <span class="admin-subtitle">{{ t('admin.header.subtitle') }}</span>
       <div class="admin-metrics">
         <div
           v-for="metric in adminMetrics"
@@ -1025,115 +1081,34 @@ onUnmounted(() => {
       </div>
     </div>
 
-    <!-- Tabs -->
-    <div class="tabs">
-      <button :class="['tab', { active: tab === 'users' }]" @click="tab = 'users'">
-        👥 Kullanıcılar
-      </button>
-      <button :class="['tab', { active: tab === 'orgs' }]" @click="tab = 'orgs'">
-        🏢 Organizasyonlar
-      </button>
-      <button :class="['tab', { active: tab === 'drill' }]" @click="tab = 'drill'">
-        🎯 Tatbikat
-      </button>
-      <button :class="['tab', { active: tab === 'sources' }]" @click="tab = 'sources'">
-        📡 Veri Kaynakları
-      </button>
-      <button v-if="canAdmin" :class="['tab', { active: tab === 'csv' }]" @click="tab = 'csv'">
-        📁 Dosya Yükle
-      </button>
+    <!-- Categories: styled like the metric cards above (rectangular, tinted
+         border per category) instead of pill buttons, so this row reads as
+         part of the same visual language rather than a bolted-on control. -->
+    <div class="tab-categories">
       <button
-        v-if="canAdmin"
-        :class="['tab', { active: tab === 'manual' }]"
-        @click="tab = 'manual'"
+        v-for="cat in visibleCategories"
+        :key="cat.id"
+        :class="['tab-category', `category-${cat.id}`, { active: activeCategory === cat.id }]"
+        @click="selectCategory(cat.id)"
       >
-        ✍️ Manuel Giriş
-      </button>
-      <button
-        v-if="canAdmin"
-        :class="['tab', { active: tab === 'boundaries' }]"
-        @click="tab = 'boundaries'"
-      >
-        🗺️ Sınır Verisi
-      </button>
-      <button
-        v-if="canCreateUsers"
-        :class="['tab', { active: tab === 'contacts' }]"
-        @click="tab = 'contacts'"
-      >
-        📇 {{ t('contacts.tabLabel') }}
-      </button>
-      <button
-        v-if="canCreateUsers"
-        :class="['tab', { active: tab === 'dispatch' }]"
-        @click="tab = 'dispatch'"
-      >
-        📨 {{ t('dispatch.panelTitle') }}
-      </button>
-      <button
-        v-if="canCreateUsers"
-        :class="['tab', { active: tab === 'integrations' }]"
-        @click="tab = 'integrations'"
-      >
-        🔌 {{ t('integrations.tabLabel') }}
-      </button>
-      <button
-        v-if="hasCapability('hazard_taxonomy')"
-        :class="['tab', { active: tab === 'hazardTaxonomy' }]"
-        @click="tab = 'hazardTaxonomy'"
-      >
-        🌋 {{ t('hazardTaxonomy.tabLabel') }}
-      </button>
-      <button
-        v-if="hasCapability('sop_repository')"
-        :class="['tab', { active: tab === 'sopRepository' }]"
-        @click="tab = 'sopRepository'"
-      >
-        📋 {{ t('incidentTracking.sopTabLabel') }}
-      </button>
-      <button
-        v-if="hasCapability('map_layers')"
-        :class="['tab', { active: tab === 'mapLayers' }]"
-        @click="tab = 'mapLayers'"
-      >
-        🗺️ {{ t('mapLayers.tabLabel') }}
-      </button>
-      <button
-        v-if="hasCapability('audit')"
-        :class="['tab', { active: tab === 'audit' }]"
-        @click="openAuditTab"
-      >
-        🛡️ {{ t('audit.tabLabel') }}
-      </button>
-      <button
-        v-if="canAdmin"
-        :class="['tab', { active: tab === 'exposure' }]"
-        @click="tab = 'exposure'"
-      >
-        📊 {{ t('impact.exposure.tabLabel') }}
-      </button>
-      <button
-        v-if="canAdmin"
-        :class="['tab', { active: tab === 'risk' }]"
-        @click="tab = 'risk'"
-      >
-        🧭 {{ t('risk.tabLabel') }}
-      </button>
-      <button
-        v-if="canAdmin"
-        :class="['tab', { active: tab === 'communityReports' }]"
-        @click="tab = 'communityReports'"
-      >
-        📢 {{ t('communityReport.moderation.tabLabel') }}
-      </button>
-      <button
-        v-if="isOrgAdmin"
-        :class="['tab', { active: tab === 'assignedCommunityReports' }]"
-        @click="tab = 'assignedCommunityReports'"
-      >
-        📢 {{ t('communityReport.assigned.tabLabel') }}
+        <span class="tab-category-icon">{{ cat.icon }}</span>
+        <span class="tab-category-label">{{ t(cat.labelKey) }}</span>
       </button>
     </div>
+
+    <!-- Tabs (within the active category) — transitions in on category switch -->
+    <Transition name="category-tabs" mode="out-in">
+    <div class="tabs" :key="activeCategory">
+      <button
+        v-for="tabItem in visibleTabsInActiveCategory"
+        :key="tabItem.id"
+        :class="['tab', { active: tab === tabItem.id }]"
+        @click="tabItem.onClick ? tabItem.onClick() : (tab = tabItem.id)"
+      >
+        {{ tabItem.icon }} {{ tabItem.labelKey ? t(tabItem.labelKey) : tabItem.label }}
+      </button>
+    </div>
+    </Transition>
 
     <!-- ── Users tab ─────────────────────────────────────────────────────── -->
     <div v-if="tab === 'users'" class="tab-content">
@@ -1201,21 +1176,21 @@ onUnmounted(() => {
         <button class="btn-export" @click="downloadAccessReview('csv')">{{ t('admin.accessReview.exportCsv') }}</button>
         <button class="btn-export" @click="downloadAccessReview('json')">{{ t('admin.accessReview.exportJson') }}</button>
       </div>
-      <div v-if="usersLoading" class="tab-loading">Yükleniyor...</div>
+      <div v-if="usersLoading" class="tab-loading">{{ t('sidebar.loadingEllipsis') }}</div>
       <div v-else class="users-table-wrap">
         <table class="data-table">
           <thead>
             <tr>
-              <th>Email</th>
-              <th>Ad Soyad</th>
-              <th>Rol</th>
-              <th>Ülke</th>
-              <th>Org</th>
+              <th>{{ t('admin.table.email') }}</th>
+              <th>{{ t('admin.table.fullName') }}</th>
+              <th>{{ t('admin.table.role') }}</th>
+              <th>{{ t('admin.table.country') }}</th>
+              <th>{{ t('admin.table.org') }}</th>
               <th v-if="auth.isSuperAdmin">{{ t('admin.capabilities.columnLabel') }}</th>
               <th v-if="auth.isSuperAdmin">{{ t('admin.accessReview.lastLogin') }}</th>
               <th v-if="auth.isSuperAdmin">{{ t('admin.accessReview.lockStatus') }}</th>
-              <th>Kayıt</th>
-              <th>İşlem</th>
+              <th>{{ t('admin.table.registered') }}</th>
+              <th>{{ t('admin.table.action') }}</th>
             </tr>
           </thead>
           <tbody>
@@ -2051,13 +2026,83 @@ onUnmounted(() => {
 .metric-danger { border-color: rgba(239, 68, 68, 0.34); }
 .metric-info { border-color: rgba(77, 163, 255, 0.28); }
 
+/* Same shape/grid language as .admin-metrics above — rectangular cards with
+   a tinted border, not pill buttons — so this row reads as part of the
+   header rather than a bolted-on, differently-styled control. */
+.tab-categories {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 36px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.14);
+}
+.tab-category {
+  min-height: 54px;
+  padding: 9px 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(15, 23, 42, 0.58);
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 8px;
+  color: var(--color-text-muted, #94a3b8);
+  font-size: 0.8rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+.tab-category-icon {
+  font-size: 1.1rem;
+  line-height: 1;
+}
+.tab-category-label {
+  text-align: left;
+}
+.tab-category:hover:not(.active) {
+  color: var(--color-text-primary, #e2e8f0);
+  background: rgba(255, 255, 255, 0.06);
+}
+
+/* One tone per category, matching the .metric-* accent palette above so the
+   two rows read as the same "flagged card" pattern with different colors. */
+.category-identity { border-color: rgba(77, 163, 255, 0.28); }
+.category-data { border-color: rgba(34, 197, 94, 0.3); }
+.category-operations { border-color: rgba(245, 158, 11, 0.34); }
+.category-config { border-color: rgba(168, 85, 247, 0.32); }
+.category-audit { border-color: rgba(239, 68, 68, 0.34); }
+
+.category-identity.active { color: #dbeafe; background: rgba(77, 163, 255, 0.2); border-color: rgba(77, 163, 255, 0.65); }
+.category-data.active { color: #dcfce7; background: rgba(34, 197, 94, 0.18); border-color: rgba(34, 197, 94, 0.65); }
+.category-operations.active { color: #fef3c7; background: rgba(245, 158, 11, 0.2); border-color: rgba(245, 158, 11, 0.65); }
+.category-config.active { color: #f3e8ff; background: rgba(168, 85, 247, 0.2); border-color: rgba(168, 85, 247, 0.65); }
+.category-audit.active { color: #fee2e2; background: rgba(239, 68, 68, 0.2); border-color: rgba(239, 68, 68, 0.65); }
+
+/* Sub-tab row transitions in when the active category changes instead of
+   just snapping to the new set. */
+.category-tabs-enter-active,
+.category-tabs-leave-active {
+  transition:
+    opacity 0.18s ease,
+    transform 0.18s ease;
+}
+.category-tabs-enter-from {
+  opacity: 0;
+  transform: translateY(-6px);
+}
+.category-tabs-leave-to {
+  opacity: 0;
+  transform: translateY(6px);
+}
+
 .tabs {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
   align-items: center;
   align-content: flex-start;
-  margin-top: 16px;
+  margin-top: 12px;
   margin-bottom: 18px;
   padding: 10px;
   border: 1px solid rgba(148, 163, 184, 0.14);
@@ -2763,6 +2808,10 @@ onUnmounted(() => {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
+  .tab-categories {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
   .tab {
     flex-basis: calc(25% - 8px);
     text-align: center;
@@ -2797,6 +2846,10 @@ onUnmounted(() => {
   }
 
   .admin-metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .tab-categories {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 

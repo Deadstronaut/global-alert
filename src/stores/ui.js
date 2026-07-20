@@ -136,6 +136,11 @@ export const useUIStore = defineStore('ui', () => {
 
     function toggleSettings() {
         settingsPanelOpen.value = !settingsPanelOpen.value;
+        // Settings shares the impact-analysis dock as a flip-card face on the
+        // map view (MapView.vue) — if that dock is collapsed to its narrow
+        // rail, opening settings would silently do nothing visible unless
+        // it's expanded back out too.
+        if (settingsPanelOpen.value) impactPanelCollapsed.value = false;
     }
 
     function setCountryConfig(config) {

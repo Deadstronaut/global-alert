@@ -94,7 +94,22 @@ watch(
     <!-- UI Overlays -->
     <SidebarPanel />
     <AlertPanel />
-    <SettingsPanel />
+
+    <!-- Settings: on the map view, MapView.vue embeds this as a flip-card
+         face inside its own impact-panel-dock instead of floating on top of
+         it (same dock, same position/colors — see MapView.vue's dock-flip).
+         Render the standalone version here only where that dock doesn't
+         exist (globe view) — same panel styling, just a plain slide-in
+         since there's no other face to flip to. -->
+    <Transition name="standalone-settings-dock-slide">
+      <div
+        v-if="uiStore.settingsPanelOpen && uiStore.viewMode !== 'map'"
+        class="standalone-settings-dock"
+      >
+        <SettingsPanel />
+      </div>
+    </Transition>
+
     <EmergencyPopup />
 
     <!-- Mobile sidebar toggle button -->
@@ -135,6 +150,34 @@ watch(
 
 .map-container.active {
   display: block;
+}
+
+/* Same dock geometry/background as .impact-panel-dock + .impact-panel in
+   MapView.vue — kept visually identical even though this instance has no
+   flip partner (no impact-analysis dock exists outside the map view). */
+.standalone-settings-dock {
+  position: fixed;
+  top: 0;
+  right: 0;
+  width: 320px;
+  max-width: 90vw;
+  height: 100vh;
+  z-index: var(--z-alerts);
+  background: rgba(15, 17, 23, 0.92);
+  border-left: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.standalone-settings-dock-slide-enter-active,
+.standalone-settings-dock-slide-leave-active {
+  transition:
+    transform var(--transition-slow),
+    opacity var(--transition-slow);
+}
+
+.standalone-settings-dock-slide-enter-from,
+.standalone-settings-dock-slide-leave-to {
+  transform: translateX(100%);
+  opacity: 0;
 }
 
 .mobile-menu-btn {

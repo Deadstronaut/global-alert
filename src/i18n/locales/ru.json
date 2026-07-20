@@ -44,7 +44,36 @@
     "locationDenied": "Доступ к местоположению запрещен",
     "hexResolution": {
       "label": "Размер шестигранника"
-    }
+    },
+    "countryFilterActive": "Фильтр по стране активен",
+    "backToGlobal": "Вернуться к глобальному",
+    "viewActive": "Активные",
+    "viewAll": "Все",
+    "hideLayer": "Скрыть слой",
+    "showLayer": "Показать слой",
+    "noDataYet": "Данных пока нет",
+    "loadingEllipsis": "Загрузка…",
+    "calendar": "Календарь",
+    "view2D": "Вид 2D",
+    "view3D": "Вид 3D",
+    "toggle3DAria": "Переключить 3D-режим глобуса",
+    "filters": "Фильтры",
+    "magnitude": "МАГНИТУДА",
+    "depth": "ГЛУБИНА",
+    "depthAll": "ВСЕ",
+    "duration": "ДЛИТЕЛЬНОСТЬ",
+    "dateRange": "ДИАПАЗОН ДАТ",
+    "calendarSingleRange": "Календарь (Один день / Диапазон)",
+    "dateRangeHint": "1 выбор: один день. 2 выбора: диапазон. Следующий выбор начинает новый диапазон.",
+    "viewModeSection": "Режим просмотра",
+    "modeNormal": "Статус",
+    "modeHexagon": "Соты",
+    "modeHeatmap": "Тепловая карта",
+    "locationAlertSection": "Местоположение и оповещения",
+    "wholeCountry": "Вся страна",
+    "onlyMyRegion": "Только мой регион",
+    "expand": "Развернуть",
+    "collapse": "Свернуть"
   },
   "alerts": {
     "title": "Ближайшие угрозы",
@@ -629,7 +658,48 @@
     "drillLessonsLearned": "Заметка о Извлечённых Уроках",
     "drillRelatedHazard": "Связанный Тип Опасности (необязательно)",
     "drillSaveFeedback": "Сохранить",
-    "drillGoToThresholdEditor": "Перейти к Редактору Порогов →"
+    "drillGoToThresholdEditor": "Перейти к Редактору Порогов →",
+    "categories": {
+      "identity": "Личность и доступ",
+      "data": "Управление данными",
+      "operations": "Операции и реагирование",
+      "config": "Конфигурация",
+      "audit": "Аудит"
+    },
+    "tabs": {
+      "users": "Пользователи",
+      "orgs": "Организации",
+      "sources": "Источники данных",
+      "csv": "Загрузить файл",
+      "manual": "Ручной ввод",
+      "boundaries": "Данные границ",
+      "drill": "Учения"
+    },
+    "table": {
+      "email": "Эл. почта",
+      "fullName": "ФИО",
+      "role": "Роль",
+      "country": "Страна",
+      "org": "Орг.",
+      "registered": "Регистрация",
+      "action": "Действие",
+      "exportCsv": "Экспорт CSV",
+      "exportJson": "Экспорт JSON"
+    },
+    "header": {
+      "title": "Панель администратора",
+      "subtitle": "Администрирование и контроль доступа",
+      "backToMap": "Карта",
+      "logout": "Выйти"
+    },
+    "metrics": {
+      "users": "Пользователи",
+      "orgs": "Организации",
+      "activeSources": "Активные источники",
+      "liveFeed": "Живая лента",
+      "activeDrills": "Активные учения",
+      "auditRecords": "Записи аудита"
+    }
   },
   "shelters": {
     "tabLabel": "Убежища",

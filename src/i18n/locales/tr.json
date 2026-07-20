@@ -44,7 +44,36 @@
     "locationDenied": "Konum izni reddedildi",
     "hexResolution": {
       "label": "Altıgen Boyutu"
-    }
+    },
+    "countryFilterActive": "Ülke Filtresi Aktif",
+    "backToGlobal": "Küresele dön",
+    "viewActive": "Aktif",
+    "viewAll": "Tümü",
+    "hideLayer": "Katmanı Gizle",
+    "showLayer": "Katmanı Göster",
+    "noDataYet": "Henüz veri yok",
+    "loadingEllipsis": "Yükleniyor…",
+    "calendar": "Takvim",
+    "view2D": "2B Görünüm",
+    "view3D": "3B Görünüm",
+    "toggle3DAria": "3D Küre Modunu Aç/Kapat",
+    "filters": "Filtreler",
+    "magnitude": "BÜYÜKLÜK",
+    "depth": "DERİNLİK",
+    "depthAll": "TÜMÜ",
+    "duration": "SÜRE",
+    "dateRange": "ZAMAN ARALIĞI",
+    "calendarSingleRange": "Takvim (Tek Gün / Aralık)",
+    "dateRangeHint": "1 seçim: tek gün. 2 seçim: aralık. Sonraki seçim yeni aralık başlatır.",
+    "viewModeSection": "Görünüm Modu",
+    "modeNormal": "Durum",
+    "modeHexagon": "Petek",
+    "modeHeatmap": "Isı",
+    "locationAlertSection": "Konum & Uyarı",
+    "wholeCountry": "Tüm Ülke",
+    "onlyMyRegion": "Sadece Bölgem",
+    "expand": "Genişlet",
+    "collapse": "Daralt"
   },
   "alerts": {
     "title": "En Yakın Tehditler",
@@ -693,7 +722,48 @@
     "drillLessonsLearned": "Ders Çıkarımı Notu",
     "drillRelatedHazard": "İlgili Afet Tipi (isteğe bağlı)",
     "drillSaveFeedback": "Kaydet",
-    "drillGoToThresholdEditor": "Eşik Düzenleyiciye Git →"
+    "drillGoToThresholdEditor": "Eşik Düzenleyiciye Git →",
+    "categories": {
+      "identity": "Kimlik & Erişim",
+      "data": "Veri Yönetimi",
+      "operations": "Operasyon & Müdahale",
+      "config": "Yapılandırma",
+      "audit": "Denetim"
+    },
+    "tabs": {
+      "users": "Kullanıcılar",
+      "orgs": "Organizasyonlar",
+      "sources": "Veri Kaynakları",
+      "csv": "Dosya Yükle",
+      "manual": "Manuel Giriş",
+      "boundaries": "Sınır Verisi",
+      "drill": "Tatbikat"
+    },
+    "table": {
+      "email": "E-posta",
+      "fullName": "Ad Soyad",
+      "role": "Rol",
+      "country": "Ülke",
+      "org": "Org",
+      "registered": "Kayıt",
+      "action": "İşlem",
+      "exportCsv": "CSV Dışa Aktar",
+      "exportJson": "JSON Dışa Aktar"
+    },
+    "header": {
+      "title": "Yönetim Paneli",
+      "subtitle": "Yönetim ve Erişim Kontrolü",
+      "backToMap": "Harita",
+      "logout": "Çıkış Yap"
+    },
+    "metrics": {
+      "users": "Kullanıcı",
+      "orgs": "Organizasyon",
+      "activeSources": "Aktif Kaynak",
+      "liveFeed": "Canlı Feed",
+      "activeDrills": "Aktif Tatbikat",
+      "auditRecords": "Audit Kayıt"
+    }
   },
   "shelters": {
     "tabLabel": "Sığınaklar",

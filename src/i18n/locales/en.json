@@ -44,7 +44,36 @@
     "locationDenied": "Location permission denied",
     "hexResolution": {
       "label": "Hexagon size"
-    }
+    },
+    "countryFilterActive": "Country Filter Active",
+    "backToGlobal": "Back to global",
+    "viewActive": "Active",
+    "viewAll": "All",
+    "hideLayer": "Hide Layer",
+    "showLayer": "Show Layer",
+    "noDataYet": "No data yet",
+    "loadingEllipsis": "Loading…",
+    "calendar": "Calendar",
+    "view2D": "View 2D",
+    "view3D": "View 3D",
+    "toggle3DAria": "Toggle 3D Globe Mode",
+    "filters": "Filters",
+    "magnitude": "MAGNITUDE",
+    "depth": "DEPTH",
+    "depthAll": "ALL",
+    "duration": "DURATION",
+    "dateRange": "DATE RANGE",
+    "calendarSingleRange": "Calendar (Single Day / Range)",
+    "dateRangeHint": "1 pick: single day. 2 picks: range. Next pick starts a new range.",
+    "viewModeSection": "View Mode",
+    "modeNormal": "Status",
+    "modeHexagon": "Hexbin",
+    "modeHeatmap": "Heatmap",
+    "locationAlertSection": "Location & Alerts",
+    "wholeCountry": "Whole Country",
+    "onlyMyRegion": "Only My Region",
+    "expand": "Expand",
+    "collapse": "Collapse"
   },
   "alerts": {
     "title": "Nearest Threats",
@@ -693,7 +722,48 @@
     "drillLessonsLearned": "Lessons Learned Note",
     "drillRelatedHazard": "Related Hazard Type (optional)",
     "drillSaveFeedback": "Save",
-    "drillGoToThresholdEditor": "Go to Threshold Editor →"
+    "drillGoToThresholdEditor": "Go to Threshold Editor →",
+    "categories": {
+      "identity": "Identity & Access",
+      "data": "Data Management",
+      "operations": "Operations & Response",
+      "config": "Configuration",
+      "audit": "Audit"
+    },
+    "tabs": {
+      "users": "Users",
+      "orgs": "Organizations",
+      "sources": "Data Sources",
+      "csv": "Upload File",
+      "manual": "Manual Entry",
+      "boundaries": "Boundary Data",
+      "drill": "Drill"
+    },
+    "table": {
+      "email": "Email",
+      "fullName": "Full Name",
+      "role": "Role",
+      "country": "Country",
+      "org": "Org",
+      "registered": "Registered",
+      "action": "Action",
+      "exportCsv": "Export CSV",
+      "exportJson": "Export JSON"
+    },
+    "header": {
+      "title": "Admin Panel",
+      "subtitle": "Administration & Access Control",
+      "backToMap": "Map",
+      "logout": "Log Out"
+    },
+    "metrics": {
+      "users": "Users",
+      "orgs": "Organizations",
+      "activeSources": "Active Sources",
+      "liveFeed": "Live Feed",
+      "activeDrills": "Active Drills",
+      "auditRecords": "Audit Records"
+    }
   },
   "shelters": {
     "tabLabel": "Shelters",

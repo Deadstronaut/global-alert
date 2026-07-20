@@ -18,6 +18,8 @@ import maplibregl from 'maplibre-gl'
 import 'maplibre-gl/dist/maplibre-gl.css'
 import ImpactPanel from '@/components/impact/ImpactPanel.vue'
 import GeocodingSearch from '@/components/impact/GeocodingSearch.vue'
+import SettingsPanel from '@/components/SettingsPanel.vue'
+import PanelCollapseToggle from '@/components/PanelCollapseToggle.vue'
 import { useMapLayersStore } from '@/stores/mapLayers.js'
 import { useSheltersStore, occupancyPercentage } from '@/stores/shelters.js'
 import { useCommunityReportsStore } from '@/stores/communityReports.js'
@@ -749,12 +751,20 @@ function addSourcesAndLayers() {
     before,
   )
 
+  // Antarctica's ring in this topojson is clipped along a near-constant
+  // latitude (world-atlas's standard southern cutoff) — filled or bordered
+  // like every other country, that flat edge renders as a stray straight
+  // line/wedge across the bottom of the view. No disaster data is ever
+  // relevant there, so it's excluded from these layers entirely.
+  const excludeAntarctica = ['!=', ['get', 'name'], 'Antarctica']
+
   // Country fills (invisible, for interaction — moved to top after all layers)
   map.addLayer(
     {
       id: 'country-fills',
       type: 'fill',
       source: 'world-countries',
+      filter: excludeAntarctica,
       paint: {
         'fill-color': 'rgba(255, 255, 255, 0)',
       },
@@ -762,15 +772,19 @@ function addSourcesAndLayers() {
     before,
   )
 
-  // Hover fill — white highlight
+  // Hover fill — was a white highlight keyed off feature-state, but a
+  // handful of country rings (antimeridian-adjacent ones fixGeometry()
+  // doesn't fully normalize) tessellate into a large stray triangle when
+  // filled. Not worth it for a subtle highlight — disabled outright.
   map.addLayer(
     {
       id: 'countries-hover-fill',
       type: 'fill',
       source: 'world-countries',
+      filter: excludeAntarctica,
       paint: {
         'fill-color': '#ffffff',
-        'fill-opacity': ['case', ['boolean', ['feature-state', 'hover'], false], 0.08, 0],
+        'fill-opacity': 0,
       },
     },
     before,
@@ -809,6 +823,7 @@ function addSourcesAndLayers() {
       id: 'country-selected',
       type: 'fill',
       source: 'world-countries',
+      filter: excludeAntarctica,
       paint: {
         'fill-color': '#4ade80',
         'fill-opacity': ['case', ['boolean', ['feature-state', 'selected'], false], 0.18, 0],
@@ -823,6 +838,7 @@ function addSourcesAndLayers() {
       id: 'country-borders',
       type: 'line',
       source: 'world-countries',
+      filter: excludeAntarctica,
       paint: {
         'line-color': '#4ade80',
         'line-width': 1.2,
@@ -842,6 +858,8 @@ function addSourcesAndLayers() {
     },
     before,
   )
+  // Same reasoning as countries-hover-fill above — disabled, not filtered
+  // per-feature.
   map.addLayer(
     {
       id: 'custom-hover-fill',
@@ -849,7 +867,7 @@ function addSourcesAndLayers() {
       source: 'custom-territories',
       paint: {
         'fill-color': '#ffffff',
-        'fill-opacity': ['case', ['boolean', ['feature-state', 'hover'], false], 0.08, 0],
+        'fill-opacity': 0,
       },
     },
     before,
@@ -2177,17 +2195,48 @@ onBeforeUnmount(() => {
     <!-- Impact Analysis (spec 008): geocoding search + split-view side panel -->
     <GeocodingSearch @location-selected="onLocationSelected" />
     <div class="impact-panel-dock" :class="{ collapsed: uiStore.impactPanelCollapsed }">
-      <button
-        class="impact-panel-toggle"
-        type="button"
-        :title="uiStore.impactPanelCollapsed ? t('impact.panel.expand') : t('impact.panel.collapse')"
-        :aria-label="uiStore.impactPanelCollapsed ? t('impact.panel.expand') : t('impact.panel.collapse')"
-        :aria-expanded="!uiStore.impactPanelCollapsed"
-        @click="uiStore.toggleImpactPanel()"
+      <!-- Persistent header — always here regardless of which face
+           (Impact Analysis / Settings) is flipped up, so the collapse
+           toggle has a real, stable menu bar to anchor to (top:100%/
+           left:100%, same technique as .sidebar-header in
+           SidebarPanel.vue) instead of a guessed pixel value. -->
+      <div class="dock-header">
+        <span class="dock-header-title">
+          {{ uiStore.settingsPanelOpen ? `⚙️ ${t('settings.title')}` : '📊 Etki Analizi' }}
+        </span>
+        <button
+          v-if="uiStore.settingsPanelOpen"
+          type="button"
+          class="btn-icon btn-ghost dock-header-close"
+          @click="uiStore.toggleSettings()"
+        >
+          ✕
+        </button>
+        <div class="panel-collapse-toggle-slot">
+          <PanelCollapseToggle
+            mirrored
+            :title="uiStore.impactPanelCollapsed ? t('impact.panel.expand') : t('impact.panel.collapse')"
+            @click="uiStore.toggleImpactPanel()"
+          />
+        </div>
+      </div>
+      <!-- Settings (gear icon in the sidebar) takes over this same dock
+           instead of opening its own separate panel — flips in place so it
+           reads as "the same right-hand panel changed pages", not two
+           competing panels stacking on top of each other. Both faces stay
+           mounted; CSS rotateY + backface-visibility decide what's shown. -->
+      <div
+        v-show="!uiStore.impactPanelCollapsed"
+        class="dock-flip"
+        :class="{ flipped: uiStore.settingsPanelOpen }"
       >
-        {{ uiStore.impactPanelCollapsed ? '‹' : '›' }}
-      </button>
-      <ImpactPanel v-show="!uiStore.impactPanelCollapsed" :selected-event="selectedImpactEvent" />
+        <div class="dock-face dock-face-front">
+          <ImpactPanel :selected-event="selectedImpactEvent" />
+        </div>
+        <div class="dock-face dock-face-back">
+          <SettingsPanel hide-header />
+        </div>
+      </div>
     </div>
 
     <!-- Layer panel stack: WMS/WFS (spec 012) + Exposure layers (spec 042) share one
@@ -2715,6 +2764,8 @@ onBeforeUnmount(() => {
   width: var(--impact-panel-width);
   height: 100%;
   z-index: 15;
+  display: flex;
+  flex-direction: column;
   pointer-events: auto;
   transition: width 0.22s ease;
 }
@@ -2726,32 +2777,91 @@ onBeforeUnmount(() => {
   -webkit-backdrop-filter: blur(10px);
 }
 
-.impact-panel-toggle {
-  position: absolute;
-  top: 14px;
-  left: -18px;
-  z-index: 2;
-  width: 36px;
-  height: 36px;
-  border-radius: 999px;
-  border: 1px solid rgba(255, 255, 255, 0.18);
-  background: rgba(20, 24, 33, 0.92);
+/* Persistent header — present regardless of which dock-face is flipped up,
+   so the collapse toggle (nested inside, see .panel-collapse-toggle-slot
+   below) always has the same real menu bar to anchor to. Same idea as
+   .sidebar-header in SidebarPanel.vue. */
+.dock-header {
+  position: relative;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  /* This panel's content (a single title line) is shorter than
+     .sidebar-header's (icon + title + subtitle), so matching padding alone
+     undershot — 36px verified live (DevTools) to land the two collapse
+     toggles at the same height. Keep in sync with SidebarPanel.vue if
+     either header's content changes. */
+  padding: 36px 16px;
+  background: rgba(15, 17, 23, 0.92);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
   color: #e2e8f0;
-  font-size: 1.35rem;
-  line-height: 1;
-  cursor: pointer;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.28);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
 }
 
-.impact-panel-toggle:hover {
-  background: rgba(77, 163, 255, 0.28);
-  border-color: rgba(77, 163, 255, 0.42);
+.dock-header-title {
+  font-size: 0.95rem;
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-.impact-panel-dock.collapsed .impact-panel-toggle {
-  left: 6px;
+.impact-panel-dock.collapsed .dock-header-title,
+.impact-panel-dock.collapsed .dock-header-close {
+  display: none;
+}
+
+/* Anchored to .dock-header's own bottom-left corner (top:100%/right:100%,
+   both relative to the header, then centered on that point) — a genuine
+   CSS child of the menu it sits next to, mirroring how
+   .panel-collapse-toggle-slot in SidebarPanel.vue anchors to
+   .sidebar-header. */
+.panel-collapse-toggle-slot {
+  position: absolute;
+  top: 100%;
+  right: 100%;
+  z-index: 2;
+  transform: translate(50%, -50%);
+}
+
+/* Card-flip between Impact Analysis (front) and Settings (back). Both faces
+   stay mounted the whole time — only the 3D transform + backface-visibility
+   decide which one is interactive/visible, so the flip animation always has
+   real content to show mid-rotation instead of a blank face. */
+.dock-flip {
+  position: relative;
+  width: 100%;
+  flex: 1;
+  min-height: 0;
+  perspective: 1800px;
+}
+
+.dock-face {
+  position: absolute;
+  inset: 0;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+  transition: transform 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+  transform: rotateY(0deg);
+  pointer-events: auto;
+}
+
+.dock-face-back {
+  transform: rotateY(180deg);
+  /* backface-visibility hides the render but isn't reliable for hit-testing
+     across browsers, so pointer-events is set explicitly on both faces. */
+  pointer-events: none;
+}
+
+.dock-flip.flipped .dock-face-front {
+  transform: rotateY(-180deg);
+  pointer-events: none;
+}
+
+.dock-flip.flipped .dock-face-back {
+  transform: rotateY(0deg);
+  pointer-events: auto;
 }
 
 @media (max-width: 900px) {
@@ -2789,13 +2899,15 @@ onBeforeUnmount(() => {
     min-height: 52px;
   }
 
-  .impact-panel-toggle {
+  .panel-collapse-toggle-slot {
     top: -18px;
     left: 50%;
+    right: auto;
+    margin-right: 0;
     transform: translateX(-50%) rotate(90deg);
   }
 
-  .impact-panel-dock.collapsed .impact-panel-toggle {
+  .impact-panel-dock.collapsed .panel-collapse-toggle-slot {
     left: 50%;
   }
 

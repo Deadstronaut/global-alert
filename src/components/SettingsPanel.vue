@@ -5,6 +5,14 @@ import { useUIStore } from '@/stores/ui.js'
 import { useI18n } from 'vue-i18n'
 import { useAuthStore } from '@/stores/auth.js'
 
+defineProps({
+  // MapView.vue's dock has its own persistent header (with the title +
+  // close button) so its collapse toggle has a stable menu to anchor to —
+  // this panel's own header would be redundant there. The standalone
+  // globe-view usage (HomeView.vue) has no such dock, so it keeps this.
+  hideHeader: { type: Boolean, default: false },
+})
+
 const { t, locale } = useI18n()
 const router = useRouter()
 const uiStore = useUIStore()
@@ -33,12 +41,15 @@ function navigateTo(path) {
 </script>
 
 <template>
-  <transition name="slide-right">
-    <div v-if="uiStore.settingsPanelOpen" class="settings-panel glass-panel">
-      <div class="settings-header">
-        <h3>⚙️ {{ t('settings.title') }}</h3>
-        <button class="btn-icon btn-ghost" @click="uiStore.toggleSettings()">✕</button>
-      </div>
+  <!-- No own v-if/transition: this is pure panel content now. The map view
+       embeds it as one face of impact-panel-dock's flip card (both faces
+       always mounted, CSS rotateY handles visibility); the globe view (no
+       dock to flip with) wraps it in its own transition + v-if instead. -->
+  <div class="settings-panel">
+    <div v-if="!hideHeader" class="settings-header">
+      <h3>⚙️ {{ t('settings.title') }}</h3>
+      <button class="btn-icon btn-ghost" @click="uiStore.toggleSettings()">✕</button>
+    </div>
 
       <!-- Language -->
       <div class="settings-section">
@@ -162,33 +173,31 @@ function navigateTo(path) {
         </div>
       </div>
 
-      <!-- Account -->
-      <div class="settings-section" v-if="authStore.isLoggedIn">
-        <h4 class="settings-section-title">{{ t('settings.account') }}</h4>
-        <p class="settings-desc">{{ t('settings.loggedInAs', { email: authStore.session?.email }) }}</p>
-        <button class="btn btn-danger logout-btn" @click="handleLogout">
-          ⎋ {{ t('settings.logout') }}
-        </button>
-      </div>
+    <!-- Account -->
+    <div class="settings-section" v-if="authStore.isLoggedIn">
+      <h4 class="settings-section-title">{{ t('settings.account') }}</h4>
+      <p class="settings-desc">{{ t('settings.loggedInAs', { email: authStore.session?.email }) }}</p>
+      <button class="btn btn-danger logout-btn" @click="handleLogout">
+        ⎋ {{ t('settings.logout') }}
+      </button>
     </div>
-  </transition>
+  </div>
 </template>
 
 <style scoped>
+/* Matches .impact-panel (ImpactPanel.vue) exactly — same background,
+   width and padding — since the two are now faces of the same dock
+   (map view) or interchangeable at the same screen position (globe view). */
 .settings-panel {
-  position: fixed;
-  top: 0;
-  right: 0;
-  width: 340px;
-  max-width: 90%;
-  height: 100vh;
-  z-index: var(--z-alerts);
+  width: 100%;
+  height: 100%;
+  overflow-y: auto;
+  background: rgba(15, 17, 23, 0.92);
+  color: #e2e8f0;
   display: flex;
   flex-direction: column;
-  padding: var(--space-md);
+  padding: 16px;
   gap: var(--space-md);
-  border-radius: 0;
-  overflow-y: auto;
 }
 
 .settings-header {
@@ -340,20 +349,6 @@ function navigateTo(path) {
 .quick-access-arrow {
   color: var(--color-text-muted);
   font-size: 1rem;
-}
-
-/* Slide transition */
-.slide-right-enter-active,
-.slide-right-leave-active {
-  transition:
-    transform var(--transition-slow),
-    opacity var(--transition-slow);
-}
-
-.slide-right-enter-from,
-.slide-right-leave-to {
-  transform: translateX(100%);
-  opacity: 0;
 }
 
 .logout-btn {

@@ -22,10 +22,12 @@ export function geometryToWkt(geometry: { type: string; coordinates: unknown }):
     }
     case 'Polygon': {
       const rings = geometry.coordinates as number[][][]
+      if (rings.length === 0) throw new Error('Polygon has no rings')
       return `POLYGON(${rings.map(ring).join(', ')})`
     }
     case 'MultiPolygon': {
       const polys = geometry.coordinates as number[][][][]
+      if (polys.length === 0) throw new Error('MultiPolygon has no polygons')
       return `MULTIPOLYGON(${polys.map((rings) => `(${rings.map(ring).join(', ')})`).join(', ')})`
     }
     case 'LineString': {

@@ -25,6 +25,11 @@ export interface ExposureFeatureInput {
   geometry: { type: string; coordinates: unknown }
   metricValue: number
   properties: Record<string, unknown>
+  // Optional — populates exposure_features.asset_category (added by
+  // 20260707195000_impact_analysis_gaps.sql for critical-infrastructure
+  // filtering via get_critical_infrastructure_features()). Omitted by every
+  // caller before spec 044 (buildings); those rows get column default NULL.
+  assetCategory?: string
 }
 
 // Kontur's H3-hexagon datasets can exceed 400k features per country
@@ -65,6 +70,7 @@ export async function writeExposureDataset(
     geom: `SRID=4326;${geometryToWkt(feature.geometry)}`,
     metric_value: feature.metricValue,
     properties: feature.properties,
+    asset_category: feature.assetCategory ?? null,
   }))
 
   for (let i = 0; i < rows.length; i += INSERT_CHUNK_SIZE) {

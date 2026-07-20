@@ -52,6 +52,22 @@ Deno.test('geometryToWkt: LineString with no coordinates throws', () => {
   )
 })
 
+Deno.test('geometryToWkt: Polygon with no rings throws', () => {
+  assertThrows(
+    () => geometryToWkt({ type: 'Polygon', coordinates: [] }),
+    Error,
+    'Polygon has no rings',
+  )
+})
+
+Deno.test('geometryToWkt: MultiPolygon with no polygons throws', () => {
+  assertThrows(
+    () => geometryToWkt({ type: 'MultiPolygon', coordinates: [] }),
+    Error,
+    'MultiPolygon has no polygons',
+  )
+})
+
 Deno.test('geometryToWkt: unsupported geometry type throws', () => {
   assertThrows(
     () => geometryToWkt({ type: 'GeometryCollection', coordinates: [] }),

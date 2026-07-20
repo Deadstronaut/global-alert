@@ -1,6 +1,6 @@
 import { assert, assertEquals } from 'https://deno.land/std@0.224.0/assert/mod.ts'
 import { writeArrayBuffer } from 'https://esm.sh/geotiff@2.1.3'
-import { aggregateRasterToHexagons } from './rasterToHexagon.ts'
+import { aggregateRasterToHexagons, geometryBoundingBox } from './rasterToHexagon.ts'
 import { WORLDPOP_SOURCE_CONFIG } from './rasterSourceConfig.ts'
 
 // geotiff.js's writeArrayBuffer anchors the synthetic raster at a fixed
@@ -85,4 +85,43 @@ Deno.test('aggregateRasterToHexagons produces valid Polygon geometry for each he
     assertEquals(record.properties.source, 'worldpop')
     assertEquals(record.countryCode, 'tr')
   }
+})
+
+Deno.test('geometryBoundingBox: computes the box for a simple Polygon', () => {
+  const geometry: GeoJSON.Geometry = {
+    type: 'Polygon',
+    coordinates: [[[43.2, -25.6], [50.5, -25.6], [50.5, -11.9], [43.2, -11.9], [43.2, -25.6]]],
+  }
+  assertEquals(geometryBoundingBox(geometry), [43.2, -25.6, 50.5, -11.9])
+})
+
+Deno.test('geometryBoundingBox: computes the union box across a GeometryCollection', () => {
+  const geometry: GeoJSON.Geometry = {
+    type: 'GeometryCollection',
+    geometries: [
+      { type: 'Polygon', coordinates: [[[0, 0], [1, 0], [1, 1], [0, 1], [0, 0]]] },
+      { type: 'Polygon', coordinates: [[[5, 5], [6, 5], [6, 6], [5, 6], [5, 5]]] },
+    ],
+  }
+  assertEquals(geometryBoundingBox(geometry), [0, 0, 6, 6])
+})
+
+Deno.test('geometryBoundingBox: handles MultiPolygon nesting depth', () => {
+  const geometry: GeoJSON.Geometry = {
+    type: 'MultiPolygon',
+    coordinates: [
+      [[[0, 0], [2, 0], [2, 2], [0, 2], [0, 0]]],
+      [[[10, 10], [12, 10], [12, 12], [10, 12], [10, 10]]],
+    ],
+  }
+  assertEquals(geometryBoundingBox(geometry), [0, 0, 12, 12])
+})
+
+Deno.test('aggregateRasterToHexagons: a boundary bbox with no overlap in the raster crops to nothing, not an error', async () => {
+  const buf = await buildRaster([1, 2, 3, 4, 5, 6, 7, 8], 4, 2)
+  // Same coordinates as FAR_AWAY_BOUNDARY, exercised explicitly against the
+  // new pixel-space cropping path (not just the post-hoc point-in-boundary
+  // filter) — this must clamp to an empty window, not throw or hang.
+  const records = await aggregateRasterToHexagons(buf, WORLDPOP_SOURCE_CONFIG, FAR_AWAY_BOUNDARY, 'tr')
+  assertEquals(records.length, 0)
 })

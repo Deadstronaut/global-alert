@@ -19,8 +19,26 @@
  * already clipped close to the country's extent by WorldPop themselves, so
  * this catches only the small edge-fringe case (research.md §6), not a
  * primary clip step.
+ *
+ * Pixel-space cropping to the country boundary's bounding box (added for
+ * spec 044's GHSL attempt) is what makes a genuinely global raster source
+ * usable at all: GHSL's whole-world 30-arcsecond GeoTIFF is ~43,200 x
+ * 21,400 pixels — live-verified locally at ~2.5s per 512-row full-width
+ * block (~100s for a full pass), and this function used to always read the
+ * FULL width for every row block regardless of how small countryBoundary
+ * actually is. Cropping to Madagascar's bbox first (a small country) cut
+ * the pixels actually read to well under 1% of the whole raster. WorldPop/
+ * Kontur's existing per-country-clipped rasters are unaffected in
+ * practice — their bbox already covers ~the whole small raster, so this is
+ * a no-op-sized optimization for them, not a behavior change.
+ *
+ * Found live-testing spec 044's GHSL attempt: importing geotiff.js crashed
+ * every function that used it (including the pre-existing, unmodified
+ * import-worldpop — this was never actually working) with "ReferenceError:
+ * Worker is not defined" — see workerPolyfill.ts, which this file must
+ * import FIRST (before the geotiff import below) to fix it.
  */
-
+import './workerPolyfill.ts'
 import { fromArrayBuffer } from 'https://esm.sh/geotiff@2.1.3'
 import { latLngToCell, cellToBoundary, cellToLatLng } from 'https://esm.sh/h3-js@4.1.0'
 // deno-lint-ignore no-explicit-any
@@ -65,6 +83,38 @@ function pointWithinBoundary(point: [number, number], boundary: GeoJSON.Geometry
   }
 }
 
+// Flattens any GeoJSON geometry (including a GeometryCollection, this
+// codebase's normalized shape for a multi-feature country_boundaries row —
+// see fetchCountryBoundary()) into a [minLng, minLat, maxLng, maxLat] box.
+// Exported for unit testing without a live raster.
+export function geometryBoundingBox(geometry: GeoJSON.Geometry): [number, number, number, number] {
+  let minLng = Infinity, minLat = Infinity, maxLng = -Infinity, maxLat = -Infinity
+  const visit = (coords: unknown): void => {
+    if (typeof coords[0] === 'number') {
+      const [lng, lat] = coords as [number, number]
+      if (lng < minLng) minLng = lng
+      if (lng > maxLng) maxLng = lng
+      if (lat < minLat) minLat = lat
+      if (lat > maxLat) maxLat = lat
+      return
+    }
+    for (const c of coords as unknown[]) visit(c)
+  }
+  if (geometry.type === 'GeometryCollection') {
+    for (const g of geometry.geometries) {
+      const [gMinLng, gMinLat, gMaxLng, gMaxLat] = geometryBoundingBox(g)
+      if (gMinLng < minLng) minLng = gMinLng
+      if (gMaxLng > maxLng) maxLng = gMaxLng
+      if (gMinLat < minLat) minLat = gMinLat
+      if (gMaxLat > maxLat) maxLat = gMaxLat
+    }
+  } else {
+    // deno-lint-ignore no-explicit-any
+    visit((geometry as any).coordinates)
+  }
+  return [minLng, minLat, maxLng, maxLat]
+}
+
 export async function aggregateRasterToHexagons(
   rasterBuffer: ArrayBuffer,
   config: RasterSourceConfig,
@@ -80,21 +130,34 @@ export async function aggregateRasterToHexagons(
   const resY = (ymax - ymin) / height
   const noData: number | null = image.getGDALNoData()
 
+  // Crop to the country boundary's bbox (+ a small margin so edge hexagons
+  // straddling the boundary still get their full pixel neighborhood) before
+  // reading any rows — see this function's header comment for why this
+  // matters for a genuinely global raster.
+  const MARGIN_DEG = 0.5
+  const [bMinLng, bMinLat, bMaxLng, bMaxLat] = geometryBoundingBox(countryBoundary)
+  const colStart = Math.max(0, Math.floor((bMinLng - MARGIN_DEG - xmin) / resX))
+  const colEnd = Math.min(width, Math.ceil((bMaxLng + MARGIN_DEG - xmin) / resX))
+  const rowStartClip = Math.max(0, Math.floor((ymax - (bMaxLat + MARGIN_DEG)) / resY))
+  const rowEndClip = Math.min(height, Math.ceil((ymax - (bMinLat - MARGIN_DEG)) / resY))
+  const cropWidth = Math.max(0, colEnd - colStart)
+
   const accumulator = new Map<string, number>()
 
-  for (let rowStart = 0; rowStart < height; rowStart += ROW_BLOCK_SIZE) {
-    const rowEnd = Math.min(rowStart + ROW_BLOCK_SIZE, height)
-    const rasters = await image.readRasters({ window: [0, rowStart, width, rowEnd] })
+  for (let rowStart = rowStartClip; rowStart < rowEndClip; rowStart += ROW_BLOCK_SIZE) {
+    const rowEnd = Math.min(rowStart + ROW_BLOCK_SIZE, rowEndClip)
+    if (cropWidth === 0 || rowEnd <= rowStart) continue
+    const rasters = await image.readRasters({ window: [colStart, rowStart, colEnd, rowEnd] })
     // deno-lint-ignore no-explicit-any
     const band = (rasters as any)[0] as ArrayLike<number>
     const blockHeight = rowEnd - rowStart
 
     for (let row = 0; row < blockHeight; row++) {
       const lat = ymax - (rowStart + row + 0.5) * resY
-      for (let col = 0; col < width; col++) {
-        const value = band[row * width + col]
+      for (let col = 0; col < cropWidth; col++) {
+        const value = band[row * cropWidth + col]
         if (!isValidPixel(value, noData)) continue
-        const lng = xmin + (col + 0.5) * resX
+        const lng = xmin + (colStart + col + 0.5) * resX
         const cell = latLngToCell(lat, lng, config.h3Resolution)
         accumulator.set(cell, (accumulator.get(cell) ?? 0) + value)
       }

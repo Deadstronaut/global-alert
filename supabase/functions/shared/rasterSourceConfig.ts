@@ -38,3 +38,16 @@ export const META_SOURCE_CONFIG: RasterSourceConfig = {
   h3Resolution: 7,
   pixelValueMeaning: 'count',
 }
+
+// GHSL (GHS-POP), spec 044 — the 30-arcsecond (~1km) global product, not
+// GHSL's 100m one: live-verified the 100m product is per-tile/much larger,
+// while this one is a single ~461MB world file that decompresses to a very
+// manageable 384MB GeoTIFF (see ghslFetch.ts). Resolution 6 (Kontur's,
+// ~3km hexagons), one step coarser than WorldPop's 7 — a ~1km pixel
+// shouldn't be bucketed into H3 cells smaller than a few pixels wide, or
+// the hexagon count balloons for no real precision gain.
+export const GHSL_SOURCE_CONFIG: RasterSourceConfig = {
+  sourceName: 'ghsl',
+  h3Resolution: 6,
+  pixelValueMeaning: 'count',
+}

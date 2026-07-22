@@ -283,9 +283,15 @@ Deno.serve(async (req) => {
   // trackedFetch('EMSC', fetchEMSC),
   // trackedFetch('AFAD', fetchAFAD),
   // trackedFetch('Kandilli', fetchKandilli),
-  const results = await Promise.all([
-    trackedFetch('GDACS', fetchGDACS),
-  ])
+  //
+  // CUTOVER-2026-07-22 (same day, revised decision): GDACS also moved to
+  // server-only — it was already running there unavoidably (registered in
+  // configuredSources.js's SOURCE_REGISTRY), so keeping this Edge Function
+  // path alive was pure duplication, not genuine redundancy. Its
+  // fetch-gdacs-earthquakes pg_cron job (added earlier today) was
+  // unscheduled the same day this comment was added.
+  // trackedFetch('GDACS', fetchGDACS),
+  const results = await Promise.all<{ name: string; events: ReturnType<typeof normalize>[]; error?: string; skipped?: boolean }>([])
   for (const r of results) {
     sources[r.name] = r.events
     if (r.error) fetchErrors.push(`${r.name}: ${r.error}`)

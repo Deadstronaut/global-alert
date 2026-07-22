@@ -81,7 +81,6 @@ Deno.serve(async (req) => {
 
   const glofasId = await resolveSourceId('flood', 'GloFAS/Copernicus')
   const reliefwebId = await resolveSourceId('flood', 'ReliefWeb')
-  const gdacsId = await resolveSourceId('flood', 'GDACS')
 
   await Promise.allSettled([
     (async () => {
@@ -104,21 +103,24 @@ Deno.serve(async (req) => {
         if (reliefwebId) await recordFetchOutcome(reliefwebId, 'failure', e.message)
       }
     })(),
-    (async () => {
-      if (!(await isSourceActive(gdacsId))) return
-      try {
-        all.push(...await fetchGDACS(gdacsId))
-        if (gdacsId) await recordFetchOutcome(gdacsId, 'success')
-      } catch (e) {
-        fetchErrors.push(`GDACS: ${e.message}`)
-        if (gdacsId) await recordFetchOutcome(gdacsId, 'failure', e.message)
-      }
-    })(),
+    // CUTOVER-2026-07-22: GDACS's flood slice moved to server/ (already
+    // dispatched there via configuredSources.js's gdacs_rest registry
+    // entry). Rollback: uncomment + redeploy.
+    // (async () => {
+    //   const gdacsId = await resolveSourceId('flood', 'GDACS')
+    //   if (!(await isSourceActive(gdacsId))) return
+    //   try {
+    //     all.push(...await fetchGDACS(gdacsId))
+    //     if (gdacsId) await recordFetchOutcome(gdacsId, 'success')
+    //   } catch (e) {
+    //     fetchErrors.push(`GDACS: ${e.message}`)
+    //     if (gdacsId) await recordFetchOutcome(gdacsId, 'failure', e.message)
+    //   }
+    // })(),
   ])
 
-  // No dedup existed across GloFAS/ReliefWeb before this feature; adding GDACS as a
-  // 3rd source makes duplicate real-world events across sources more likely, so a
-  // dedup pass is added now for all 3 (feature 003-gdacs-source, spec FR-006).
+  // Dedup pass kept even with GDACS removed — GloFAS/ReliefWeb can still
+  // overlap on the same real-world flood event.
   const events = deduplicateEvents(all, 20) // 20km threshold per TECHNICAL.md §3
 
   const { inserted, errors: dbErrors } = await upsertEvents(events)

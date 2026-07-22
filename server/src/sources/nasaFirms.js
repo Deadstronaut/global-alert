@@ -40,8 +40,11 @@ export function startNASAFirms(onEvent, apiKey, opts = {}) {
   async function poll() {
     cleanSeen();
     try {
-      // Son 24h, tüm dünya — sadece yüksek/nominal güven seviyesi (low confidence atla)
-      const res = await axios.get(`${baseUrl}/${apiKey}/VIIRS_SNPP_NRT/world/1`, {
+      // world/1 (son 24h) canlı test edildi 2026-07-22: NASA'nın NRT
+      // işleme gecikmesi yüzünden sürekli boş dönüyor (sadece header) —
+      // world/2 güvenilir şekilde veri içeriyor, seen-map zaten dahili
+      // dedup yapıyor, tekrar taranan ilk gün zararsız.
+      const res = await axios.get(`${baseUrl}/${apiKey}/VIIRS_SNPP_NRT/world/2`, {
         timeout: 90000,        // 90s — büyük CSV için yeterli
         responseType: 'text',
         decompress: true,

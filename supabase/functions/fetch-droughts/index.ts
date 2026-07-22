@@ -61,31 +61,40 @@ Deno.serve(async (req) => {
   const fetchErrors: string[] = []
   const sources: Record<string, any[]> = {}
 
-  const fewsId = await resolveSourceId('drought', 'FEWS NET')
-  const gdacsId = await resolveSourceId('drought', 'GDACS')
-
-  await Promise.allSettled([
-    (async () => {
-      if (!(await isSourceActive(fewsId))) return
-      try {
-        sources['FEWS NET'] = await fetchFEWSNET(fewsId)
-        if (fewsId) await recordFetchOutcome(fewsId, 'success')
-      } catch (e) {
-        fetchErrors.push(`FEWS NET: ${e.message}`)
-        if (fewsId) await recordFetchOutcome(fewsId, 'failure', e.message)
-      }
-    })(),
-    (async () => {
-      if (!(await isSourceActive(gdacsId))) return
-      try {
-        sources['GDACS'] = await fetchGDACS(gdacsId)
-        if (gdacsId) await recordFetchOutcome(gdacsId, 'success')
-      } catch (e) {
-        fetchErrors.push(`GDACS: ${e.message}`)
-        if (gdacsId) await recordFetchOutcome(gdacsId, 'failure', e.message)
-      }
-    })(),
-  ])
+  // CUTOVER-2026-07-22: both of this function's sources (FEWS NET, GDACS)
+  // moved to the always-on server/ aggregator (configuredSources.js already
+  // dispatches BOTH via SOURCE_REGISTRY's fewsnet/gdacs_rest entries — this
+  // was true before today too, meaning these ran in two places at once
+  // whenever server/ happened to be running). This function is now a
+  // deliberate no-op, not deleted, so the frontend's still-existing
+  // EDGE_FUNCTIONS.DROUGHTS call (src/services/api/config.js) degrades to
+  // an empty result instead of a 404. Rollback: uncomment below + redeploy.
+  //
+  // const fewsId = await resolveSourceId('drought', 'FEWS NET')
+  // const gdacsId = await resolveSourceId('drought', 'GDACS')
+  //
+  // await Promise.allSettled([
+  //   (async () => {
+  //     if (!(await isSourceActive(fewsId))) return
+  //     try {
+  //       sources['FEWS NET'] = await fetchFEWSNET(fewsId)
+  //       if (fewsId) await recordFetchOutcome(fewsId, 'success')
+  //     } catch (e) {
+  //       fetchErrors.push(`FEWS NET: ${e.message}`)
+  //       if (fewsId) await recordFetchOutcome(fewsId, 'failure', e.message)
+  //     }
+  //   })(),
+  //   (async () => {
+  //     if (!(await isSourceActive(gdacsId))) return
+  //     try {
+  //       sources['GDACS'] = await fetchGDACS(gdacsId)
+  //       if (gdacsId) await recordFetchOutcome(gdacsId, 'success')
+  //     } catch (e) {
+  //       fetchErrors.push(`GDACS: ${e.message}`)
+  //       if (gdacsId) await recordFetchOutcome(gdacsId, 'failure', e.message)
+  //     }
+  //   })(),
+  // ])
 
   const all = [...(sources['FEWS NET'] ?? []), ...(sources['GDACS'] ?? [])]
   const events = deduplicateEvents(all, 20) // 20km threshold per TECHNICAL.md §3

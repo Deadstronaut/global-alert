@@ -141,17 +141,23 @@ Deno.serve(async (req) => {
   const fetchErrors: string[] = []
   let events: ReturnType<typeof normalize>[] = []
 
-  const whoId = await resolveSourceId('epidemic', 'WHO')
-
-  if (await isSourceActive(whoId)) {
-    try {
-      events = await fetchWHO(whoId)
-      if (whoId) await recordFetchOutcome(whoId, 'success')
-    } catch (e) {
-      fetchErrors.push(`WHO: ${e.message}`)
-      if (whoId) await recordFetchOutcome(whoId, 'failure', e.message)
-    }
-  }
+  // CUTOVER-2026-07-22: WHO moved to the always-on server/ aggregator
+  // (already dispatched there via configuredSources.js's `who` registry
+  // entry). Its pg_cron trigger (20260720130000_ptwc_who_fetch_cron.sql)
+  // was unscheduled the same day. Rollback: uncomment + redeploy +
+  // re-add the cron.schedule call.
+  //
+  // const whoId = await resolveSourceId('epidemic', 'WHO')
+  //
+  // if (await isSourceActive(whoId)) {
+  //   try {
+  //     events = await fetchWHO(whoId)
+  //     if (whoId) await recordFetchOutcome(whoId, 'success')
+  //   } catch (e) {
+  //     fetchErrors.push(`WHO: ${e.message}`)
+  //     if (whoId) await recordFetchOutcome(whoId, 'failure', e.message)
+  //   }
+  // }
 
   const { inserted, errors: dbErrors } = await upsertEvents(events)
 

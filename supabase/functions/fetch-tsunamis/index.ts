@@ -115,17 +115,23 @@ Deno.serve(async (req) => {
   const fetchErrors: string[] = []
   let events: ReturnType<typeof normalize>[] = []
 
-  const ptwcId = await resolveSourceId('tsunami', 'PTWC')
-
-  if (await isSourceActive(ptwcId)) {
-    try {
-      events = await fetchPTWC(ptwcId)
-      if (ptwcId) await recordFetchOutcome(ptwcId, 'success')
-    } catch (e) {
-      fetchErrors.push(`PTWC: ${e.message}`)
-      if (ptwcId) await recordFetchOutcome(ptwcId, 'failure', e.message)
-    }
-  }
+  // CUTOVER-2026-07-22: PTWC moved to the always-on server/ aggregator
+  // (already dispatched there via configuredSources.js's `ptwc_rest`/
+  // `ptwc_rss` registry entries). Its pg_cron trigger
+  // (20260720130000_ptwc_who_fetch_cron.sql) was unscheduled the same day.
+  // Rollback: uncomment + redeploy + re-add the cron.schedule call.
+  //
+  // const ptwcId = await resolveSourceId('tsunami', 'PTWC')
+  //
+  // if (await isSourceActive(ptwcId)) {
+  //   try {
+  //     events = await fetchPTWC(ptwcId)
+  //     if (ptwcId) await recordFetchOutcome(ptwcId, 'success')
+  //   } catch (e) {
+  //     fetchErrors.push(`PTWC: ${e.message}`)
+  //     if (ptwcId) await recordFetchOutcome(ptwcId, 'failure', e.message)
+  //   }
+  // }
 
   const { inserted, errors: dbErrors } = await upsertEvents(events)
 

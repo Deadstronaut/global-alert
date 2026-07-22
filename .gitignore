@@ -39,5 +39,10 @@ __screenshots__/
 *.timestamp-*-*.mjs
 
 # Local-only large raster test files (Meta/HDX Population feasibility testing —
-# these are multi-GB GeoTIFFs, never meant to be committed)
+# these are multi-GB GeoTIFFs, never meant to be committed).
+# As of 2026-07-22 these files live OUTSIDE the repo, at
+# C:\Users\Deadstro\global-alert-db\database\ (turkey_2020.tif, mdg_general_2020.tif,
+# ~28GB total) — keeping them in the workspace made the IDE unusably slow to index.
+# The local test scripts take the path from the META_TIF_PATH env var, so nothing
+# in the code is tied to either location. This ignore rule stays as a safety net.
 /database/

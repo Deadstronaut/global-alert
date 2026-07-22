@@ -26,6 +26,15 @@ import { SOURCE_REGISTRY } from './registry.js';
 
 const REFRESH_LIST_MS = 60 * 1000; // list-refresh cadence, same tradeoff as dynamicSources.js
 
+// Module-level (not closure-local like `running`) so index.js's /health
+// handler can read each active source's actual configured interval without
+// a DB round-trip on every healthcheck — see getSourceIntervalMs().
+const currentIntervals = new Map(); // source name -> intervalMs (or null for websocket/push sources)
+
+export function getSourceIntervalMs(name) {
+  return currentIntervals.get(name) ?? null;
+}
+
 export function startConfiguredSources(onEvent) {
   const running = new Map(); // row.id -> { stop, mode, intervalMs, url, name }
   const trackedRowIds = new Map(); // source name -> row.id, for the health-change listener
@@ -108,6 +117,10 @@ export function startConfiguredSources(onEvent) {
       // other adapters ignore this key harmlessly.
       const stop = adapter.start(onEvent, { url: row.endpoint_url, intervalMs: desiredIntervalMs, name: row.name });
       running.set(row.id, { stop, mode: adapter.mode, intervalMs: desiredIntervalMs, url: row.endpoint_url, name: row.name });
+      // websocket sources push on their own schedule, not intervalMs — leave
+      // them out of currentIntervals so getSourceIntervalMs() correctly
+      // signals "no polling interval applies" rather than a misleading number.
+      if (adapter.mode === 'poll') currentIntervals.set(row.name, desiredIntervalMs);
       console.log(
         `[ConfiguredSources] ✅ Started "${row.name}" (${row.source_type}, ${adapter.mode}` +
         `${adapter.mode === 'poll' ? `, every ${row.poll_interval_seconds}s` : ''})`
@@ -122,6 +135,7 @@ export function startConfiguredSources(onEvent) {
         trackedRowIds.delete(entry.name);
         trackedModes.delete(entry.name);
         lastProcessedAt.delete(entry.name);
+        currentIntervals.delete(entry.name);
         console.log(`[ConfiguredSources] Stopped source ${id} (deactivated/removed/type changed)`);
       }
     }
@@ -138,5 +152,6 @@ export function startConfiguredSources(onEvent) {
     trackedRowIds.clear();
     trackedModes.clear();
     lastProcessedAt.clear();
+    currentIntervals.clear();
   };
 }

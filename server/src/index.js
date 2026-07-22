@@ -26,7 +26,7 @@ import { startFEWSNET }    from './sources/fewsnet.js';
 import { startGDACSRSS, startPTWCRSS } from './sources/rss.js';
 import { startIoTSource }  from './sources/iot.js';
 import { startDynamicSources } from './sources/dynamicSources.js';
-import { startConfiguredSources } from './sources/configuredSources.js';
+import { startConfiguredSources, getSourceIntervalMs } from './sources/configuredSources.js';
 
 // ── İşlemciler ───────────────────────────────────────────────────────────────
 import { Deduplicator }        from './processors/deduplicator.js';
@@ -149,6 +149,36 @@ const CORS_HEADERS = {
   'Content-Type': 'application/json',
 };
 
+// Sources that need sub-minute latency (moved here 2026-07-22 specifically
+// for this — see server/README or the architecture discussion) — if any of
+// these goes stale, Docker's HEALTHCHECK (hitting /health) should restart
+// the container, unlike the old /health which only checked "is the process
+// alive" and would happily report "ok" while EMSC sat silently disconnected.
+const CRITICAL_SOURCES = ['EMSC', 'USGS', 'AFAD', 'Kandilli', 'GEOFON'];
+const STALENESS_MULTIPLIER = 3; // tolerate up to 2 missed cycles before flagging
+const EMSC_PING_INTERVAL_MS = 15 * 1000; // mirrors emsc.js's PING_INTERVAL — websocket has no polling interval to read from getSourceIntervalMs()
+const STARTUP_GRACE_MS = 90 * 1000; // first poll cycles + EMSC connect+first-pong all need time on cold start
+
+function checkCriticalSourcesHealth() {
+  const now = Date.now();
+  const stale = [];
+  for (const name of CRITICAL_SOURCES) {
+    const entry = sourceHealth[name];
+    if (!entry) {
+      if (process.uptime() * 1000 < STARTUP_GRACE_MS) continue; // hasn't had a chance to report yet
+      stale.push(`${name}: never reported`);
+      continue;
+    }
+    const intervalMs = getSourceIntervalMs(name) ?? EMSC_PING_INTERVAL_MS;
+    const thresholdMs = intervalMs * STALENESS_MULTIPLIER;
+    const ageMs = now - entry.at;
+    if (ageMs > thresholdMs) {
+      stale.push(`${name}: last report ${Math.round(ageMs / 1000)}s ago (threshold ${Math.round(thresholdMs / 1000)}s)`);
+    }
+  }
+  return { healthy: stale.length === 0, stale };
+}
+
 const httpServer = http.createServer((req, res) => {
   if (req.method === 'OPTIONS') {
     res.writeHead(204, CORS_HEADERS);
@@ -161,6 +191,11 @@ const httpServer = http.createServer((req, res) => {
   }
 
   if (req.url === '/health') {
+    const { healthy, stale } = checkCriticalSourcesHealth();
+    if (!healthy) {
+      res.writeHead(500, CORS_HEADERS);
+      return res.end(JSON.stringify({ status: 'degraded', db: dbReady, staleSources: stale }));
+    }
     res.writeHead(200, CORS_HEADERS);
     return res.end(JSON.stringify({ status: 'ok', db: dbReady }));
   }

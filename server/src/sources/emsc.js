@@ -44,7 +44,13 @@ export function connectEMSC(onEvent, opts = {}) {
       }
     });
 
-    ws.on('pong', () => { /* alive */ });
+    // Without this, sourceHealth['EMSC'].at only updates on (re)connect —
+    // a WebSocket can sit open for days with zero earthquake traffic (real
+    // seismic activity is bursty), which would make any staleness-based
+    // health check (see index.js's /health) falsely flag a perfectly live
+    // connection as dead after its threshold passed. Every confirmed pong
+    // is proof the socket is genuinely alive, not just open.
+    ws.on('pong', () => { reportStatus('EMSC', 200); });
 
     ws.on('close', () => {
       console.warn('[EMSC] Disconnected, reconnecting in 5s...');

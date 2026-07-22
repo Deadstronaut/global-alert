@@ -37,3 +37,7 @@ __screenshots__/
 
 # Vite
 *.timestamp-*-*.mjs
+
+# Local-only large raster test files (Meta/HDX Population feasibility testing —
+# these are multi-GB GeoTIFFs, never meant to be committed)
+/database/

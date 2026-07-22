@@ -12,13 +12,15 @@
  * above) rather than JSON paths — there is no nesting in FDSN text.
  */
 
+import { safeFetch, readTextWithLimit } from '../urlSafety.js';
+
 const FDSN_COLUMNS = [
   'EventID', 'Time', 'Latitude', 'Longitude', 'Depth/km', 'Author', 'Catalog',
   'Contributor', 'ContributorID', 'MagType', 'Magnitude', 'MagAuthor', 'EventLocationName',
 ];
 
 export async function fetchFDSN(row) {
-  const res = await fetch(row.endpoint_url, {
+  const res = await safeFetch(row.endpoint_url, {
     headers: { 'User-Agent': 'GlobalAlert/1.0 (disaster monitoring)' },
     signal: AbortSignal.timeout(15000),
   });
@@ -27,7 +29,7 @@ export async function fetchFDSN(row) {
   if (res.status === 204 || res.status === 404) return { records: [], status: 200 };
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
 
-  const text = await res.text();
+  const text = await readTextWithLimit(res);
   const records = [];
   for (const line of text.split('\n')) {
     if (!line || line.startsWith('#')) continue;

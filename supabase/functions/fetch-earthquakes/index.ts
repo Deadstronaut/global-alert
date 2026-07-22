@@ -7,7 +7,7 @@
 
 import { corsHeaders } from '../shared/cors.ts'
 import { normalize } from '../shared/normalize.ts'
-import { upsertEvents } from '../shared/upsert.ts'
+import { upsertEvents, getServiceClient } from '../shared/upsert.ts'
 import { validatePayload } from '../shared/validatePayload.ts'
 import { recordFetchOutcome, resolveSourceId, logRejectedPayload, isSourceActive } from '../shared/sourceHealth.ts'
 import { fetchGdacsFeatures, toGdacsNormalized } from '../shared/gdacsFetch.ts'
@@ -189,6 +189,53 @@ function deduplicate(events: ReturnType<typeof normalize>[]) {
   return result
 }
 
+// ── Cross-process dedup against the live table ────────────────────────────────
+// deduplicate() above only compares events within THIS invocation's own batch —
+// it has no idea what server/'s separately-running aggregator (EMSC/USGS/AFAD/
+// Kandilli/GEOFON, moved there 2026-07-22 for sub-minute latency + P-wave) has
+// already written to `earthquake` moments ago from its own process. GDACS is the
+// one source staying in this Edge Function alongside those five now-external
+// sources, so its events are the ones that can arrive "late" relative to
+// server/'s faster path and land as an avoidable duplicate row. Tolerances match
+// server/src/processors/deduplicator.js's earthquake constants (25km/5min)
+// exactly, so "is this a duplicate" means the same thing on both sides — plus a
+// magnitude tolerance here since two independently-reported magnitudes for the
+// same physical event are rarely bit-identical.
+const CROSS_PROCESS_RADIUS_KM = 25
+const CROSS_PROCESS_TIME_MS = 5 * 60_000
+const CROSS_PROCESS_MAG_TOLERANCE = 0.3
+
+async function filterAgainstLiveEarthquakes(
+  events: ReturnType<typeof normalize>[],
+): Promise<ReturnType<typeof normalize>[]> {
+  if (events.length === 0) return events
+  const supabase = getServiceClient()
+  const sinceIso = new Date(Date.now() - CROSS_PROCESS_TIME_MS).toISOString()
+  const { data: recent, error } = await supabase
+    .from('earthquake')
+    .select('lat, lng, time, magnitude')
+    .gte('time', sinceIso)
+  if (error || !recent) {
+    // Fail open (keep the events) — a dedup-check failure must not silently
+    // drop real earthquake data; a rare duplicate row is far cheaper than a
+    // missed one.
+    console.warn(`[fetch-earthquakes] Live dedup check failed, proceeding without it: ${error?.message}`)
+    return events
+  }
+
+  return events.filter((ev) => {
+    const isDup = recent.some((ex) => {
+      if (ex.magnitude != null && Math.abs(ev.magnitude! - ex.magnitude) > CROSS_PROCESS_MAG_TOLERANCE) return false
+      const dLat = (ev.lat - ex.lat) * 111
+      const dLng = (ev.lng - ex.lng) * 111
+      const distKm = Math.sqrt(dLat * dLat + dLng * dLng)
+      const dtMs = Math.abs(new Date(ev.time).getTime() - new Date(ex.time).getTime())
+      return distKm < CROSS_PROCESS_RADIUS_KM && dtMs < CROSS_PROCESS_TIME_MS
+    })
+    return !isDup
+  })
+}
+
 // ── Health tracking (feature 001-data-ingestion-monitoring) ───────────────────
 // Each upstream fetcher is tracked against its data_sources row (looked up by
 // hazard_type + name). Sources not yet registered in data_sources resolve to
@@ -220,11 +267,23 @@ Deno.serve(async (req) => {
   const sources: Record<string, ReturnType<typeof normalize>[]> = {}
   const fetchErrors: string[] = []
 
+  // CUTOVER-2026-07-22: USGS/EMSC/AFAD/Kandilli moved to the always-on
+  // server/ aggregator (see docker-compose.yml's `aggregator` service) —
+  // it polls each at 15-20s (pg_cron's syntax floor is 1 minute, so this
+  // Edge Function could never match that latency) and holds EMSC's
+  // WebSocket open (structurally impossible for a stateless Edge
+  // Function). This can't be flipped via data_sources.is_active — that
+  // row is shared with server/'s own configuredSources.js poll-list
+  // check, so disabling it here would ALSO stop server/'s polling.
+  // Rollback: uncomment these four lines and redeploy (no DB change
+  // needed) — cheap and fast, matches server/index.js's own
+  // comment-not-delete precedent for the mirror-image cutover.
+  //
+  // trackedFetch('USGS', fetchUSGS),
+  // trackedFetch('EMSC', fetchEMSC),
+  // trackedFetch('AFAD', fetchAFAD),
+  // trackedFetch('Kandilli', fetchKandilli),
   const results = await Promise.all([
-    trackedFetch('USGS', fetchUSGS),
-    trackedFetch('EMSC', fetchEMSC),
-    trackedFetch('AFAD', fetchAFAD),
-    trackedFetch('Kandilli', fetchKandilli),
     trackedFetch('GDACS', fetchGDACS),
   ])
   for (const r of results) {
@@ -240,7 +299,8 @@ Deno.serve(async (req) => {
     const order = ['USGS', 'EMSC', 'AFAD', 'Kandilli', 'GDACS']
     return order.indexOf(a.source) - order.indexOf(b.source)
   })
-  const events = deduplicate(all)
+  const batchDeduped = deduplicate(all)
+  const events = await filterAgainstLiveEarthquakes(batchDeduped)
 
   const { inserted, errors: dbErrors } = await upsertEvents(events)
 
@@ -249,6 +309,7 @@ Deno.serve(async (req) => {
       status: dbErrors.length === 0 ? 'ok' : 'partial',
       fetched: all.length,
       deduplicated: events.length,
+      crossProcessDuplicatesSkipped: batchDeduped.length - events.length,
       inserted,
       fetchErrors,
       dbErrors,

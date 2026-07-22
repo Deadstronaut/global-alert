@@ -8,14 +8,15 @@
  */
 
 import { parseXML } from '../rss.js';
+import { safeFetch, readTextWithLimit } from '../urlSafety.js';
 
 export async function fetchRSS(row) {
-  const res = await fetch(row.endpoint_url, {
+  const res = await safeFetch(row.endpoint_url, {
     headers: { 'User-Agent': 'GlobalAlert/1.0 (disaster monitoring)' },
     signal: AbortSignal.timeout(15000),
   });
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  const xml = await res.text();
+  const xml = await readTextWithLimit(res);
   return { records: parseXML(xml), status: res.status };
 }
 

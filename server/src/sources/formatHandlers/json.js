@@ -5,7 +5,7 @@
  * per-record via getPath().
  */
 
-import axios from 'axios';
+import { safeAxiosGet } from '../urlSafety.js';
 
 export function getPath(obj, path) {
   if (!path) return obj;
@@ -14,7 +14,7 @@ export function getPath(obj, path) {
 
 export async function fetchJSON(row) {
   const { response_path = '' } = row.endpoint_config || {};
-  const res = await axios.get(row.endpoint_url, { timeout: 10000 });
+  const res = await safeAxiosGet(row.endpoint_url, { timeout: 10000 });
   const records = response_path ? getPath(res.data, response_path) : res.data;
   if (!Array.isArray(records)) throw new Error(`response_path "${response_path}" did not resolve to an array`);
   return { records, status: res.status };

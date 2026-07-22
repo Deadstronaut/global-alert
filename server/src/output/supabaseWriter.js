@@ -58,6 +58,51 @@ export function queueWrite(event) {
   }
 }
 
+// Cross-checks earthquake rows about to be written against the live table
+// before the upsert, as a defense-in-depth backstop to the in-memory
+// Deduplicator. Live-verified 2026-07-22: EMSC and USGS independently
+// reported the same physical Hawaii M2.5 quake ~40 real seconds apart, and
+// the in-memory check (which by every reproduction test — an isolated
+// two-event repro AND a full 548-event historical replay — behaves
+// correctly) still let both rows land in the DB in the live container. The
+// exact live-runtime race was not pinned down, so rather than leave a
+// known, reproducible duplicate-writing gap, this closes it independently
+// at the write boundary — mirrors fetch-earthquakes/index.ts's
+// filterAgainstLiveEarthquakes() (same tolerances: 25km/5min/±0.3 mag),
+// and the same fail-open philosophy (a dedup-check failure must not drop
+// real earthquake data).
+const CROSS_CHECK_RADIUS_KM = 25;
+const CROSS_CHECK_TIME_MS = 5 * 60_000;
+const CROSS_CHECK_MAG_TOLERANCE = 0.3;
+
+async function filterAgainstLiveEarthquakes(rows) {
+  if (rows.length === 0) return rows;
+  const sinceIso = new Date(Date.now() - CROSS_CHECK_TIME_MS).toISOString();
+  const { data: recent, error } = await supabase
+    .from('earthquake')
+    .select('id, lat, lng, time, magnitude')
+    .gte('time', sinceIso);
+  if (error) {
+    console.warn(`[Supabase] Live earthquake dedup check failed, writing without it: ${error.message}`);
+    return rows;
+  }
+
+  const existing = recent || [];
+  return rows.filter((row) => {
+    const isDup = existing.some((ex) => {
+      if (ex.id === row.id) return false; // handled by upsert's own onConflict, not this filter
+      if (ex.magnitude != null && row.magnitude != null && Math.abs(row.magnitude - ex.magnitude) > CROSS_CHECK_MAG_TOLERANCE) return false;
+      const dLat = (row.lat - ex.lat) * 111;
+      const dLng = (row.lng - ex.lng) * 111;
+      const distKm = Math.sqrt(dLat * dLat + dLng * dLng);
+      if (distKm >= CROSS_CHECK_RADIUS_KM) return false;
+      const dtMs = Math.abs(new Date(row.time).getTime() - new Date(ex.time).getTime());
+      return dtMs < CROSS_CHECK_TIME_MS;
+    });
+    return !isDup;
+  });
+}
+
 async function flushQueue() {
   flushTimer = null;
   if (writeQueue.length === 0) return;
@@ -74,14 +119,16 @@ async function flushQueue() {
   // Her tablo için upsert
   for (const [table, rows] of Object.entries(groups)) {
     try {
+      const rowsToWrite = table === 'earthquake' ? await filterAgainstLiveEarthquakes(rows) : rows;
+      if (rowsToWrite.length === 0) continue;
       const {error} = await supabase
         .from(table)
-        .upsert(rows, {onConflict: 'id', ignoreDuplicates: true});
+        .upsert(rowsToWrite, {onConflict: 'id', ignoreDuplicates: true});
 
       if (error) {
         // Tablo yoksa 'disasters' genel tablosuna yaz
         if (error.code === '42P01') {
-          await supabase.from('disasters').upsert(rows, {onConflict: 'id', ignoreDuplicates: true});
+          await supabase.from('disasters').upsert(rowsToWrite, {onConflict: 'id', ignoreDuplicates: true});
         } else {
           console.warn(`[Supabase] Upsert error (${table}):`, error.message);
         }

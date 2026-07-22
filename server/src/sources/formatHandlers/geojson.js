@@ -8,12 +8,12 @@
  * order at all.
  */
 
-import axios from 'axios';
+import { safeAxiosGet } from '../urlSafety.js';
 import { getPath } from './json.js';
 
 export async function fetchGeoJSON(row) {
   const { response_path = 'features' } = row.endpoint_config || {};
-  const res = await axios.get(row.endpoint_url, { timeout: 10000 });
+  const res = await safeAxiosGet(row.endpoint_url, { timeout: 10000 });
   const records = getPath(res.data, response_path);
   if (!Array.isArray(records)) throw new Error(`response_path "${response_path}" did not resolve to a GeoJSON features array`);
   return { records, status: res.status };

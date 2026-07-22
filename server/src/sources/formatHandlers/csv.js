@@ -5,13 +5,15 @@
  * column name (no dotted paths needed — CSV has no nesting).
  */
 
+import { safeFetch, readTextWithLimit } from '../urlSafety.js';
+
 export async function fetchCSV(row) {
-  const res = await fetch(row.endpoint_url, {
+  const res = await safeFetch(row.endpoint_url, {
     headers: { 'User-Agent': 'GlobalAlert/1.0 (disaster monitoring)' },
     signal: AbortSignal.timeout(90000),
   });
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  const text = await res.text();
+  const text = await readTextWithLimit(res);
   const lines = text.split('\n').map((l) => l.trim()).filter(Boolean);
   if (lines.length === 0) return { records: [], status: res.status };
 

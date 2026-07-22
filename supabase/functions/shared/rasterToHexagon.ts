@@ -140,14 +140,22 @@ export function geometryBoundingBox(geometry: GeoJSON.Geometry): [number, number
   return [minLng, minLat, maxLng, maxLat]
 }
 
-export async function aggregateRasterToHexagons(
-  rasterBuffer: ArrayBuffer,
+// deno-lint-ignore no-explicit-any
+type GeotiffImage = any
+
+// Shared by both entry points below: aggregateRasterToHexagons (Edge
+// Function-facing, whole file already in memory as an ArrayBuffer) and
+// aggregateRasterToHexagonsFromImage (container-facing, called with an
+// image opened from a lazy/windowed source — see rasterToHexagonFile.ts —
+// so a 12GB+ raster never has to fit in RAM at once, only one row-block
+// at a time). Both call this function; the memory-usage difference comes
+// entirely from how `image` was obtained, not from this loop.
+export async function aggregateRasterToHexagonsFromImage(
+  image: GeotiffImage,
   config: RasterSourceConfig,
   countryBoundary: GeoJSON.Geometry,
   countryCode: string,
 ): Promise<PopulationRasterRecord[]> {
-  const tiff = await fromArrayBuffer(rasterBuffer)
-  const image = await tiff.getImage()
   const width: number = image.getWidth()
   const height: number = image.getHeight()
   const [xmin, ymin, xmax, ymax] = image.getBoundingBox() as [number, number, number, number]
@@ -204,4 +212,21 @@ export async function aggregateRasterToHexagons(
   }
 
   return records
+}
+
+// Edge Function-facing entry point (WorldPop/GHSL/GDO SPI today): the
+// whole raster must already be downloaded into memory as an ArrayBuffer,
+// since Supabase's Edge Runtime has no local filesystem to stream from.
+// This is exactly the shape that hits WORKER_RESOURCE_LIMIT on anything
+// GHSL/Meta-sized — see rasterToHexagonFile.ts for the disk-streaming
+// alternative meant for a persistent container instead.
+export async function aggregateRasterToHexagons(
+  rasterBuffer: ArrayBuffer,
+  config: RasterSourceConfig,
+  countryBoundary: GeoJSON.Geometry,
+  countryCode: string,
+): Promise<PopulationRasterRecord[]> {
+  const tiff = await fromArrayBuffer(rasterBuffer)
+  const image = await tiff.getImage()
+  return aggregateRasterToHexagonsFromImage(image, config, countryBoundary, countryCode)
 }

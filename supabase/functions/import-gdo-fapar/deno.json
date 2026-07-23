@@ -1,0 +1,5 @@
+{
+  "imports": {
+    "node:vm": "data:application/javascript,export default {};export const Script=class{};"
+  }
+}

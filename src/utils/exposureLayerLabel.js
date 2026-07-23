@@ -14,6 +14,12 @@ const SOURCE_LABEL_KEYS = {
   hydrobasins: 'exposureLayers.sourceLabel.hydrobasins',
   worldpop: 'exposureLayers.sourceLabel.worldpop',
   gdo_spi: 'exposureLayers.sourceLabel.gdoSpi',
+  gdo_fapar_anomaly: 'exposureLayers.sourceLabel.gdoFapar',
+  gdo_soil_moisture_anomaly: 'exposureLayers.sourceLabel.gdoSoilMoisture',
+  ghsl: 'exposureLayers.sourceLabel.ghsl',
+  meta_hdx: 'exposureLayers.sourceLabel.metaHdx',
+  glofas_river_discharge: 'exposureLayers.sourceLabel.glofasRiverDischarge',
+  'osm-buildings': 'exposureLayers.sourceLabel.osmBuildings',
 }
 
 const COUNTRY_LABEL_KEYS = {

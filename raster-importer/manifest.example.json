@@ -1,0 +1,12 @@
+[
+  {
+    "source": "meta_hdx",
+    "countryCode": "mg",
+    "tifPath": "/rasters/mdg_general_2020.tif"
+  },
+  {
+    "source": "meta_hdx",
+    "countryCode": "tr",
+    "tifPath": "/rasters/turkey_2020.tif"
+  }
+]

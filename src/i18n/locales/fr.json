@@ -706,14 +706,19 @@
     "emptyState": "Aucune couche d'exposition disponible pour cette zone pour le moment.",
     "selectCountryPrompt": "Sélectionnez un pays sur la carte pour voir ses couches d'exposition.",
     "featureCount": "{count} éléments",
-    "loading": "Chargement...",
-    "sourceLabel": {
+    "loading": "Chargement...",    "sourceLabel": {
       "osm": "Réseau Routier",
       "kontur": "Densité de Population",
       "hydrorivers": "Réseau Fluvial",
       "hydrobasins": "Limites des Bassins",
       "worldpop": "Population (WorldPop)",
-      "gdoSpi": "Intensité de Sécheresse (SPI)"
+      "gdoSpi": "Intensité de Sécheresse (SPI)",
+      "gdoFapar": "Anomalie de Végétation (FAPAR)",
+      "gdoSoilMoisture": "Anomalie d'Humidité du Sol",
+      "ghsl": "Population (GHSL)",
+      "metaHdx": "Population (Meta/HDX)",
+      "glofasRiverDischarge": "Débit Fluvial (GloFAS)",
+      "osmBuildings": "Établissements Critiques (Bâtiments)"
     },
     "countryLabel": {
       "tr": "Turquie",

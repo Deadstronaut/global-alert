@@ -11,6 +11,7 @@
     "https://esm.sh/@turf/bbox@7": "https://esm.sh/@turf/bbox@7.3.5",
     "https://esm.sh/@turf/boolean-intersects@7": "https://esm.sh/@turf/boolean-intersects@7.3.5",
     "https://esm.sh/@turf/boolean-point-in-polygon@7": "https://esm.sh/@turf/boolean-point-in-polygon@7.3.5",
+    "https://esm.sh/@types/pako@~2.0.4/index.d.ts": "https://esm.sh/@types/pako@2.0.4/index.d.ts",
     "https://esm.sh/array-source@0.0?target=denonext": "https://esm.sh/array-source@0.0.4?target=denonext",
     "https://esm.sh/core-util-is@~1.0.0?target=denonext": "https://esm.sh/core-util-is@1.0.3?target=denonext",
     "https://esm.sh/iceberg-js@^0.8.1?target=denonext": "https://esm.sh/iceberg-js@0.8.1?target=denonext",

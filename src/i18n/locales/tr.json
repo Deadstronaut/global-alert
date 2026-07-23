@@ -702,18 +702,23 @@
     "panelTitle": "Harita Katmanları"
   },
   "exposureLayers": {
-    "panelTitle": "Maruziyet Katmanları",
-    "emptyState": "Bu bölge için henüz maruziyet katmanı yok.",
-    "selectCountryPrompt": "Maruziyet katmanlarını görmek için haritadan bir ülke seçin.",
+    "panelTitle": "Etki Alanı Katmanları",
+    "emptyState": "Bu bölge için henüz etki alanı katmanı yok.",
+    "selectCountryPrompt": "Etki alanı katmanlarını görmek için haritadan bir ülke seçin.",
     "featureCount": "{count} kayıt",
-    "loading": "Yükleniyor...",
-    "sourceLabel": {
+    "loading": "Yükleniyor...",    "sourceLabel": {
       "osm": "Yol Ağı",
       "kontur": "Nüfus Yoğunluğu",
       "hydrorivers": "Nehir Ağı",
       "hydrobasins": "Havza Sınırları",
       "worldpop": "Nüfus (WorldPop)",
-      "gdoSpi": "Kuraklık Şiddeti (SPI)"
+      "gdoSpi": "Kuraklık Şiddeti (SPI)",
+      "gdoFapar": "Bitki Örtüsü Anomalisi (FAPAR)",
+      "gdoSoilMoisture": "Toprak Nemi Anomalisi",
+      "ghsl": "Nüfus (GHSL)",
+      "metaHdx": "Nüfus (Meta/HDX)",
+      "glofasRiverDischarge": "Nehir Debisi (GloFAS)",
+      "osmBuildings": "Kritik Tesisler (Bina)"
     },
     "countryLabel": {
       "tr": "Türkiye",

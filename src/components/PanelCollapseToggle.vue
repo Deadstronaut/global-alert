@@ -82,30 +82,30 @@ defineEmits(['click'])
   outline: none;
 }
 
+/* Points "outward" (away from the panel, expand hint) at rest/collapsed,
+   and flips 180° to point "inward" (toward the panel, collapse hint) once
+   expanded — was backwards before (rotated on collapse instead of on
+   expand), making both arrows appear to point the wrong way in both
+   states. The button's own padding (12px left, 0px right, below)
+   compensates for the triple-chevron cluster's compressed mass sitting
+   flush against the icon's own left edge at rest; rotating 180° flips
+   which edge that mass sits against, so the rotated state folds a
+   translateX(12px) into the SAME transform to keep the glyph landing on
+   the exact same screen pixels in both states (flips in place instead of
+   sliding) — a separate, independent transition on the padding used to
+   "fix" this instead but caused the icon to swing outward before
+   overflow:hidden clipped it back, reading as unstable mid-animation.
+*/
 .panel-collapse-toggle-icon {
   display: flex;
   transition:
     margin 0.35s ease,
     transform 0.35s ease;
+  transform: rotate(180deg) translateX(12px);
 }
 
-/* The resting (uncollapsed) glyph reads as centered only because the
-   button's own padding (12px left, 0px right, above) compensates for the
-   triple-chevron cluster's compressed mass sitting flush against the
-   icon's own left edge. Rotating 180° flips which edge that mass sits
-   against, so a plain rotate() re-introduces the same imbalance the
-   padding was compensating for — a second, independent transition on the
-   button's padding used to "fix" this, but animating rotation (transform,
-   on the icon) and the compensating shift (padding, on the parent button)
-   as two separate transitions made the icon swing outward before the
-   overflow:hidden clip snapped it back, reading as unstable/overflowing
-   mid-animation. Folding the compensation into the SAME transform as the
-   rotation keeps the icon glyph landing on the exact same screen pixels
-   in both states — it flips in place instead of sliding — and both
-   animate as one coordinated motion instead of two independent ones.
-*/
 .panel-collapse-toggle--collapsed .panel-collapse-toggle-icon {
-  transform: rotate(180deg) translateX(12px);
+  transform: none;
 }
 
 .panel-collapse-toggle-btn:hover .panel-collapse-toggle-icon {

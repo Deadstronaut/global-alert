@@ -29,7 +29,7 @@ import { useAuthStore } from '@/stores/auth.js'
 import { supabase } from '@/services/api/config.js'
 import { getShelterMarkerColor, getShelterMarkerIcon } from '@/services/shelterMarkerStyle.js'
 import { useExposureLayersStore } from '@/stores/exposureLayers.js'
-import { colorForDataset, isPopulationSource, populationFillExpression } from '@/utils/exposureLayerColor.js'
+import { colorForDataset, isPopulationSource, isGridMetricSource, populationFillExpression, gridMetricFillExpression, GRID_METRIC_RAMP } from '@/utils/exposureLayerColor.js'
 import { buildFeaturePopupHtml } from '@/utils/exposureFeaturePopup.js'
 import { friendlyDatasetLabel } from '@/utils/exposureLayerLabel.js'
 
@@ -150,6 +150,27 @@ function exposureLayerKey(dataset) { return `exposure-dataset-${dataset.id}` }
 
 const EXPOSURE_SUB_LAYER_SUFFIXES = ['-fill', '-line', '-point']
 
+// Value labels are always on, gated purely by zoom (VALUE_LABEL_MINZOOM on
+// the symbol layer below) — no manual toggle. At country-wide zoom a
+// gridded layer can have tens of thousands of cells, so the numbers would
+// be illegible clutter until the user has zoomed in close enough for
+// individual cells to actually be distinguishable.
+const VALUE_LABEL_MINZOOM = 8
+
+// Kept short and locale-formatted (thousands separators) rather than a
+// MapLibre expression — different metrics span wildly different scales in
+// this dataset family (population counts in the hundreds of thousands,
+// SPI-style anomalies around ±0-4, river discharge in m3/s), and picking
+// the right precision per value is far simpler as plain JS than as a
+// MapLibre `step`/`case` expression evaluated per-feature on the GPU side.
+function formatMetricValueLabel(value) {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return ''
+  const abs = Math.abs(value)
+  if (abs >= 100) return Math.round(value).toLocaleString()
+  if (abs >= 1) return (Math.round(value * 10) / 10).toLocaleString()
+  return (Math.round(value * 100) / 100).toString()
+}
+
 async function addExposureLayer(dataset) {
   if (!map) return
   const sourceId = exposureSourceId(dataset)
@@ -168,7 +189,7 @@ async function addExposureLayer(dataset) {
       features: data.map((row) => ({
         type: 'Feature',
         geometry: JSON.parse(row.geom_geojson),
-        properties: { ...row.properties, __metricValue: row.metric_value },
+        properties: { ...row.properties, __metricValue: row.metric_value, __metricValueLabel: formatMetricValueLabel(row.metric_value) },
       })),
     }
     exposureFeatureCache.set(dataset.id, geojson)
@@ -180,17 +201,66 @@ async function addExposureLayer(dataset) {
   const color = colorForDataset(dataset)
   const opacity = getLayerOpacity(exposureLayerKey(dataset))
   const isPopulation = isPopulationSource(dataset.source_name)
-  const fillColor = isPopulation ? populationFillExpression(geojson) : color
+  const isGridMetric = isGridMetricSource(dataset.source_name)
+  // Both population and other gridded metrics (GDO anomalies, GloFAS
+  // discharge) are thousands of small per-pixel cells covering a whole
+  // country — a flat fill + full-opacity 2px outline (the default, meant
+  // for a handful of large features) reads as a dense, illegible grid/moiré
+  // pattern instead of a heatmap, so both get a quantile-graduated fill and
+  // a thin, low-opacity outline instead.
+  const isGridded = isPopulation || isGridMetric
+  const fillColor = isPopulation ? populationFillExpression(geojson) : isGridMetric ? gridMetricFillExpression(geojson, GRID_METRIC_RAMP) : color
   map.addSource(sourceId, { type: 'geojson', data: geojson })
-  map.addLayer({ id: `${sourceId}-fill`, type: 'fill', source: sourceId, filter: ['==', ['geometry-type'], 'Polygon'], paint: { 'fill-color': fillColor, 'fill-opacity': opacity * (isPopulation ? 0.75 : 0.4) } })
-  map.addLayer({ id: `${sourceId}-line`, type: 'line', source: sourceId, filter: ['in', ['geometry-type'], ['literal', ['LineString', 'Polygon']]], paint: { 'line-color': isPopulation ? '#7f0000' : color, 'line-opacity': opacity * (isPopulation ? 0.3 : 1), 'line-width': isPopulation ? 0.5 : 2 } })
+  map.addLayer({ id: `${sourceId}-fill`, type: 'fill', source: sourceId, filter: ['==', ['geometry-type'], 'Polygon'], paint: { 'fill-color': fillColor, 'fill-opacity': opacity * (isGridded ? 0.75 : 0.4) } })
+  map.addLayer({ id: `${sourceId}-line`, type: 'line', source: sourceId, filter: ['in', ['geometry-type'], ['literal', ['LineString', 'Polygon']]], paint: { 'line-color': isGridded ? '#7f0000' : color, 'line-opacity': opacity * (isGridded ? 0.3 : 1), 'line-width': isGridded ? 0.5 : 2 } })
   map.addLayer({ id: `${sourceId}-point`, type: 'circle', source: sourceId, filter: ['==', ['geometry-type'], 'Point'], paint: { 'circle-color': color, 'circle-opacity': opacity, 'circle-radius': 5 } })
+
+  // Value labels — a separate, non-interactive symbol layer (not part of
+  // EXPOSURE_SUB_LAYER_SUFFIXES's click-to-inspect loop below, so clicking a
+  // number still opens the same popup the underlying fill/point would).
+  // Always visible=true — gated purely by VALUE_LABEL_MINZOOM, no manual
+  // toggle (per-cell numbers only make sense once zoomed in close enough to
+  // tell cells apart; at country-wide zoom this stays off automatically).
+  map.addLayer({
+    id: `${sourceId}-labels`,
+    type: 'symbol',
+    source: sourceId,
+    minzoom: VALUE_LABEL_MINZOOM,
+    layout: {
+      'text-field': ['get', '__metricValueLabel'],
+      // Live-verified 2026-07-23: without an explicit text-font, MapLibre's
+      // default font stack request doesn't match anything this app's map
+      // styles' glyphs endpoint (tiles.openfreemap.org/fonts/{fontstack})
+      // actually serves — the layer registers with no console error at all,
+      // it just silently never draws any text. "Noto Sans Regular" is the
+      // stack both bundled styles (dark/liberty, tiles.openfreemap.org)
+      // confirmed to use for their own labels. Not fixable for the
+      // ESRI_SATELLITE_STYLE raster style (getBaseStyle()) — that style has
+      // no `glyphs` URL at all, a separate pre-existing limitation of using
+      // a bare raster-tile style, not something this layer can work around.
+      'text-font': ['Noto Sans Regular'],
+      // Zoom-interpolated, not fixed: a constant pixel size stays visually
+      // tiny relative to how much closer the user has zoomed in, reading as
+      // "shrinking" even though it's technically constant. Grows from 14px
+      // at VALUE_LABEL_MINZOOM (8) to 23px by zoom 14 (~30% bigger than the
+      // original 11-18 range, per live legibility feedback 2026-07-23).
+      'text-size': ['interpolate', ['linear'], ['zoom'], VALUE_LABEL_MINZOOM, 14, 14, 23],
+      'text-allow-overlap': false,
+      visibility: 'visible',
+    },
+    paint: {
+      'text-color': '#ffffff',
+      'text-halo-color': '#000000',
+      'text-halo-width': 2,
+      'text-halo-blur': 0.5,
+    },
+  })
 
   for (const suffix of EXPOSURE_SUB_LAYER_SUFFIXES) {
     map.on('click', `${sourceId}${suffix}`, (e) => {
       const f = e.features?.[0]
       if (!f) return
-      const { __metricValue, ...properties } = f.properties ?? {}
+      const { __metricValue, __metricValueLabel, ...properties } = f.properties ?? {}
       if (exposurePopup) exposurePopup.remove()
       exposurePopup = new maplibregl.Popup({ offset: 12, className: 'modern-popup-container' })
         .setLngLat(e.lngLat)
@@ -203,7 +273,7 @@ async function addExposureLayer(dataset) {
 function removeExposureLayerRendering(dataset) {
   if (!map) return
   const sourceId = exposureSourceId(dataset)
-  for (const suffix of EXPOSURE_SUB_LAYER_SUFFIXES) {
+  for (const suffix of [...EXPOSURE_SUB_LAYER_SUFFIXES, '-labels']) {
     if (map.getLayer(sourceId + suffix)) map.removeLayer(sourceId + suffix)
   }
   if (map.getSource(sourceId)) map.removeSource(sourceId)
@@ -246,8 +316,9 @@ function setExposureLayerOpacity(dataset, value) {
   layerOpacity.value = { ...layerOpacity.value, [key]: value }
   if (!map || !isLayerVisible(key)) return
   const sourceId = exposureSourceId(dataset)
-  if (map.getLayer(`${sourceId}-fill`)) map.setPaintProperty(`${sourceId}-fill`, 'fill-opacity', value * 0.4)
-  if (map.getLayer(`${sourceId}-line`)) map.setPaintProperty(`${sourceId}-line`, 'line-opacity', value)
+  const isGridded = isPopulationSource(dataset.source_name) || isGridMetricSource(dataset.source_name)
+  if (map.getLayer(`${sourceId}-fill`)) map.setPaintProperty(`${sourceId}-fill`, 'fill-opacity', value * (isGridded ? 0.75 : 0.4))
+  if (map.getLayer(`${sourceId}-line`)) map.setPaintProperty(`${sourceId}-line`, 'line-opacity', value * (isGridded ? 0.3 : 1))
   if (map.getLayer(`${sourceId}-point`)) map.setPaintProperty(`${sourceId}-point`, 'circle-opacity', value)
 }
 
@@ -2232,7 +2303,7 @@ onBeforeUnmount(() => {
         :class="{ flipped: uiStore.settingsPanelOpen }"
       >
         <div class="dock-face dock-face-front">
-          <ImpactPanel :selected-event="selectedImpactEvent" />
+          <ImpactPanel :selected-event="selectedImpactEvent" :country-code="selectedCountryCode" />
         </div>
         <div class="dock-face dock-face-back">
           <SettingsPanel hide-header />
@@ -2273,7 +2344,7 @@ onBeforeUnmount(() => {
           <label class="map-layer-toggle">
             <input type="checkbox" :checked="isLayerVisible(`exposure-dataset-${dataset.id}`)" @change="toggleExposureLayer(dataset)" />
             <span class="exposure-layer-swatch" :style="{ background: colorForDataset(dataset) }"></span>
-            <span class="exposure-layer-name">{{ friendlyDatasetLabel(t, dataset) }}</span>
+            <span class="exposure-layer-name" :title="friendlyDatasetLabel(t, dataset)">{{ friendlyDatasetLabel(t, dataset) }}</span>
             <span class="map-layer-type exposure-layer-count" v-if="dataset.feature_count">{{ t('exposureLayers.featureCount', { count: dataset.feature_count.toLocaleString() }) }}</span>
           </label>
           <input
@@ -2351,6 +2422,7 @@ onBeforeUnmount(() => {
   color: #e2e8f0;
   font-size: .8rem;
 }
+.exposure-layers-panel { max-width: 420px; }
 .map-layers-title { margin: 0 0 8px; font-size: .8rem; font-weight: 700; }
 .map-layer-row { margin-bottom: 8px; }
 .map-layer-toggle { display: flex; align-items: center; gap: 6px; cursor: pointer; }
@@ -2373,12 +2445,24 @@ onBeforeUnmount(() => {
 .exposure-layer-name {
   font-weight: 600;
   color: #e8edf4;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .exposure-layer-count {
   font-variant-numeric: tabular-nums;
   background: rgba(255,255,255,.08);
   padding: 2px 7px;
   border-radius: 10px;
+  /* Fixed width instead of hugging the digit count — otherwise each row's
+     badge is a different size ("115 kayıt" vs "65.010 kayıt") and, even
+     though all are right-aligned via margin-left:auto, their left edges
+     land at different x-positions, reading as an uneven, scattered list. */
+  min-width: 72px;
+  text-align: right;
+  flex-shrink: 0;
 }
 
 .shelters-layer-panel {

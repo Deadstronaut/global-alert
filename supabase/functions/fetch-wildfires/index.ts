@@ -107,42 +107,47 @@ Deno.serve(async (req) => {
   const fetchErrors: string[] = []
   const sources: Record<string, ReturnType<typeof normalize>[]> = {}
 
-  const firmsId = await resolveSourceId('wildfire', 'NASA FIRMS')
-
   // CUTOVER-2026-07-22: GDACS's wildfire slice moved to server/ (already
   // dispatched there via configuredSources.js's gdacs_rest registry entry).
-  // NASA FIRMS deliberately NOT moved — live-tested moving it: server/'s
-  // Docker container gets ETIMEDOUT connecting to
-  // firms.modaps.eosdis.nasa.gov specifically (DNS resolves fine, TCP
-  // connect hangs) while the exact same request works instantly from the
-  // host machine and from this Edge Function today — a Docker-networking-
-  // level issue on this dev machine, not a code bug, but not something to
-  // risk breaking the one currently-working wildfire path over. Revisit
-  // once this can be tested on a real deployment VM.
-  await Promise.allSettled([
-    (async () => {
-      if (!(await isSourceActive(firmsId))) return
-      try {
-        sources['NASA FIRMS'] = await fetchFIRMS(firmsId)
-        if (firmsId) await recordFetchOutcome(firmsId, 'success')
-      } catch (e) {
-        fetchErrors.push(`NASA FIRMS: ${e.message}`)
-        if (firmsId) await recordFetchOutcome(firmsId, 'failure', e.message)
-      }
-    })(),
-    // GDACS wildfire (server-only now):
-    // const gdacsId = await resolveSourceId('wildfire', 'GDACS')
-    // (async () => {
-    //   if (!(await isSourceActive(gdacsId))) return
-    //   try {
-    //     sources['GDACS'] = await fetchGDACS(gdacsId)
-    //     if (gdacsId) await recordFetchOutcome(gdacsId, 'success')
-    //   } catch (e) {
-    //     fetchErrors.push(`GDACS: ${e.message}`)
-    //     if (gdacsId) await recordFetchOutcome(gdacsId, 'failure', e.message)
-    //   }
-    // })(),
-  ])
+  //
+  // CUTOVER-2026-07-22 (later same day): NASA FIRMS also moved to
+  // server-only. Originally kept here because server/'s Docker container
+  // was live-tested getting ETIMEDOUT connecting to
+  // firms.modaps.eosdis.nasa.gov (DNS resolved, TCP connect hung) while
+  // the same request worked instantly from the host machine and this Edge
+  // Function — assumed to be a Docker-networking-level issue on the dev
+  // machine. Re-tested later the same day (after other Docker Desktop
+  // activity/restarts): server/'s container now reaches FIRMS fine,
+  // live-verified processing 86,000+ fire points into real wildfire
+  // events. Whatever caused the earlier ETIMEDOUT was transient, not
+  // structural — no code change needed, just re-verification. Rollback:
+  // uncomment below + redeploy (no DB change needed) if it recurs.
+  //
+  // const firmsId = await resolveSourceId('wildfire', 'NASA FIRMS')
+  // await Promise.allSettled([
+  //   (async () => {
+  //     if (!(await isSourceActive(firmsId))) return
+  //     try {
+  //       sources['NASA FIRMS'] = await fetchFIRMS(firmsId)
+  //       if (firmsId) await recordFetchOutcome(firmsId, 'success')
+  //     } catch (e) {
+  //       fetchErrors.push(`NASA FIRMS: ${e.message}`)
+  //       if (firmsId) await recordFetchOutcome(firmsId, 'failure', e.message)
+  //     }
+  //   })(),
+  //   // GDACS wildfire (server-only now):
+  //   // const gdacsId = await resolveSourceId('wildfire', 'GDACS')
+  //   // (async () => {
+  //   //   if (!(await isSourceActive(gdacsId))) return
+  //   //   try {
+  //   //     sources['GDACS'] = await fetchGDACS(gdacsId)
+  //   //     if (gdacsId) await recordFetchOutcome(gdacsId, 'success')
+  //   //   } catch (e) {
+  //   //     fetchErrors.push(`GDACS: ${e.message}`)
+  //   //     if (gdacsId) await recordFetchOutcome(gdacsId, 'failure', e.message)
+  //   //   }
+  //   // })(),
+  // ])
 
   // NASA FIRMS (dedicated satellite feed) is authoritative over GDACS (secondary,
   // supplementary source) on conflict — same source-priority convention as

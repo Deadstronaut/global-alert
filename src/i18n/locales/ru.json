@@ -706,14 +706,19 @@
     "emptyState": "Для этой территории пока нет доступных слоёв уязвимости.",
     "selectCountryPrompt": "Выберите страну на карте, чтобы увидеть её слои уязвимости.",
     "featureCount": "{count} объектов",
-    "loading": "Загрузка...",
-    "sourceLabel": {
+    "loading": "Загрузка...",    "sourceLabel": {
       "osm": "Дорожная Сеть",
       "kontur": "Плотность Населения",
       "hydrorivers": "Речная Сеть",
       "hydrobasins": "Границы Водосборов",
       "worldpop": "Население (WorldPop)",
-      "gdoSpi": "Интенсивность засухи (SPI)"
+      "gdoSpi": "Интенсивность засухи (SPI)",
+      "gdoFapar": "Аномалия растительности (FAPAR)",
+      "gdoSoilMoisture": "Аномалия влажности почвы",
+      "ghsl": "Население (GHSL)",
+      "metaHdx": "Население (Meta/HDX)",
+      "glofasRiverDischarge": "Речной сток (GloFAS)",
+      "osmBuildings": "Критически важные объекты (здания)"
     },
     "countryLabel": {
       "tr": "Турция",

@@ -706,14 +706,19 @@
     "emptyState": "该区域暂无可用的暴露层。",
     "selectCountryPrompt": "请在地图上选择一个国家以查看其暴露层。",
     "featureCount": "{count} 个要素",
-    "loading": "加载中...",
-    "sourceLabel": {
+    "loading": "加载中...",    "sourceLabel": {
       "osm": "道路网络",
       "kontur": "人口密度",
       "hydrorivers": "河流网络",
       "hydrobasins": "流域边界",
       "worldpop": "人口（WorldPop）",
-      "gdoSpi": "干旱强度（SPI）"
+      "gdoSpi": "干旱强度（SPI）",
+      "gdoFapar": "植被异常（FAPAR）",
+      "gdoSoilMoisture": "土壤湿度异常",
+      "ghsl": "人口（GHSL）",
+      "metaHdx": "人口（Meta/HDX）",
+      "glofasRiverDischarge": "河流流量（GloFAS）",
+      "osmBuildings": "关键设施（建筑物）"
     },
     "countryLabel": {
       "tr": "土耳其",

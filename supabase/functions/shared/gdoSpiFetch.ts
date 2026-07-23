@@ -227,6 +227,26 @@ async function fetchOneCountry(countryCode: string): Promise<ExposureFeatureInpu
   const height: number = image.getHeight()
   if (width === 0 || height === 0) return null
 
+  // Live-verified 2026-07-22: GDO's spgTS WCS coverage's own DescribeCoverage
+  // claims a float range of ±3.4e38 (i.e. "this is a real continuous SPI
+  // value"), but every actual GetCoverage response is an 8-bit UNSIGNED
+  // INTEGER raster (BitsPerSample=8, SampleFormat=1/unsigned) with values
+  // confined to 0-4 (SELECTED_TIMESCALE=01/06/12) or 0-8 (=03) — inconsistent
+  // with GDO's own published 7-class SPI scheme (factsheet_spi.pdf Table 2,
+  // which classifySpi() below implements) and NOT a plausible encoding of a
+  // real ±3-ish SPI float. Whatever this coverage actually serves, it is not
+  // usable as SPI data as-is — see NEW_GAME_PLAN.md's GDO SPI section. Fail
+  // loudly (this project's "reject, don't default" convention,
+  // validatePayload.ts/rejected_payloads) rather than let classifySpi() run
+  // on nonsense and silently write wrong drought classifications.
+  const sampleFormat = image.fileDirectory?.SampleFormat?.[0]
+  if (sampleFormat !== 3) {
+    throw new Error(
+      `GDO SPI WCS returned a non-float raster (BitsPerSample=${image.getBitsPerSample?.()}, SampleFormat=${sampleFormat}) — ` +
+      `this is very likely a classification/category code, not a real SPI value. Refusing to import until GDO's coverage is verified to serve actual floats.`,
+    )
+  }
+
   const [xmin, ymin, xmax, ymax] = image.getBoundingBox() as [number, number, number, number]
   const resX = (xmax - xmin) / width
   const resY = (ymax - ymin) / height

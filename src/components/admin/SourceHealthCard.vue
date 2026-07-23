@@ -17,6 +17,13 @@ const STATE_META = {
   down:     { label: 'Çalışmıyor', color: '#ef4444', dot: '✕' },
   disabled: { label: 'Devre Dışı', color: '#94a3b8', dot: '○' },
   offline:  { label: 'Çevrimdışı', color: '#ef4444', dot: '✕' },
+  // Never fetched even once (last_success_at is null) — distinct from
+  // 'offline' (used to run successfully, then went quiet). A source that
+  // simply hasn't been triggered yet (e.g. the aggregator container isn't
+  // running locally, or it's a slow-cron source that hasn't hit its first
+  // interval) is not the same signal as one that broke, and showing both as
+  // red "Çevrimdışı" reads as "this is failing" when it may just be new.
+  pending:  { label: 'Henüz Çalıştırılmadı', color: '#64748b', dot: '○' },
 }
 
 // health_state is only ever updated by the aggregator when it actually attempts
@@ -35,18 +42,24 @@ const staleThresholdMs = computed(() => {
   return (s.staleness_threshold_seconds ?? (s.poll_interval_seconds ?? 3600) * 3) * 1000
 })
 
+// Only true once the source HAS run before and then gone quiet — a source
+// that has never run isn't "stale", it just hasn't had a first attempt yet
+// (see 'pending' in STATE_META above).
 const isStale = computed(() => {
   const s = props.source
   if (!s.is_active) return false
-  if (!s.last_success_at) return true
+  if (!s.last_success_at) return false
   return now.value - new Date(s.last_success_at).getTime() > staleThresholdMs.value
 })
+
+const neverRun = computed(() => !props.source.last_success_at)
 
 const stateMeta = computed(() => {
   const raw = props.source.health_state
   // Only override 'healthy' — an explicit 'degraded'/'down' from the aggregator's
   // own last real attempt is more specific than a client-side staleness guess.
   if (raw === 'healthy' && isStale.value) return STATE_META.offline
+  if (raw === 'healthy' && neverRun.value) return STATE_META.pending
   return STATE_META[raw] ?? STATE_META.disabled
 })
 

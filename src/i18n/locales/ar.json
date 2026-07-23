@@ -706,14 +706,19 @@
     "emptyState": "لا توجد طبقات تعرض متاحة لهذه المنطقة حتى الآن.",
     "selectCountryPrompt": "اختر دولة على الخريطة لعرض طبقات التعرض الخاصة بها.",
     "featureCount": "{count} عنصر",
-    "loading": "جارٍ التحميل...",
-    "sourceLabel": {
+    "loading": "جارٍ التحميل...",    "sourceLabel": {
       "osm": "شبكة الطرق",
       "kontur": "الكثافة السكانية",
       "hydrorivers": "شبكة الأنهار",
       "hydrobasins": "حدود الأحواض المائية",
       "worldpop": "السكان (WorldPop)",
-      "gdoSpi": "شدة الجفاف (SPI)"
+      "gdoSpi": "شدة الجفاف (SPI)",
+      "gdoFapar": "شذوذ الغطاء النباتي (FAPAR)",
+      "gdoSoilMoisture": "شذوذ رطوبة التربة",
+      "ghsl": "السكان (GHSL)",
+      "metaHdx": "السكان (Meta/HDX)",
+      "glofasRiverDischarge": "تصريف النهر (GloFAS)",
+      "osmBuildings": "المرافق الحيوية (المباني)"
     },
     "countryLabel": {
       "tr": "تركيا",

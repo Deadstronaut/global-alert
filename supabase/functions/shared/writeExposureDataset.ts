@@ -99,12 +99,30 @@ export async function writeExposureDataset(
   // prior dataset(s) for this exact (source_name, country_code) pair. Never
   // delete before the new insert succeeds — a failed re-import must leave
   // the prior data intact rather than leaving a country with none at all.
-  await supabase
+  //
+  // Error IS checked (unlike this call's original version): live-verified
+  // 2026-07-23 that a real duplicate slipped through in production —
+  // meta_hdx/tr ended up with two identical exposure_datasets rows after
+  // two separate runs, most likely a transient failure on this exact
+  // delete that nothing ever surfaced (the call wasn't awaited-and-checked
+  // before). Fail loudly here — matches this project's convention
+  // elsewhere (recordFetchOutcome, rejected_payloads) — without throwing,
+  // since the new dataset already committed successfully; a stale
+  // duplicate lingering is a real but non-fatal problem worth a clear log
+  // line, not a reason to fail an otherwise-successful import.
+  const { error: deleteError } = await supabase
     .from('exposure_datasets')
     .delete()
     .eq('source_name', sourceName)
     .eq('country_code', countryCode)
     .neq('id', dataset.id)
+
+  if (deleteError) {
+    console.error(
+      `[writeExposureDataset] failed to remove superseded ${sourceName}/${countryCode} dataset(s) ` +
+      `(new dataset ${dataset.id} still committed fine, but an old duplicate may now linger): ${deleteError.message}`,
+    )
+  }
 
   return { datasetId: dataset.id, featureCount: features.length }
 }

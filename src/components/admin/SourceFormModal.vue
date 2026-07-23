@@ -26,6 +26,12 @@ const HAZARD_TYPES = computed(() =>
   hazardTypesStore.activeHazardTypes.filter((h) => SOURCE_SUPPORTED_HAZARDS.includes(h.code)),
 )
 // Only "id"/"lat"/"lng"/"time" are required by validatePayload(); the rest are optional extras.
+// lat/lng are excluded for 'geojson' format below (mapping-section template) —
+// formatHandlers/geojson.js's mapGeoJSON() always reads coordinates straight
+// from feature.geometry.coordinates and never even looks at field_map.lat/lng
+// (see that file's own header comment), so asking an admin to fill them in
+// here was pure friction with no effect — this form previously required it
+// anyway regardless of format, which is what actually gets validated/mapped.
 const MAPPABLE_FIELDS = [
   { key: 'id', label: 'ID *' },
   { key: 'lat', label: 'Enlem (lat) *' },
@@ -36,6 +42,9 @@ const MAPPABLE_FIELDS = [
   { key: 'title', label: 'Başlık' },
   { key: 'description', label: 'Açıklama' },
 ]
+const visibleMappableFields = computed(() =>
+  form.value.format === 'geojson' ? MAPPABLE_FIELDS.filter((f) => f.key !== 'lat' && f.key !== 'lng') : MAPPABLE_FIELDS,
+)
 
 // Faz 2.5: veri formatı seçimi — sadece "özel kaynak" işaretliyken görünür.
 // 'json' varsayılan (mevcut özel kaynaklarla geriye dönük uyumlu). GeoJSON/RSS
@@ -113,7 +122,9 @@ watch(
 )
 
 const requiredMappingFilled = computed(() =>
-  !form.value.is_custom || ['id', 'lat', 'lng', 'time'].every((k) => form.value.field_map[k]?.trim())
+  !form.value.is_custom || visibleMappableFields.value
+    .filter((f) => f.key === 'id' || f.key === 'lat' || f.key === 'lng' || f.key === 'time')
+    .every((f) => form.value.field_map[f.key]?.trim())
 )
 
 const scopeFilled = computed(() =>
@@ -214,7 +225,7 @@ function submit() {
         <template v-else>:</template>
       </p>
       <div class="mapping-grid">
-        <template v-for="f in MAPPABLE_FIELDS" :key="f.key">
+        <template v-for="f in visibleMappableFields" :key="f.key">
           <span class="mapping-label">{{ f.label }}</span>
           <input v-model="form.field_map[f.key]" placeholder="onların JSON key'i" />
         </template>

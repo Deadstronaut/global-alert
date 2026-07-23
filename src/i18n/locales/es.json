@@ -706,14 +706,19 @@
     "emptyState": "Aún no hay capas de exposición disponibles para esta área.",
     "selectCountryPrompt": "Selecciona un país en el mapa para ver sus capas de exposición.",
     "featureCount": "{count} elementos",
-    "loading": "Cargando...",
-    "sourceLabel": {
+    "loading": "Cargando...",    "sourceLabel": {
       "osm": "Red de Carreteras",
       "kontur": "Densidad de Población",
       "hydrorivers": "Red Fluvial",
       "hydrobasins": "Límites de Cuencas",
       "worldpop": "Población (WorldPop)",
-      "gdoSpi": "Intensidad de Sequía (SPI)"
+      "gdoSpi": "Intensidad de Sequía (SPI)",
+      "gdoFapar": "Anomalía de Vegetación (FAPAR)",
+      "gdoSoilMoisture": "Anomalía de Humedad del Suelo",
+      "ghsl": "Población (GHSL)",
+      "metaHdx": "Población (Meta/HDX)",
+      "glofasRiverDischarge": "Caudal Fluvial (GloFAS)",
+      "osmBuildings": "Instalaciones Críticas (Edificios)"
     },
     "countryLabel": {
       "tr": "Turquía",

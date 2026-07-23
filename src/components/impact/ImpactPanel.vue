@@ -11,6 +11,13 @@ import { rowsToCsv, rowsToJson, triggerDownload } from '@/lib/auditExport.js'
 
 const props = defineProps({
   selectedEvent: { type: Object, default: null },
+  // MapView's currently-selected country (map polygon click) — used below
+  // to scope the exposure-dataset dropdown to just that country instead of
+  // listing every served country's datasets mixed together. Country-locked
+  // admins (auth.countryCode) take priority over this when both are set,
+  // since their own account scope is a stronger signal than whatever
+  // happens to be focused on the map.
+  countryCode: { type: String, default: null },
 })
 
 const { t } = useI18n()
@@ -64,6 +71,18 @@ async function loadDatasets() {
   const { data } = await supabase.from('exposure_datasets').select('*').order('created_at', { ascending: false })
   datasets.value = data || []
 }
+
+// Scopes the "Etkilenme veri seti" dropdown to the relevant country instead
+// of listing every served country's datasets mixed together (e.g. a
+// Malatya/Turkey earthquake showing Malaysia/Madagascar population layers
+// right alongside Turkey's) — falls back to every dataset if neither the
+// account nor the map has a country in focus, so this never hides options
+// a superadmin browsing with no country selected still needs.
+const effectiveCountryCode = computed(() => auth.countryCode || props.countryCode || null)
+const filteredDatasets = computed(() => {
+  if (!effectiveCountryCode.value) return datasets.value
+  return datasets.value.filter((d) => !d.country_code || d.country_code === effectiveCountryCode.value)
+})
 
 async function loadScenarios() {
   const { data } = await supabase
@@ -231,7 +250,7 @@ onMounted(() => {
           <span>{{ t('impact.panel.step1') }}: {{ t('impact.panel.datasetLabel') }}</span>
           <select v-model="selectedDatasetId">
             <option :value="null">—</option>
-            <option v-for="d in datasets" :key="d.id" :value="d.id">{{ friendlyDatasetLabel(t, d) }}</option>
+            <option v-for="d in filteredDatasets" :key="d.id" :value="d.id">{{ friendlyDatasetLabel(t, d) }}</option>
           </select>
         </label>
         <label class="impact-field">

@@ -30,6 +30,336 @@ services:
     networks:
       - mhews
 
+  # ── NetCDF/GDAL raster conversion service (spec 047) ─────────────────────────
+  # Python + GDAL, always-on — the only piece of this stack that isn't
+  # Deno/Node, because GDO Soil Moisture/FAPAR (NetCDF4/HDF5) and GloFAS
+  # (GRIB2/NetCDF, see NEW_GAME_PLAN.md §4.2) have no mature Deno/Node
+  # reader, and GDAL reads both natively. Deliberately has NO `ports:`
+  # mapping — internal-only, reachable from other containers on the
+  # `mhews` network (e.g. a future raster-importer script) at
+  # http://netcdf-service:8000, never from the host or public internet,
+  # matching spec 047 FR-002 ("network isolation is enough, no auth").
+  # DATASET_REGISTRY in netcdf-service/app/main.py still has GDO's two
+  # datasets as unwired 501 stubs as of 2026-07-22 pending the real HDX/GDO
+  # archive URL research — this container is the proven, tested shell
+  # (GDAL crop/convert + download cache + HTTP contract all work, see
+  # netcdf-service/app/test_gdal_convert.py) waiting for those URLs.
+  netcdf-service:
+    build:
+      context: ./netcdf-service
+      dockerfile: Dockerfile
+    container_name: mhews-netcdf-service
+    restart: unless-stopped
+    environment:
+      - NETCDF_CACHE_DIR=/cache
+    volumes:
+      - netcdf-cache:/cache
+    networks:
+      - mhews
+
+  # ── Meta/HDX downloader (manual, run-to-completion, one-time in practice) ────
+  # Downloads+extracts each served country's Meta/HDX population GeoTIFF
+  # from HDX (data.humdata.org) into RASTER_DB_PATH and regenerates
+  # manifest.json — run this BEFORE meta-ghsl-importer the first time, or
+  # to (re-)populate a fresh RASTER_DB_PATH on a new deployment. Needs
+  # WRITE access to /rasters (unlike the other services below, which only
+  # read it), and no restart policy / cron equivalent — see
+  # download-meta.ts's header for why (HDX's own metadata says this
+  # dataset is frozen, not updated since 2024).
+  #   docker compose run --rm meta-downloader
+  meta-downloader:
+    build:
+      context: .
+      dockerfile: raster-importer/Dockerfile
+    container_name: mhews-meta-downloader
+    command: ["raster-importer/download-meta.ts"]
+    env_file:
+      - ./server/.env
+    environment:
+      - RASTER_IMPORT_MANIFEST=/manifest.json
+      - RASTERS_DIR=/rasters
+    volumes:
+      - ${RASTER_DB_PATH:-./raster-importer/_no_rasters}:/rasters
+      - ./raster-importer/manifest.json:/manifest.json
+    networks:
+      - mhews
+
+  # ── Meta/HDX population raster importer (manual, run-to-completion) ─────────
+  # Not started by `docker compose up -d` — no restart policy, and by design
+  # exits after processing its manifest once. Invoke explicitly:
+  #   docker compose run --rm meta-ghsl-importer
+  # See raster-importer/manifest.example.json and NEW_GAME_PLAN.md §4.1.
+  # No scheduled equivalent (removed 2026-07-22) — Meta/HDX's dataset is
+  # frozen (see download-meta.ts's header) and this only ever reprocesses
+  # manifest.json, never re-downloads, so a recurring schedule would just
+  # recompute identical output every month. Manual-only, like meta-downloader.
+  meta-ghsl-importer:
+    build:
+      context: .
+      dockerfile: raster-importer/Dockerfile
+    container_name: mhews-meta-ghsl-importer
+    env_file:
+      - ./server/.env
+    environment:
+      - RASTER_IMPORT_MANIFEST=/manifest.json
+    volumes:
+      - ${RASTER_DB_PATH:-./raster-importer/_no_rasters}:/rasters:ro
+      - ./raster-importer/manifest.json:/manifest.json:ro
+    networks:
+      - mhews
+
+  # ── GHSL population importer (manual, run-to-completion) ────────────────────
+  # Separate from meta-ghsl-importer above: GHSL downloads its own small
+  # (~1.5MB) per-country tiles over the network (ghslFetch.ts, unmodified
+  # from the Edge Function version) rather than reading a locally-mounted
+  # file, so it needs no /rasters or manifest.json mount — just Supabase
+  # credentials and outbound network access. See NEW_GAME_PLAN.md §4.1 for
+  # why this had to move out of the Edge Function (WORKER_RESOURCE_LIMIT,
+  # live-verified even after ghslFetch.ts's tile-based rewrite).
+  #   docker compose run --rm ghsl-importer
+  ghsl-importer:
+    build:
+      context: .
+      dockerfile: raster-importer/Dockerfile
+    container_name: mhews-ghsl-importer
+    command: ["raster-importer/import-ghsl.ts"]
+    env_file:
+      - ./server/.env
+    networks:
+      - mhews
+
+  # ── GloFAS river discharge importer (manual, run-to-completion) ─────────────
+  # EWDS (submit/poll/download, ewdsClient.ts) -> netcdf-service (GDAL
+  # NetCDF->GeoTIFF conversion) -> exposure_datasets. See
+  # raster-importer/import-glofas.ts's header for the full chain.
+  # GLOFAS_NETCDF_VARIABLE_NAME ("dis24") and the whole pipeline are now
+  # live-verified end-to-end (2026-07-22, real EWDS token) — see
+  # NEW_GAME_PLAN.md §4.2. Needs EWDS_API_KEY, kept in the gitignored
+  # server/.env.local (NOT server/.env, which is tracked in git — see
+  # server/.env.local.example). Also requires accepting the
+  # cems-glofas-forecast dataset's licence on the EWDS website once per
+  # account (a 403 with a clear message otherwise, not a code bug).
+  #   docker compose run --rm glofas-importer
+  glofas-importer:
+    build:
+      context: .
+      dockerfile: raster-importer/Dockerfile
+    container_name: mhews-glofas-importer
+    command: ["raster-importer/import-glofas.ts"]
+    env_file:
+      - ./server/.env
+      - path: ./server/.env.local
+        required: false
+    environment:
+      - NETCDF_SERVICE_URL=http://netcdf-service:8000
+    networks:
+      - mhews
+
+  # ── GloFAS importer, always-on / daily-scheduled ─────────────────────────────
+  # Same as glofas-importer above, but stays running and fires itself daily
+  # via Deno.cron — GloFAS publishes a new forecast daily, unlike GHSL/
+  # Meta's monthly cadence, so this uses cron.ts's "glofas" job (a
+  # different schedule than the monthly ones — see cron.ts).
+  glofas-importer-scheduled:
+    build:
+      context: .
+      dockerfile: raster-importer/Dockerfile
+    container_name: mhews-glofas-importer-scheduled
+    restart: unless-stopped
+    command: ["raster-importer/cron.ts", "glofas"]
+    env_file:
+      - ./server/.env
+      - path: ./server/.env.local
+        required: false
+    environment:
+      - NETCDF_SERVICE_URL=http://netcdf-service:8000
+    networks:
+      - mhews
+
+  # ── GDO Soil Moisture + fAPAR Anomaly importer (manual, run-to-completion) ──
+  # WCS GeoTIFF (no Python/NetCDF needed, see gdoAnomalyFetch.ts) ->
+  # exposure_datasets, for both GDO anomaly sources in one run.
+  #   docker compose run --rm gdo-anomaly-importer
+  gdo-anomaly-importer:
+    build:
+      context: .
+      dockerfile: raster-importer/Dockerfile
+    container_name: mhews-gdo-anomaly-importer
+    command: ["raster-importer/import-gdo-anomaly.ts"]
+    env_file:
+      - ./server/.env
+    networks:
+      - mhews
+
+  # ── GDO Anomaly importer, always-on / monthly-scheduled ──────────────────────
+  # Same as gdo-anomaly-importer above, but stays running and fires itself
+  # monthly via Deno.cron — GDO's SPI/anomaly products are monthly-cadence
+  # (matches GDO SPI's own 2592000s poll_interval_seconds).
+  gdo-anomaly-importer-scheduled:
+    build:
+      context: .
+      dockerfile: raster-importer/Dockerfile
+    container_name: mhews-gdo-anomaly-importer-scheduled
+    restart: unless-stopped
+    command: ["raster-importer/cron.ts", "gdo-anomaly"]
+    env_file:
+      - ./server/.env
+    networks:
+      - mhews
+
+  # ── WorldPop / HydroBASINS / HydroRIVERS / OSM Buildings / OSM Roads ────────
+  # (manual, run-to-completion) — moved out of their Edge Functions
+  # 2026-07-23: live-verified that day that ALL FIVE fail when actually
+  # invoked as deployed functions (WorldPop can't even deploy — geotiff/
+  # esm.sh bundler bug, see NEW_GAME_PLAN.md §4.7; HydroBASINS/HydroRIVERS
+  # hit WORKER_RESOURCE_LIMIT; OSM Buildings/Roads time out past 120s on
+  # Overpass) — same class of fix as GHSL/Meta/GloFAS, just discovered
+  # later via an admin-panel audit rather than up front. Each reuses its
+  # Edge Function's shared fetch module completely unmodified.
+  #   docker compose run --rm worldpop-importer
+  #   docker compose run --rm hydrobasins-importer
+  #   docker compose run --rm hydrorivers-importer
+  #   docker compose run --rm osm-buildings-importer
+  #   docker compose run --rm osm-roads-importer
+  worldpop-importer:
+    build:
+      context: .
+      dockerfile: raster-importer/Dockerfile
+    container_name: mhews-worldpop-importer
+    command: ["raster-importer/import-worldpop.ts"]
+    env_file:
+      - ./server/.env
+    networks:
+      - mhews
+
+  hydrobasins-importer:
+    build:
+      context: .
+      dockerfile: raster-importer/Dockerfile
+    container_name: mhews-hydrobasins-importer
+    command: ["raster-importer/import-hydrobasins.ts"]
+    env_file:
+      - ./server/.env
+    networks:
+      - mhews
+
+  hydrorivers-importer:
+    build:
+      context: .
+      dockerfile: raster-importer/Dockerfile
+    container_name: mhews-hydrorivers-importer
+    command: ["raster-importer/import-hydrorivers.ts"]
+    env_file:
+      - ./server/.env
+    networks:
+      - mhews
+
+  osm-buildings-importer:
+    build:
+      context: .
+      dockerfile: raster-importer/Dockerfile
+    container_name: mhews-osm-buildings-importer
+    command: ["raster-importer/import-osm-buildings.ts"]
+    env_file:
+      - ./server/.env
+    networks:
+      - mhews
+
+  osm-roads-importer:
+    build:
+      context: .
+      dockerfile: raster-importer/Dockerfile
+    container_name: mhews-osm-roads-importer
+    command: ["raster-importer/import-osm-roads.ts"]
+    env_file:
+      - ./server/.env
+    networks:
+      - mhews
+
+  # ── Same 5, always-on / scheduled (matches each source's old pg_cron cadence,
+  # or a sensible new default for HydroBASINS/HydroRIVERS which never had one
+  # — see cron.ts's header) ─────────────────────────────────────────────────
+  worldpop-importer-scheduled:
+    build:
+      context: .
+      dockerfile: raster-importer/Dockerfile
+    container_name: mhews-worldpop-importer-scheduled
+    restart: unless-stopped
+    command: ["raster-importer/cron.ts", "worldpop"]
+    env_file:
+      - ./server/.env
+    networks:
+      - mhews
+
+  hydrobasins-importer-scheduled:
+    build:
+      context: .
+      dockerfile: raster-importer/Dockerfile
+    container_name: mhews-hydrobasins-importer-scheduled
+    restart: unless-stopped
+    command: ["raster-importer/cron.ts", "hydrobasins"]
+    env_file:
+      - ./server/.env
+    networks:
+      - mhews
+
+  hydrorivers-importer-scheduled:
+    build:
+      context: .
+      dockerfile: raster-importer/Dockerfile
+    container_name: mhews-hydrorivers-importer-scheduled
+    restart: unless-stopped
+    command: ["raster-importer/cron.ts", "hydrorivers"]
+    env_file:
+      - ./server/.env
+    networks:
+      - mhews
+
+  osm-buildings-importer-scheduled:
+    build:
+      context: .
+      dockerfile: raster-importer/Dockerfile
+    container_name: mhews-osm-buildings-importer-scheduled
+    restart: unless-stopped
+    command: ["raster-importer/cron.ts", "osm-buildings"]
+    env_file:
+      - ./server/.env
+    networks:
+      - mhews
+
+  osm-roads-importer-scheduled:
+    build:
+      context: .
+      dockerfile: raster-importer/Dockerfile
+    container_name: mhews-osm-roads-importer-scheduled
+    restart: unless-stopped
+    command: ["raster-importer/cron.ts", "osm-roads"]
+    env_file:
+      - ./server/.env
+    networks:
+      - mhews
+
+  # ── GHSL importer, always-on / monthly-scheduled ─────────────────────────────
+  # Same as ghsl-importer above, but stays running and fires itself monthly
+  # via Deno.cron (raster-importer/cron.ts) instead of needing a human (or
+  # host OS cron/Task Scheduler, deliberately avoided — see cron.ts's
+  # header) to invoke it. Starts automatically with `docker compose up -d`,
+  # matching aggregator. No manifest/rasters mount needed (GHSL downloads
+  # its own tiles) — unlike Meta/HDX, GHSL's upstream data actually
+  # refreshes, so scheduling it is meaningful (see cron.ts for why Meta
+  # doesn't get an equivalent).
+  ghsl-importer-scheduled:
+    build:
+      context: .
+      dockerfile: raster-importer/Dockerfile
+    container_name: mhews-ghsl-importer-scheduled
+    restart: unless-stopped
+    command: ["raster-importer/cron.ts", "ghsl"]
+    env_file:
+      - ./server/.env
+    networks:
+      - mhews
+
   # ── Vue Frontend (static build) ────────────────────────────────────────────
   frontend:
     image: nginx:alpine
@@ -48,3 +378,9 @@ services:
 networks:
   mhews:
     driver: bridge
+
+volumes:
+  # netcdf-service's downloaded-archive cache — a named volume (not a bind
+  # mount) since, unlike RASTER_DB_PATH, nothing outside this container
+  # needs to browse these files directly.
+  netcdf-cache:

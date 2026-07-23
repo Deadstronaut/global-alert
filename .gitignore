@@ -1,3 +1,9 @@
+# Machine-specific secrets not meant to be committed (server/.env and
+# root .env ARE tracked in this repo already, deliberately left alone —
+# see NEW_GAME_PLAN.md's secret-hygiene note; this is a NEW file only,
+# for the real personal EWDS_API_KEY added 2026-07-22).
+server/.env.local
+
 # Logs
 logs
 *.log
@@ -46,3 +52,9 @@ __screenshots__/
 # The local test scripts take the path from the META_TIF_PATH env var, so nothing
 # in the code is tied to either location. This ignore rule stays as a safety net.
 /database/
+
+# Machine-specific raster-importer manifest (real paths point at whichever
+# host has the raster files locally, e.g. C:\Users\Deadstro\global-alert-db\
+# database\ on this dev machine) — commit manifest.example.json instead.
+/raster-importer/manifest.json
+/raster-importer/_no_rasters/

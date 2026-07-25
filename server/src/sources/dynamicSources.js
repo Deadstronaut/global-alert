@@ -103,6 +103,11 @@ export function startDynamicSources(onEvent) {
     const active = new Set();
     for (const row of (rows || [])) {
       if (!isGenericSource(row)) continue;
+      // 'manual' (data_sources.automation_kind) — admin explicitly chose "elle
+      // güncelleyeceğim" in the Kaynak Ekle form (no automatic polling at all,
+      // by design, not a misconfiguration). Never schedule a timer for these;
+      // see 20260725180000_data_sources_automation_kind.sql's header comment.
+      if (row.automation_kind === 'manual') continue;
       active.add(row.id);
       if (timers.has(row.id)) continue; // already polling this one
 

@@ -64,6 +64,41 @@ const SOURCE_FORMATS = [
 // poll_interval_seconds sunucu tarafında hiç okunmaz (bkz. registry.js).
 const WEBSOCKET_SOURCE_TYPES = ['emsc']
 
+// "Ne sıklıkla kontrol edilsin?" — ülke admininin görüp anlayabileceği bir
+// seçim, teknik altyapı detayını (Docker/pg_cron/hangi süreç) hiç göstermez
+// (2026-07-25 tartışması: hangi VPS'te/hangi mekanizmayla çalıştığı ülkenin
+// kendi kurulumuna bağlı olabilir — bu form sadece "ne sıklıkta" sorar).
+// automation_kind (20260725180000_data_sources_automation_kind.sql) buradan
+// direkt türüyor: admin panelindeki rozetin (⚡/🕐/🖖) doğru gösterebilmesi
+// için sıklık seçimiyle birebir eşleşiyor, ayrı bir alan olarak sorulmuyor.
+const FREQUENCY_OPTIONS = [
+  { value: 'continuous', label: 'Sürekli (60 sn)', poll: 60, kind: 'continuous' },
+  { value: 'frequent', label: '15 dakikada bir', poll: 900, kind: 'continuous' },
+  { value: 'hourly', label: 'Saatte bir', poll: 3600, kind: 'scheduled' },
+  { value: 'daily', label: 'Günde bir', poll: 86400, kind: 'scheduled' },
+  { value: 'weekly', label: 'Haftada bir', poll: 604800, kind: 'scheduled' },
+  // poll değeri anlamsız (dynamicSources.js otomatik_kind='manual' olan
+  // satırları hiç zamanlamıyor, bkz. server/src/sources/dynamicSources.js) —
+  // yine de mantıklı bir varsayılan yazıyoruz ki elle çalıştırılmadan önce
+  // DB'de garip bir sayı durmasın.
+  { value: 'manual', label: 'Elle güncelleyeceğim (otomatik çekilmesin)', poll: 2592000, kind: 'manual' },
+]
+
+// Mevcut bir kaynağın (poll_interval_seconds, automation_kind) çiftinden en
+// yakın seçeneği bulur — tam eşleşme yoksa (örn. elle 3700 sn girilmişse)
+// en yakın süreye düşer, "manual" hiçbir zaman yanlışlıkla eşleşmez.
+function frequencyChoiceFor(pollSeconds, automationKind) {
+  if (automationKind === 'manual') return 'manual'
+  const exact = FREQUENCY_OPTIONS.find((o) => o.kind !== 'manual' && o.poll === pollSeconds)
+  if (exact) return exact.value
+  const candidates = FREQUENCY_OPTIONS.filter((o) => o.kind !== 'manual')
+  let closest = candidates[0]
+  for (const o of candidates) {
+    if (Math.abs(o.poll - pollSeconds) < Math.abs(closest.poll - pollSeconds)) closest = o
+  }
+  return closest.value
+}
+
 const props = defineProps({
   source: { type: Object, default: null }, // null = create mode
   saving: { type: Boolean, default: false },
@@ -78,6 +113,8 @@ function blankForm() {
     hazard_type: 'earthquake',
     endpoint_url: '',
     poll_interval_seconds: 60,
+    automation_kind: 'continuous',
+    frequencyChoice: 'continuous',
     staleness_threshold_seconds: null,
     down_after_consecutive_failures: 3,
     // source_type is never set on create — every admin-created source stays
@@ -100,6 +137,7 @@ function blankForm() {
 function fromSource(src) {
   return {
     ...src,
+    frequencyChoice: frequencyChoiceFor(src.poll_interval_seconds, src.automation_kind),
     // Read-only passthrough — see blankForm()'s comment. Carried through on
     // edit so a Tier-1 row's source_type round-trips unchanged.
     source_type: src.source_type ?? null,
@@ -142,11 +180,16 @@ const friendlyError = computed(() => {
 })
 
 function submit() {
-  const { is_custom, response_path, format, field_map, scopeChoice, ...rest } = form.value
+  const { is_custom, response_path, format, field_map, scopeChoice, frequencyChoice, ...rest } = form.value
+  const freq = FREQUENCY_OPTIONS.find((o) => o.value === frequencyChoice) ?? FREQUENCY_OPTIONS[0]
   const payload = {
     ...rest,
     country_code: scopeChoice === 'global' ? null : rest.country_code || null,
     endpoint_config: is_custom ? { response_path, format, field_map } : {},
+    // Tier-1 (source_type set, e.g. WebSocket-driven emsc) rows keep their own
+    // seed-migration automation_kind/poll_interval_seconds regardless of what
+    // this frequency picker shows for them (disabled in the UI below anyway).
+    ...(form.value.source_type ? {} : { poll_interval_seconds: freq.poll, automation_kind: freq.kind }),
   }
   emit('save', payload)
 }
@@ -164,15 +207,19 @@ function submit() {
         </select>
       </label>
       <label class="form-field">
-        <span>Poll Aralığı (saniye) *</span>
-        <input
-          v-model.number="form.poll_interval_seconds"
-          type="number" min="1" placeholder="örn. 60"
+        <span>Ne sıklıkla kontrol edilsin? *</span>
+        <select
+          v-model="form.frequencyChoice"
           :disabled="WEBSOCKET_SOURCE_TYPES.includes(form.source_type)"
           :title="WEBSOCKET_SOURCE_TYPES.includes(form.source_type) ? 'Bu kaynak WebSocket üzerinden çalışır, aralık ayarı geçerli değildir' : ''"
-        />
+        >
+          <option v-for="o in FREQUENCY_OPTIONS" :key="o.value" :value="o.value">{{ o.label }}</option>
+        </select>
         <span v-if="WEBSOCKET_SOURCE_TYPES.includes(form.source_type)" class="field-hint">
           Bu kaynak WebSocket üzerinden çalışır, aralık ayarı geçerli değildir.
+        </span>
+        <span v-else-if="form.frequencyChoice === 'manual'" class="field-hint">
+          Otomatik çekilmez — verileri elle yenilemeniz gerekir.
         </span>
       </label>
       <label v-if="form.source_type" class="form-field">

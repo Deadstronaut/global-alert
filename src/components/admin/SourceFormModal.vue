@@ -237,11 +237,11 @@ function submit() {
           title="Sadece kendi ülkenize ait kaynak kaydedebilirsiniz"
         />
         <select v-else v-model="form.scopeChoice">
-          <option value="global">🌍 Küresel — tüm ülkelerin yönetim panelinde görünür (USGS, NASA FIRMS gibi)</option>
-          <option value="country">📍 Ülkeye özel — sadece seçtiğiniz ülkenin yönetim panelinde görünür</option>
+          <option value="global">🌍 Küresel — dünya çapında/uluslararası kaynak (USGS, NASA FIRMS gibi)</option>
+          <option value="country">📍 Yerel — bu ülkeye/bölgeye özel kaynak (kendi sismik ağınız gibi)</option>
         </select>
         <span class="field-hint">
-          Bu, kaynağın yönetim panelinde kimin görüp yönetebileceğiyle ilgilidir — herkese açık bir yayın değil.
+          Kaynağın kapsadığı coğrafyayı belirtir, kimin görebileceğiyle ilgili değildir.
         </span>
       </label>
       <label v-if="!scopeLocked && form.scopeChoice === 'country'" class="form-field">

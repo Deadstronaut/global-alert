@@ -9,7 +9,18 @@ const props = defineProps({
   showCountryBadge: { type: Boolean, default: false },
 })
 
-defineEmits(['edit', 'toggle-active', 'delete', 'view-audit'])
+defineEmits(['edit', 'toggle-active', 'delete', 'view-audit', 'trigger-now'])
+
+// The manual_trigger_requested_at signal (20260725190000_manual_source_trigger.sql)
+// is only ever picked up by dynamicSources.js's generic/custom-source loop —
+// it requires endpoint_config.field_map (isGenericSource() there). A Docker-
+// importer-family source marked automation_kind='manual' (e.g. Meta/HDX
+// Population — "run the raster-importer container by hand") has no field_map
+// and nothing anywhere would ever notice this timestamp for it, so the button
+// must not offer a false promise there.
+const canTriggerManually = computed(
+  () => props.source.automation_kind === 'manual' && !!props.source.endpoint_config?.field_map?.id,
+)
 
 const STATE_META = {
   healthy:  { label: 'Sağlıklı', color: '#22c55e', dot: '●' },
@@ -131,6 +142,9 @@ function relativeTime(iso) {
       </span>
     </div>
     <div v-if="canManage" class="source-actions">
+      <button v-if="canTriggerManually" class="btn-trigger" @click="$emit('trigger-now', source)">
+        🔁 Şimdi Çalıştır
+      </button>
       <button class="btn-edit" @click="$emit('edit', source)">✏️ Düzenle</button>
       <button class="btn-toggle" @click="$emit('toggle-active', source)">
         {{ source.is_active ? '⏸ Devre Dışı Bırak' : '▶ Etkinleştir' }}
@@ -197,4 +211,5 @@ function relativeTime(iso) {
 }
 .source-actions button:hover { background: rgba(255, 255, 255, 0.12); }
 .btn-delete:hover { background: rgba(239, 68, 68, 0.2); }
+.btn-trigger:hover { background: rgba(34, 197, 94, 0.2); }
 </style>

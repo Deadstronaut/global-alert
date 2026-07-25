@@ -84,6 +84,12 @@ async function pollOne(row, onEvent) {
  */
 export function startDynamicSources(onEvent) {
   const timers = new Map(); // source id -> interval handle
+  // 'manual' sources' last-handled manual_trigger_requested_at, per source id
+  // — in-memory only (resets on aggregator restart, which just means a
+  // trigger clicked right before a restart might fire twice; harmless,
+  // matches this module's existing tolerance for re-fetching on every
+  // refresh() tick's re-fetched row anyway).
+  const lastHandledTrigger = new Map();
   let refreshTimer = null;
   let running = true;
 
@@ -107,7 +113,22 @@ export function startDynamicSources(onEvent) {
       // güncelleyeceğim" in the Kaynak Ekle form (no automatic polling at all,
       // by design, not a misconfiguration). Never schedule a timer for these;
       // see 20260725180000_data_sources_automation_kind.sql's header comment.
-      if (row.automation_kind === 'manual') continue;
+      // The one thing we DO act on is manual_trigger_requested_at — the admin
+      // panel's "Şimdi Çalıştır" button (SourceHealthCard.vue) writes a fresh
+      // timestamp there; this refresh loop (already running every
+      // REFRESH_LIST_MS regardless) is what actually notices and fires it —
+      // there's no direct frontend->aggregator channel by design (see this
+      // repo's server/src/index.js header comment), so a DB-mediated signal
+      // picked up by a loop that already polls data_sources is the only way
+      // that fits the existing architecture.
+      if (row.automation_kind === 'manual') {
+        if (row.manual_trigger_requested_at && row.manual_trigger_requested_at !== lastHandledTrigger.get(row.id)) {
+          lastHandledTrigger.set(row.id, row.manual_trigger_requested_at);
+          console.log(`[Dynamic] ▶ Manual trigger for "${row.name}"`);
+          pollOne(row, onEvent);
+        }
+        continue;
+      }
       active.add(row.id);
       if (timers.has(row.id)) continue; // already polling this one
 

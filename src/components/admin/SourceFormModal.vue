@@ -229,7 +229,7 @@ function submit() {
       <label class="form-field span-2"><span>Endpoint URL *</span>
         <input v-model="form.endpoint_url" placeholder="https://..." />
       </label>
-      <label class="form-field"><span>Kapsam (Scope)</span>
+      <label class="form-field"><span>Kapsam</span>
         <input
           v-if="scopeLocked"
           :value="form.country_code || '—'"
@@ -237,9 +237,12 @@ function submit() {
           title="Sadece kendi ülkenize ait kaynak kaydedebilirsiniz"
         />
         <select v-else v-model="form.scopeChoice">
-          <option value="global">🌍 Küresel (herkes görür)</option>
-          <option value="country">📍 Ülkeye özel</option>
+          <option value="global">🌍 Küresel — tüm ülkelerin yönetim panelinde görünür (USGS, NASA FIRMS gibi)</option>
+          <option value="country">📍 Ülkeye özel — sadece seçtiğiniz ülkenin yönetim panelinde görünür</option>
         </select>
+        <span class="field-hint">
+          Bu, kaynağın yönetim panelinde kimin görüp yönetebileceğiyle ilgilidir — herkese açık bir yayın değil.
+        </span>
       </label>
       <label v-if="!scopeLocked && form.scopeChoice === 'country'" class="form-field">
         <span>Ülke Kodu *</span>

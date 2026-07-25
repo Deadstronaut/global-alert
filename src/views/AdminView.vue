@@ -636,6 +636,15 @@ function editSource(source) {
   showSourceForm.value = true
 }
 
+// "Elle güncelleyeceğim" kaynakları için — aggregator'a doğrudan bir istek
+// atmıyoruz (bkz. server/src/index.js'in "Frontend ile DOĞRUDAN iletişim
+// YOK" kuralı), sadece bir zaman damgası yazıyoruz; dynamicSources.js zaten
+// çalışan 60 saniyelik döngüsünde bunu görüp kaynağı bir kerelik çekiyor
+// (bkz. 20260725190000_manual_source_trigger.sql).
+async function triggerSourceNow(source) {
+  await sourcesStore.updateSource(source.id, { manual_trigger_requested_at: new Date().toISOString() })
+}
+
 async function toggleSourceActive(source) {
   const action = source.is_active ? 'devre dışı bırakmak' : 'yeniden etkinleştirmek'
   if (!confirm(`"${source.name}" kaynağını ${action} istediğinize emin misiniz?`)) return
@@ -1584,6 +1593,7 @@ onUnmounted(() => {
             @toggle-active="toggleSourceActive"
             @delete="deleteSourceConfirm"
             @view-audit="viewAudit"
+            @trigger-now="triggerSourceNow"
           />
           <div v-if="!groupedSources.global.length" class="tab-loading">Küresel kaynak yok.</div>
         </div>
@@ -1602,6 +1612,7 @@ onUnmounted(() => {
               @toggle-active="toggleSourceActive"
               @delete="deleteSourceConfirm"
               @view-audit="viewAudit"
+              @trigger-now="triggerSourceNow"
             />
           </div>
         </template>

@@ -2627,6 +2627,16 @@ onUnmounted(() => {
   border-radius: 6px;
   padding: 4px 8px;
   font-size: 0.78rem;
+  /* Without this, Chromium/Windows renders the OPENED native option list
+     with its default white/light styling regardless of the closed box's
+     own background — live-verified 2026-07-25. .form-field select (this
+     file, SourceFormModal.vue) already had this; this select was added
+     later and missed it. */
+  color-scheme: dark;
+}
+.sources-sort-control select option {
+  background: #1e2330;
+  color: #e2e8f0;
 }
 .sources-divider {
   height: 1px;

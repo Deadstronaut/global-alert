@@ -1,3 +1,5 @@
+import { computeDisplayState, DISPLAY_STATE_PRIORITY } from './sourceDisplayState.js';
+
 /**
  * Groups data sources into global vs. local (country-scoped) buckets for display.
  * Feature: 002-source-scoping
@@ -24,8 +26,13 @@ export function groupSourcesByScope(sources) {
 // (sources.js's .order('hazard_type').order('name')) is fine as a default
 // but gives no way to e.g. pull failing sources to the top when doing
 // maintenance, so this is a distinct, explicit sort applied before grouping.
-const STATUS_PRIORITY = { down: 0, degraded: 1, healthy: 2, disabled: 3 };
-
+//
+// 'status' mode sorts by computeDisplayState(), NOT the raw DB health_state
+// column — live-verified 2026-07-25 that sorting by raw health_state looked
+// broken/random, because most rows sit at a stale 'healthy' in the DB even
+// when SourceHealthCard.vue's badge shows Gecikmiş/Çevrimdışı/Henüz
+// Çalıştırılmadı on screen (health_state only updates when the aggregator
+// actually attempts a fetch). Sorting must match what the user sees.
 export const SOURCE_SORT_MODES = [
   { value: 'hazard', label: 'Afet Tipine Göre' },
   { value: 'name', label: 'İsme Göre (A-Z)' },
@@ -40,8 +47,13 @@ export function sortSources(sources, mode) {
       return list.sort((a, b) => a.name.localeCompare(b.name, 'tr'))
     case 'created':
       return list.sort((a, b) => new Date(b.created_at ?? 0) - new Date(a.created_at ?? 0))
-    case 'status':
-      return list.sort((a, b) => (STATUS_PRIORITY[a.health_state] ?? 9) - (STATUS_PRIORITY[b.health_state] ?? 9))
+    case 'status': {
+      const now = Date.now()
+      return list.sort((a, b) =>
+        (DISPLAY_STATE_PRIORITY[computeDisplayState(a, now)] ?? 9) -
+        (DISPLAY_STATE_PRIORITY[computeDisplayState(b, now)] ?? 9)
+      )
+    }
     case 'hazard':
     default:
       return list.sort((a, b) => a.hazard_type.localeCompare(b.hazard_type) || a.name.localeCompare(b.name, 'tr'))

@@ -1,5 +1,6 @@
 <script setup>
 import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { computeDisplayState } from '@/utils/sourceDisplayState.js'
 
 const props = defineProps({
   source: { type: Object, required: true },
@@ -62,46 +63,20 @@ const automationMeta = computed(
 // a fetch (server/src/processors/sourceHealth.js) — if that process isn't running
 // at all, nothing ever flips it, so a stale 'healthy' from its last run sits in
 // the DB forever. `now` re-evaluates on an interval so this card independently
-// notices "no success reported in longer than expected" even with the aggregator
-// fully down, instead of trusting the frozen DB value.
+// notices "no success reported in longer than expected" even with the
+// aggregator fully down, instead of trusting the frozen DB value. See computeDisplayState().
 const now = ref(Date.now())
 let nowTimer
 onMounted(() => { nowTimer = setInterval(() => { now.value = Date.now() }, 30000) })
 onUnmounted(() => clearInterval(nowTimer))
 
-const staleThresholdMs = computed(() => {
-  const s = props.source
-  return (s.staleness_threshold_seconds ?? (s.poll_interval_seconds ?? 3600) * 3) * 1000
-})
-
-// Only true once the source HAS run before and then gone quiet — a source
-// that has never run isn't "stale", it just hasn't had a first attempt yet
-// (see 'pending' in STATE_META above). 'manual' sources are excluded
-// entirely: there's no scheduled trigger for them to have missed, so
-// staleness has no meaning — see automation_kind's header comment.
-const isStale = computed(() => {
-  const s = props.source
-  if (!s.is_active) return false
-  if (s.automation_kind === 'manual') return false
-  if (!s.last_success_at) return false
-  return now.value - new Date(s.last_success_at).getTime() > staleThresholdMs.value
-})
-
-const neverRun = computed(() => !props.source.last_success_at)
-
-const stateMeta = computed(() => {
-  const raw = props.source.health_state
-  // Only override 'healthy' — an explicit 'degraded'/'down' from the aggregator's
-  // own last real attempt is more specific than a client-side staleness guess.
-  // 'continuous' sources going stale is a real incident (red 'offline');
-  // 'scheduled' ones are just between cron cycles (amber 'overdue', never red)
-  // — see automation_kind's header comment for why these can't share one badge.
-  if (raw === 'healthy' && isStale.value) {
-    return props.source.automation_kind === 'continuous' ? STATE_META.offline : STATE_META.overdue
-  }
-  if (raw === 'healthy' && neverRun.value && props.source.automation_kind !== 'manual') return STATE_META.pending
-  return STATE_META[raw] ?? STATE_META.disabled
-})
+// computeDisplayState is shared with sourceScope.js's "Duruma Göre" sort —
+// found live 2026-07-25 that sorting by the raw DB health_state produced a
+// visibly wrong order (most rows sit at a stale 'healthy' in the DB even
+// when their badge shows Gecikmiş/Çevrimdışı/Henüz Çalıştırılmadı on
+// screen); both places now derive the SAME displayed state from the same
+// function so the sort always matches what the badge actually shows.
+const stateMeta = computed(() => STATE_META[computeDisplayState(props.source, now.value)] ?? STATE_META.disabled)
 
 function relativeTime(iso) {
   if (!iso) return 'Henüz yok'

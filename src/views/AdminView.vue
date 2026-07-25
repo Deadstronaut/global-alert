@@ -11,7 +11,7 @@ import ManualEntryForm from '@/components/admin/ManualEntryForm.vue'
 import FileImportForm from '@/components/admin/FileImportForm.vue'
 import BoundaryUploadForm from '@/components/admin/BoundaryUploadForm.vue'
 import { getRegionNames } from '@/data/boundaries/index.js'
-import { groupSourcesByScope } from '@/utils/sourceScope.js'
+import { groupSourcesByScope, sortSources, SOURCE_SORT_MODES } from '@/utils/sourceScope.js'
 import { rowsToCsv, rowsToJson, triggerDownload } from '@/lib/auditExport.js'
 import { buildComplianceChecklist, TEMPLATE_VERSION } from '@/services/complianceChecklist.js'
 import ExposureDatasetManager from '@/components/impact/ExposureDatasetManager.vue'
@@ -603,7 +603,8 @@ const FASTEST_POLL_MS = 60_000 // matches earthquake's 60s interval — fastest 
 let sourcesRefreshTimer = null
 
 // Feature 002-source-scoping: group already-RLS-filtered sources into global/local for display.
-const groupedSources = computed(() => groupSourcesByScope(sourcesStore.sources))
+const sourceSortMode = ref('hazard')
+const groupedSources = computed(() => groupSourcesByScope(sortSources(sourcesStore.sources, sourceSortMode.value)))
 
 // A country_admin may only manage (edit/toggle/delete) sources scoped to their own country —
 // enforced by RLS (20260706_data_sources_country_scope.sql), mirrored here so the UI doesn't
@@ -1582,7 +1583,15 @@ onUnmounted(() => {
         Yükleniyor...
       </div>
       <div v-else>
-        <div class="sources-group-label">🌍 Küresel Kaynaklar</div>
+        <div class="sources-toolbar">
+          <div class="sources-group-label">🌍 Küresel Kaynaklar</div>
+          <label class="sources-sort-control">
+            <span>Sırala:</span>
+            <select v-model="sourceSortMode">
+              <option v-for="m in SOURCE_SORT_MODES" :key="m.value" :value="m.value">{{ m.label }}</option>
+            </select>
+          </label>
+        </div>
         <div class="sources-grid">
           <SourceHealthCard
             v-for="source in groupedSources.global"
@@ -1631,6 +1640,14 @@ onUnmounted(() => {
         <div v-if="auditLoading" class="tab-loading">Yükleniyor...</div>
         <div v-else-if="auditError" class="tab-error">{{ auditError }}</div>
         <div v-else-if="auditData" class="audit-content">
+          <div class="audit-hint">
+            <strong>Hata mesajını nasıl okumalı:</strong>
+            "HTTP 5xx" (500, 502, 503...) kaynağın <em>kendi</em> sunucusunun sorunu — bizim
+            tarafımızda düzeltilecek bir şey yok, genelde kendi kendine geçer (bkz. aşağıdaki geçmiş).
+            "HTTP 4xx" (401, 403, 404...) veya "unresolvable timestamp" / "missing required field"
+            gibi mesajlar bizim isteğimizle/alan eşleştirmemizle ilgili — ✏️ Düzenle'den URL veya
+            alan eşleştirmesini kontrol edin. "timeout" genelde geçici bir erişim sorunudur.
+          </div>
           <div class="audit-section">
             <h4>Durum Geçişleri</h4>
             <div v-if="!auditData.transitions.length" class="muted">Kayıt yok.</div>
@@ -2589,6 +2606,28 @@ onUnmounted(() => {
   letter-spacing: 0.04em;
   margin: 14px 0 8px;
 }
+.sources-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.sources-toolbar .sources-group-label { margin: 14px 0 8px; }
+.sources-sort-control {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.78rem;
+  color: var(--color-text-muted, #94a3b8);
+}
+.sources-sort-control select {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: var(--color-text-primary, #e2e8f0);
+  border-radius: 6px;
+  padding: 4px 8px;
+  font-size: 0.78rem;
+}
 .sources-divider {
   height: 1px;
   background: rgba(148, 163, 184, 0.14);
@@ -2655,6 +2694,16 @@ onUnmounted(() => {
   flex-direction: column;
   gap: 16px;
 }
+.audit-hint {
+  font-size: 0.76rem;
+  line-height: 1.5;
+  color: var(--color-text-muted, #94a3b8);
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  padding: 10px 12px;
+}
+.audit-hint strong { color: var(--color-text-primary, #e2e8f0); }
 .audit-section h4 {
   margin: 0 0 8px;
   font-size: 0.8rem;

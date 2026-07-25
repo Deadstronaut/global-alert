@@ -190,6 +190,13 @@ function submit() {
     // seed-migration automation_kind/poll_interval_seconds regardless of what
     // this frequency picker shows for them (disabled in the UI below anyway).
     ...(form.value.source_type ? {} : { poll_interval_seconds: freq.poll, automation_kind: freq.kind }),
+    // "Elle güncelleyeceğim" sources have no scheduled polling at all — without
+    // this, saving one for the first time would leave it sitting with zero
+    // data until someone separately finds the "🔁 Şimdi Çalıştır" button.
+    // Kaydet doubles as an immediate first fetch, same mechanism that button
+    // uses (dynamicSources.js's manual_trigger_requested_at pickup) — see
+    // 20260725190000_manual_source_trigger.sql.
+    ...(is_custom && freq.kind === 'manual' ? { manual_trigger_requested_at: new Date().toISOString() } : {}),
   }
   emit('save', payload)
 }

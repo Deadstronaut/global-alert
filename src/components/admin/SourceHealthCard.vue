@@ -17,6 +17,10 @@ const STATE_META = {
   down:     { label: 'Çalışmıyor', color: '#ef4444', dot: '✕' },
   disabled: { label: 'Devre Dışı', color: '#94a3b8', dot: '○' },
   offline:  { label: 'Çevrimdışı', color: '#ef4444', dot: '✕' },
+  // Softer than 'offline': used for scheduled/manual sources whose staleness
+  // is expected between runs, not an incident — see isStale's automation_kind
+  // branch below. Amber like 'degraded', not red: worth a glance, not urgent.
+  overdue:  { label: 'Gecikmiş', color: '#fbbf24', dot: '◐' },
   // Never fetched even once (last_success_at is null) — distinct from
   // 'offline' (used to run successfully, then went quiet). A source that
   // simply hasn't been triggered yet (e.g. the aggregator container isn't
@@ -25,6 +29,23 @@ const STATE_META = {
   // red "Çevrimdışı" reads as "this is failing" when it may just be new.
   pending:  { label: 'Henüz Çalıştırılmadı', color: '#64748b', dot: '○' },
 }
+
+// automation_kind (20260725180000_data_sources_automation_kind.sql) — WHICH
+// of three genuinely different automation models a source runs under.
+// Surfaced as an icon so staleness reads correctly per kind: a 'continuous'
+// source going quiet is an incident (⚡ + red), a 'scheduled' one going quiet
+// between its own daily/weekly/monthly cycles is normal (🕐 + amber, never
+// red), and a 'manual' source has no "supposed to have run by now" at all
+// (🖖 — Vulcan salute doubles as this project's own "hands-off, someone
+// runs this by hand" mark, per live discussion 2026-07-25).
+const AUTOMATION_META = {
+  continuous: { icon: '⚡', label: 'Canlı / sürekli çalışıyor' },
+  scheduled:  { icon: '🕐', label: 'Zamanlanmış (cron)' },
+  manual:     { icon: '🖖', label: 'Elle yükleniyor (otomatik tetikleyici yok)' },
+}
+const automationMeta = computed(
+  () => AUTOMATION_META[props.source.automation_kind] ?? AUTOMATION_META.scheduled,
+)
 
 // health_state is only ever updated by the aggregator when it actually attempts
 // a fetch (server/src/processors/sourceHealth.js) — if that process isn't running
@@ -44,10 +65,13 @@ const staleThresholdMs = computed(() => {
 
 // Only true once the source HAS run before and then gone quiet — a source
 // that has never run isn't "stale", it just hasn't had a first attempt yet
-// (see 'pending' in STATE_META above).
+// (see 'pending' in STATE_META above). 'manual' sources are excluded
+// entirely: there's no scheduled trigger for them to have missed, so
+// staleness has no meaning — see automation_kind's header comment.
 const isStale = computed(() => {
   const s = props.source
   if (!s.is_active) return false
+  if (s.automation_kind === 'manual') return false
   if (!s.last_success_at) return false
   return now.value - new Date(s.last_success_at).getTime() > staleThresholdMs.value
 })
@@ -58,8 +82,13 @@ const stateMeta = computed(() => {
   const raw = props.source.health_state
   // Only override 'healthy' — an explicit 'degraded'/'down' from the aggregator's
   // own last real attempt is more specific than a client-side staleness guess.
-  if (raw === 'healthy' && isStale.value) return STATE_META.offline
-  if (raw === 'healthy' && neverRun.value) return STATE_META.pending
+  // 'continuous' sources going stale is a real incident (red 'offline');
+  // 'scheduled' ones are just between cron cycles (amber 'overdue', never red)
+  // — see automation_kind's header comment for why these can't share one badge.
+  if (raw === 'healthy' && isStale.value) {
+    return props.source.automation_kind === 'continuous' ? STATE_META.offline : STATE_META.overdue
+  }
+  if (raw === 'healthy' && neverRun.value && props.source.automation_kind !== 'manual') return STATE_META.pending
   return STATE_META[raw] ?? STATE_META.disabled
 })
 
@@ -81,8 +110,11 @@ function relativeTime(iso) {
     :style="{ borderColor: stateMeta.color + '66', background: stateMeta.color + '0a' }"
   >
     <div class="source-card-top">
-      <span class="source-state" :style="{ color: stateMeta.color }">
-        {{ stateMeta.dot }} {{ stateMeta.label }}
+      <span class="source-state-group">
+        <span class="source-state" :style="{ color: stateMeta.color }">
+          {{ stateMeta.dot }} {{ stateMeta.label }}
+        </span>
+        <span class="source-automation-icon" :title="automationMeta.label">{{ automationMeta.icon }}</span>
       </span>
       <span class="source-hazard-type">{{ source.hazard_type }}</span>
     </div>
@@ -125,7 +157,9 @@ function relativeTime(iso) {
   align-items: center;
   font-size: 0.72rem;
 }
+.source-state-group { display: flex; align-items: center; gap: 5px; }
 .source-state { font-weight: 700; }
+.source-automation-icon { font-size: 0.85rem; cursor: default; }
 .source-hazard-type {
   background: rgba(255, 255, 255, 0.08);
   padding: 2px 7px;

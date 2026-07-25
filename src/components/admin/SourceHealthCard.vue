@@ -173,14 +173,31 @@ function relativeTime(iso) {
   color: var(--color-text-muted, #94a3b8);
 }
 .source-failures { color: #f87171; }
-.source-actions { display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap; }
+/* 2-column grid instead of flex-wrap — with a long label like "Devre Dışı
+   Bırak" alongside short ones like the icon-only delete button, flex-wrap
+   produced ragged, inconsistent rows (2026-07-25 feedback: "dağınık ve
+   responsive değil"). A fixed 2-up grid keeps every button the same width
+   regardless of its label length or how many buttons this card has
+   (4 normally, 5 when 🔁 Şimdi Çalıştır is also shown). */
+.source-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  margin-top: 8px;
+}
 .source-actions button {
-  padding: 5px 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 6px 8px;
   border-radius: 6px;
   border: 1px solid rgba(255, 255, 255, 0.12);
   background: rgba(255, 255, 255, 0.06);
   color: var(--color-text-primary, #e2e8f0);
-  font-size: 0.75rem;
+  font-size: 0.72rem;
+  line-height: 1.25;
+  text-align: center;
   cursor: pointer;
   transition: background 0.15s;
 }

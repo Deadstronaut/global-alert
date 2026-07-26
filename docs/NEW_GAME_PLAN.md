@@ -506,3 +506,17 @@ INFORM'un hiç API'si yok (statik, yıllık yayın) — ne "Manuel Giriş" formu
 **Yapılan:** Migration (`country_risk_indices` tablosu, RLS, audit trigger, `updated_at` tetikleyicisi), `src/components/risk/CountryRiskIndexPanel.vue` (yeni, `HazardTaxonomyPanel.vue`'nin liste+ekle/düzenle desenini izliyor), `AdminView.vue`'nin var olan "Risk ve Senaryo Modelleme" sekmesine eklendi (yeni bir üst-sekme açılmadı), 7 dilde i18n.
 
 **Canlı doğrulandı:** Gerçek bir test kaydı (TR, 2025, örnek skorlar) admin panelden eklendi, doğru sütunlarla listede göründü, sonra temizlendi. Build ve sayfa boyunca sıfır konsol hatası.
+
+---
+
+## 10. Sığınaklar — OSM'den Otomatik İçe Aktarma — ✅ TAMAMLANDI (2026-07-26)
+
+**Sorun:** Haritadaki "Sığınakları Göster" hiçbir şey göstermiyordu. Kök neden: `shelters` tablosu (spec 027) sadece admin panelden elle giriş için tasarlanmış — hiç import mekanizması yoktu, TR/MG/MY için kimse elle veri girmemişti (canlı doğrulandı: 0 satır).
+
+**Araştırma (gerçek Overpass sorgularıyla, koda geçmeden önce):** OSM'de gerçek, kullanılabilir veri var ama tek bir etikette değil. `amenity=shelter` (TR'de 7189, MY'de 4481) büyük çoğunlukla otobüs durağı/park gölgeliği gibi sıradan yapılar — **bilerek kullanılmadı**. `emergency=assembly_point` + `social_facility=shelter` + `evacuation_center=yes` etiketleri gerçek anlamda "afet toplanma alanı" demek — TR'de 676 nokta (birçoğu doğrudan "Tekirdağ Büyükşehir Belediyesi Afet Yönetimi" kaynaklı, gerçek belediye verisi), MY'de ~99. **MG'de bu etiketlerde pratikte hiç veri yok** — bu bir kod eksikliği değil, OSM'in kendi kapsam boşluğu, dürüstçe kullanıcıya böyle iletildi.
+
+**Yapılan:** `supabase/functions/shared/osmSheltersFetch.ts` + `raster-importer/import-osm-shelters.ts` (yeni) — OSM Buildings'in aynı deseni, ama `exposure_features` yerine doğrudan `shelters` tablosuna, `(source, external_id)` üzerinden **upsert** ile yazıyor (elle girilen kayıtlar `source='manual', external_id=NULL` olarak hiç dokunulmuyor). `docker-compose.yml`/`cron.ts`/`Dockerfile` OSM Buildings/Roads'un haftalık deseniyle aynı.
+
+**Canlıda bulunup düzeltilen gerçek bir hata:** İlk migration `external_id IS NOT NULL` koşullu **kısmi** bir unique index kullanmıştı — PostgREST'in genel `upsert`/`ON CONFLICT` mekanizması kısmi index'i hedef alamıyor (Postgres bunun için ON CONFLICT'in WHERE koşulunu birebir eşleştirmesini istiyor, PostgREST buna izin vermiyor). İlk gerçek çalıştırmada net bir hatayla ortaya çıktı (`there is no unique or exclusion constraint matching the ON CONFLICT specification`), aynı gün bir düzeltme migration'ıyla **tam** (kısmi olmayan) bir UNIQUE constraint'e çevrildi — NULL'ların zaten birbirine hiç eşit sayılmaması sayesinde elle girilen kayıtlar için davranış aynı kaldı.
+
+**Canlı doğrulandı:** TR 649, MY 63, MG 1 satır yazıldı → hemen tekrar çalıştırıldı, TR sayısı **aynı kaldı** (upsert doğru çalışıyor, çoğaltmıyor) → haritada "Sığınakları Göster" açıkken TR/MY üzerinde gerçek marker kümeleri Playwright ile görsel olarak doğrulandı.

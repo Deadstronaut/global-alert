@@ -1,9 +1,32 @@
 # NEW GAME PLAN — Server/Cron Mimarisi ve Kaynak Envanteri
 
-**Tarih:** 2026-07-22 → 2026-07-24 (üç günlük oturum, sürekli güncellendi)
+**Tarih:** 2026-07-22 → 2026-07-26 (sürekli güncellenen, çok günlük bir oturum serisi)
 **Durum:** `aggregator` + `netcdf-service` + **10 zamanlanmış `raster-importer` konteyneri** canlıda, sürekli açık, sağlıklı. Supabase Edge Function deploy'u genel olarak hâlâ kırık (bkz. 4.7), ama 2026-07-24'te `import-gdo-fapar`/`import-gdo-soil-moisture` için nokta-atışı bir düzeltme yapıldı (aşağıya bakın) — bu ikisi artık yeniden deploy edilebiliyor. Üretimdeki gerçek veri yolu değişmedi: hâlâ Docker `gdo-anomaly-importer-scheduled` konteyneri.
 
-Bu doküman, iki günlük mimari inceleme oturumunda alınan tüm kararları ve tüm veri kaynaklarının GÜNCEL, GERÇEK durumunu tek bir yerde topluyor. `docs/Veri_Kaynaklari_Envanteri.docx` (genel kaynak envanteri) ile birlikte okunmalı.
+Bu doküman, çok günlük bir mimari inceleme/geliştirme sürecinde alınan tüm kararları ve tüm veri kaynaklarının GÜNCEL, GERÇEK durumunu tek bir yerde topluyor. `docs/Veri_Kaynaklari_Envanteri.docx` (genel kaynak envanteri) ile birlikte okunmalı.
+
+---
+
+## Yönetici Özeti — Bu Sistem Şu An Ne Durumda? (bu konuşmaları okumamış biri için)
+
+**Sistem ne yapıyor:** GEWS/MHEWS, deprem/sel/yangın/kuraklık/tsunami/salgın/gıda güvenliği gibi afet olaylarını dünya çapındaki resmi kaynaklardan (USGS, EMSC, GDACS, WHO, NASA FIRMS vb.) gerçek zamanlı toplayıp haritada gösteren, ayrıca nüfus/yol/nehir/bina gibi "etkilenme" (exposure) katmanlarını periyodik olarak güncelleyen bir çok-ülke (şu an TR/Madagaskar/Malezya) erken uyarı sistemi.
+
+**İki farklı iş, iki farklı yerde çalışıyor — bu ayrım tüm mimarinin temeli (bkz. Bölüm 1):**
+- **Canlı afet olayları** (deprem oldu, yangın çıktı vb.) → **Docker'da, sürekli açık `aggregator` konteynerinde** çalışıyor. Bir kaynağı saniyeler içinde yakalaması gerektiği için (pg_cron'un 1 dakikalık tavanı buna yetmiyor), bilgisayar/sunucu hep açık kalan bir servis.
+- **Periyodik toplu katman güncellemeleri** (nüfus haritası, yol ağı gibi ayda/haftada bir değişen büyük veriler) → ya **Docker'daki ayrı, zamanlanmış "importer" konteynerlerinde** (GHSL, WorldPop, GloFAS, GDO toprak nemi/bitki örtüsü, HydroBASINS/RIVERS, OSM yol/bina — 10 tanesi de canlı, sağlıklı) ya da (sadece Kontur Population için) hâlâ Supabase'in kendi "Edge Function + pg_cron" mekanizmasında çalışıyor.
+- **"Python/GDAL işi" dediğiniz kısım:** `netcdf-service` — internet'e hiç açık olmayan, sadece diğer konteynerlerin arka planda kullandığı küçük bir Python servisi. Tek görevi: bazı kaynakların (özellikle GloFAS nehir taşkını verisi) NetCDF/GRIB2 formatında gelen dosyalarını, sistemin geri kalanının anlayacağı GeoTIFF'e çevirmek. Kendi başına bir özellik değil, bir "çevirmen".
+
+**Son günlerde (2026-07-25 → 07-26) eklenen iki büyük parça:**
+1. **Admin panelin güvenlik/denetim altyapısı** (Bölüm 7) — artık her silme/kritik değişiklik işlemi (kaynak silme, kullanıcı yetkisi düşürme, hesap askıya alma, kişi verisi anonimleştirme) admin'in kendi şifresini tekrar girmesini istiyor ve **kim, ne zaman, neyi değiştirdi** sorusu `audit_log` tablosunda artık gerçekten cevaplanabiliyor (önceden bu sütun hiç doldurulmuyormuş — bulunup düzeltilen gerçek bir bug).
+2. **Yeni bir afet tipinin (örn. "toprak kayması") koda hiç dokunmadan sisteme eklenebilmesi** (Bölüm 8) — önceden bu, bir geliştiricinin 7 farklı dosyaya dokunmasını ve yeni bir veritabanı migration'ı yazmasını gerektiriyordu. Artık admin panelden "Hazard Taksonomisi" ekranına yeni bir tip eklenip bir kaynak bağlandığında, sistem bunu otomatik olarak zaten var olan genel bir "diğer afetler" tablosuna yönlendiriyor, ikonunu/adını da yine admin panelden girilen bilgiden okuyor — hiçbir kod değişikliği/redeploy gerekmiyor.
+
+**Federasyon planı (her ülkenin kendi sunucusunu kendi kurması) nerede duruyor:** Rol/davet/yetki sistemi (`super_admin` → `country_admin` → `org_admin` → `viewer`) zaten sağlam ve bu iş için hazır. Ama gerçek bir "paket halinde teslim et, kur çalıştır" deneyimi HENÜZ yok — kurulum sihirbazı yazılmadı, self-hosted Supabase'de `pg_cron`/`pg_net`'in çalışıp çalışmayacağı hiç test edilmedi, ve depoda gerçek servis anahtarları içeren `.env` dosyaları hâlâ git'e commit'li duruyor (bu son madde ayrıca bir güvenlik riski — rotate edilmesi öneriliyor). Detaylı, ayrı bir doküman olarak `docs/FEDERATION_SETUP_PLAN.md`'de takip ediliyor.
+
+**Şu an bloke olan / beklemede olan şeyler (tek bakışta):**
+- **ReliefWeb** (sel verisi kaynağı) — API erişim başvurusu yapıldı, onay e-postası bekleniyor.
+- **GDO SPI** (kuraklık şiddeti) — kalıcı olarak bloke, çünkü kaynağın kendi API'si bozuk/tutarsız veri döndürüyor (bizim kodumuzun sorunu değil, dış veri kalitesi sorunu).
+- **Supabase Edge Function deploy'u** — platform tarafında bir bug yüzünden `geotiff` kullanan fonksiyonlar genel olarak yeniden deploy edilemiyor; bu, pratikte önemli değil çünkü o işlerin hepsi zaten Docker'a taşındı, sadece "yedek" olarak duran Edge Function kopyaları etkileniyor.
+- **OSM yol/bina verisi** — Overpass API'nin kendi ücretsiz kullanım limitine takıldığı için şu an 3 ülkeden sadece 1'i tam, haftalık otomatik tekrar denemeyle zamanla tamamlanacak (bizim kodumuzun sorunu değil).
 
 ---
 
@@ -434,3 +457,51 @@ Bu bölüm önceki bölümlerden farklı bir katman: veri kaynağı entegrasyonu
 - Düzeltme: her buton için sabit `height: 40px` (satırdan bağımsız), `grid-auto-rows` kaldırıldı (varsayılan `auto`). Artık her hücre, kaç satır/kaç buton olursa olsun (4 normal, 5 "Şimdi Çalıştır" olduğunda) birebir aynı boyutta — Playwright ile canlı doğrulandı (`getBoundingClientRect().height` tüm butonlarda tam 40).
 - Sil butonu artık sadece `🗑` ikonu değil, `🗑️ Sil` (ikon + etiket) — diğer butonlarla (Düzenle/Geçmiş/Devre Dışı Bırak) tutarlı.
 - Beş butonun (Şimdi Çalıştır, Düzenle, Devre Dışı Bırak/Etkinleştir, Geçmiş, Sil) hepsine `title` attribute'u (native tooltip) eklendi, her biri aksiyonun ne yaptığını açıklıyor.
+
+---
+
+## 8. Yeni Hazard Type'ı Kod Değişikliği Olmadan Ekleyebilme — ✅ TAMAMLANDI (2026-07-26)
+
+**Sorunun tanımı:** Bir ülke admini "bizim resmi toprak kayması izleme sistemimiz var, bunu da haritaya ekleyelim" dediğinde, önceden bu **7 farklı, birbirinden habersiz yerin** aynı anda güncellenmesini gerektiriyordu — biri yeni bir veritabanı migration'ı bile yazmayı gerektiriyordu (bkz. federasyon planı tartışması, `docs/FEDERATION_SETUP_PLAN.md`). Hedef: bunu, mümkün olduğunca "admin panelden formu doldur, çalışsın" seviyesine indirmek — ama uygulamanın kendi kendine veritabanında yeni tablo yaratmasına (riskli, bkz. aşağıdaki "kapsam dışı" notu) İZİN VERMEDEN.
+
+**Seçilen çözüm — "genel kova" tablosu:** Sistemde zaten `disaster` adında, deprem/sel/yangın gibi 9 özel tablonun (`earthquake`, `flood`, vb.) aksine tek bir genel tablo vardı — ama kullanılmıyordu (frontend hiç okumuyor/dinlemiyordu, bir tür yarım kalmış iskelet). Bu tabloyu gerçekten devreye soktuk: artık bilinmeyen/yeni bir hazard type'a ait her olay otomatik olarak bu tabloya, kendi gerçek etiketiyle (örn. `type: 'toprak_kaymasi'`) düşüyor, harita bunu ayrı ayrı tanıyıp doğru ikonla gösteriyor.
+
+**Yapılan (migration `20260727000000_hazard_types_icon_color_and_generic_fk.sql` + ilgili kod değişiklikleri):**
+- `hazard_types` tablosuna `icon`/`color` sütunları eklendi — artık haritadaki ikonlar sabit kod içinde değil, admin panelden girilen bilgiden okunuyor.
+- `data_sources.hazard_type` ve `rejected_payloads.hazard_type`'ın "izin verilen değerler" listesi (CHECK constraint) kaldırıldı, yerine `hazard_types` tablosuna referans veren bir foreign key kondu — yani yeni bir tip artık **migration yazmadan**, sadece taksonomiye bir satır eklenerek "geçerli" hale geliyor.
+- `disaster_view` (diğer 9 tablonun sahip olduğu, geçersiz koordinatları filtreleyen görünüm) ilk kez yaratıldı — daha önce hiç yoktu.
+- "Kaynak Ekle" formundaki afet tipi listesi artık sabit kodlanmış bir liste değil, veritabanından (`hazard_types.supports_custom_source`) geliyor — yeni eklenen her tip otomatik olarak orada seçilebilir.
+- Admin panelin "Hazard Taksonomisi" ekranına yeni tip eklenirken artık bir ikon (emoji) da girilebiliyor, 7 dilin hepsinde (TR/EN/FR/AR/ES/RU/ZH) çevrildi.
+- Başka bir admin oturumu (başka bir sekme/tarayıcı) yeni eklenen tipi sayfa yenilemeden görsün diye küçük bir "canlı güncelleme" (realtime) bağlantısı eklendi.
+
+**Süreçte bulunan, önceden fark edilmemiş iki gerçek bug:**
+1. Frontend'de bir fonksiyon (`rowToEvent`), her olayın gerçek tipini sessizce tablonun sabit tipiyle eziyordu — 9 özel tablo için zararsızdı ama genel kovaya düşen farklı tipteki olayların hepsini "disaster" diye tek bir isme indirgeyip ikon eşleştirmesini kırardı. Düzeltildi.
+2. **Daha ciddi olanı:** admin panelin "Hazard Taksonomisi" ekranından yeni bir tip eklemek/düzenlemek, 2026-07-07'den beri (denetim/audit sistemi eklendiğinden beri) **muhtemelen hiç çalışmamış** — sistemin genel "kim ne değiştirdi" kayıt fonksiyonu her tabloda `id` adında bir sütun olduğunu varsayıyordu, ama bu tablonun birincil anahtarı `code`. Migration'ı canlıya uygularken bu hata gerçekten ortaya çıktı (denendi, patladı), aynı migration içinde düzeltildi ve gerçek bir test kaydıyla (oluştur → sil) uçtan uca doğrulandı.
+
+**Kapsam dışı bırakılan (bilinçli):** Uygulamanın kendi kendine (bir admin formu doldurunca arka planda) gerçek bir veritabanı tablosu yaratması (`CREATE TABLE`) YAPILMIYOR — güvenlik (SQL enjeksiyonuna açık yüzey) ve her ülkenin kendi kurulumunda şemanın birbirinden sessizce sapması riski yüzünden bilinçli olarak reddedildi. Bunun yerine, bir hazard type'ın hacmi/önemi arttığında bir geliştiricinin elle, hazır bir şablon kullanarak (`docs/HAZARD_TABLE_TEMPLATE.md`) onu kendi özel tablosuna "yükseltmesi" hâlâ mümkün — sadece otomatik değil.
+
+**Canlı doğrulandı:** Gerçek bir test hazard type'ı ("landslide_test") admin panelden oluşturuldu → aynı anda "Kaynak Ekle" formunda seçilebilir hale geldi (sayfa yenilemeden) → audit kaydı doğru kişi/zaman bilgisiyle düştü → test verisi temizlendi.
+
+---
+
+## 9. CHIRPS (Yağış) + INFORM Index — İki "Denenmemiş" Kaynağın Gerçek Entegrasyonu (2026-07-26)
+
+Envanterde "hiç denenmedi" (CHIRPS) ve "API'si yok, otomasyona uygun değil" (INFORM Index) diye işaretli iki kalem araştırıldı; ikisi de gerçekten yapılabilir çıktı, ama birbirinden çok farklı iki mekanizma gerektirdiler.
+
+### 9.1 CHIRPS — GHSL'in aynı deseni, Docker raster-importer olarak — ✅ TAMAMLANDI
+
+Canlı araştırıldı: UCSB Climate Hazards Center, `https://data.chc.ucsb.edu/products/CHIRPS-2.0/global_monthly/tifs/chirps-v2.0.{YIL}.{AY}.tif.gz` adresinde kimlik doğrulama gerektirmeyen, tahmin edilebilir bir URL'de global aylık yağış verisini (gzip'li tek bir GeoTIFF, ~14MB) yayınlıyor — NetCDF/GRIB yok, Python/GDAL gerekmiyor. GHSL'den bile basit: tek global dosya, GHSL'in tile-grid/sınır-birleştirme adımları hiç gerekmiyor.
+
+**Bulunan gerçek teknik ayrıntı:** Nüfus verisi (GHSL/WorldPop) bir altıgen içindeki piksel değerlerini **toplayarak** anlamlı hale geliyor. Yağış (mm) için bu yanlış — **ortalama** almak gerekiyor. Paylaşılan agregasyon fonksiyonunun (`rasterToHexagon.ts`) `RasterSourceConfig`'i tam olarak bu ayrım için önceden hazırlanmış (`pixelValueMeaning` alanı) ama hiç implemente edilmemişti. Yeni bir `'mean'` modu eklendi — var olan `'count'` modunun (GHSL/WorldPop/Meta) davranışı birebir korunarak, sadece yeni bir dal eklendi (regresyon riski yok, GHSL'i tekrar çalıştırıp aynı 44.418 feature'ı verdiği doğrulandı).
+
+**Yapılan:** `supabase/functions/shared/chirpsFetch.ts` (yeni), `raster-importer/import-chirps.ts` (yeni, GHSL'in `runGhslImport()` deseniyle birebir), `docker-compose.yml`'e `chirps-importer` + `chirps-importer-scheduled`, `cron.ts`'e aylık job, migration ile `hazard_types`/`data_sources` seed (artık CHECK değil FK olduğu için tek bir INSERT yeterli). **Bulunan ayrı bir gerçek hata:** `raster-importer/Dockerfile` her importer dosyasını `COPY` ile tek tek listeliyor (klasörün tamamını değil) — yeni dosyayı eklemeyi ilk denemede unuttum, `docker compose run --rm chirps-importer` net bir "Module not found" hatasıyla bunu hemen ortaya çıkardı, düzeltildi.
+
+**Frontend'e hiç dokunulmadı** — `exposure_datasets` zaten admin panelin "Etkilenme Verisi" sekmesinden generic okunuyor. **Canlı doğrulandı:** `docker compose run --rm chirps-importer` → 3 ülke, 43.940 feature, 0 ret → admin panelde "chirps — tr/mg/my — 2026-07" otomatik göründü → örnek değerler ~25-30mm (Türkiye için Haziran ortalaması olarak makul — toplanmış olsaydı yüzlerce/binlerce olurdu, bu da `'mean'` modunun doğru çalıştığının kanıtı).
+
+### 9.2 INFORM Index — yeni bir "yıllık ülke skoru" ekranı — ✅ TAMAMLANDI
+
+INFORM'un hiç API'si yok (statik, yıllık yayın) — ne "Manuel Giriş" formu (sadece lat/lng afet olayları için) ne de `risk_indicators`/`risk_area_scores` mekanizması (hesaplanan, alt-bölge+hazard-type bazlı bir pipeline) buna uyuyordu. Yeni, küçük bir tablo (`country_risk_indices`) + `risk_indicators`'ın kanıtlanmış RLS desenini (super_admin hepsi, country_admin/org_admin sadece kendi ülkesi, anon/public okuma YOK — aynı hassas-veri temkinini koruyarak) birebir kopyalayan bir admin ekranı yazıldı.
+
+**Yapılan:** Migration (`country_risk_indices` tablosu, RLS, audit trigger, `updated_at` tetikleyicisi), `src/components/risk/CountryRiskIndexPanel.vue` (yeni, `HazardTaxonomyPanel.vue`'nin liste+ekle/düzenle desenini izliyor), `AdminView.vue`'nin var olan "Risk ve Senaryo Modelleme" sekmesine eklendi (yeni bir üst-sekme açılmadı), 7 dilde i18n.
+
+**Canlı doğrulandı:** Gerçek bir test kaydı (TR, 2025, örnek skorlar) admin panelden eklendi, doğru sütunlarla listede göründü, sonra temizlendi. Build ve sayfa boyunca sıfır konsol hatası.

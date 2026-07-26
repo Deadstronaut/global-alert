@@ -757,6 +757,13 @@
       "frequency": {
         "monthly": "Se actualiza mensualmente"
       }
+    },
+    "regionView": {
+      "hexagonOption": "Hexágonos",
+      "provinceOption": "Provincias",
+      "districtOption": "Distritos",
+      "unavailableTooltip": "No hay datos de límites disponibles para este país en este nivel",
+      "populationLabel": "Población"
     }
   },
   "admin": {

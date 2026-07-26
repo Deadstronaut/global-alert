@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
+import { ref, shallowRef, computed, onMounted, onBeforeUnmount, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useDisasterStore } from '@/stores/disaster.js'
 import { useUIStore, MAX_HEX_RES } from '@/stores/ui.js'
@@ -9,6 +9,7 @@ import { numericToAlpha2 } from '@/data/isoMapping.js'
 import { getSeverityHex, getDisasterIcon } from '@/services/adapters/DisasterEvent.js'
 import { polygonToCells, cellToParent, getResolution, latLngToCell } from 'h3-js'
 import HexWorker from '@/workers/hexWorker.js?worker'
+import ProvinceAggregationWorker from '@/workers/provinceAggregationWorker.js?worker'
 import { feature } from 'topojson-client'
 import landTopo from 'world-atlas/land-10m.json'
 import countriesTopo from 'world-atlas/countries-10m.json'
@@ -29,9 +30,11 @@ import { useAuthStore } from '@/stores/auth.js'
 import { supabase } from '@/services/api/config.js'
 import { getShelterMarkerColor, getShelterMarkerIcon } from '@/services/shelterMarkerStyle.js'
 import { useExposureLayersStore } from '@/stores/exposureLayers.js'
-import { colorForDataset, isPopulationSource, isGridMetricSource, populationFillExpression, gridMetricFillExpression, rampForGridMetric } from '@/utils/exposureLayerColor.js'
+import { colorForDataset, isPopulationSource, isGridMetricSource, populationFillExpression, gridMetricFillExpression, rampForGridMetric, POPULATION_RAMP } from '@/utils/exposureLayerColor.js'
 import { buildFeaturePopupHtml } from '@/utils/exposureFeaturePopup.js'
 import { friendlyDatasetLabel } from '@/utils/exposureLayerLabel.js'
+import { formatPopulationLabel } from '@/utils/formatPopulationLabel.js'
+import { loadRegionBoundaries } from '@/data/boundaries/index.js'
 
 // spec 012: OGC WMS/WFS map layer registry — admin-registered external
 // overlays rendered live on this map (never stored/normalized, FR-008).
@@ -184,12 +187,19 @@ async function addExposureLayer(dataset) {
     // server-side to completing in ~11s once this was passed).
     const { data, error } = await supabase.rpc('get_dataset_features_geojson', { dataset_id: dataset.id, simplify_tolerance: 0.0005 })
     if (error || !data) return // silent render failure — matches addWfsLayer's existing convention
+    // Population values run into the hundreds of thousands/millions — a
+    // hexagon is too small to fit "482,367" without overflow, so population
+    // sources get an abbreviated "482K"/"1.2M" label (spec 046 FR-003)
+    // instead of the generic comma-separated formatMetricValueLabel used by
+    // every other gridded metric (SPI/anomaly/discharge values are small
+    // floats that already fit).
+    const buildLabel = isPopulationSource(dataset.source_name) ? formatPopulationLabel : formatMetricValueLabel
     geojson = {
       type: 'FeatureCollection',
       features: data.map((row) => ({
         type: 'Feature',
         geometry: JSON.parse(row.geom_geojson),
-        properties: { ...row.properties, __metricValue: row.metric_value, __metricValueLabel: formatMetricValueLabel(row.metric_value) },
+        properties: { ...row.properties, __metricValue: row.metric_value, __metricValueLabel: buildLabel(row.metric_value) },
       })),
     }
     exposureFeatureCache.set(dataset.id, geojson)
@@ -202,6 +212,16 @@ async function addExposureLayer(dataset) {
   const opacity = getLayerOpacity(exposureLayerKey(dataset))
   const isPopulation = isPopulationSource(dataset.source_name)
   const isGridMetric = isGridMetricSource(dataset.source_name)
+  // spec 046 US2: kick off (fire-and-forget) the region-boundary
+  // availability check (both province/ADM1 and district/ADM2) for this
+  // dataset's country as soon as its hexagon data is on the map — the
+  // toggle buttons in the panel read regionBoundaryCache reactively once
+  // this resolves, so a country without boundary data at a given level
+  // (FR-007) simply never enables that button.
+  if (isPopulation) {
+    ensureRegionBoundaryChecked(dataset.country_code, 'province')
+    ensureRegionBoundaryChecked(dataset.country_code, 'district')
+  }
   // Both population and other gridded metrics (GDO anomalies, GloFAS
   // discharge) are thousands of small per-pixel cells covering a whole
   // country — a flat fill + full-opacity 2px outline (the default, meant
@@ -277,6 +297,223 @@ function removeExposureLayerRendering(dataset) {
     if (map.getLayer(sourceId + suffix)) map.removeLayer(sourceId + suffix)
   }
   if (map.getSource(sourceId)) map.removeSource(sourceId)
+
+  // spec 046 US2: also tear down region-view rendering (province and/or
+  // district, whichever was active) if it was active for this dataset, and
+  // reset back to 'hexagon' mode — re-toggling this dataset on later always
+  // starts fresh regardless of which view was last active (no stale layer
+  // left behind from a prior session).
+  for (const level of REGION_LEVELS) {
+    const regSourceId = regionSourceId(dataset, level)
+    for (const suffix of ['-fill', '-line', '-label']) {
+      if (map.getLayer(regSourceId + suffix)) map.removeLayer(regSourceId + suffix)
+    }
+    if (map.getSource(regSourceId)) map.removeSource(regSourceId)
+  }
+  if (dataset.id in populationViewMode.value) {
+    const next = { ...populationViewMode.value }
+    delete next[dataset.id]
+    populationViewMode.value = next
+  }
+}
+
+// ── Region-level population view (spec 046 US2, extended for ADM2) ─────────
+// Distinct, manually-toggled per-dataset display mode; independent of the
+// automatic zoom-based hex resolution and spec 045's manual resolution
+// slider (data-model.md's State additions / spec.md Assumptions).
+// 'province' = ADM1 (il/state), 'district' = ADM2 (ilçe) — same rendering/
+// aggregation path for both, just a different bundled boundary source
+// (src/data/boundaries/index.js's `level` param) and layer-id suffix.
+const REGION_LEVELS = ['province', 'district']
+
+const populationViewMode = ref({}) // { [datasetId]: 'hexagon' | 'province' | 'district' }
+// { [level]: { [countryCode]: loadRegionBoundaries() result | null } } —
+// null once confirmed unavailable, absent key = not checked yet this session.
+// shallowRef, not ref: this holds real GeoJSON FeatureCollections that get
+// posted to the worker (runRegionAggregation). A deep ref() wraps nested
+// values in reactive Proxies on read, and repeated {...prev, [key]: x}
+// merges (one per ensureRegionBoundaryChecked call, e.g. province then
+// district for the same country) end up permanently storing a Proxy as the
+// actual data for whichever sibling key wasn't touched in that merge —
+// toRaw() on the outer object only strips one layer, not that baked-in
+// nested Proxy, and postMessage's structured clone throws DataCloneError on
+// it (found via live testing: worked once, then failed once both levels had
+// been populated). shallowRef never wraps nested data, so every reassigned
+// value here stays a plain, clonable object — no toRaw() needed anywhere.
+const regionBoundaryCache = shallowRef({ province: {}, district: {} })
+// Whether the worker-computed aggregation is currently in flight for a
+// dataset — drives the toggle buttons' disabled/label state so the wait
+// reads as "working", not a frozen UI (live user feedback: without this the
+// switch felt like it hung, then "suddenly" popped in).
+const regionViewLoading = ref({})
+
+function regionSourceId(dataset, level) {
+  return `${exposureSourceId(dataset)}-${level}`
+}
+
+function regionViewLoadingFor(dataset) {
+  return !!regionViewLoading.value[dataset.id]
+}
+
+// Dedicated worker (not hexWorker — its lazy-init is tied to the unrelated
+// hexbins/"Petek" toggle) running the point-in-polygon aggregation off the
+// main thread. See provinceAggregationWorker.js — the aggregation function
+// itself is level-agnostic (just sums a metric into whatever boundary
+// FeatureCollection it's given), reused unchanged for district level too.
+let regionWorker = null
+let regionRequestSeq = 0
+const regionPendingRequests = new Map() // requestId -> resolve fn
+
+function runRegionAggregation(populationFeatures, regionFeatureCollection, nameProperty) {
+  if (!regionWorker) {
+    regionWorker = new ProvinceAggregationWorker()
+    regionWorker.onmessage = ({ data }) => {
+      const resolve = regionPendingRequests.get(data.requestId)
+      if (!resolve) return
+      regionPendingRequests.delete(data.requestId)
+      resolve(data.result)
+    }
+  }
+  const requestId = ++regionRequestSeq
+  return new Promise((resolve) => {
+    regionPendingRequests.set(requestId, resolve)
+    regionWorker.postMessage({ requestId, populationFeatures, provinceFeatureCollection: regionFeatureCollection, nameProperty })
+  })
+}
+
+function populationViewModeFor(dataset) {
+  return populationViewMode.value[dataset.id] ?? 'hexagon'
+}
+
+function isRegionViewAvailable(dataset, level) {
+  return !!regionBoundaryCache.value[level]?.[dataset.country_code]
+}
+
+async function ensureRegionBoundaryChecked(countryCode, level) {
+  if (!countryCode) return
+  if (countryCode in (regionBoundaryCache.value[level] ?? {})) return
+  const boundary = await loadRegionBoundaries(countryCode, level)
+  regionBoundaryCache.value = {
+    ...regionBoundaryCache.value,
+    [level]: { ...regionBoundaryCache.value[level], [countryCode]: boundary },
+  }
+}
+
+function setHexagonSubLayersVisibility(dataset, visibility) {
+  if (!map) return
+  const sourceId = exposureSourceId(dataset)
+  for (const suffix of [...EXPOSURE_SUB_LAYER_SUFFIXES, '-labels']) {
+    const layerId = sourceId + suffix
+    if (map.getLayer(layerId)) map.setLayoutProperty(layerId, 'visibility', visibility)
+  }
+}
+
+function buildRegionPopupHtml(regionName, totalPopulation) {
+  const accent = POPULATION_RAMP[POPULATION_RAMP.length - 1]
+  return `
+    <div class="disaster-popup-modern" style="--severity-color: ${accent}; --severity-rgba: rgba(203, 24, 29, 0.18);">
+      <div class="popup-header">
+        <span class="chip type-chip" style="background: ${accent}; color: #fff;">${regionName ?? ''}</span>
+      </div>
+      <div class="popup-body">
+        <div class="popup-metrics"><span><b>${t('exposureLayers.regionView.populationLabel')}:</b> ${Number(totalPopulation ?? 0).toLocaleString()}</span></div>
+      </div>
+    </div>
+  `
+}
+
+async function enableRegionView(dataset, level) {
+  if (!map || regionViewLoadingFor(dataset)) return
+  const boundary = regionBoundaryCache.value[level]?.[dataset.country_code]
+  const populationGeojson = exposureFeatureCache.get(dataset.id)
+  if (!boundary || !populationGeojson) return // toggle shouldn't be reachable in this state, but degrade safely (FR-007)
+
+  const sourceId = regionSourceId(dataset, level)
+  if (map.getSource(sourceId)) return // already rendered
+
+  regionViewLoading.value = { ...regionViewLoading.value, [dataset.id]: true }
+  const aggregated = await runRegionAggregation(populationGeojson, boundary.featureCollection, boundary.nameProperty)
+  regionViewLoading.value = { ...regionViewLoading.value, [dataset.id]: false }
+
+  // The user may have switched to another view (hexagon, or the other
+  // region level) — or toggled the whole dataset off — while the worker was
+  // computing. Don't render a stale result over whatever state they're in
+  // now.
+  if (!map || populationViewModeFor(dataset) !== level || map.getSource(sourceId)) return
+
+  // Hide (not remove) the hexagon layers so switching back restores them
+  // exactly, with no lost opacity/toggle state (FR-008). Unconditional and
+  // idempotent — a no-op if already hidden (e.g. switching province<->district).
+  setHexagonSubLayersVisibility(dataset, 'none')
+
+  const opacity = getLayerOpacity(exposureLayerKey(dataset))
+  map.addSource(sourceId, { type: 'geojson', data: aggregated })
+  map.addLayer({
+    id: `${sourceId}-fill`,
+    type: 'fill',
+    source: sourceId,
+    // populationFillExpression() reads __metricValue, which
+    // aggregatePopulationByProvince() also injects alongside
+    // totalPopulation — same graduated ramp/logic as hexagons (FR-005),
+    // scaled to this collection's own min/max, zero new color code.
+    paint: { 'fill-color': populationFillExpression(aggregated), 'fill-opacity': opacity * 0.75 },
+  })
+  map.addLayer({
+    id: `${sourceId}-line`,
+    type: 'line',
+    source: sourceId,
+    paint: { 'line-color': '#7f0000', 'line-opacity': opacity * 0.3, 'line-width': 1 },
+  })
+  // Always-on name + population label (live feedback: names weren't visible
+  // at all before, only on click) — district level can run into the
+  // hundreds of features (Turkey: 973), still far fewer than the hexagon
+  // grid's tens of thousands, so no zoom-gating needed the way
+  // VALUE_LABEL_MINZOOM is for that layer; MapLibre's own
+  // text-allow-overlap:false thins out crowded small districts at low zoom.
+  map.addLayer({
+    id: `${sourceId}-label`,
+    type: 'symbol',
+    source: sourceId,
+    layout: {
+      'text-field': ['get', '__provinceLabel'],
+      'text-font': ['Noto Sans Regular'],
+      'text-size': 13,
+      'text-allow-overlap': false,
+    },
+    paint: { 'text-color': '#ffffff', 'text-halo-color': '#000000', 'text-halo-width': 1.5 },
+  })
+
+  map.on('click', `${sourceId}-fill`, (e) => {
+    const f = e.features?.[0]
+    if (!f) return
+    if (exposurePopup) exposurePopup.remove()
+    exposurePopup = new maplibregl.Popup({ offset: 12, className: 'modern-popup-container' })
+      .setLngLat(e.lngLat)
+      .setHTML(buildRegionPopupHtml(f.properties?.provinceName, f.properties?.totalPopulation))
+      .addTo(map)
+  })
+}
+
+function disableRegionView(dataset, level) {
+  if (!map) return
+  const sourceId = regionSourceId(dataset, level)
+  for (const suffix of ['-fill', '-line', '-label']) {
+    if (map.getLayer(sourceId + suffix)) map.removeLayer(sourceId + suffix)
+  }
+  if (map.getSource(sourceId)) map.removeSource(sourceId)
+}
+
+function setPopulationViewMode(dataset, mode) {
+  const current = populationViewModeFor(dataset)
+  if (current === mode) return
+  if (mode !== 'hexagon' && !isRegionViewAvailable(dataset, mode)) return // FR-007: disabled option is not clickable-through
+
+  populationViewMode.value = { ...populationViewMode.value, [dataset.id]: mode }
+  if (!mapLoaded) return
+
+  if (current !== 'hexagon') disableRegionView(dataset, current)
+  if (mode === 'hexagon') setHexagonSubLayersVisibility(dataset, 'visible')
+  else enableRegionView(dataset, mode)
 }
 
 // Only the currently selected country's own exposure datasets — the panel
@@ -724,6 +961,9 @@ function brightenDarkLabels() {
 function addSourcesAndLayers() {
   // beforeId = first label layer → our layers render below labels
   const before = firstSymbolLayerId()
+  // Dark basemap can take a heavy dim without losing legibility; light/satellite
+  // basemaps are already low-contrast so the same overlay reads as near-black.
+  const dimOpacity = mapStyleIndex.value === 0 ? 0.55 : 0.18
 
   map.addSource('disaster-heat', {
     type: 'geojson',
@@ -753,6 +993,13 @@ function addSourcesAndLayers() {
   map.addSource('custom-territories', {
     type: 'geojson',
     data: fixGeometry(CUSTOM_TERRITORIES),
+    // MapLibre's GeoJSON tiler only preserves a feature's top-level `id` when
+    // it's a number (see GeoJSONWrapper) — string ids like 'XKX'/'TRNC' are
+    // silently dropped to undefined, which made both custom territories
+    // permanently unselectable (selectCountry bails on a null id). promoteId
+    // reads the id from a property instead, which has no such numeric-only
+    // restriction.
+    promoteId: 'numeric',
   })
 
   // Community reports (spec 036, research.md Decision 6) — MapLibre's native
@@ -827,7 +1074,18 @@ function addSourcesAndLayers() {
   // like every other country, that flat edge renders as a stray straight
   // line/wedge across the bottom of the view. No disaster data is ever
   // relevant there, so it's excluded from these layers entirely.
-  const excludeAntarctica = ['!=', ['get', 'name'], 'Antarctica']
+  //
+  // world-atlas also ships a "Kosovo" feature with no ISO numeric id (Kosovo
+  // has none), which crashes map.setFeatureState (id must be non-null) the
+  // moment the cursor/click resolves to it instead of our own custom-territories
+  // Kosovo polygon (which does have an id) — in practice this made hovering or
+  // clicking anywhere near Kosovo silently fail to select it. Excluded here so
+  // our custom-territories entry is the only interactive Kosovo shape.
+  const excludeAntarctica = [
+    'all',
+    ['!=', ['get', 'name'], 'Antarctica'],
+    ['!=', ['get', 'name'], 'Kosovo'],
+  ]
 
   // Country fills (invisible, for interaction — moved to top after all layers)
   map.addLayer(
@@ -961,7 +1219,7 @@ function addSourcesAndLayers() {
     source: 'custom-territories',
     paint: {
       'fill-color': '#000000',
-      'fill-opacity': ['case', ['boolean', ['feature-state', 'dimmed'], false], 0.55, 0],
+      'fill-opacity': ['case', ['boolean', ['feature-state', 'dimmed'], false], dimOpacity, 0],
     },
   })
 
@@ -1035,7 +1293,7 @@ function addSourcesAndLayers() {
     source: 'world-countries',
     paint: {
       'fill-color': '#000000',
-      'fill-opacity': ['case', ['boolean', ['feature-state', 'dimmed'], false], 0.55, 0],
+      'fill-opacity': ['case', ['boolean', ['feature-state', 'dimmed'], false], dimOpacity, 0],
     },
   })
 
@@ -1236,7 +1494,13 @@ function selectCountry(f) {
 
   if (source === 'custom-territories') {
     selectedCountryName.value = f.properties?.name || f.id
-    selectedCountryCode.value = null
+    // Kosovo has no official ISO 3166-1 code, but 'XK' is the de facto
+    // user-assigned code widely adopted for exactly this gap (EU, Microsoft,
+    // Mastercard, etc.) — using it lets exposure datasets ever registered
+    // with country_code 'xk' show up here. KKTC/Northern Cyprus has no
+    // similarly-adopted placeholder, so it stays uncoded (FR: exposure panel
+    // still shows an accurate "no layers" state rather than a real code).
+    selectedCountryCode.value = fid === 'XKX' ? 'xk' : null
   } else {
     const nameKey = String(fid).padStart(3, '0')
     selectedCountryName.value = COUNTRY_NAMES[nameKey] ?? `#${fid}`
@@ -1360,6 +1624,9 @@ function setupMapInteractions() {
     if (!e.features?.length) return
     const f = e.features[0]
     const source = f.source
+    // setFeatureState throws if id is null/undefined (e.g. a world-atlas
+    // feature with no ISO numeric id) — bail rather than crash the handler.
+    if (f.id == null) return
 
     if (
       hoveredFeatureId !== null &&
@@ -2346,7 +2613,11 @@ onBeforeUnmount(() => {
            same session-only state shape as the WMS/WFS panel above. -->
       <div v-if="exposureLayersStore.loaded" class="map-layers-panel exposure-layers-panel">
         <h4 class="map-layers-title">{{ t('exposureLayers.panelTitle') }}</h4>
-        <p v-if="!selectedCountryCode" class="exposure-layers-empty">{{ t('exposureLayers.selectCountryPrompt') }}</p>
+        <!-- Gated on selectedCountryName, not selectedCountryCode: a custom
+             territory (e.g. KKTC) can be genuinely selected with no country
+             code at all, and should read as "no layers for this place" —
+             not as if nothing were selected yet. -->
+        <p v-if="!selectedCountryName" class="exposure-layers-empty">{{ t('exposureLayers.selectCountryPrompt') }}</p>
         <p v-else-if="visibleExposureDatasets.length === 0" class="exposure-layers-empty">{{ t('exposureLayers.emptyState') }}</p>
         <div v-for="dataset in visibleExposureDatasets" :key="dataset.id" class="map-layer-row exposure-layer-row">
           <label class="map-layer-toggle">
@@ -2363,6 +2634,37 @@ onBeforeUnmount(() => {
             class="map-layer-opacity"
             :style="{ accentColor: colorForDataset(dataset) }"
           />
+          <!-- spec 046 US2: hexagon vs. province (ADM1) vs. district (ADM2)
+               population view — only for population sources, and only once
+               the layer itself is on (region aggregation reads its
+               already-fetched hex data). -->
+          <div
+            v-if="isPopulationSource(dataset.source_name) && isLayerVisible(`exposure-dataset-${dataset.id}`)"
+            class="population-view-toggle"
+          >
+            <button
+              type="button"
+              class="population-view-btn"
+              :class="{ active: populationViewModeFor(dataset) === 'hexagon' }"
+              @click="setPopulationViewMode(dataset, 'hexagon')"
+            >{{ t('exposureLayers.regionView.hexagonOption') }}</button>
+            <button
+              type="button"
+              class="population-view-btn"
+              :class="{ active: populationViewModeFor(dataset) === 'province', loading: regionViewLoadingFor(dataset) && populationViewModeFor(dataset) === 'province' }"
+              :disabled="!isRegionViewAvailable(dataset, 'province') || regionViewLoadingFor(dataset)"
+              :title="isRegionViewAvailable(dataset, 'province') ? '' : t('exposureLayers.regionView.unavailableTooltip')"
+              @click="setPopulationViewMode(dataset, 'province')"
+            >{{ regionViewLoadingFor(dataset) && populationViewModeFor(dataset) === 'province' ? t('exposureLayers.loading') : t('exposureLayers.regionView.provinceOption') }}</button>
+            <button
+              type="button"
+              class="population-view-btn"
+              :class="{ active: populationViewModeFor(dataset) === 'district', loading: regionViewLoadingFor(dataset) && populationViewModeFor(dataset) === 'district' }"
+              :disabled="!isRegionViewAvailable(dataset, 'district') || regionViewLoadingFor(dataset)"
+              :title="isRegionViewAvailable(dataset, 'district') ? '' : t('exposureLayers.regionView.unavailableTooltip')"
+              @click="setPopulationViewMode(dataset, 'district')"
+            >{{ regionViewLoadingFor(dataset) && populationViewModeFor(dataset) === 'district' ? t('exposureLayers.loading') : t('exposureLayers.regionView.districtOption') }}</button>
+          </div>
         </div>
       </div>
     </div>
@@ -2443,6 +2745,38 @@ onBeforeUnmount(() => {
   transition: background .15s ease;
 }
 .exposure-layer-row:hover { background: rgba(255,255,255,.05); }
+.population-view-toggle {
+  display: flex;
+  gap: 4px;
+  margin-top: 6px;
+}
+.population-view-btn {
+  flex: 1;
+  font-size: .68rem;
+  padding: 3px 6px;
+  border-radius: 6px;
+  border: 1px solid rgba(255,255,255,.15);
+  background: transparent;
+  color: var(--color-text-muted,#94a3b8);
+  cursor: pointer;
+}
+.population-view-btn.active {
+  background: rgba(203, 24, 29, .25);
+  border-color: rgba(203, 24, 29, .6);
+  color: #fff;
+}
+.population-view-btn:disabled {
+  opacity: .4;
+  cursor: not-allowed;
+}
+.population-view-btn.loading {
+  opacity: .8;
+  animation: population-view-loading-pulse 1s ease-in-out infinite;
+}
+@keyframes population-view-loading-pulse {
+  0%, 100% { opacity: .5; }
+  50% { opacity: .9; }
+}
 .exposure-layer-swatch {
   width: 10px;
   height: 10px;

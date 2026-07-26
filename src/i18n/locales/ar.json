@@ -757,6 +757,13 @@
       "frequency": {
         "monthly": "يُحدَّث شهريًا"
       }
+    },
+    "regionView": {
+      "hexagonOption": "سداسيات",
+      "provinceOption": "المحافظات",
+      "districtOption": "الأقضية",
+      "unavailableTooltip": "لا تتوفر بيانات حدود لهذه الدولة عند هذا المستوى",
+      "populationLabel": "السكان"
     }
   },
   "admin": {

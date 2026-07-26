@@ -757,6 +757,13 @@
       "frequency": {
         "monthly": "Обновляется ежемесячно"
       }
+    },
+    "regionView": {
+      "hexagonOption": "Гексагоны",
+      "provinceOption": "Провинции",
+      "districtOption": "Районы",
+      "unavailableTooltip": "Для этой страны нет данных о границах на этом уровне",
+      "populationLabel": "Население"
     }
   },
   "admin": {

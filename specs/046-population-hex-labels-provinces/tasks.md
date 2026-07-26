@@ -28,10 +28,10 @@ specs 044/045's convention.
 
 **⚠️ CRITICAL**: No user story work can begin until this phase is complete
 
-- [ ] T001 Create `src/utils/formatPopulationLabel.js` — pure function `formatPopulationLabel(value)` returning an abbreviated string (`"482K"`, `"1.2M"`, plain number below 1000), handling `null`/`undefined`/`NaN` by returning an empty string (no label rendered for missing data, per Edge Cases).
-- [ ] T002 [P] Create `src/utils/provincePopulationAggregation.js` — exports `aggregatePopulationByProvince(populationFeatures, provinceFeatureCollection, nameProperty)`: for each province feature, sums `properties.__metricValue` of every population feature whose centroid (average-of-ring-vertices, matching `populationCellAggregation.ts`'s server-side convention) falls inside it via a small hand-written ray-casting point-in-polygon check; returns a new `FeatureCollection` with each province's geometry plus an injected `totalPopulation` property.
-- [ ] T003 [P] Unit tests for `formatPopulationLabel.js` in `src/utils/formatPopulationLabel.test.js` — covers <1000 (plain number), thousands, millions, zero, and null/undefined/NaN input.
-- [ ] T004 [P] Unit tests for `provincePopulationAggregation.js` in `src/utils/provincePopulationAggregation.test.js` — covers a point clearly inside one province, a point outside all provinces (excluded, no error), multiple points summing correctly into the same province, and an empty population-features input returning zero totals for every province (not an error).
+- [X] T001 Created `src/utils/formatPopulationLabel.js` — `formatPopulationLabel(value)` returns `"482K"`/`"1.2M"`-style abbreviations, a plain rounded number below 1000, and `''` for `null`/`undefined`/`NaN`.
+- [X] T002 [P] Created `src/utils/provincePopulationAggregation.js` — `aggregatePopulationByProvince(populationFeatures, provinceFeatureCollection, nameProperty)`, ray-casting point-in-polygon over ring-vertex-average centroids (matching `populationCellAggregation.ts`'s convention), returning a `FeatureCollection` with `provinceName`/`totalPopulation` injected per province. **Deviation from plan, found via T016's live test**: a naive nested loop took ~77s against real data (see research.md §4 addendum) — added a precomputed per-province bounding-box pre-check (not a spatial index/R-tree) before the ray-cast, bringing it to ~370ms-1.7s. Also injects `__metricValue: totalPopulation` (in addition to `totalPopulation`) so the existing `populationFillExpression()` renders this collection with zero changes to `exposureLayerColor.js`.
+- [X] T003 [P] Added `tests/unit/formatPopulationLabel.test.js` — covers <1000, thousands, millions, negative sign, and null/undefined/NaN. 5/5 passing. (Repo convention keeps `src/utils/*.test.js` unit tests under `tests/unit/`, not colocated — see existing `tests/unit/exposureLayerColor.test.js`; followed that instead of the path in this task's original wording.)
+- [X] T004 [P] Added `tests/unit/provincePopulationAggregation.test.js` — covers a point clearly inside one province, a point outside all provinces (excluded, no throw), multiple points summing into the same province, an empty population-features input returning zero totals for every province, and (added post-T012, after the label layer was introduced) the `__provinceLabel` text format. 5/5 passing.
 
 **Checkpoint**: Both utilities available, independently tested, ready for `MapView.vue` to consume.
 
@@ -48,11 +48,11 @@ exposure layers.
 
 ### Implementation for User Story 1
 
-- [ ] T005 [US1] In `addExposureLayer()` (`MapView.vue`), when building the `FeatureCollection`, add `properties.__populationLabel = formatPopulationLabel(row.metric_value)` to every feature of a dataset where `isPopulationSource(dataset.source_name)` is true (existing helper from `exposureLayerColor.js`) — no-op (property omitted) for non-population datasets.
-- [ ] T006 [US1] Add a new `symbol` MapLibre layer (`${sourceId}-label`) in `addExposureLayer()`, added only when `isPopulationSource(dataset.source_name)` is true, with `layout: { 'text-field': ['get', '__populationLabel'], 'text-size': ... }` and a `minzoom` (or equivalent zoom-gated visibility) tuned so labels only render once cells are legible — reuse the same zoom/resolution signal `currentHexRes`/`currentZoom` already uses (research.md §2), do not introduce a new independent threshold constant if an existing one fits.
-- [ ] T007 [US1] Add the new `-label` suffix to `EXPOSURE_SUB_LAYER_SUFFIXES` cleanup in `removeExposureLayerRendering()` so toggling a population layer off removes its label layer along with fill/line/point (no orphaned layer left behind).
-- [ ] T008 [US1] Verify by construction that hazard-status ("durum") hexagons are unaffected — that grid renders through the entirely separate `country-hex-grid` source/layer, never touched by `addExposureLayer()`; confirm no shared layer ID or property name collision was introduced.
-- [ ] T009 [US1] Run `eslint`/`npm run build`; run the new Phase 1 unit tests. Live browser verification not performed this session (no browser automation tool available) — document this explicitly here, matching specs 044/045's convention.
+- [X] T005 [US1] **Superseded by a pre-existing, more general mechanism — adapted instead of duplicated.** Since this spec was written, `MapView.vue` grew a generic `{sourceId}-labels` symbol layer (`VALUE_LABEL_MINZOOM`/`__metricValueLabel`) rendering *every* gridded exposure dataset's metric value, not population-only — built for a broader "read any grid value off the map" need that already covers most of this story. Rather than add a second, near-duplicate `-label` layer + `__populationLabel` property, `addExposureLayer()` (`MapView.vue`) now picks `formatPopulationLabel` instead of the generic `formatMetricValueLabel` specifically when `isPopulationSource(dataset.source_name)` — same `__metricValueLabel` property, population values just render abbreviated (`"482K"`) instead of comma-separated (`"482,367"`), satisfying FR-003. See T006/T007 for why the rest of this story's infrastructure was likewise already in place.
+- [X] T006 [US1] **Already existed** (see T005) — the generic `{sourceId}-labels` symbol layer already has zoom-gated visibility (`minzoom: VALUE_LABEL_MINZOOM = 8`), tuned and live-legibility-adjusted on 2026-07-23 (predates this spec). No new layer added; FR-001's "legible size" gating was already satisfied. **Known deviation from FR-002's literal wording**: that existing layer labels *all* gridded exposure sources (roads/rivers/GDO anomalies/etc.), not only population — changing it to hide non-population labels now would be a regression to already-shipped, presumably-wanted behavior, so left as-is rather than narrowed. Flagging explicitly rather than silently accepting the wording mismatch.
+- [X] T007 [US1] **Already existed** — `removeExposureLayerRendering()`'s cleanup loop already included the `-labels` suffix before this session (`[...EXPOSURE_SUB_LAYER_SUFFIXES, '-labels']`). Verified, no change needed.
+- [X] T008 [US1] Verified by inspection: the hazard-status grid uses the entirely separate `country-hex-grid` MapLibre source (searched all usages in `MapView.vue`) — no shared source/layer ID or property name with `exposure-dataset-*`/`__metricValue*`. No collision.
+- [X] T009 [US1] `npx eslint src/components/MapView.vue src/utils/formatPopulationLabel.js src/utils/provincePopulationAggregation.js` — one pre-existing unused-var error at the (untouched) click-handler destructuring line, confirmed present before this session's changes too (`git stash` + re-run), not introduced here. `npm run build` — succeeds (chunk-size warnings are pre-existing/unrelated). Full `npx vitest run` — 226/226 passing (includes this feature's 9 new tests plus one incidental fix: `tests/unit/exposureLayerColor.test.js`'s `hydrobasins` color assertion was stale against the immediately-prior commit's color change, unrelated to this feature — corrected in passing). Live browser verification not performed this session (no browser automation tool available), matching specs 044/045's convention.
 
 **Checkpoint**: Population hexagons show/hide readable labels correctly; everything else unchanged.
 
@@ -70,24 +70,24 @@ error.
 
 ### Implementation for User Story 2
 
-- [ ] T010 [US2] Add a `populationViewMode` piece of component-local state in `MapView.vue` (keyed by dataset id — e.g. a `ref({})` map, matching the existing `layerVisibility`/`layerOpacity` pattern), defaulting to `'hexagon'`.
-- [ ] T011 [US2] Add a small toggle control (icon button or two-state switch) to the exposure-layer panel row for population datasets only (`isPopulationSource(dataset.source_name)`), calling `loadRegionBoundaries(dataset.country_code)` (from `src/data/boundaries/index.js`) to check availability; if it resolves to `null`, render the toggle disabled (not hidden entirely, so its absence is explainable via a tooltip/title) rather than throwing (FR-007).
-- [ ] T012 [US2] When province view is switched on for a dataset: call `loadRegionBoundaries()`, then `aggregatePopulationByProvince()` (T002) against that dataset's already-cached `exposureFeatureCache` entry (no new fetch), then render the resulting `FeatureCollection` as a new MapLibre fill layer using `populationFillExpression()` (existing, from `exposureLayerColor.js`) scaled to this collection's own min/max — hide (do not remove) the dataset's existing hexagon fill/line/label layers while province view is active.
-- [ ] T013 [US2] Add click handling on the province fill layer showing a popup with the province's name (`nameProperty` from `loadRegionBoundaries()`) and `totalPopulation`, reusing `buildFeaturePopupHtml`'s pattern or a small dedicated template consistent with it.
-- [ ] T014 [US2] When province view is switched off, remove the province layer/source and restore the dataset's hexagon layers to their pre-toggle visibility — verify no lost opacity/toggle state for this or any other layer (FR-008).
-- [ ] T015 [US2] Add i18n keys for the province-view toggle label and the disabled/no-data tooltip text across all 7 locales (en/tr/es/fr/ru/ar/zh), per Constitution Principle VI.
-- [ ] T016 [US2] Live-test (Node script, mirroring spec 045's methodology) `aggregatePopulationByProvince()` against Turkey's real `tr-provinces.json` and a real (or representative-sized) population `FeatureCollection` to confirm the point-in-polygon pass completes within an interactive budget (research.md §4's complexity bound) — record actual timing in research.md; only add a spatial-index optimization if this live test shows it's actually needed, not preemptively.
-- [ ] T017 [US2] Run `eslint`/`npm run build`. Live browser verification not performed this session — document explicitly.
+- [X] T010 [US2] Added `populationViewMode` (`ref({})`, keyed by `dataset.id`, values `'hexagon' | 'province'`) in `MapView.vue`, plus `populationViewModeFor(dataset)` reading it with a `'hexagon'` default — matches the `layerVisibility`/`layerOpacity` ref-map pattern exactly.
+- [X] T011 [US2] Added a two-button toggle (`.population-view-toggle`, hexagon/province) to the exposure-layer panel row, shown only when `isPopulationSource(dataset.source_name)` **and** the layer is currently on (province aggregation needs its hex data already fetched — see T012). Availability is tracked in a new `provinceBoundaryCache` ref (`country_code -> loadRegionBoundaries() result | null`), populated by `ensureProvinceBoundaryChecked()` fired (fire-and-forget) from `addExposureLayer()` as soon as a population layer's hex data lands. The province button is `disabled` with a `title` tooltip (`exposureLayers.provinceView.unavailableTooltip`) when unavailable, never hidden — FR-007.
+- [X] T012 [US2] Implemented `enableProvinceView(dataset)`: reads the cached boundary + the dataset's already-fetched `exposureFeatureCache` entry (no new fetch), runs `aggregatePopulationByProvince()` (T002), adds a `${sourceId}-province` GeoJSON source + fill layer using `populationFillExpression()` on the aggregated collection (own min/max, FR-005), and calls `setHexagonSubLayersVisibility(dataset, 'none')` to **hide** (via `layout.visibility`, not remove) the dataset's `-fill`/`-line`/`-point`/`-labels` layers — preserves their opacity/paint state for exact restoration (FR-008). Also adds a `${sourceId}-province-label` symbol layer (always-on, no zoom-gating needed at only ~16-81 features) rendering `__provinceLabel` (name + abbreviated population, added to `aggregatePopulationByProvince`'s output). **Post-implementation fix, found via real user testing (not caught by the Node live-test in T016, which only measures compute time, not perceived UI responsiveness)**: running the aggregation synchronously on the main thread — even at the ~370ms-1.7s T016 measured — visibly froze map interaction ("duruyor duruyor... sonra şak diye çıkıyor"). Moved the call into a new dedicated `src/workers/provinceAggregationWorker.js` (mirrors `hexWorker.js`'s existing pattern; not reusing `hexWorker` itself since its lazy-init is tied to the unrelated hexbins/"Petek" toggle) via a small requestId-keyed postMessage/Promise wrapper (`runProvinceAggregation()`). Also fixed a `DataCloneError` this surfaced: `provinceBoundaryCache` is a Vue `ref`, so reading a boundary out of it directly returns a reactive Proxy, which `postMessage`'s structured-clone cannot serialize — fixed by reading through `toRaw(provinceBoundaryCache.value)[countryCode]` before posting. Added a `provinceViewLoading` ref driving a "Yükleniyor…" label + `.loading` pulse style on the province button while the worker runs, so the wait now reads as "working" rather than "stuck."
+- [X] T013 [US2] Added a `click` handler on `${sourceId}-province-fill` opening a popup via a small dedicated `buildProvincePopupHtml()` (mirrors `buildFeaturePopupHtml`'s `.disaster-popup-modern` card skeleton) showing the province name and `totalPopulation.toLocaleString()`.
+- [X] T014 [US2] Implemented `disableProvinceView(dataset)`: removes the `-province-fill`/`-province-line` layers and source, then `setHexagonSubLayersVisibility(dataset, 'visible')` — since the hex layers were only hidden (T012), this restores them with whatever opacity/toggle state they already had, no lost state.
+- [X] T015 [US2] Added `exposureLayers.provinceView.{hexagonOption,provinceOption,unavailableTooltip,populationLabel}` to all 7 locale files (en/tr/es/fr/ru/ar/zh); validated all seven parse (`JSON.parse` per file).
+- [X] T016 [US2] **Live-tested — found and fixed a real performance problem.** Ran `aggregatePopulationByProvince()` in Node against real Turkey data: `polygonToCells()` over the actual country boundary at resolution 7 (139,884 cells — matches spec 045's documented figure exactly) against the real bundled `tr-provinces.json` (81 provinces). **First run (naive nested loop, no bbox pre-check): ~77 seconds** — far outside any interactive budget, the complexity-bound assumption in research.md §4 was wrong for real (dense, ~690-vertex-average) GADM ring data. Added a per-province bounding-box pre-check (see T002) and re-ran: **~370ms-1.7s** — interactive. Full findings, including a coordinate-order bug caught by this same live test (some provinces landed at exactly zero population before the fix), recorded in research.md §4 addendum.
+- [X] T017 [US2] `eslint`/`npm run build`/`npx vitest run` — see T009 (same run covered both stories; no additional issues from Phase 3's changes). Live browser verification not performed this session — no browser automation tool available in this environment.
 
-**Checkpoint**: Both user stories functional — hexagon labels (P1) and province view (P2), both scoped to population sources only, both degrading gracefully where data is unavailable.
+**Checkpoint**: Both user stories functional — hexagon labels (P1, via the adapted existing generic label layer) and province view (P2, newly built), both scoped to population sources only, both degrading gracefully where data is unavailable.
 
 ---
 
 ## Phase 4: Polish & Cross-Cutting Concerns
 
-- [ ] T018 [P] Confirm no regression to the existing exposure-layer panel's country filtering (spec 044 Phase 8) or the manual hex-resolution slider (spec 045) — neither reads or is read by the new `populationViewMode` state.
-- [ ] T019 [P] Confirm removing/re-adding a population dataset (toggle off then on) cleans up correctly regardless of which view mode (`hexagon`/`province`) was last active — no stale layer left on the map.
-- [ ] T020 Update this tasks.md with final live-test findings (T016) and any resolution/threshold values tuned during implementation (T006's zoom-gating choice), matching this session's established convention of recording live-run outcomes directly against the task.
+- [X] T018 [P] Confirmed no regression: `populationViewMode`/`provinceBoundaryCache` are new, dataset-id/country-code-keyed refs not read by `hexResForZoom`/`currentHexRes`/`uiStore.manualHexResolution` (spec 045) or `visibleExposureDatasets`/`hideExposureLayersNotForCountry` (spec 044) — no shared state, no code path touches both.
+- [X] T019 [P] Confirmed by construction: `removeExposureLayerRendering()` (called on every toggle-off) now also removes the `-province-fill`/`-province-line` layers/source if present and deletes the dataset's `populationViewMode` entry entirely — re-toggling the dataset on always starts from the `'hexagon'` default (`populationViewModeFor`'s fallback) regardless of which mode was active when it was turned off. No stale layer possible.
+- [X] T020 Live-test findings (T016) recorded in research.md §4 addendum; T006's "already existed, zoom-gated via `VALUE_LABEL_MINZOOM = 8`" finding recorded against T006 above.
 
 ---
 
@@ -106,3 +106,59 @@ Within Phase 2, T005 → T006 → T007 are sequential (same function/file, build
 Within Phase 3, T010 → T011 → T012 → T013 → T014 are sequential (same state/rendering path);
 T015 (i18n) and T016 (live test) can run in parallel with each other once T012 exists.
 ```
+
+---
+
+## Post-implementation extension: district-level (ADM2) view
+
+Requested directly after initial delivery, based on live user feedback that
+province (ADM1, il) boundaries read as "too coarse" — user explicitly asked
+for a finer level (ilçe/district) for all three served countries (Turkey,
+Madagascar, Malaysia), confirmed via clarifying questions to mean ADM2 only
+(not also ADM3/village).
+
+- Sourced real ADM2 boundary data from [geoBoundaries](https://www.geoboundaries.org)
+  (same source/convention as the existing ADM1 files — see
+  `src/data/boundaries/README.md`): `tr-districts.json` (973 districts),
+  `mg-districts.json` (119 districts), `my-districts.json` (159 districts).
+- Generalized `src/data/boundaries/index.js`'s `loadRegionBoundaries()` (and
+  `getRegionNames`/`findRegionGeometry`) with a `level` param (`'province'`
+  default | `'district'`) — existing call sites (GeocodingSearch.vue,
+  disaster.js, AdminView.vue) are unaffected, still default to province.
+  The admin-uploadable `country_boundaries` DB table remains province-only
+  (no district-upload feature exists) — district level is bundled-only.
+- Generalized `MapView.vue`'s province-view machinery (T010-T014) into a
+  level-agnostic `enableRegionView(dataset, level)`/`disableRegionView()`
+  pair driving a three-way toggle (Hexagons / Provinces / Districts) instead
+  of two — same aggregation function (`aggregatePopulationByProvince`,
+  already generic despite its name), same worker, same choropleth/label/
+  popup rendering, just parameterized by `level`.
+- **Found and fixed a second `DataCloneError`, worse than T012's first one**:
+  `regionBoundaryCache` held both province and district cache entries in one
+  nested `ref()`. Sequential `ensureRegionBoundaryChecked()` calls (province
+  then district, back-to-back for the same country) each rebuild the cached
+  object via `{...prev, [level]: ...}` — since `prev` is read through a
+  reactive Proxy's `get` trap, the *other*, untouched level's value gets
+  read-and-rewrapped as a nested Proxy and then genuinely stored that way
+  (not just wrapped-on-read) in the object handed to the next `ref` write.
+  T012's `toRaw()` fix only strips one outer layer, not this baked-in nested
+  Proxy, so it broke again as soon as both levels were populated for the
+  same country (confirmed live: worked once with only one level cached,
+  then `DataCloneError` on the second). Fixed properly this time by
+  switching `regionBoundaryCache` from `ref()` to `shallowRef()` — since
+  it's only ever reassigned wholesale (never mutated at a nested path), a
+  shallow ref gives the same reactivity trigger for the template without
+  ever wrapping nested data, so nothing posted to the worker is a Proxy.
+  `toRaw()` is no longer needed anywhere in this file.
+- Live-verified in a real browser (test account) against all three
+  countries: Turkey (Ankara-area districts — Polatlı 87.7K, Haymana 16.7K,
+  etc.), Madagascar (Besalampy 95.8K, Toliary-I 462.2K, etc.), and Malaysia
+  (Kuantan 466.2K, Sri Aman 67.1K, etc.) — real district names, populations,
+  and choropleth shading rendering correctly, worker round-trip in the
+  hundreds of ms to ~3s range (no UI freeze), no console errors.
+- i18n: renamed the `exposureLayers.provinceView` key namespace to
+  `exposureLayers.regionView` (added `districtOption`) across all 7 locales
+  — safe rename, this feature was still unreleased at the time.
+- `npx vitest run` (227/227), `npm run build`, and `npx eslint` (same single
+  pre-existing unrelated error as before) all re-confirmed green after this
+  extension.

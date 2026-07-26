@@ -31,6 +31,7 @@ async function initGlobe() {
   globeInstance = Globe()
     .globeImageUrl(getTextureUrl())
     .bumpImageUrl('/textures/earth-topology.png')
+    .backgroundColor('rgba(0,0,0,0)')
     .showAtmosphere(true)
     .atmosphereColor('#3a7bd5')
     .atmosphereAltitude(0.25)

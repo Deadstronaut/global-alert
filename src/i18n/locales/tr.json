@@ -757,6 +757,13 @@
       "frequency": {
         "monthly": "Aylık güncellenir"
       }
+    },
+    "regionView": {
+      "hexagonOption": "Altıgenler",
+      "provinceOption": "İller",
+      "districtOption": "İlçeler",
+      "unavailableTooltip": "Bu ülke için bu seviyede sınır verisi mevcut değil",
+      "populationLabel": "Nüfus"
     }
   },
   "admin": {

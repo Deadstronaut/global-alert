@@ -78,6 +78,33 @@ this would be exactly the premature-complexity Constitution Principle VIII warns
 testing during implementation shows otherwise, that testing (mirroring this session's Node-based
 live test for spec 045's hex-resolution range) will be the deciding evidence, not a guess.
 
+**Addendum (live-tested, T016)**: The naive nested loop (no bbox pre-check) was run in Node
+against real data — `polygonToCells()` over Turkey's actual country boundary (the same
+topojson/algorithm `hexWorker.js` uses, `resolution 7`, matching spec 045's live-tested ~140K-cell
+maximum exactly: **139,884 cells**) against the real, bundled `tr-provinces.json` (81 provinces,
+55,865 total ring vertices, ~690/province average, up to 3,453 in one ring). Result: **~77
+seconds** — nowhere near an interactive budget. The naive-loop assumption above ("expected to
+complete well within an interactive budget") was wrong in practice: real GADM-derived province
+rings are dense enough (not the "dozens of polygons" simple case implied) that an O(cells ×
+provinces × ring-length) scan is too slow.
+
+**Resolution**: added a precomputed axis-aligned bounding box per province (`boundingBoxOf()` in
+`provincePopulationAggregation.js`), checked before the real ray-cast — an O(1) reject for the
+large majority of centroid/province pairs that don't overlap at all, still no R-tree/spatial-index
+library. Re-ran the identical live test after adding this: **~370ms-1.7s** (varies slightly run to
+run) for the same 139,884 cells × 81 provinces — comfortably interactive, in the same ballpark as
+spec 045's own ~1.8s hex-generation time for this cell count. This is a bounding-box pre-filter,
+not the R-tree this section already reasoned against — the "why not a spatial index" conclusion
+still holds; a full index was not needed once the trivial O(1) reject was added.
+
+**Correctness note**: the first live-test attempt used a manually lat/lng-swapped ring while also
+passing h3-js's `isGeoJson` truthy flag (double-negating the coordinate order) — this silently
+produced a geographically-rotated cell set (some provinces, e.g. Adana, landed at exactly zero
+aggregated population) without erroring. Fixed by passing the raw GeoJSON-order ring directly
+(matching `hexWorker.js`'s own usage exactly, no manual swap) — confirmed by the cell count landing
+on the exact figure (139,884) already documented in spec 045, and by a follow-up check that all 81
+provinces receive a non-zero share of a uniform-value cell set.
+
 ## §5. Province shading color: reuse the existing population ramp
 
 **Decision**: Province view reuses `populationFillExpression()`/`POPULATION_RAMP` from

@@ -757,6 +757,13 @@
       "frequency": {
         "monthly": "每月更新"
       }
+    },
+    "regionView": {
+      "hexagonOption": "六边形",
+      "provinceOption": "省份",
+      "districtOption": "区县",
+      "unavailableTooltip": "该国家在此级别暂无边界数据",
+      "populationLabel": "人口"
     }
   },
   "admin": {

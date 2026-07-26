@@ -26,7 +26,7 @@ describe('colorForDataset', () => {
 
   it('gives rivers, basins, and roads their fixed real-world-convention colors', () => {
     expect(colorForDataset({ id: 'x', source_name: 'hydrorivers' })).toBe('#08306b')
-    expect(colorForDataset({ id: 'x', source_name: 'hydrobasins' })).toBe('#a8d8f0')
+    expect(colorForDataset({ id: 'x', source_name: 'hydrobasins' })).toBe('#4a90a4')
     expect(colorForDataset({ id: 'x', source_name: 'osm' })).toBe('#6c757d')
   })
 

@@ -3,6 +3,7 @@ import { watch, defineAsyncComponent } from 'vue'
 import { useRoute } from 'vue-router'
 const GlobeView = defineAsyncComponent(() => import('@/components/GlobeView.vue'))
 const MapView = defineAsyncComponent(() => import('@/components/MapView.vue'))
+import StarfieldBackground from '@/components/StarfieldBackground.vue'
 import SidebarPanel from '@/components/SidebarPanel.vue'
 import AlertPanel from '@/components/AlertPanel.vue'
 import SettingsPanel from '@/components/SettingsPanel.vue'
@@ -79,6 +80,12 @@ watch(
 
 <template>
   <div class="home-view">
+    <!-- Starry sky behind the 3D globe -->
+    <StarfieldBackground
+      class="starfield-container"
+      v-if="uiStore.viewMode === 'globe' || uiStore.transitionState === 'transitioning'"
+    />
+
     <!-- 3D Globe -->
     <div class="globe-container" :class="{ 'transitioning-out': uiStore.viewMode === 'map' }">
       <GlobeView
@@ -128,6 +135,12 @@ watch(
   width: 100%;
   height: 100%;
   position: relative;
+}
+
+.starfield-container {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
 }
 
 .globe-container {

@@ -8,22 +8,16 @@ const auth = useAuthStore()
 // their own country (enforced by RLS regardless — this just keeps the form honest).
 const scopeLocked = computed(() => !auth.isSuperAdmin)
 
-// spec 010, widened by tier1-source-unification migration
-// (20260709000000_data_sources_tier1_source_type.sql): intersected with the
-// hazard types data_sources.hazard_type's own CHECK constraint permits —
-// 'multi_hazard' is only used by built-in multi-hazard adapters (GDACS) and
-// isn't offered here since it's not selectable for admin-created sources.
-// 'population' added by feature 038 (population exposure data sources) — not a
-// disaster hazard, but data_sources.hazard_type is documented as a
-// "primary/informational label" (see the tier1-source-unification migration's own
-// comment) and this is the existing extension mechanism for non-hazard source
-// categories. hazard_types.category = 'exposure' for this row lets other
-// hazard-specific UI (threshold editor, CAP hazard picker) filter it out without
-// removing it here.
-const SOURCE_SUPPORTED_HAZARDS = ['earthquake', 'wildfire', 'flood', 'drought', 'food_security', 'tsunami', 'epidemic', 'population', 'roads']
+// hazard_types.supports_custom_source (20260727000000 migration) replaces the
+// old hardcoded SOURCE_SUPPORTED_HAZARDS allow-list — a newly admin-created
+// hazard type is sourceable here automatically, no code change needed.
+// System-cron-managed exposure datasets and the synthetic 'multi_hazard'
+// aggregator label default to false at the DB level (same business rule the
+// old hardcoded list encoded). Using the raw `hazardTypes` ref rather than
+// `activeHazardTypes` since the latter is trimmed to {code, display_name}.
 const hazardTypesStore = useHazardTypesStore()
 const HAZARD_TYPES = computed(() =>
-  hazardTypesStore.activeHazardTypes.filter((h) => SOURCE_SUPPORTED_HAZARDS.includes(h.code)),
+  hazardTypesStore.hazardTypes.filter((h) => h.is_active && h.supports_custom_source),
 )
 // Only "id"/"lat"/"lng"/"time" are required by validatePayload(); the rest are optional extras.
 // lat/lng are excluded for 'geojson' format below (mapping-section template) —

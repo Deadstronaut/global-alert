@@ -581,6 +581,8 @@
     "code": "Code",
     "displayName": "Display Name",
     "displayNamePlaceholder": "e.g. Landslide",
+    "icon": "Icon",
+    "iconPlaceholder": "e.g. ⛏️ (emoji)",
     "category": "Category",
     "description": "Description",
     "descriptionPlaceholder": "Brief description of this hazard type",

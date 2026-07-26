@@ -268,6 +268,12 @@ export const useDisasterStore = defineStore('disaster', () => {
     const useDateRange = startDate.value || endDate.value;
 
     for (const [key, store] of Object.entries(storeMap.value)) {
+      // 'disaster' is the generic multi-hazard-type bucket (landslide, etc. —
+      // see 20260727000000 migration) — a single count under this one key
+      // would conflate unrelated hazard types and has no corresponding UI
+      // slot (SidebarPanel's disasterTypes list has no 'disaster' row).
+      // The aggregate total below (counts.total) already includes bucketed
+      // events via allEvents, so nothing is lost by skipping it here.
       if (key === 'disaster') continue;
 
       counts[key] = store.value.filter(e => {

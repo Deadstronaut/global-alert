@@ -32,6 +32,10 @@ onMounted(() => {
   // consumer (6 migrated hazard-type selectors) already has it cached by
   // the time it mounts, instead of each one fetching independently.
   hazardTypesStore.fetchHazardTypes()
+  // Cross-tab visibility for newly created hazard types (20260727000000) —
+  // without this, another admin's already-open session never sees a new
+  // taxonomy row until they manually reload.
+  hazardTypesStore.subscribeToHazardTypeChanges()
   // spec 011: warm the SOP repository once at boot so IncidentsView can
   // show linked procedures immediately on mount.
   sopDocumentsStore.fetchSopDocuments()

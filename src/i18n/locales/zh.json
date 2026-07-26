@@ -626,6 +626,8 @@
       "thresholdsTitle": "严重程度阈值"
     },
     "displayNamePlaceholder": "例如：滑坡",
+    "icon": "图标",
+    "iconPlaceholder": "例如：⛏️（表情符号）",
     "descriptionPlaceholder": "该灾害类型的简要说明",
     "minValuePlaceholder": "例如：6.0"
   },

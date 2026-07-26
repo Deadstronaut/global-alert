@@ -581,6 +581,8 @@
     "code": "Kod",
     "displayName": "Görünen Ad",
     "displayNamePlaceholder": "örn. Heyelan",
+    "icon": "İkon",
+    "iconPlaceholder": "örn. ⛏️ (emoji)",
     "category": "Kategori",
     "description": "Açıklama",
     "descriptionPlaceholder": "Bu afet tipi için kısa açıklama",

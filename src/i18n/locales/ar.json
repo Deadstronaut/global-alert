@@ -626,6 +626,8 @@
       "thresholdsTitle": "عتبات الشدة"
     },
     "displayNamePlaceholder": "مثال: انهيار أرضي",
+    "icon": "الأيقونة",
+    "iconPlaceholder": "مثال: ⛏️ (رمز تعبيري)",
     "descriptionPlaceholder": "وصف موجز لنوع الخطر هذا",
     "minValuePlaceholder": "مثال: 6.0"
   },

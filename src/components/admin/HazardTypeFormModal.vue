@@ -15,6 +15,7 @@ const CATEGORIES = ['meteo', 'hydro', 'geo', 'bio', 'tech']
 
 const code = ref('')
 const displayName = ref('')
+const icon = ref('')
 const category = ref('meteo')
 const description = ref('')
 const parentCode = ref('')
@@ -38,6 +39,7 @@ watch(
   (h) => {
     code.value = h?.code ?? ''
     displayName.value = h?.display_name ?? ''
+    icon.value = h?.icon ?? ''
     category.value = h?.category ?? 'meteo'
     description.value = h?.description ?? ''
     parentCode.value = h?.parent_code ?? ''
@@ -56,6 +58,7 @@ function save() {
   emit('save', {
     ...(props.hazardType ? {} : { code: code.value.trim().toLowerCase() }),
     display_name: displayName.value.trim(),
+    icon: icon.value.trim() || null,
     category: category.value,
     description: description.value.trim() || null,
     parent_code: parentCode.value || null,
@@ -75,6 +78,9 @@ function save() {
         </label>
         <label class="form-field span-2"><span>{{ t('hazardTaxonomy.displayName') }} *</span>
           <input v-model="displayName" :placeholder="t('hazardTaxonomy.displayNamePlaceholder')" />
+        </label>
+        <label class="form-field"><span>{{ t('hazardTaxonomy.icon') }}</span>
+          <input v-model="icon" :placeholder="t('hazardTaxonomy.iconPlaceholder')" maxlength="8" />
         </label>
         <label class="form-field"><span>{{ t('hazardTaxonomy.category') }}</span>
           <select v-model="category">

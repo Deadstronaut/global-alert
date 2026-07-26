@@ -1,7 +1,7 @@
 # NEW GAME PLAN — Server/Cron Mimarisi ve Kaynak Envanteri
 
-**Tarih:** 2026-07-22 → 2026-07-23 (iki günlük oturum, sürekli güncellendi)
-**Durum:** `aggregator` + `netcdf-service` + **10 zamanlanmış `raster-importer` konteyneri** canlıda, sürekli açık, sağlıklı. Supabase Edge Function deploy'u platform genelinde kırık (bkz. 4.7) — bu yüzden bugün eklenen/taşınan HER şey Docker konteynerlerinde çalışıyor, Edge Function'a bağımlı değil.
+**Tarih:** 2026-07-22 → 2026-07-24 (üç günlük oturum, sürekli güncellendi)
+**Durum:** `aggregator` + `netcdf-service` + **10 zamanlanmış `raster-importer` konteyneri** canlıda, sürekli açık, sağlıklı. Supabase Edge Function deploy'u genel olarak hâlâ kırık (bkz. 4.7), ama 2026-07-24'te `import-gdo-fapar`/`import-gdo-soil-moisture` için nokta-atışı bir düzeltme yapıldı (aşağıya bakın) — bu ikisi artık yeniden deploy edilebiliyor. Üretimdeki gerçek veri yolu değişmedi: hâlâ Docker `gdo-anomaly-importer-scheduled` konteyneri.
 
 Bu doküman, iki günlük mimari inceleme oturumunda alınan tüm kararları ve tüm veri kaynaklarının GÜNCEL, GERÇEK durumunu tek bir yerde topluyor. `docs/Veri_Kaynaklari_Envanteri.docx` (genel kaynak envanteri) ile birlikte okunmalı.
 
@@ -96,7 +96,8 @@ graph TB
 | `gdo-anomaly-importer-scheduled` | aylık (1'i 05:00 UTC) | `exposure_datasets` (`gdo_soil_moisture_anomaly`, `gdo_fapar_anomaly`) | GDO WCS (GeoTIFF, NetCDF gerekmiyor) |
 
 **Hâlâ Edge Function + `pg_cron`'da kalan (kod çalışıyor, deploy edilebiliyor):** Kontur Population, `fetch-food-security` (WFP HungerMap).
-**Edge Function'da ama deploy edilemeyen (kod hazır, platform sorunu — bkz. 4.7):** `import-gdo-soil-moisture`, `import-gdo-fapar`, `import-ghsl-population`, `import-worldpop` — hepsinin gerçek işi artık yukarıdaki konteynerler yapıyor, bu Edge Function'lar fiilen yedek/pasif.
+**Edge Function'da, artık deploy EDİLEBİLİYOR ama fiilen kullanılmıyor (2026-07-24 `node:vm` düzeltmesi, bkz. 4.7):** `import-gdo-soil-moisture`, `import-gdo-fapar` — gerçek/canonical veri yolu hâlâ `gdo-anomaly-importer-scheduled` konteyneri, bu ikisi yedek.
+**Edge Function'da ve hâlâ deploy edilemeyen (kod hazır, aynı platform sorunu, henüz yamalanmadı — bkz. 4.7):** `import-ghsl-population`, `import-worldpop` — gerçek işlerini zaten `ghsl-importer-scheduled`/`worldpop-importer-scheduled` konteynerleri yapıyor, pratik bir etkisi yok.
 **Kalıcı bloke (kod değil, veri kalitesi sorunu):** `import-gdo-spi` (GDO SPI — API 0-4 arası tam sayı döndürüyor, gerçek SPI değil; kod artık bunu reddediyor).
 **Devre dışı bırakılan öksüz kayıtlar:** GDACS'ın 4 eski `data_sources` satırı (drought/earthquake/flood/wildfire) — gerçek GDACS takibi artık `multi_hazard` satırlarında.
 
@@ -308,6 +309,8 @@ Error: failed to load 'node:vm': Unknown built-in "node:" module: vm
 - **Kısmi temizlik yapıldı (2026-07-22, Gemini MCP ile):** Bu üç fonksiyona bağlı, artık boşa dönen `pg_cron` job'ları (`import-ghsl-population-monthly`, `import-gdo-soil-moisture-monthly`, `import-gdo-fapar-monthly`) `20260722190000_unschedule_geotiff_edge_function_crons.sql` migration'ıyla durduruldu — canlıya push edildi, doğrulandı. Trigger fonksiyonları ve Edge Function kaynak kodu SİLİNMEDİ (bu repo'nun "yorum satırına al, silme" kuralına uygun) — platform sorunu düzelince tek satırlık `cron.schedule(...)` ile geri açılabilir.
 - GDO SPI'nin kendi `import-gdo-spi-monthly` cron job'ı BİLEREK dokunulmadı — o hâlâ eski (çalışan) bundle'la deploy'lu, aktif kalması gerekiyor.
 
+**Kısmi düzeltme — ✅ 2026-07-24:** `import-gdo-fapar`/`import-gdo-soil-moisture`'ın kendi `deno.json` import map'lerine `node:vm`'i inert bir stub'a alias'layan bir giriş eklendi (`workerPolyfill.ts` zaten global `Worker`'ı stub'lıyor, yani worker path zaten hiç çalışmayan ölü kod — bundler sadece statik import'u çözemediği için hata veriyordu, gerçek bir runtime ihtiyacı yoktu). Bu iki fonksiyon artık yeniden deploy edilebiliyor. **Kapsam bilerek dar tutuldu:** sadece bu gece prod'da gerçekten kırık olan ikisi (hiç başarıyla deploy edilmemişlerdi) yamalandı — GHSL/WorldPop/Kontur/HydroBASINS/HydroRIVERS/OSM Buildings/Roads'un Edge Function kopyaları aynı `node:vm` hatasına aynı şekilde çarpacaktır (redeploy denenirse), ama bunlar zaten `raster-importer/` konteynerlerine taşındığı için dokunulmadı — pratik bir etkileri yok. **Önemli:** bu düzeltme sadece deploy edilebilirliği geri getirdi, mimari kararı DEĞİŞTİRMEDİ — GDO Soil Moisture/fAPAR'ın gerçek/canonical veri yolu hâlâ `gdo-anomaly-importer-scheduled` Docker konteyneri (§0, §2.3); Edge Function kopyaları yedek/pasif olarak kalıyor.
+
 ### 4.6 Frontend'in artık boş dönen Edge Function çağrıları — ✅ TAMAMLANDI (2026-07-22)
 İnceleme sonucu asıl bulgu plandaki varsayımdan biraz farklı çıktı: `fetch-earthquakes` ve `fetch-droughts` artık **tamamen** no-op (tüm kaynakları yorum satırına alınmış, GDACS dahil) — ama bunları çağıran `src/services/api/disasterService.js` zaten repo'nun hiçbir yerinden import edilmiyordu (canlı veri artık `supabaseService.js`'teki realtime `postgres_changes` aboneliğiyle geliyor). `fetch-wildfires` ve `fetch-floods` hâlâ kısmen canlı (NASA FIRMS / GloFAS-ReliefWeb denemeleri), o yüzden onlara dokunulmadı.
 
@@ -371,3 +374,63 @@ Her kesim **kod seviyesinde, yorum satırına alarak** yapıldı — `data_sourc
 3. Redeploy et
 
 Server'ı durdurmak için: `docker compose stop aggregator` — bu, o kaynakların TAMAMEN durması anlamına gelir (Edge Function tarafı artık yedek değil, bilinçli olarak kapatıldı).
+
+---
+
+## 6. Dış Envanter Listesi Karşılaştırması (2026-07-25)
+
+Kullanıcının paylaştığı harici "Data Sources Inventory" tablosu (Data/Source/Usability/Module/Connection Link sütunlu) ile bu repodaki GERÇEK durum karşılaştırması — koddan doğrulandı, envanterin kendisinden değil:
+
+| Envanterdeki Ad | Bu Repodaki Karşılığı | Durum |
+|---|---|---|
+| CHIRPS (yağış katmanı) | — | ❌ Hiç entegre edilmedi, kod yok |
+| SPI — Drought.gov (CMORPH) | GDO SPI (GPCC), farklı kaynak/aynı amaç | ❌ Bloke — bizim entegrasyonumuz Drought.gov'u değil GDO WCS'i kullanıyor; o da veri kalitesi sorunu yüzünden bloke (§2.3) |
+| EU GDO Soil Moisture | GDO Soil Moisture Anomaly (`gdoAnomalyFetch.ts`, `coverageID=smand`) | ✅ Canlı — `gdo-anomaly-importer-scheduled` (Docker, aylık) |
+| FAPAR (CLMS) | GDO fAPAR Anomaly VIIRS (`coverageID=fpanv`) | ✅ Canlı — aynı konteyner |
+| GHSL | GHSL (`ghslFetch.ts`) | ✅ Canlı — `ghsl-importer-scheduled` (Docker, aylık) |
+| Kontur Population | Kontur Population | ✅ Canlı — Edge Function + `pg_cron` (tek Edge-Function-canlı katman kaynağı) |
+| WorldPop | WorldPop | ✅ Canlı — `worldpop-importer-scheduled` (Docker, aylık) |
+| Mwta (Meta yüksek çözünürlük nüfus) | Meta/HDX Population | ✅ Canlı ama SADECE elle (`meta-downloader` + `meta-ghsl-importer`) — HDX dataset'i 2024'ten beri donmuş, zamanlama kasıtlı yok |
+| INFORM Index | — | ❌ API'si yok, statik/yıllık veri — bilinçli olarak kod kapsamı dışı bırakıldı (§2.4) |
+| Geoboundaries | Yalnızca `country_boundaries` tablosunda TR için elle seed edilmiş sınır | 🟡 Kısmi — genel/otomatik bir Geoboundaries API entegrasyonu yok |
+| GDACS (cyclone) | GDACS REST+RSS, server `aggregator`'da | ✅ Canlı ama cyclone'a özel ayrım yok — GDACS'ın tüm hazard tipleri (earthquake/flood/wildfire/drought) tek `multi_hazard` altında toplanıyor |
+| JRC GFM | — | ❌ Bilinçli olarak atlandı — GloFAS ile kapsam örtüşmesi (§2.4) |
+| Building — OpenBuildingMap | — (OSM/Overpass Buildings farklı bir kaynak) | 🟡 Kısmi — OpenBuildingMap'in kendisi entegre değil, amaç örtüşen bir OSM Overpass katmanı var (aşağıya bakın) |
+| Building OSM | OSM/Overpass Buildings (kritik tesisler) | 🟡 Kısmi canlı — `osm-buildings-importer-scheduled` (Docker, haftalık); Overpass'ın kendi rate-limit'i yüzünden şu an sadece 1/3 ülke (MY) tam, TR/MG haftalık döngüyle tamamlanacak |
+| Roads — Google Maps | — | ❌ Hiç entegre edilmedi, Google Maps API hiç kullanılmıyor |
+| Roads OSM | OSM/Overpass Roads | 🟡 Kısmi canlı — `osm-roads-importer-scheduled` (Docker, haftalık); şu an sadece 1/3 ülke (TR) tam, aynı Overpass rate-limit sebebiyle |
+
+**Özet:** Envanterdeki 16 satırdan **8'i canlı/kısmi canlı** (GDO Soil Moisture, FAPAR, GHSL, Kontur, WorldPop, Meta/HDX, GDACS, OSM Buildings/Roads), **4'ü bilinçli olarak hiç entegre edilmedi** (CHIRPS, INFORM, JRC GFM, Google Maps Roads), **2'si kısmi/dolaylı karşılığı var ama envanterdeki spesifik kaynak değil** (SPI→GDO WCS değil Drought.gov; Geoboundaries→sadece TR elle seed), **1'i** (Building/OpenBuildingMap) doğrudan değil ama OSM Overpass eşdeğeri üzerinden kapsanıyor.
+
+---
+
+## 7. Admin Panel — Kaynak Yönetimi, Denetim (Audit) ve Silme Güvenliği (2026-07-25 → 2026-07-26)
+
+Bu bölüm önceki bölümlerden farklı bir katman: veri kaynağı entegrasyonu değil, **admin panelin kendi güvenlik/denetim/UX-altyapısı** üzerine yapılan işi kapsıyor. Sadece fonksiyonel/teknik değişiklikler listelendi.
+
+### 7.1 `automation_kind` — kaynakların otomasyon modeline göre sınıflandırılması — ✅ TAMAMLANDI
+- `data_sources` tablosuna yeni `automation_kind` sütunu: `continuous` (aggregator'da sürekli açık, örn. EMSC/USGS) / `scheduled` (cron ile periyodik, örn. GHSL/GloFAS) / `manual` (elle tetiklenen, örn. Meta/HDX importer).
+- `sourceDisplayState.js` (yeni, `src/utils/`) — `computeDisplayState(source, now)` tek bir yerden kaynağın EKRANDA gösterilecek durumunu hesaplıyor (healthy/degraded/down/offline/overdue/pending/disabled), `automation_kind`'a göre farklı gecikme toleransı uyguluyor (continuous için "offline" = kırmızı/acil, scheduled/manual için "overdue" = amber/beklenen). Hem `SourceHealthCard.vue`'nin rozeti hem `sourceScope.js`'nin "Duruma Göre" sıralaması AYNI fonksiyonu kullanıyor — daha önce sıralama ham DB `health_state`'i kullanıyordu ve rozette görünenle tutarsızdı, bu düzeltildi.
+- "Kaynak Ekle" formuna (`SourceFormModal.vue`) kullanıcı dostu bir frekans seçici eklendi (`FREQUENCY_OPTIONS`), seçilen değer hem `automation_kind` hem `poll_interval_seconds`'a yazılıyor.
+
+### 7.2 "Şimdi Çalıştır" — manuel kaynaklar için elle tetikleme — ✅ TAMAMLANDI
+- Mimari kural korunarak (`server/src/index.js` başlığı: "Frontend ile DOĞRUDAN iletişim YOK") frontend aggregator'a asla doğrudan HTTP isteği atmıyor. Bunun yerine `manual_trigger_requested_at` timestamp'i DB'ye yazılıyor, `dynamicSources.js`'in zaten var olan 60 saniyelik tarama döngüsü bunu görüp kaynağı tetikliyor.
+- `SourceHealthCard.vue`'de `canTriggerManually` computed'ı, sadece `automation_kind==='manual'` VE `endpoint_config.field_map.id` olan (yani jenerik/custom kaynak mekanizmasına uygun) kaynaklarda "🔁 Şimdi Çalıştır" butonunu gösteriyor — Docker-importer ailesi (örn. Meta/HDX) bu mekanizmayla hiç yakalanmadığı için buton orada YOK (yanlış vaat vermemek için).
+
+### 7.3 `audit_log.changed_by` hiç doldurulmuyordu — gerçek, önceden fark edilmemiş bug — ✅ DÜZELTİLDİ
+- `audit_log` tablosunun `changed_by UUID REFERENCES auth.users(id)` sütunu, tablonun ilk oluşturulduğu migration'dan (`20260605120000_audit_log.sql`) beri **hiçbir zaman** set edilmiyordu — "bunu kim sildi/değiştirdi" sorusu, sütun DB'de var olmasına rağmen hiç cevaplanamıyordu.
+- Kök neden: `log_table_change()` trigger fonksiyonu `SECURITY DEFINER` ile çalışıyor ama `auth.uid()` çağıran isteğin JWT'sine bakıyor (owner'a değil, session-scoped) — bu satır trigger'ın INSERT/UPDATE/DELETE dallarının hiçbirine hiç yazılmamıştı.
+- Düzeltme: `supabase/migrations/20260726100000_audit_log_changed_by.sql` — üç dalın üçüne de `changed_by: auth.uid()` eklendi. Canlıya `supabase db push` ile uygulandı; hem doğrudan API çağrısıyla hem tarayıcı üzerinden gerçek bir silme işlemiyle `changed_by`'ın artık doğru UUID ile dolduğu doğrulandı.
+- Yan temizlik: teşhis için eklenmiş geçici `debug_whoami()` SQL fonksiyonu `20260726100200_drop_debug_whoami.sql` ile kaldırıldı.
+
+### 7.4 Native `window.confirm()` → `ConfirmDialog.vue` + şifre onaylı silme — ✅ TAMAMLANDI
+- Yeni `src/components/ConfirmDialog.vue` — ortada açılan, uygulama temasıyla tutarlı, yeniden kullanılabilir onay modalı. Props: `requirePassword` (destructive aksiyonlar için şifre alanı gösterir, boşken confirm butonu disabled), `danger` (kırmızı buton stili), caller-supplied `error`/`submitting`.
+- Şifre doğrulaması component'in İÇİNDE değil, çağıran view'da yapılıyor: `supabase.auth.signInWithPassword()` mevcut oturumun e-postasıyla tekrar çağrılıyor (`verifyOwnPassword()` helper'ı, `AdminView.vue`) — başarısızsa dialog kapanmadan hata gösteriliyor, admin şifreyi tekrar deneyebiliyor.
+- Şu an şifre onaylı `ConfirmDialog` uygulanan aksiyonlar: kaynak silme, kaynak devre-dışı/etkinleştirme toggle'ı, kullanıcı yetkisini düşürme (revoke access → `viewer` rolüne indirme), kullanıcı askıya alma (suspend), kişi (contact) anonimleştirme (`ContactsPanel.vue` — GDPR spec 031, zaten geri alınamaz bir işlem).
+- Bu değişiklik hem kullanıcı deneyimini iyileştiriyor (native tarayıcı alert'i yerine tutarlı bir modal) hem de 7.3'teki `changed_by` düzeltmesiyle birleşince, artık her destructive aksiyonun HEM şifreyle doğrulanmış HEM de kim tarafından yapıldığı audit_log'da kayıtlı olduğu bir zincir oluşuyor.
+
+### 7.5 Kaynak kartı buton grid'i — eşit boyut + tooltip + Sil butonuna etiket — ✅ TAMAMLANDI (2026-07-26)
+- Kök neden: `.source-actions` CSS grid'i `grid-auto-rows: 1fr` + butonlarda `height: 100%` kullanıyordu — bu, her SATIRIN kendi içeriğine göre (auto) boyutlanmasına, sonra her butonun KENDİ satırının yüksekliğine göre stretch olmasına yol açıyordu. Bir satırdaki 2 satırlık metin ("Devre Dışı Bırak") ile başka bir satırdaki tek satırlık/ikon-only buton ("🗑") farklı satır yükseklikleri ürettiği için buton boyutları/padding'leri kartlar arası (ve kart içi) tutarsız görünüyordu.
+- Düzeltme: her buton için sabit `height: 40px` (satırdan bağımsız), `grid-auto-rows` kaldırıldı (varsayılan `auto`). Artık her hücre, kaç satır/kaç buton olursa olsun (4 normal, 5 "Şimdi Çalıştır" olduğunda) birebir aynı boyutta — Playwright ile canlı doğrulandı (`getBoundingClientRect().height` tüm butonlarda tam 40).
+- Sil butonu artık sadece `🗑` ikonu değil, `🗑️ Sil` (ikon + etiket) — diğer butonlarla (Düzenle/Geçmiş/Devre Dışı Bırak) tutarlı.
+- Beş butonun (Şimdi Çalıştır, Düzenle, Devre Dışı Bırak/Etkinleştir, Geçmiş, Sil) hepsine `title` attribute'u (native tooltip) eklendi, her biri aksiyonun ne yaptığını açıklıyor.

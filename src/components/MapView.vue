@@ -1691,6 +1691,14 @@ function hazardDisplayNameForMap(code) {
   return hazardTypesStore.hazardTypes.find((h) => h.code === code)?.display_name ?? code
 }
 
+// hazard_types.icon (20260727000000 migration) drives marker icons for any
+// hazard type, including ones added after this file was last deployed — the
+// hardcoded getDisasterIcon() map (DisasterEvent.js) is now only a fallback
+// for the brief window before hazardTypesStore has loaded.
+function hazardIconForMap(code) {
+  return hazardTypesStore.hazardTypes.find((h) => h.code === code)?.icon
+}
+
 // Drill injected event marker layer (spec 037) — mirrors the shelter
 // DOM-Marker+Popup approach (research.md Decision 2, no native clustering
 // needed at this scale). RLS's authenticated_read_active_drill_events policy
@@ -1795,11 +1803,11 @@ function updateMarkers() {
     el.className = `disaster-marker${isPulse ? ' marker-pulse' : ''}`
     el.innerHTML = `
       <div class="marker-dot" style="background:${color};box-shadow:0 0 10px ${color};">
-        <span class="marker-icon">${event.icon || getDisasterIcon(event.type)}</span>
+        <span class="marker-icon">${hazardIconForMap(event.type) || event.icon || getDisasterIcon(event.type)}</span>
       </div>
     `
 
-    const typeText = t(`disasters.${event.type}`) || event.type
+    const typeText = hazardDisplayNameForMap(event.type)
 
     const popup = new maplibregl.Popup({ offset: 12, className: 'modern-popup-container' }).setHTML(
       `

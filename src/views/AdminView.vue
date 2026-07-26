@@ -6,12 +6,14 @@ import { useAuthStore } from '@/stores/auth.js'
 import { useSourcesStore } from '@/stores/sources.js'
 import { supabase } from '@/services/api/config.js'
 import SourceHealthCard from '@/components/admin/SourceHealthCard.vue'
+import ConfirmDialog from '@/components/ConfirmDialog.vue'
 import SourceFormModal from '@/components/admin/SourceFormModal.vue'
 import ManualEntryForm from '@/components/admin/ManualEntryForm.vue'
 import FileImportForm from '@/components/admin/FileImportForm.vue'
 import BoundaryUploadForm from '@/components/admin/BoundaryUploadForm.vue'
 import { getRegionNames } from '@/data/boundaries/index.js'
 import { groupSourcesByScope, sortSources, SOURCE_SORT_MODES } from '@/utils/sourceScope.js'
+import { computeDisplayState } from '@/utils/sourceDisplayState.js'
 import { rowsToCsv, rowsToJson, triggerDownload } from '@/lib/auditExport.js'
 import { buildComplianceChecklist, TEMPLATE_VERSION } from '@/services/complianceChecklist.js'
 import ExposureDatasetManager from '@/components/impact/ExposureDatasetManager.vue'
@@ -198,23 +200,49 @@ async function saveUser() {
   await loadUsers()
 }
 
-async function revokeAccess(userId) {
-  const { error } = await supabase.from('profiles').update({ role: 'viewer' }).eq('id', userId)
-  if (error) {
-    usersError.value = error.message
-    return
+// Both revoke and suspend previously ran on a single click with NO
+// confirmation at all — for account-security actions on someone ELSE's
+// account, that's worse than the native window.confirm() this same
+// 2026-07-25 session already replaced for kaynak delete. Same ConfirmDialog
+// + own-password re-verification pattern as confirmDeleteSource below.
+const pendingRevokeUser = ref(null)
+const pendingSuspendUser = ref(null)
+
+async function verifyOwnPassword(password) {
+  const { error } = await supabase.auth.signInWithPassword({ email: auth.session.email, password })
+  return error ? (error.message || 'Şifre yanlış. Tekrar deneyin.') : null
+}
+
+async function confirmRevokeAccess(password) {
+  confirmDialogError.value = null
+  confirmDialogSubmitting.value = true
+  try {
+    const authErr = await verifyOwnPassword(password)
+    if (authErr) { confirmDialogError.value = 'Şifre yanlış. Tekrar deneyin.'; return }
+    const { error } = await supabase.from('profiles').update({ role: 'viewer' }).eq('id', pendingRevokeUser.value.id)
+    if (error) { usersError.value = error.message; return }
+    pendingRevokeUser.value = null
+    await loadUsers()
+  } finally {
+    confirmDialogSubmitting.value = false
   }
-  await loadUsers()
 }
 
 // Real access suspension (spec 004 gap 3) — distinct from revokeAccess()'s role
 // downgrade above: this blocks login entirely rather than just lowering permissions.
-async function suspendUser(userId) {
+async function confirmSuspendUser(password) {
+  confirmDialogError.value = null
+  confirmDialogSubmitting.value = true
   try {
-    await auth.suspendUser(userId)
+    const authErr = await verifyOwnPassword(password)
+    if (authErr) { confirmDialogError.value = 'Şifre yanlış. Tekrar deneyin.'; return }
+    await auth.suspendUser(pendingSuspendUser.value.id)
+    pendingSuspendUser.value = null
     await loadUsers()
   } catch (err) {
-    usersError.value = err.message
+    confirmDialogError.value = err.message
+  } finally {
+    confirmDialogSubmitting.value = false
   }
 }
 
@@ -606,6 +634,41 @@ let sourcesRefreshTimer = null
 const sourceSortMode = ref('hazard')
 const groupedSources = computed(() => groupSourcesByScope(sortSources(sourcesStore.sources, sourceSortMode.value)))
 
+// "Genel Sağlık Raporu" (2026-07-25 request) — deliberately READ-ONLY and
+// purely client-side over data already loaded into sourcesStore. Discussed
+// with the user whether this should also auto-FIX problems (restart a
+// Docker container, redeploy an Edge Function, etc.) — decided against it:
+// this app has no browser-reachable path to Docker or the Supabase CLI at
+// all (same "frontend never talks to the aggregator directly" boundary
+// this admin panel already respects elsewhere, see triggerSourceNow above),
+// and auto-remediating a live disaster-alert system's data sources without
+// a human looking at what actually broke is a real safety risk, not just
+// an engineering shortcut. This reports; a human still decides what to do.
+const STATE_LABELS = {
+  healthy: 'Sağlıklı', degraded: 'Bozulmuş', down: 'Çalışmıyor', disabled: 'Devre Dışı',
+  offline: 'Çevrimdışı', overdue: 'Gecikmiş', pending: 'Henüz Çalıştırılmadı',
+}
+const healthReport = ref(null)
+
+function runHealthDiagnostic() {
+  const now = Date.now()
+  const counts = {}
+  const problems = []
+  for (const s of sourcesStore.sources) {
+    const state = computeDisplayState(s, now)
+    counts[state] = (counts[state] ?? 0) + 1
+    if (state === 'down' || state === 'degraded' || state === 'offline') {
+      problems.push({ name: s.name, hazard_type: s.hazard_type, state, last_success_at: s.last_success_at, consecutive_failures: s.consecutive_failures })
+    }
+  }
+  healthReport.value = {
+    ranAt: new Date().toISOString(),
+    total: sourcesStore.sources.length,
+    counts,
+    problems,
+  }
+}
+
 // A country_admin may only manage (edit/toggle/delete) sources scoped to their own country —
 // enforced by RLS (20260706_data_sources_country_scope.sql), mirrored here so the UI doesn't
 // offer actions that would just be rejected by the database.
@@ -635,6 +698,12 @@ async function saveSource(payload) {
 function editSource(source) {
   editingSource.value = source
   showSourceForm.value = true
+  // The form renders right after .tab-actions, near the top of the tab —
+  // invisible without scrolling if the admin clicked "Düzenle" on a card
+  // further down the grid. Without this, clicking Düzenle silently opened
+  // the form off-screen with no visible feedback (2026-07-25 feedback:
+  // "yukarıdaki yer edit oluyor ama anlaşılmıyor").
+  document.querySelector('.admin-page')?.scrollTo({ top: 0, behavior: 'smooth' })
 }
 
 // "Elle güncelleyeceğim" kaynakları için — aggregator'a doğrudan bir istek
@@ -646,20 +715,54 @@ async function triggerSourceNow(source) {
   await sourcesStore.updateSource(source.id, { manual_trigger_requested_at: new Date().toISOString() })
 }
 
-async function toggleSourceActive(source) {
-  const action = source.is_active ? 'devre dışı bırakmak' : 'yeniden etkinleştirmek'
-  if (!confirm(`"${source.name}" kaynağını ${action} istediğinize emin misiniz?`)) return
-  await sourcesStore.setActive(source.id, !source.is_active)
+// Native window.confirm() replaced with the in-app ConfirmDialog
+// (2026-07-25 request: "hep yukarıdan HTML alarm ile çıkıyor" — the browser's
+// native top-of-page dialog isn't part of this app's UI at all). Deletion
+// additionally re-verifies the acting admin's own password before the
+// action runs, not just a click-through confirmation.
+const pendingToggleSource = ref(null)
+const pendingDeleteSource = ref(null)
+const confirmDialogError = ref(null)
+const confirmDialogSubmitting = ref(false)
+
+function toggleSourceActive(source) {
+  pendingToggleSource.value = source
+}
+async function confirmToggleSource() {
+  confirmDialogSubmitting.value = true
+  try {
+    await sourcesStore.setActive(pendingToggleSource.value.id, !pendingToggleSource.value.is_active)
+    pendingToggleSource.value = null
+  } finally {
+    confirmDialogSubmitting.value = false
+  }
 }
 
-async function deleteSourceConfirm(source) {
-  if (
-    !confirm(
-      `"${source.name}" kaynağını kalıcı olarak silmek istediğinize emin misiniz? Daha önce alınan veriler saklanmaya devam edecek, sadece bu kaynaktan yeni veri toplanması durur.`,
-    )
-  )
-    return
-  await sourcesStore.deleteSource(source.id)
+function deleteSourceConfirm(source) {
+  confirmDialogError.value = null
+  pendingDeleteSource.value = source
+}
+async function confirmDeleteSource(password) {
+  confirmDialogError.value = null
+  confirmDialogSubmitting.value = true
+  try {
+    // Re-verify the CURRENT admin's own password before a destructive
+    // delete — verifyOwnPassword calls signInWithPassword against the
+    // already-logged-in session's own email, which just re-validates
+    // credentials (same call login() uses), it doesn't change whose
+    // account is signed in.
+    const authErr = await verifyOwnPassword(password)
+    if (authErr) {
+      confirmDialogError.value = 'Şifre yanlış. Tekrar deneyin.'
+      return
+    }
+    await sourcesStore.deleteSource(pendingDeleteSource.value.id)
+    pendingDeleteSource.value = null
+  } catch (err) {
+    confirmDialogError.value = err.message ?? String(err)
+  } finally {
+    confirmDialogSubmitting.value = false
+  }
 }
 
 async function viewAudit(source) {
@@ -1277,7 +1380,7 @@ onUnmounted(() => {
                   <button
                     v-if="canAdmin && u.role !== 'viewer'"
                     class="btn-revoke"
-                    @click="revokeAccess(u.id)"
+                    @click="pendingRevokeUser = u"
                     title="Erişimi kısıtla (rolü viewer'a düşür)"
                   >
                     🔒
@@ -1285,7 +1388,7 @@ onUnmounted(() => {
                   <button
                     v-if="canAdmin && u.id !== auth.session?.id && u.is_active !== false"
                     class="btn-suspend"
-                    @click="suspendUser(u.id)"
+                    @click="pendingSuspendUser = u"
                     title="Hesabı askıya al (girişi tamamen engeller)"
                   >
                     ⛔
@@ -1558,15 +1661,57 @@ onUnmounted(() => {
 
     <!-- ── Data Sources tab ──────────────────────────────────────────────── -->
     <div v-if="tab === 'sources'" class="tab-content">
-      <div class="tab-actions">
-        <button
-          v-if="canAdmin"
-          class="btn-new"
-          @click="toggleSourceForm"
-        >
-          {{ showSourceForm && !editingSource ? '✕ Kapat' : '+ Kaynak Ekle' }}
-        </button>
+      <div class="tab-actions sources-tab-actions">
+        <label class="sources-sort-control">
+          <span>Sırala:</span>
+          <select v-model="sourceSortMode">
+            <option v-for="m in SOURCE_SORT_MODES" :key="m.value" :value="m.value">{{ m.label }}</option>
+          </select>
+        </label>
+        <div class="sources-tab-actions-right">
+          <button class="btn-new btn-diagnostic" @click="runHealthDiagnostic">
+            🩺 Genel Sağlık Raporu
+          </button>
+          <button
+            v-if="canAdmin"
+            class="btn-new"
+            @click="toggleSourceForm"
+          >
+            {{ showSourceForm && !editingSource ? '✕ Kapat' : '+ Kaynak Ekle' }}
+          </button>
+        </div>
       </div>
+
+      <div v-if="healthReport" class="health-report">
+        <div class="health-report-header">
+          <strong>🩺 Genel Sağlık Raporu</strong>
+          <span class="muted">{{ formatDate(healthReport.ranAt) }}</span>
+          <button class="btn-cancel-form" @click="healthReport = null">✕ Kapat</button>
+        </div>
+        <div class="health-report-counts">
+          <span v-for="(count, state) in healthReport.counts" :key="state" :class="`health-count health-count-${state}`">
+            {{ STATE_LABELS[state] ?? state }}: {{ count }}
+          </span>
+          <span class="health-count">Toplam: {{ healthReport.total }}</span>
+        </div>
+        <div v-if="!healthReport.problems.length" class="health-report-ok">
+          ✅ Şu an "Bozulmuş", "Çalışmıyor" veya "Çevrimdışı" durumda kaynak yok.
+        </div>
+        <div v-else class="health-report-problems">
+          <div v-for="p in healthReport.problems" :key="p.name + p.hazard_type" class="health-report-row">
+            <span :class="`health-count-${p.state}`">{{ STATE_LABELS[p.state] }}</span>
+            <span>{{ p.name }} ({{ p.hazard_type }})</span>
+            <span class="muted">son başarı: {{ p.last_success_at ? formatDate(p.last_success_at) : 'hiç' }}</span>
+            <span v-if="p.consecutive_failures > 0" class="muted">{{ p.consecutive_failures }} ardışık hata</span>
+          </div>
+        </div>
+        <div class="health-report-hint muted">
+          Bu rapor salt okunur — hiçbir kaynağı otomatik yeniden başlatmaz/deploy etmez.
+          Sorunlu bir kaynağın kartındaki 📜 Geçmiş'ten gerçek hata mesajını okuyup
+          ✏️ Düzenle'den düzeltin, ya da geçiciyse (HTTP 5xx) kendi kendine düzelmesini bekleyin.
+        </div>
+      </div>
+
       <Transition name="slide-down">
         <SourceFormModal
           v-if="showSourceForm"
@@ -1583,15 +1728,7 @@ onUnmounted(() => {
         Yükleniyor...
       </div>
       <div v-else>
-        <div class="sources-toolbar">
-          <div class="sources-group-label">🌍 Küresel Kaynaklar</div>
-          <label class="sources-sort-control">
-            <span>Sırala:</span>
-            <select v-model="sourceSortMode">
-              <option v-for="m in SOURCE_SORT_MODES" :key="m.value" :value="m.value">{{ m.label }}</option>
-            </select>
-          </label>
-        </div>
+        <div class="sources-group-label">🌍 Küresel Kaynaklar</div>
         <div class="sources-grid">
           <SourceHealthCard
             v-for="source in groupedSources.global"
@@ -1958,6 +2095,51 @@ onUnmounted(() => {
     <div v-if="tab === 'assignedCommunityReports' && isOrgAdmin" class="tab-content">
       <AssignedCommunityReportsPanel />
     </div>
+
+    <ConfirmDialog
+      v-if="pendingToggleSource"
+      :title="pendingToggleSource.is_active ? 'Kaynağı devre dışı bırak' : 'Kaynağı yeniden etkinleştir'"
+      :message="`&quot;${pendingToggleSource.name}&quot; kaynağını ${pendingToggleSource.is_active ? 'devre dışı bırakmak' : 'yeniden etkinleştirmek'} istediğinize emin misiniz?`"
+      :submitting="confirmDialogSubmitting"
+      @confirm="confirmToggleSource"
+      @cancel="pendingToggleSource = null"
+    />
+    <ConfirmDialog
+      v-if="pendingDeleteSource"
+      title="Kaynağı kalıcı olarak sil"
+      :message="`&quot;${pendingDeleteSource.name}&quot; kaynağını kalıcı olarak silmek istediğinize emin misiniz? Daha önce alınan veriler saklanmaya devam edecek, sadece bu kaynaktan yeni veri toplanması durur.`"
+      require-password
+      danger
+      confirm-label="Sil"
+      :error="confirmDialogError"
+      :submitting="confirmDialogSubmitting"
+      @confirm="confirmDeleteSource"
+      @cancel="pendingDeleteSource = null; confirmDialogError = null"
+    />
+    <ConfirmDialog
+      v-if="pendingRevokeUser"
+      title="Erişimi kısıtla"
+      :message="`&quot;${pendingRevokeUser.email}&quot; kullanıcısının rolünü viewer'a düşürmek istediğinize emin misiniz?`"
+      require-password
+      danger
+      confirm-label="Kısıtla"
+      :error="confirmDialogError"
+      :submitting="confirmDialogSubmitting"
+      @confirm="confirmRevokeAccess"
+      @cancel="pendingRevokeUser = null; confirmDialogError = null"
+    />
+    <ConfirmDialog
+      v-if="pendingSuspendUser"
+      title="Hesabı askıya al"
+      :message="`&quot;${pendingSuspendUser.email}&quot; kullanıcısını askıya almak istediğinize emin misiniz? Girişi tamamen engellenir.`"
+      require-password
+      danger
+      confirm-label="Askıya Al"
+      :error="confirmDialogError"
+      :submitting="confirmDialogSubmitting"
+      @confirm="confirmSuspendUser"
+      @cancel="pendingSuspendUser = null; confirmDialogError = null"
+    />
   </div>
 </template>
 
@@ -1974,11 +2156,29 @@ onUnmounted(() => {
 }
 .admin-header {
   position: sticky;
-  top: 0;
+  /* `top: 0` here was WRONG, not just imprecise — .admin-page (the
+     scrollport, overflow-y: auto) has padding-top: 20px, and a sticky
+     element's `top` offset is measured from the scrollport's PADDING edge,
+     not the viewport edge. So "top: 0" actually meant "stick 20px below
+     the real top", leaving a permanent 20px gap every other card kept
+     peeking through while scrolled — that's the colored strip bleed-through
+     in the 2026-07-25 screenshot. Live-verified via Playwright
+     (page.locator('.admin-header').bounding_box() after a real scroll):
+     with `top: 0` the header's y stayed at 20 no matter how far the page
+     scrolled; with `top: -20px` it correctly reaches y: 0. */
+  top: -20px;
   z-index: 20;
   margin: -20px -24px 18px;
-  padding: 18px 24px 16px;
-  background: rgba(7, 11, 20, 0.9);
+  /* Extra top padding (was 18px) — at scroll position 0 the sticky header
+     sat flush against the viewport edge with no breathing room above
+     "← Harita"/"Çıkış Yap" (2026-07-25 feedback: "boşluk olmamış"). */
+  padding: 26px 24px 16px;
+  /* 0.9 opacity let a sliver of whatever's scrolled behind the sticky
+     header show through the blur at the very top edge — bumped
+     near-opaque so the header fully occludes content scrolled underneath
+     it once the top:0 bug above is also fixed, matching every other
+     sticky/glass panel's own near-opaque backgrounds in this app. */
+  background: rgba(7, 11, 20, 0.98);
   border-bottom: 1px solid rgba(148, 163, 184, 0.16);
   backdrop-filter: blur(18px) saturate(130%);
   -webkit-backdrop-filter: blur(18px) saturate(130%);
@@ -2189,6 +2389,67 @@ onUnmounted(() => {
   justify-content: flex-end;
   gap: 8px;
   margin-bottom: 12px;
+}
+/* Sources tab's own action row needs Sırala on the left / Genel Sağlık
+   Raporu + Kaynak Ekle on the right (2026-07-25 request), unlike every
+   other tab-actions row which is just right-aligned buttons. */
+.sources-tab-actions {
+  justify-content: space-between;
+  align-items: center;
+}
+.sources-tab-actions-right {
+  display: flex;
+  gap: 8px;
+}
+.btn-diagnostic {
+  background: rgba(77, 163, 255, 0.12);
+  border-color: rgba(77, 163, 255, 0.35);
+}
+.health-report {
+  background: rgba(15, 23, 42, 0.7);
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 10px;
+  padding: 14px 16px;
+  margin-bottom: 14px;
+  font-size: 0.8rem;
+}
+.health-report-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+.health-report-header strong { font-size: 0.88rem; }
+.health-report-header .btn-cancel-form { margin-left: auto; }
+.health-report-counts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  margin-bottom: 10px;
+  font-size: 0.76rem;
+}
+.health-count-healthy { color: #22c55e; }
+.health-count-degraded, .health-count-overdue { color: #fbbf24; }
+.health-count-down, .health-count-offline { color: #ef4444; }
+.health-count-disabled, .health-count-pending { color: #94a3b8; }
+.health-report-ok { color: #22c55e; font-size: 0.8rem; }
+.health-report-problems {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.health-report-row {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  font-size: 0.78rem;
+  padding: 4px 0;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.08);
+}
+.health-report-hint {
+  margin-top: 10px;
+  font-size: 0.72rem;
+  line-height: 1.5;
 }
 .tab-loading {
   text-align: center;
@@ -2606,13 +2867,6 @@ onUnmounted(() => {
   letter-spacing: 0.04em;
   margin: 14px 0 8px;
 }
-.sources-toolbar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-}
-.sources-toolbar .sources-group-label { margin: 14px 0 8px; }
 .sources-sort-control {
   display: flex;
   align-items: center;

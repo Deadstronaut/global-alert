@@ -111,7 +111,7 @@ async function flushQueue() {
   const groups = {};
   while (writeQueue.length > 0) {
     const event = writeQueue.shift();
-    const table = TABLE_MAP[event.type] || 'disasters';
+    const table = TABLE_MAP[event.type] || 'disaster';
     if (!groups[table]) groups[table] = [];
     groups[table].push(mapToRow(event));
   }
@@ -126,9 +126,9 @@ async function flushQueue() {
         .upsert(rowsToWrite, {onConflict: 'id', ignoreDuplicates: true});
 
       if (error) {
-        // Tablo yoksa 'disasters' genel tablosuna yaz
-        if (error.code === '42P01') {
-          await supabase.from('disasters').upsert(rowsToWrite, {onConflict: 'id', ignoreDuplicates: true});
+        // Tablo yoksa genel 'disaster' tablosuna yaz
+        if (error.code === '42P01' && table !== 'disaster') {
+          await supabase.from('disaster').upsert(rowsToWrite, {onConflict: 'id', ignoreDuplicates: true});
         } else {
           console.warn(`[Supabase] Upsert error (${table}):`, error.message);
         }

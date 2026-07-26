@@ -117,6 +117,10 @@ plana yazıyoruz ama bir sürpriz riski var.
 4. **Dokümantasyon** — script stabilize olduktan sonra yazılır (önce yazıp
    sonra script'i ona uydurmak tersten gider)
 
+## 4.1 Yeni hazard type ekleme (self-servis, 20260727'de eklendi)
+
+Bir ülke admini yeni bir hazard type (örn. "toprak kayması") eklemek istediğinde: Hazard Taksonomisi panelinden ekler, "Kaynak Ekle"den bir kaynak bağlar — hiçbir migration/kod değişikliği gerekmez, olay otomatik olarak genel `disaster` kova tablosuna düşer, ikon/etiket taksonomi kaydından dinamik okunur. Bir ülke bu tipi kendi özel tablosuna "yükseltmek" isterse (yüksek hacim/önem durumunda), [HAZARD_TABLE_TEMPLATE.md](./HAZARD_TABLE_TEMPLATE.md)'deki kopyala-yapıştır şablonunu izler.
+
 ## 5. Açık sorular (henüz karar verilmedi)
 
 - Self-host maliyeti/karmaşıklığı bazı ülkeler için fazla gelirse, "biz

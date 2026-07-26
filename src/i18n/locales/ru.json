@@ -626,6 +626,8 @@
       "thresholdsTitle": "Пороги серьёзности"
     },
     "displayNamePlaceholder": "напр. Оползень",
+    "icon": "Значок",
+    "iconPlaceholder": "напр. ⛏️ (эмодзи)",
     "descriptionPlaceholder": "Краткое описание этого типа опасности",
     "minValuePlaceholder": "напр. 6.0"
   },

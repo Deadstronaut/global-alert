@@ -626,6 +626,8 @@
       "thresholdsTitle": "Seuils de gravité"
     },
     "displayNamePlaceholder": "ex. Glissement de terrain",
+    "icon": "Icône",
+    "iconPlaceholder": "ex. ⛏️ (emoji)",
     "descriptionPlaceholder": "Brève description de ce type de danger",
     "minValuePlaceholder": "ex. 6.0"
   },

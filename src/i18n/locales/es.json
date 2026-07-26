@@ -626,6 +626,8 @@
       "thresholdsTitle": "Umbrales de Severidad"
     },
     "displayNamePlaceholder": "ej. Deslizamiento de tierra",
+    "icon": "Icono",
+    "iconPlaceholder": "ej. ⛏️ (emoji)",
     "descriptionPlaceholder": "Breve descripción de este tipo de peligro",
     "minValuePlaceholder": "ej. 6.0"
   },

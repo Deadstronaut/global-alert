@@ -3,8 +3,10 @@ import { ref, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useContactsStore } from '@/stores/contacts.js'
 import { useAuthStore } from '@/stores/auth.js'
+import { supabase } from '@/services/api/config.js'
 import { parseDataFile, SUPPORTED_EXTENSIONS } from '@/utils/fileParsers.js'
 import ContactFormModal from './ContactFormModal.vue'
+import ConfirmDialog from '@/components/ConfirmDialog.vue'
 
 const { t } = useI18n()
 const store = useContactsStore()
@@ -72,11 +74,35 @@ async function toggleActive(contact) {
 }
 
 // GDPR anonymization (spec 031, MHEWS-SD-CONTACT-06) — Super Admin-only,
-// irreversible, so a confirmation is required before calling the store.
-async function anonymize(contact) {
-  const confirmed = window.confirm(t('contacts.anonymizeConfirm', { name: contact.full_name }))
-  if (!confirmed) return
-  await store.anonymizeContact(contact.id)
+// irreversible. Was a native window.confirm() with no further check;
+// replaced with the in-app ConfirmDialog + own-password re-verification
+// (2026-07-26 request — "önemli sil komutu olan yerlerde" applied wherever
+// an admin can irreversibly destroy someone else's data, matching the same
+// pattern AdminView.vue uses for kaynak delete / kullanıcı suspend/revoke).
+const pendingAnonymizeContact = ref(null)
+const anonymizeError = ref(null)
+const anonymizeSubmitting = ref(false)
+
+function anonymize(contact) {
+  anonymizeError.value = null
+  pendingAnonymizeContact.value = contact
+}
+async function confirmAnonymize(password) {
+  anonymizeError.value = null
+  anonymizeSubmitting.value = true
+  try {
+    const { error } = await supabase.auth.signInWithPassword({ email: auth.session.email, password })
+    if (error) {
+      anonymizeError.value = 'Şifre yanlış. Tekrar deneyin.'
+      return
+    }
+    await store.anonymizeContact(pendingAnonymizeContact.value.id)
+    pendingAnonymizeContact.value = null
+  } catch (err) {
+    anonymizeError.value = err.message ?? String(err)
+  } finally {
+    anonymizeSubmitting.value = false
+  }
 }
 
 async function onImportFile(e) {
@@ -253,6 +279,19 @@ async function runImport() {
         </button>
       </div>
     </div>
+
+    <ConfirmDialog
+      v-if="pendingAnonymizeContact"
+      :title="t('contacts.anonymize')"
+      :message="t('contacts.anonymizeConfirm', { name: pendingAnonymizeContact.full_name })"
+      require-password
+      danger
+      :confirm-label="t('contacts.anonymize')"
+      :error="anonymizeError"
+      :submitting="anonymizeSubmitting"
+      @confirm="confirmAnonymize"
+      @cancel="pendingAnonymizeContact = null; anonymizeError = null"
+    />
   </div>
 </template>
 

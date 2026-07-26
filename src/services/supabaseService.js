@@ -12,6 +12,9 @@ export function getClient() {
 }
 
 // Fetch için view'lar (geçersiz koordinatlar filtrelenmiş)
+// 'disaster' — kendi özel tablosu olmayan hazard type'lar için genel kova
+// (bkz. 20260727000000 migration). Yeni bir hazard type eklendiğinde BU
+// LİSTEYE satır eklenmez — hepsi zaten 'disaster' girişinin altına düşer.
 const TABLE_MAP = {
     earthquake_view: 'earthquake',
     wildfire_view: 'wildfire',
@@ -22,6 +25,7 @@ const TABLE_MAP = {
     cyclone_view: 'cyclone',
     volcano_view: 'volcano',
     epidemic_view: 'epidemic',
+    disaster_view: 'disaster',
 };
 
 // Realtime subscription için tablolar (view'lar realtime desteklemez)
@@ -35,6 +39,7 @@ const REALTIME_TABLE_MAP = {
     cyclone: 'cyclone',
     volcano: 'volcano',
     epidemic: 'epidemic',
+    disaster: 'disaster',
 };
 
 // Tip başına fetch limiti
@@ -48,6 +53,7 @@ const FETCH_LIMIT = {
     cyclone_view: 10000,
     volcano_view: 10000,
     epidemic_view: 10000,
+    disaster_view: 10000,
 };
 
 function getEarthquakeSeverity(magnitude) {
@@ -67,7 +73,12 @@ function rowToEvent(row, type) {
 
     return createDisasterEvent({
         ...row,
-        type,
+        // row.type önceliklidir: 9 özel tablo için no-op (row.type zaten
+        // sabit `type` ile aynı), ama 'disaster' genel kovasında satırlar
+        // birbirinden farklı gerçek hazard type'ları taşıyor (örn.
+        // landslide) — bunu sabit 'disaster' string'iyle ezmek ikon
+        // eşleşmesini ve disaster.js'in storeMap fallback'ini kırar.
+        type: row.type || type,
         severity,
         h3_id: row.h3_id || null,
         sourceUrl: row.source_url ?? row.sourceUrl ?? '',

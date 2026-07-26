@@ -157,6 +157,33 @@ export const useHazardTypesStore = defineStore('hazardTypes', () => {
     }
   }
 
+  // Cross-tab/cross-session visibility for newly created hazard types
+  // (20260727000000 self-serve onboarding work) — createHazardType() below
+  // already pushes optimistically for the CURRENT tab, but another admin's
+  // already-open session had no way to see a new row without a manual
+  // reload until this subscription existed.
+  let _realtimeChannel = null;
+  function subscribeToHazardTypeChanges() {
+    if (_realtimeChannel) return;
+    _realtimeChannel = supabase
+      .channel('realtime:hazard_types')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'hazard_types' },
+        (payload) => {
+          if (payload.eventType === 'INSERT') {
+            if (!hazardTypes.value.some((h) => h.code === payload.new.code)) {
+              hazardTypes.value.push(payload.new);
+            }
+          } else if (payload.eventType === 'UPDATE') {
+            const idx = hazardTypes.value.findIndex((h) => h.code === payload.new.code);
+            if (idx !== -1) hazardTypes.value[idx] = payload.new;
+          }
+        },
+      )
+      .subscribe();
+  }
+
   // FR-011/SC-005: bundled fallback until the registry has actually loaded
   // (or if it errored) — never an empty list.
   const activeHazardTypes = computed(() => {
@@ -260,6 +287,7 @@ export const useHazardTypesStore = defineStore('hazardTypes', () => {
     activeHazardTypes,
     alertableHazardTypes,
     fetchHazardTypes,
+    subscribeToHazardTypeChanges,
     computeSeverity,
     createHazardType,
     updateHazardType,

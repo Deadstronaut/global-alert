@@ -855,6 +855,7 @@
     "edit": "编辑",
     "deactivate": "停用",
     "reactivate": "启用",
+    "osmImportedHint": "自动从 OpenStreetMap 导入 — 容量大多为估计值/未知。",
     "empty": "尚无避难所。",
     "save": "保存",
     "cancel": "取消",

@@ -41,6 +41,7 @@ import { runHydroBasinsImport } from './import-hydrobasins.ts'
 import { runHydroRiversImport } from './import-hydrorivers.ts'
 import { runOsmBuildingsImport } from './import-osm-buildings.ts'
 import { runOsmRoadsImport } from './import-osm-roads.ts'
+import { runOsmSheltersImport } from './import-osm-shelters.ts'
 
 const JOBS: Record<string, { name: string; run: () => Promise<void>; schedule: string }> = {
   ghsl: { name: 'ghsl-population-import', run: runGhslImport, schedule: '0 3 1 * *' },
@@ -55,6 +56,7 @@ const JOBS: Record<string, { name: string; run: () => Promise<void>; schedule: s
   // accepts 0 or 7 interchangeably for Sunday — only "7" works here.
   'osm-roads': { name: 'osm-roads-import', run: runOsmRoadsImport, schedule: '0 4 * * 7' }, // matches old import-osm-roads-weekly
   'osm-buildings': { name: 'osm-buildings-import', run: runOsmBuildingsImport, schedule: '0 5 * * 7' }, // matches old import-osm-buildings-weekly
+  'osm-shelters': { name: 'osm-shelters-import', run: runOsmSheltersImport, schedule: '0 6 * * 7' },
 }
 
 const jobKey = Deno.args[0]

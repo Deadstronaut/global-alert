@@ -855,6 +855,7 @@
     "edit": "editar",
     "deactivate": "desactivar",
     "reactivate": "reactivar",
+    "osmImportedHint": "Importado automáticamente desde OpenStreetMap — la capacidad es mayormente estimada/desconocida.",
     "empty": "Aún no hay refugios.",
     "save": "Guardar",
     "cancel": "Cancelar",

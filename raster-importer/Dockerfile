@@ -39,12 +39,13 @@ COPY raster-importer/import-hydrobasins.ts ./raster-importer/import-hydrobasins.
 COPY raster-importer/import-hydrorivers.ts ./raster-importer/import-hydrorivers.ts
 COPY raster-importer/import-osm-buildings.ts ./raster-importer/import-osm-buildings.ts
 COPY raster-importer/import-osm-roads.ts ./raster-importer/import-osm-roads.ts
+COPY raster-importer/import-osm-shelters.ts ./raster-importer/import-osm-shelters.ts
 COPY raster-importer/cron.ts ./raster-importer/cron.ts
 
 # Pre-resolve npm:/esm.sh imports at build time so a run with no outbound
 # access to those registries (only to Supabase, HDX, GHSL's own tile
 # host, EWDS, GDO's WCS, Overpass, and netcdf-service) still works.
-RUN deno cache raster-importer/import.ts raster-importer/import-ghsl.ts raster-importer/import-chirps.ts raster-importer/download-meta.ts raster-importer/import-glofas.ts raster-importer/import-gdo-anomaly.ts raster-importer/import-worldpop.ts raster-importer/import-hydrobasins.ts raster-importer/import-hydrorivers.ts raster-importer/import-osm-buildings.ts raster-importer/import-osm-roads.ts raster-importer/cron.ts
+RUN deno cache raster-importer/import.ts raster-importer/import-ghsl.ts raster-importer/import-chirps.ts raster-importer/download-meta.ts raster-importer/import-glofas.ts raster-importer/import-gdo-anomaly.ts raster-importer/import-worldpop.ts raster-importer/import-hydrobasins.ts raster-importer/import-hydrorivers.ts raster-importer/import-osm-buildings.ts raster-importer/import-osm-roads.ts raster-importer/import-osm-shelters.ts raster-importer/cron.ts
 
 # --unstable-cron: Deno.cron() (cron.ts's scheduled mode) is not yet a
 # stable API as of Deno 2.1 — live-verified 2026-07-22 that `Deno.cron` is

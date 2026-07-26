@@ -292,6 +292,21 @@ services:
     networks:
       - mhews
 
+  # ── OSM disaster shelters / assembly points (manual, run-to-completion) ─────
+  # Writes directly to the `shelters` table (not exposure_features like the
+  # other OSM importers) — upserts on (source, external_id), see
+  # import-osm-shelters.ts's header for why.
+  osm-shelters-importer:
+    build:
+      context: .
+      dockerfile: raster-importer/Dockerfile
+    container_name: mhews-osm-shelters-importer
+    command: ["raster-importer/import-osm-shelters.ts"]
+    env_file:
+      - ./server/.env
+    networks:
+      - mhews
+
   # ── Same 5, always-on / scheduled (matches each source's old pg_cron cadence,
   # or a sensible new default for HydroBASINS/HydroRIVERS which never had one
   # — see cron.ts's header) ─────────────────────────────────────────────────
@@ -350,6 +365,18 @@ services:
     container_name: mhews-osm-roads-importer-scheduled
     restart: unless-stopped
     command: ["raster-importer/cron.ts", "osm-roads"]
+    env_file:
+      - ./server/.env
+    networks:
+      - mhews
+
+  osm-shelters-importer-scheduled:
+    build:
+      context: .
+      dockerfile: raster-importer/Dockerfile
+    container_name: mhews-osm-shelters-importer-scheduled
+    restart: unless-stopped
+    command: ["raster-importer/cron.ts", "osm-shelters"]
     env_file:
       - ./server/.env
     networks:

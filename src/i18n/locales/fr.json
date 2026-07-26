@@ -855,6 +855,7 @@
     "edit": "modifier",
     "deactivate": "désactiver",
     "reactivate": "réactiver",
+    "osmImportedHint": "Importé automatiquement depuis OpenStreetMap — la capacité est majoritairement estimée/inconnue.",
     "empty": "Aucun abri pour le moment.",
     "save": "Enregistrer",
     "cancel": "Annuler",

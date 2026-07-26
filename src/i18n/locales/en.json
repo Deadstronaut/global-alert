@@ -855,6 +855,7 @@
     "edit": "edit",
     "deactivate": "deactivate",
     "reactivate": "reactivate",
+    "osmImportedHint": "Automatically imported from OpenStreetMap — capacity is mostly estimated/unknown.",
     "empty": "No shelters yet.",
     "save": "Save",
     "cancel": "Cancel",

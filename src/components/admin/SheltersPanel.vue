@@ -101,7 +101,10 @@ async function toggleActive(shelter) {
       </thead>
       <tbody>
         <tr v-for="s in visibleShelters" :key="s.id" :class="{ inactive: !s.is_active }">
-          <td>{{ s.name }}</td>
+          <td>
+            {{ s.name }}
+            <span v-if="s.source === 'osm'" class="osm-badge" :title="t('shelters.osmImportedHint')">OSM</span>
+          </td>
           <td>{{ s.country_code.toUpperCase() }}</td>
           <td>{{ s.capacity_occupied }} / {{ s.capacity_total }}</td>
           <td>{{ occupancyPercentage(s) }}%</td>
@@ -141,4 +144,9 @@ async function toggleActive(shelter) {
 .form-error { color: #ef4444; font-size: .8rem; }
 .tab-loading { font-size: .82rem; color: var(--color-text-muted,#94a3b8); }
 .modal-inline-error { margin-top: 8px; }
+.osm-badge {
+  display: inline-block; margin-left: 6px; padding: 1px 6px; font-size: .68rem; font-weight: 700;
+  color: #94a3b8; background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.15); border-radius: 4px;
+  vertical-align: middle;
+}
 </style>

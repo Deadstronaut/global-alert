@@ -855,6 +855,7 @@
     "edit": "düzenle",
     "deactivate": "deaktive et",
     "reactivate": "aktive et",
+    "osmImportedHint": "OpenStreetMap'ten otomatik içe aktarıldı — kapasite bilgisi çoğunlukla tahmini/bilinmiyor.",
     "empty": "Henüz sığınak eklenmedi.",
     "save": "Kaydet",
     "cancel": "İptal",

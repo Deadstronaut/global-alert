@@ -23,6 +23,13 @@ export interface RasterSourceConfig {
   // headed toward a *count* (people), just via a pixel-area conversion
   // first; 'mean' never becomes a count at all.
   pixelValueMeaning: 'count' | 'density' | 'mean'
+  // Every source until GDO anomaly (2026-07-26) had non-negative pixel
+  // values, so isValidPixel() in rasterToHexagon.ts unconditionally
+  // rejected value < 0 as presumed-invalid. GDO Soil Moisture/fAPAR
+  // Anomaly values are legitimately negative ("below normal"), so this
+  // flag opts a source out of that rejection. Optional and defaults to
+  // false (undefined) — every pre-existing config below is untouched.
+  allowNegativeValues?: boolean
 }
 
 export const WORLDPOP_SOURCE_CONFIG: RasterSourceConfig = {
@@ -67,4 +74,39 @@ export const CHIRPS_SOURCE_CONFIG: RasterSourceConfig = {
   sourceName: 'chirps',
   h3Resolution: 6,
   pixelValueMeaning: 'mean',
+}
+
+// GDO Soil Moisture Anomaly (smand, 0.1°) + fAPAR Anomaly (fpanv, 0.0833°) —
+// converted from a hand-drawn one-rectangle-per-pixel geometry to real H3
+// hexagons (2026-07-26 consistency pass — see gdoAnomalyFetch.ts). Both are
+// coarser than CHIRPS's 0.05° pixels, so a coarser hexagon (resolution 5,
+// ~8.5km edge) matches their own scale rather than needlessly splitting one
+// pixel across several small hexagons. pixelValueMeaning='mean' for the
+// same non-additive reason as CHIRPS. allowNegativeValues=true — an anomaly
+// value is legitimately negative (below-normal moisture/vegetation), unlike
+// every other currently-configured source.
+export const GDO_SOIL_MOISTURE_SOURCE_CONFIG: RasterSourceConfig = {
+  sourceName: 'gdo_soil_moisture_anomaly',
+  h3Resolution: 5,
+  pixelValueMeaning: 'mean',
+  allowNegativeValues: true,
+}
+
+export const GDO_FAPAR_SOURCE_CONFIG: RasterSourceConfig = {
+  sourceName: 'gdo_fapar_anomaly',
+  h3Resolution: 5,
+  pixelValueMeaning: 'mean',
+  allowNegativeValues: true,
+}
+
+// GloFAS river discharge — same consistency pass, same reasoning as GDO
+// anomaly above (converted from import-glofas.ts's own hand-drawn
+// rectangle-per-pixel geometry). Discharge (m³/s) is never negative, so
+// allowNegativeValues stays false (the default) — listed explicitly here
+// only for symmetry with the two GDO configs above.
+export const GLOFAS_SOURCE_CONFIG: RasterSourceConfig = {
+  sourceName: 'glofas_river_discharge',
+  h3Resolution: 5,
+  pixelValueMeaning: 'mean',
+  allowNegativeValues: false,
 }

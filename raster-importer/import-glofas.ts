@@ -7,12 +7,14 @@
  *     layer live-verified against the real API with a bogus token — never
  *     tested with a real one, no EWDS account existed as of 2026-07-22)
  *   - netcdf-service (GDAL conversion container, ad-hoc sourceUrl mode)
- *   - gdoAnomalyFetch.ts's pixel-loop-to-polygon-features pattern
- *     (duplicated here per this codebase's established per-module
- *     convention — see that file's header comment — except boundary
- *     point-in-polygon/simplification are imported since gdoAnomalyFetch.ts
- *     already exports them and duplicating a Douglas-Peucker
- *     implementation a third time would be pure risk for no benefit)
+ *   - gdoAnomalyFetch.ts's simplifyGeometry (Douglas-Peucker boundary
+ *     simplification) is imported rather than duplicated a third time —
+ *     duplicating that specific algorithm would be pure risk for no
+ *     benefit. Pixel-to-feature geometry itself (2026-07-26 consistency
+ *     pass) goes through rasterToHexagon.ts's shared H3-hexagon aggregator
+ *     instead of a hand-rolled rectangle-per-pixel loop — matches GHSL/
+ *     WorldPop/CHIRPS/GDO anomaly, see rasterSourceConfig.ts's
+ *     GLOFAS_SOURCE_CONFIG.
  *
  * ✅ VERIFIED END-TO-END 2026-07-22 with a real EWDS token: all 3 served
  * countries succeeded (tr/mg/my), GLOFAS_NETCDF_VARIABLE_NAME="dis24" was
@@ -32,6 +34,14 @@ import { getServedCountryCodes } from '../supabase/functions/shared/servedCountr
 import { simplifyGeometry } from '../supabase/functions/shared/gdoAnomalyFetch.ts'
 import { writeExposureDataset } from '../supabase/functions/shared/writeExposureDataset.ts'
 import { recordFetchOutcome, resolveSourceId } from '../supabase/functions/shared/sourceHealth.ts'
+// 2026-07-26 consistency pass: geometry switched from a hand-drawn
+// one-rectangle-per-pixel polygon to real H3 hexagons, matching GHSL/
+// WorldPop/CHIRPS/GDO anomaly — see rasterSourceConfig.ts's
+// GLOFAS_SOURCE_CONFIG and gdoAnomalyFetch.ts's equivalent 2026-07-26
+// comment for the same reasoning (this file runs in a container, not an
+// Edge Function, so h3-js's import-graph cost never applied here anyway).
+import { aggregateRasterToHexagonsFromImage } from '../supabase/functions/shared/rasterToHexagon.ts'
+import { GLOFAS_SOURCE_CONFIG } from '../supabase/functions/shared/rasterSourceConfig.ts'
 
 // data_sources.(hazard_type='flood', name='GloFAS/Copernicus') — seeded by
 // 20260723000000_glofas_data_source.sql. Live-verified 2026-07-23: this
@@ -61,51 +71,6 @@ function requireEnv(): { supabaseUrl: string; serviceKey: string; ewdsApiKey: st
   if (!SUPABASE_URL || !SERVICE_KEY) throw new Error('SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY must both be set')
   if (!EWDS_API_KEY) throw new Error('EWDS_API_KEY must be set (register for free at https://ewds.climate.copernicus.eu)')
   return { supabaseUrl: SUPABASE_URL, serviceKey: SERVICE_KEY, ewdsApiKey: EWDS_API_KEY }
-}
-
-// Duplicated point-in-ring/polygon test — this codebase's established
-// per-module convention (see gdoSpiFetch.ts/gdoAnomalyFetch.ts/
-// rasterToHexagon.ts, all of which independently duplicate this exact
-// logic rather than share it).
-function pointInRing(point: [number, number], ring: number[][]): boolean {
-  const [x, y] = point
-  let inside = false
-  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
-    const [xi, yi] = ring[i]
-    const [xj, yj] = ring[j]
-    const intersects = yi > y !== yj > y && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi
-    if (intersects) inside = !inside
-  }
-  return inside
-}
-function pointInPolygon(point: [number, number], coordinates: number[][][]): boolean {
-  if (coordinates.length === 0) return false
-  if (!pointInRing(point, coordinates[0])) return false
-  for (let i = 1; i < coordinates.length; i++) {
-    if (pointInRing(point, coordinates[i])) return false
-  }
-  return true
-}
-function pointInMultiPolygon(point: [number, number], coordinates: number[][][][]): boolean {
-  return coordinates.some((polygon) => pointInPolygon(point, polygon))
-}
-function pointWithinBoundary(point: [number, number], boundary: GeoJSON.Geometry): boolean {
-  if (boundary.type === 'GeometryCollection') {
-    return boundary.geometries.some((g) => {
-      try {
-        return pointWithinBoundary(point, g)
-      } catch {
-        return false
-      }
-    })
-  }
-  try {
-    if (boundary.type === 'Polygon') return pointInPolygon(point, boundary.coordinates as number[][][])
-    if (boundary.type === 'MultiPolygon') return pointInMultiPolygon(point, boundary.coordinates as number[][][][])
-  } catch {
-    return false
-  }
-  return false
 }
 
 function geometryBoundingBox(geometry: GeoJSON.Geometry): [number, number, number, number] {
@@ -207,42 +172,21 @@ async function processCountry(countryCode: string): Promise<void> {
     return
   }
 
-  const [xmin, , , ymax] = image.getBoundingBox() as [number, number, number, number]
-  const resX = (image.getBoundingBox()[2] - xmin) / width
-  const resY = (ymax - image.getBoundingBox()[1]) / height
-  const noData: number | null = image.getGDALNoData()
+  const [imgXmin, imgYmin, imgXmax, imgYmax] = image.getBoundingBox() as [number, number, number, number]
+  const resX = (imgXmax - imgXmin) / width
+  const resY = (imgYmax - imgYmin) / height
   const simplifiedBoundary = simplifyGeometry(boundary, Math.min(resX, resY) / 2)
 
-  const rasters = await image.readRasters()
-  // deno-lint-ignore no-explicit-any
-  const band = (rasters as any)[0] as ArrayLike<number>
+  const hexRecords = await aggregateRasterToHexagonsFromImage(image, GLOFAS_SOURCE_CONFIG, simplifiedBoundary, countryCode)
 
-  const features: { geometry: { type: string; coordinates: unknown }; metricValue: number; properties: Record<string, unknown> }[] = []
-  for (let row = 0; row < height; row++) {
-    const cellMinLat = ymax - (row + 1) * resY
-    const cellMaxLat = ymax - row * resY
-    const centerLat = (cellMinLat + cellMaxLat) / 2
-    for (let col = 0; col < width; col++) {
-      const value = band[row * width + col]
-      if (!Number.isFinite(value) || (noData != null && value === noData)) continue
-      const cellMinLng = xmin + col * resX
-      const cellMaxLng = xmin + (col + 1) * resX
-      const centerLng = (cellMinLng + cellMaxLng) / 2
-      if (!pointWithinBoundary([centerLng, centerLat], simplifiedBoundary)) continue
-      features.push({
-        geometry: {
-          type: 'Polygon',
-          coordinates: [[
-            [cellMinLng, cellMinLat], [cellMaxLng, cellMinLat],
-            [cellMaxLng, cellMaxLat], [cellMinLng, cellMaxLat],
-            [cellMinLng, cellMinLat],
-          ]],
-        },
-        metricValue: value,
-        properties: { source: 'glofas_river_discharge' },
-      })
-    }
-  }
+  const features = hexRecords.map((r) => ({
+    geometry: r.geometry,
+    // populationCount is PopulationRasterRecord's generic value field (see
+    // populationRasterRecord.ts) — holds discharge m³/s here, not a
+    // headcount, per GLOFAS_SOURCE_CONFIG's pixelValueMeaning='mean'.
+    metricValue: r.populationCount,
+    properties: { source: 'glofas_river_discharge', h3Cell: r.properties.h3Cell },
+  }))
 
   if (features.length === 0) {
     console.log(`[${countryCode}] no valid pixels within boundary, skipping write`)

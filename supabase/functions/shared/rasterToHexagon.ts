@@ -78,9 +78,9 @@ function pointInMultiPolygon(point: [number, number], coordinates: number[][][][
   return coordinates.some((polygon) => pointInPolygon(point, polygon))
 }
 
-function isValidPixel(value: number, noData: number | null): boolean {
+function isValidPixel(value: number, noData: number | null, allowNegative = false): boolean {
   if (!Number.isFinite(value)) return false
-  if (value < 0) return false
+  if (!allowNegative && value < 0) return false
   if (noData != null && value === noData) return false
   return true
 }
@@ -194,7 +194,7 @@ export async function aggregateRasterToHexagonsFromImage(
       const lat = ymax - (rowStart + row + 0.5) * resY
       for (let col = 0; col < cropWidth; col++) {
         const value = band[row * cropWidth + col]
-        if (!isValidPixel(value, noData)) continue
+        if (!isValidPixel(value, noData, config.allowNegativeValues)) continue
         const lng = xmin + (colStart + col + 0.5) * resX
         const cell = latLngToCell(lat, lng, config.h3Resolution)
         accumulator.set(cell, (accumulator.get(cell) ?? 0) + value)

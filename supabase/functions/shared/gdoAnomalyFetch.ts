@@ -28,63 +28,35 @@
  * no derived class/color properties.
  *
  * Structurally near-identical to gdoSpiFetch.ts (same WCS request shape,
- * same per-module-duplicated point-in-polygon/bbox helpers — this
- * codebase's established convention, see that file's header) but the two
- * indicators are similar enough to each other (one band, no
- * classification, global-ish extent) to share ONE generic implementation
- * parametrized by GdoAnomalyConfig, rather than two near-duplicate files.
+ * same per-module-duplicated bbox helper — this codebase's established
+ * convention, see that file's header) but the two indicators are similar
+ * enough to each other (one band, no classification, global-ish extent)
+ * to share ONE generic implementation parametrized by GdoAnomalyConfig,
+ * rather than two near-duplicate files. Geometry construction itself
+ * (point-in-polygon among pixels) is no longer duplicated here — see the
+ * 2026-07-26 import comment below — it now goes through the same shared
+ * H3-hexagon aggregator GHSL/WorldPop/CHIRPS use.
  */
 
 import './workerPolyfill.ts'
 import { fromArrayBuffer } from 'https://esm.sh/geotiff@2.1.3'
 import { getServiceClient } from './upsert.ts'
 import type { ExposureFeatureInput } from './writeExposureDataset.ts'
-
-// Duplicated from rasterToHexagon.ts / gdoSpiFetch.ts rather than imported
-// — see gdoSpiFetch.ts's header comment for why (h3-js import-graph cost).
-function pointInRing(point: [number, number], ring: number[][]): boolean {
-  const [x, y] = point
-  let inside = false
-  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
-    const [xi, yi] = ring[i]
-    const [xj, yj] = ring[j]
-    const intersects = yi > y !== yj > y && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi
-    if (intersects) inside = !inside
-  }
-  return inside
-}
-
-function pointInPolygon(point: [number, number], coordinates: number[][][]): boolean {
-  if (coordinates.length === 0) return false
-  if (!pointInRing(point, coordinates[0])) return false
-  for (let i = 1; i < coordinates.length; i++) {
-    if (pointInRing(point, coordinates[i])) return false // inside a hole
-  }
-  return true
-}
-
-function pointInMultiPolygon(point: [number, number], coordinates: number[][][][]): boolean {
-  return coordinates.some((polygon) => pointInPolygon(point, polygon))
-}
-
-function pointWithinBoundary(point: [number, number], boundary: GeoJSON.Geometry): boolean {
-  if (boundary.type === 'GeometryCollection') {
-    return boundary.geometries.some((geometry) => {
-      try {
-        return pointWithinBoundary(point, geometry)
-      } catch {
-        return false
-      }
-    })
-  }
-  try {
-    if (boundary.type === 'Polygon') return pointInPolygon(point, boundary.coordinates as number[][][])
-    if (boundary.type === 'MultiPolygon') return pointInMultiPolygon(point, boundary.coordinates as number[][][][])
-  } catch {
-    return false
-  }
-  return false
-}
+// 2026-07-26 consistency pass: geometry switched from a hand-drawn
+// one-rectangle-per-pixel polygon to real H3 hexagons, matching GHSL/
+// WorldPop/CHIRPS — see rasterSourceConfig.ts's GDO_SOIL_MOISTURE_SOURCE_
+// CONFIG/GDO_FAPAR_SOURCE_CONFIG for why h3Resolution=5/pixelValueMeaning=
+// 'mean'/allowNegativeValues=true. This DOES pull h3-js into this module's
+// import graph (previously avoided here — see the "Duplicated from
+// rasterToHexagon.ts" comment below — specifically for Edge Function
+// import-graph-memory reasons). Accepted tradeoff: the only Edge Function
+// consumers of this file (import-gdo-soil-moisture/import-gdo-fapar) are
+// already documented as dormant/backup (NEW_GAME_PLAN.md §4.7/§7) — the
+// real, live path is the Docker gdo-anomaly-importer container
+// (raster-importer/import-gdo-anomaly.ts), which has no such ceiling.
+import { aggregateRasterToHexagonsFromImage } from './rasterToHexagon.ts'
+import type { RasterSourceConfig } from './rasterSourceConfig.ts'
+import { GDO_FAPAR_SOURCE_CONFIG, GDO_SOIL_MOISTURE_SOURCE_CONFIG } from './rasterSourceConfig.ts'
 
 function geometryBoundingBox(geometry: GeoJSON.Geometry): [number, number, number, number] {
   let minLng = Infinity, minLat = Infinity, maxLng = -Infinity, maxLat = -Infinity
@@ -189,6 +161,7 @@ export interface GdoAnomalyConfig {
   sourceName: string
   metricPropertyName: string
   sourceMetadata: Record<string, unknown>
+  raster: RasterSourceConfig
 }
 
 export const GDO_SOIL_MOISTURE_ANOMALY_CONFIG: GdoAnomalyConfig = {
@@ -201,6 +174,7 @@ export const GDO_SOIL_MOISTURE_ANOMALY_CONFIG: GdoAnomalyConfig = {
     coverageExtent: 'global (lat -60 to 90)',
     classificationScheme: 'none published by GDO for this product — raw anomaly value only',
   },
+  raster: GDO_SOIL_MOISTURE_SOURCE_CONFIG,
 }
 
 export const GDO_FAPAR_ANOMALY_CONFIG: GdoAnomalyConfig = {
@@ -213,15 +187,10 @@ export const GDO_FAPAR_ANOMALY_CONFIG: GdoAnomalyConfig = {
     coverageExtent: 'near-global (lat -55.92 to 48.33)',
     classificationScheme: 'none published by GDO for this product — raw anomaly value only',
   },
+  raster: GDO_FAPAR_SOURCE_CONFIG,
 }
 
 const WCS_BASE = 'https://drought.emergency.copernicus.eu/api/wcs'
-
-function isValidAnomalyPixel(value: number, noData: number | null): boolean {
-  if (!Number.isFinite(value)) return false
-  if (noData != null && value === noData) return false
-  return true
-}
 
 // Same country_boundaries normalization repeated across this codebase's
 // GDO/HDX fetch modules — see gdoSpiFetch.ts's header comment for why
@@ -281,47 +250,28 @@ async function fetchOneCountry(config: GdoAnomalyConfig, countryCode: string): P
   const [xmin, ymin, xmax, ymax] = image.getBoundingBox() as [number, number, number, number]
   const resX = (xmax - xmin) / width
   const resY = (ymax - ymin) / height
-  const noData: number | null = image.getGDALNoData()
 
   // Simplified ONCE per country here, not per pixel — see this file's
   // "Live-verified 2026-07-22" comment above simplifyGeometry for why this
   // is required, not an optional optimization, at this resolution.
+  // aggregateRasterToHexagonsFromImage() below only runs pointWithinBoundary
+  // once per resulting HEXAGON (far fewer than the raw pixel count this
+  // comment was originally written against), so this simplification step is
+  // likely no longer strictly load-bearing for performance — kept anyway
+  // as a cheap, already-working safety margin rather than removed on
+  // spec.
   const simplifiedBoundary = simplifyGeometry(boundary, Math.min(resX, resY) / 2)
 
-  const rasters = await image.readRasters()
-  // deno-lint-ignore no-explicit-any
-  const band = (rasters as any)[0] as ArrayLike<number>
+  const hexRecords = await aggregateRasterToHexagonsFromImage(image, config.raster, simplifiedBoundary, countryCode)
 
-  const features: ExposureFeatureInput[] = []
-  for (let row = 0; row < height; row++) {
-    const cellMinLat = ymax - (row + 1) * resY
-    const cellMaxLat = ymax - row * resY
-    const centerLat = (cellMinLat + cellMaxLat) / 2
-    for (let col = 0; col < width; col++) {
-      const value = band[row * width + col]
-      if (!isValidAnomalyPixel(value, noData)) continue
-
-      const cellMinLng = xmin + col * resX
-      const cellMaxLng = xmin + (col + 1) * resX
-      const centerLng = (cellMinLng + cellMaxLng) / 2
-      if (!pointWithinBoundary([centerLng, centerLat], simplifiedBoundary)) continue
-
-      features.push({
-        geometry: {
-          type: 'Polygon',
-          coordinates: [[
-            [cellMinLng, cellMinLat], [cellMaxLng, cellMinLat],
-            [cellMaxLng, cellMaxLat], [cellMinLng, cellMaxLat],
-            [cellMinLng, cellMinLat],
-          ]],
-        },
-        metricValue: value,
-        properties: { source: config.sourceName },
-      })
-    }
-  }
-
-  return features
+  return hexRecords.map((r) => ({
+    geometry: r.geometry,
+    // populationCount is PopulationRasterRecord's generic value field (see
+    // populationRasterRecord.ts) — holds the raw anomaly value here, not a
+    // headcount, per config.raster's pixelValueMeaning='mean'.
+    metricValue: r.populationCount,
+    properties: { source: config.sourceName, h3Cell: r.properties.h3Cell },
+  }))
 }
 
 export async function fetchGdoAnomaly(config: GdoAnomalyConfig, countryCodes: string[]): Promise<Map<string, ExposureFeatureInput[]>> {

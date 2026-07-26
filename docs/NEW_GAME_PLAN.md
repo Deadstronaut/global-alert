@@ -16,9 +16,10 @@ Bu doküman, çok günlük bir mimari inceleme/geliştirme sürecinde alınan t�
 - **Periyodik toplu katman güncellemeleri** (nüfus haritası, yol ağı gibi ayda/haftada bir değişen büyük veriler) → ya **Docker'daki ayrı, zamanlanmış "importer" konteynerlerinde** (GHSL, WorldPop, GloFAS, GDO toprak nemi/bitki örtüsü, HydroBASINS/RIVERS, OSM yol/bina — 10 tanesi de canlı, sağlıklı) ya da (sadece Kontur Population için) hâlâ Supabase'in kendi "Edge Function + pg_cron" mekanizmasında çalışıyor.
 - **"Python/GDAL işi" dediğiniz kısım:** `netcdf-service` — internet'e hiç açık olmayan, sadece diğer konteynerlerin arka planda kullandığı küçük bir Python servisi. Tek görevi: bazı kaynakların (özellikle GloFAS nehir taşkını verisi) NetCDF/GRIB2 formatında gelen dosyalarını, sistemin geri kalanının anlayacağı GeoTIFF'e çevirmek. Kendi başına bir özellik değil, bir "çevirmen".
 
-**Son günlerde (2026-07-25 → 07-26) eklenen iki büyük parça:**
+**Son günlerde (2026-07-25 → 07-26) eklenen üç büyük parça:**
 1. **Admin panelin güvenlik/denetim altyapısı** (Bölüm 7) — artık her silme/kritik değişiklik işlemi (kaynak silme, kullanıcı yetkisi düşürme, hesap askıya alma, kişi verisi anonimleştirme) admin'in kendi şifresini tekrar girmesini istiyor ve **kim, ne zaman, neyi değiştirdi** sorusu `audit_log` tablosunda artık gerçekten cevaplanabiliyor (önceden bu sütun hiç doldurulmuyormuş — bulunup düzeltilen gerçek bir bug).
 2. **Yeni bir afet tipinin (örn. "toprak kayması") koda hiç dokunmadan sisteme eklenebilmesi** (Bölüm 8) — önceden bu, bir geliştiricinin 7 farklı dosyaya dokunmasını ve yeni bir veritabanı migration'ı yazmasını gerektiriyordu. Artık admin panelden "Hazard Taksonomisi" ekranına yeni bir tip eklenip bir kaynak bağlandığında, sistem bunu otomatik olarak zaten var olan genel bir "diğer afetler" tablosuna yönlendiriyor, ikonunu/adını da yine admin panelden girilen bilgiden okuyor — hiçbir kod değişikliği/redeploy gerekmiyor.
+3. **İki "denenmemiş" kaynağın gerçek entegrasyonu** (Bölüm 9) — CHIRPS (yağış verisi) artık GHSL'le aynı Docker deseninde tam otomatik çalışıyor; INFORM Index gibi API'si olmayan, yıllık/statik ülke risk skorları için yeni bir admin ekranı eklendi.
 
 **Federasyon planı (her ülkenin kendi sunucusunu kendi kurması) nerede duruyor:** Rol/davet/yetki sistemi (`super_admin` → `country_admin` → `org_admin` → `viewer`) zaten sağlam ve bu iş için hazır. Ama gerçek bir "paket halinde teslim et, kur çalıştır" deneyimi HENÜZ yok — kurulum sihirbazı yazılmadı, self-hosted Supabase'de `pg_cron`/`pg_net`'in çalışıp çalışmayacağı hiç test edilmedi, ve depoda gerçek servis anahtarları içeren `.env` dosyaları hâlâ git'e commit'li duruyor (bu son madde ayrıca bir güvenlik riski — rotate edilmesi öneriliyor). Detaylı, ayrı bir doküman olarak `docs/FEDERATION_SETUP_PLAN.md`'de takip ediliyor.
 
@@ -406,7 +407,7 @@ Kullanıcının paylaştığı harici "Data Sources Inventory" tablosu (Data/Sou
 
 | Envanterdeki Ad | Bu Repodaki Karşılığı | Durum |
 |---|---|---|
-| CHIRPS (yağış katmanı) | — | ❌ Hiç entegre edilmedi, kod yok |
+| CHIRPS (yağış katmanı) | CHIRPS (`chirpsFetch.ts`) | ✅ Canlı (2026-07-26) — `chirps-importer-scheduled` (Docker, aylık), bkz. §9.1 |
 | SPI — Drought.gov (CMORPH) | GDO SPI (GPCC), farklı kaynak/aynı amaç | ❌ Bloke — bizim entegrasyonumuz Drought.gov'u değil GDO WCS'i kullanıyor; o da veri kalitesi sorunu yüzünden bloke (§2.3) |
 | EU GDO Soil Moisture | GDO Soil Moisture Anomaly (`gdoAnomalyFetch.ts`, `coverageID=smand`) | ✅ Canlı — `gdo-anomaly-importer-scheduled` (Docker, aylık) |
 | FAPAR (CLMS) | GDO fAPAR Anomaly VIIRS (`coverageID=fpanv`) | ✅ Canlı — aynı konteyner |
@@ -414,7 +415,7 @@ Kullanıcının paylaştığı harici "Data Sources Inventory" tablosu (Data/Sou
 | Kontur Population | Kontur Population | ✅ Canlı — Edge Function + `pg_cron` (tek Edge-Function-canlı katman kaynağı) |
 | WorldPop | WorldPop | ✅ Canlı — `worldpop-importer-scheduled` (Docker, aylık) |
 | Mwta (Meta yüksek çözünürlük nüfus) | Meta/HDX Population | ✅ Canlı ama SADECE elle (`meta-downloader` + `meta-ghsl-importer`) — HDX dataset'i 2024'ten beri donmuş, zamanlama kasıtlı yok |
-| INFORM Index | — | ❌ API'si yok, statik/yıllık veri — bilinçli olarak kod kapsamı dışı bırakıldı (§2.4) |
+| INFORM Index | `country_risk_indices` tablosu + admin ekranı | ✅ Canlı (2026-07-26) — API'si olmadığı için otomatik çekilmiyor, admin panelden yılda bir elle girilecek şekilde entegre edildi, bkz. §9.2 |
 | Geoboundaries | Yalnızca `country_boundaries` tablosunda TR için elle seed edilmiş sınır | 🟡 Kısmi — genel/otomatik bir Geoboundaries API entegrasyonu yok |
 | GDACS (cyclone) | GDACS REST+RSS, server `aggregator`'da | ✅ Canlı ama cyclone'a özel ayrım yok — GDACS'ın tüm hazard tipleri (earthquake/flood/wildfire/drought) tek `multi_hazard` altında toplanıyor |
 | JRC GFM | — | ❌ Bilinçli olarak atlandı — GloFAS ile kapsam örtüşmesi (§2.4) |
@@ -423,7 +424,7 @@ Kullanıcının paylaştığı harici "Data Sources Inventory" tablosu (Data/Sou
 | Roads — Google Maps | — | ❌ Hiç entegre edilmedi, Google Maps API hiç kullanılmıyor |
 | Roads OSM | OSM/Overpass Roads | 🟡 Kısmi canlı — `osm-roads-importer-scheduled` (Docker, haftalık); şu an sadece 1/3 ülke (TR) tam, aynı Overpass rate-limit sebebiyle |
 
-**Özet:** Envanterdeki 16 satırdan **8'i canlı/kısmi canlı** (GDO Soil Moisture, FAPAR, GHSL, Kontur, WorldPop, Meta/HDX, GDACS, OSM Buildings/Roads), **4'ü bilinçli olarak hiç entegre edilmedi** (CHIRPS, INFORM, JRC GFM, Google Maps Roads), **2'si kısmi/dolaylı karşılığı var ama envanterdeki spesifik kaynak değil** (SPI→GDO WCS değil Drought.gov; Geoboundaries→sadece TR elle seed), **1'i** (Building/OpenBuildingMap) doğrudan değil ama OSM Overpass eşdeğeri üzerinden kapsanıyor.
+**Özet (2026-07-26 itibarıyla güncellendi):** Envanterdeki 16 satırdan **10'u canlı/kısmi canlı** (GDO Soil Moisture, FAPAR, GHSL, Kontur, WorldPop, Meta/HDX, GDACS, OSM Buildings/Roads, **CHIRPS**, **INFORM Index** — son ikisi 2026-07-26'da eklendi, bkz. Bölüm 9), **2'si bilinçli olarak hiç entegre edilmedi** (JRC GFM, Google Maps Roads), **2'si kısmi/dolaylı karşılığı var ama envanterdeki spesifik kaynak değil** (SPI→GDO WCS değil Drought.gov; Geoboundaries→sadece TR elle seed), **1'i** (Building/OpenBuildingMap) doğrudan değil ama OSM Overpass eşdeğeri üzerinden kapsanıyor.
 
 ---
 
@@ -431,22 +432,22 @@ Kullanıcının paylaştığı harici "Data Sources Inventory" tablosu (Data/Sou
 
 Bu bölüm önceki bölümlerden farklı bir katman: veri kaynağı entegrasyonu değil, **admin panelin kendi güvenlik/denetim/UX-altyapısı** üzerine yapılan işi kapsıyor. Sadece fonksiyonel/teknik değişiklikler listelendi.
 
-### 7.1 `automation_kind` — kaynakların otomasyon modeline göre sınıflandırılması — ✅ TAMAMLANDI
+### 7.1 `automation_kind` — kaynakların otomasyon modeline göre sınıflandırılması — ✅ TAMAMLANDI (2026-07-25)
 - `data_sources` tablosuna yeni `automation_kind` sütunu: `continuous` (aggregator'da sürekli açık, örn. EMSC/USGS) / `scheduled` (cron ile periyodik, örn. GHSL/GloFAS) / `manual` (elle tetiklenen, örn. Meta/HDX importer).
 - `sourceDisplayState.js` (yeni, `src/utils/`) — `computeDisplayState(source, now)` tek bir yerden kaynağın EKRANDA gösterilecek durumunu hesaplıyor (healthy/degraded/down/offline/overdue/pending/disabled), `automation_kind`'a göre farklı gecikme toleransı uyguluyor (continuous için "offline" = kırmızı/acil, scheduled/manual için "overdue" = amber/beklenen). Hem `SourceHealthCard.vue`'nin rozeti hem `sourceScope.js`'nin "Duruma Göre" sıralaması AYNI fonksiyonu kullanıyor — daha önce sıralama ham DB `health_state`'i kullanıyordu ve rozette görünenle tutarsızdı, bu düzeltildi.
 - "Kaynak Ekle" formuna (`SourceFormModal.vue`) kullanıcı dostu bir frekans seçici eklendi (`FREQUENCY_OPTIONS`), seçilen değer hem `automation_kind` hem `poll_interval_seconds`'a yazılıyor.
 
-### 7.2 "Şimdi Çalıştır" — manuel kaynaklar için elle tetikleme — ✅ TAMAMLANDI
+### 7.2 "Şimdi Çalıştır" — manuel kaynaklar için elle tetikleme — ✅ TAMAMLANDI (2026-07-25)
 - Mimari kural korunarak (`server/src/index.js` başlığı: "Frontend ile DOĞRUDAN iletişim YOK") frontend aggregator'a asla doğrudan HTTP isteği atmıyor. Bunun yerine `manual_trigger_requested_at` timestamp'i DB'ye yazılıyor, `dynamicSources.js`'in zaten var olan 60 saniyelik tarama döngüsü bunu görüp kaynağı tetikliyor.
 - `SourceHealthCard.vue`'de `canTriggerManually` computed'ı, sadece `automation_kind==='manual'` VE `endpoint_config.field_map.id` olan (yani jenerik/custom kaynak mekanizmasına uygun) kaynaklarda "🔁 Şimdi Çalıştır" butonunu gösteriyor — Docker-importer ailesi (örn. Meta/HDX) bu mekanizmayla hiç yakalanmadığı için buton orada YOK (yanlış vaat vermemek için).
 
-### 7.3 `audit_log.changed_by` hiç doldurulmuyordu — gerçek, önceden fark edilmemiş bug — ✅ DÜZELTİLDİ
+### 7.3 `audit_log.changed_by` hiç doldurulmuyordu — gerçek, önceden fark edilmemiş bug — ✅ DÜZELTİLDİ (2026-07-26)
 - `audit_log` tablosunun `changed_by UUID REFERENCES auth.users(id)` sütunu, tablonun ilk oluşturulduğu migration'dan (`20260605120000_audit_log.sql`) beri **hiçbir zaman** set edilmiyordu — "bunu kim sildi/değiştirdi" sorusu, sütun DB'de var olmasına rağmen hiç cevaplanamıyordu.
 - Kök neden: `log_table_change()` trigger fonksiyonu `SECURITY DEFINER` ile çalışıyor ama `auth.uid()` çağıran isteğin JWT'sine bakıyor (owner'a değil, session-scoped) — bu satır trigger'ın INSERT/UPDATE/DELETE dallarının hiçbirine hiç yazılmamıştı.
 - Düzeltme: `supabase/migrations/20260726100000_audit_log_changed_by.sql` — üç dalın üçüne de `changed_by: auth.uid()` eklendi. Canlıya `supabase db push` ile uygulandı; hem doğrudan API çağrısıyla hem tarayıcı üzerinden gerçek bir silme işlemiyle `changed_by`'ın artık doğru UUID ile dolduğu doğrulandı.
 - Yan temizlik: teşhis için eklenmiş geçici `debug_whoami()` SQL fonksiyonu `20260726100200_drop_debug_whoami.sql` ile kaldırıldı.
 
-### 7.4 Native `window.confirm()` → `ConfirmDialog.vue` + şifre onaylı silme — ✅ TAMAMLANDI
+### 7.4 Native `window.confirm()` → `ConfirmDialog.vue` + şifre onaylı silme — ✅ TAMAMLANDI (2026-07-25 → 2026-07-26)
 - Yeni `src/components/ConfirmDialog.vue` — ortada açılan, uygulama temasıyla tutarlı, yeniden kullanılabilir onay modalı. Props: `requirePassword` (destructive aksiyonlar için şifre alanı gösterir, boşken confirm butonu disabled), `danger` (kırmızı buton stili), caller-supplied `error`/`submitting`.
 - Şifre doğrulaması component'in İÇİNDE değil, çağıran view'da yapılıyor: `supabase.auth.signInWithPassword()` mevcut oturumun e-postasıyla tekrar çağrılıyor (`verifyOwnPassword()` helper'ı, `AdminView.vue`) — başarısızsa dialog kapanmadan hata gösteriliyor, admin şifreyi tekrar deneyebiliyor.
 - Şu an şifre onaylı `ConfirmDialog` uygulanan aksiyonlar: kaynak silme, kaynak devre-dışı/etkinleştirme toggle'ı, kullanıcı yetkisini düşürme (revoke access → `viewer` rolüne indirme), kullanıcı askıya alma (suspend), kişi (contact) anonimleştirme (`ContactsPanel.vue` — GDPR spec 031, zaten geri alınamaz bir işlem).
@@ -488,7 +489,7 @@ Bu bölüm önceki bölümlerden farklı bir katman: veri kaynağı entegrasyonu
 
 Envanterde "hiç denenmedi" (CHIRPS) ve "API'si yok, otomasyona uygun değil" (INFORM Index) diye işaretli iki kalem araştırıldı; ikisi de gerçekten yapılabilir çıktı, ama birbirinden çok farklı iki mekanizma gerektirdiler.
 
-### 9.1 CHIRPS — GHSL'in aynı deseni, Docker raster-importer olarak — ✅ TAMAMLANDI
+### 9.1 CHIRPS — GHSL'in aynı deseni, Docker raster-importer olarak — ✅ TAMAMLANDI (2026-07-26)
 
 Canlı araştırıldı: UCSB Climate Hazards Center, `https://data.chc.ucsb.edu/products/CHIRPS-2.0/global_monthly/tifs/chirps-v2.0.{YIL}.{AY}.tif.gz` adresinde kimlik doğrulama gerektirmeyen, tahmin edilebilir bir URL'de global aylık yağış verisini (gzip'li tek bir GeoTIFF, ~14MB) yayınlıyor — NetCDF/GRIB yok, Python/GDAL gerekmiyor. GHSL'den bile basit: tek global dosya, GHSL'in tile-grid/sınır-birleştirme adımları hiç gerekmiyor.
 
@@ -498,7 +499,7 @@ Canlı araştırıldı: UCSB Climate Hazards Center, `https://data.chc.ucsb.edu/
 
 **Frontend'e hiç dokunulmadı** — `exposure_datasets` zaten admin panelin "Etkilenme Verisi" sekmesinden generic okunuyor. **Canlı doğrulandı:** `docker compose run --rm chirps-importer` → 3 ülke, 43.940 feature, 0 ret → admin panelde "chirps — tr/mg/my — 2026-07" otomatik göründü → örnek değerler ~25-30mm (Türkiye için Haziran ortalaması olarak makul — toplanmış olsaydı yüzlerce/binlerce olurdu, bu da `'mean'` modunun doğru çalıştığının kanıtı).
 
-### 9.2 INFORM Index — yeni bir "yıllık ülke skoru" ekranı — ✅ TAMAMLANDI
+### 9.2 INFORM Index — yeni bir "yıllık ülke skoru" ekranı — ✅ TAMAMLANDI (2026-07-26)
 
 INFORM'un hiç API'si yok (statik, yıllık yayın) — ne "Manuel Giriş" formu (sadece lat/lng afet olayları için) ne de `risk_indicators`/`risk_area_scores` mekanizması (hesaplanan, alt-bölge+hazard-type bazlı bir pipeline) buna uyuyordu. Yeni, küçük bir tablo (`country_risk_indices`) + `risk_indicators`'ın kanıtlanmış RLS desenini (super_admin hepsi, country_admin/org_admin sadece kendi ülkesi, anon/public okuma YOK — aynı hassas-veri temkinini koruyarak) birebir kopyalayan bir admin ekranı yazıldı.
 

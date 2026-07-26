@@ -64,8 +64,11 @@ export const useUIStore = defineStore('ui', () => {
     }
 
     // Shelter map layer visibility (spec 027) — independent of mapMode, always
-    // relevant regardless of visualization mode
-    const showShelters = ref(true);
+    // relevant regardless of visualization mode. Defaults to off (2026-07-26
+    // feedback) — now that OSM-imported shelters actually populate this
+    // layer (649 points in TR alone), leaving it on by default clutters the
+    // map before the user has asked for it.
+    const showShelters = ref(false);
     function toggleShelters() {
         showShelters.value = !showShelters.value;
     }

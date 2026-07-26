@@ -16,7 +16,13 @@ export interface RasterSourceConfig {
   // summing — not needed by any currently-configured source, but the field
   // exists so a future density-based raster source doesn't require
   // rewriting the aggregation function's contract.
-  pixelValueMeaning: 'count' | 'density'
+  // 'mean' (added for CHIRPS, spec-less follow-up 2026-07-26) = each pixel
+  // value is a non-additive measurement (e.g. rainfall in mm) — summing a
+  // hexagon's pixel values would produce a meaningless number, so this mode
+  // averages them instead. Distinct from 'density': 'density' is still
+  // headed toward a *count* (people), just via a pixel-area conversion
+  // first; 'mean' never becomes a count at all.
+  pixelValueMeaning: 'count' | 'density' | 'mean'
 }
 
 export const WORLDPOP_SOURCE_CONFIG: RasterSourceConfig = {
@@ -50,4 +56,15 @@ export const GHSL_SOURCE_CONFIG: RasterSourceConfig = {
   sourceName: 'ghsl',
   h3Resolution: 6,
   pixelValueMeaning: 'count',
+}
+
+// CHIRPS monthly rainfall — a single global 0.05° GeoTIFF (chirpsFetch.ts),
+// no tiling/merge needed unlike GHSL. Resolution 6 (matches GHSL's
+// coarser-than-WorldPop choice) — CHIRPS's ~5.5km pixels shouldn't be
+// bucketed into H3 cells much smaller than that. pixelValueMeaning='mean'
+// because rainfall mm is not additive across a hexagon's pixels.
+export const CHIRPS_SOURCE_CONFIG: RasterSourceConfig = {
+  sourceName: 'chirps',
+  h3Resolution: 6,
+  pixelValueMeaning: 'mean',
 }

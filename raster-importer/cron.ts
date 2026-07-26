@@ -33,6 +33,7 @@
  * change rarely), not inherited from anywhere.
  */
 import { runGhslImport } from './import-ghsl.ts'
+import { runChirpsImport } from './import-chirps.ts'
 import { runGlofasImport } from './import-glofas.ts'
 import { runGdoAnomalyImport } from './import-gdo-anomaly.ts'
 import { runWorldPopImport } from './import-worldpop.ts'
@@ -45,6 +46,7 @@ const JOBS: Record<string, { name: string; run: () => Promise<void>; schedule: s
   ghsl: { name: 'ghsl-population-import', run: runGhslImport, schedule: '0 3 1 * *' },
   glofas: { name: 'glofas-river-discharge-import', run: runGlofasImport, schedule: '0 4 * * *' },
   'gdo-anomaly': { name: 'gdo-anomaly-import', run: runGdoAnomalyImport, schedule: '0 5 1 * *' },
+  chirps: { name: 'chirps-rainfall-import', run: runChirpsImport, schedule: '0 6 1 * *' },
   worldpop: { name: 'worldpop-population-import', run: runWorldPopImport, schedule: '0 7 1 * *' }, // matches old import-worldpop-monthly
   hydrobasins: { name: 'hydrobasins-import', run: runHydroBasinsImport, schedule: '0 8 1 * *' },
   hydrorivers: { name: 'hydrorivers-import', run: runHydroRiversImport, schedule: '0 9 1 * *' },

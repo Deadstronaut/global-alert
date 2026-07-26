@@ -128,6 +128,22 @@ services:
     networks:
       - mhews
 
+  # ── CHIRPS monthly rainfall importer (manual, run-to-completion) ────────────
+  # Single global monthly GeoTIFF (chirpsFetch.ts), no tile grid unlike GHSL —
+  # no /rasters or manifest.json mount needed, just Supabase credentials and
+  # outbound network access.
+  #   docker compose run --rm chirps-importer
+  chirps-importer:
+    build:
+      context: .
+      dockerfile: raster-importer/Dockerfile
+    container_name: mhews-chirps-importer
+    command: ["raster-importer/import-chirps.ts"]
+    env_file:
+      - ./server/.env
+    networks:
+      - mhews
+
   # ── GloFAS river discharge importer (manual, run-to-completion) ─────────────
   # EWDS (submit/poll/download, ewdsClient.ts) -> netcdf-service (GDAL
   # NetCDF->GeoTIFF conversion) -> exposure_datasets. See
@@ -355,6 +371,21 @@ services:
     container_name: mhews-ghsl-importer-scheduled
     restart: unless-stopped
     command: ["raster-importer/cron.ts", "ghsl"]
+    env_file:
+      - ./server/.env
+    networks:
+      - mhews
+
+  # Same as chirps-importer above, but stays running and fires itself monthly
+  # via Deno.cron (raster-importer/cron.ts). Starts automatically with
+  # `docker compose up -d`, matching aggregator/ghsl-importer-scheduled.
+  chirps-importer-scheduled:
+    build:
+      context: .
+      dockerfile: raster-importer/Dockerfile
+    container_name: mhews-chirps-importer-scheduled
+    restart: unless-stopped
+    command: ["raster-importer/cron.ts", "chirps"]
     env_file:
       - ./server/.env
     networks:

@@ -176,6 +176,11 @@ export async function aggregateRasterToHexagonsFromImage(
   const cropWidth = Math.max(0, colEnd - colStart)
 
   const accumulator = new Map<string, number>()
+  // Only populated/consulted for pixelValueMeaning='mean' (CHIRPS) — a
+  // second Map so 'count'/'density' sources (GHSL/WorldPop/Meta) keep
+  // their exact existing behavior and cost untouched.
+  const isMean = config.pixelValueMeaning === 'mean'
+  const pixelCounts = isMean ? new Map<string, number>() : null
 
   for (let rowStart = rowStartClip; rowStart < rowEndClip; rowStart += ROW_BLOCK_SIZE) {
     const rowEnd = Math.min(rowStart + ROW_BLOCK_SIZE, rowEndClip)
@@ -193,19 +198,21 @@ export async function aggregateRasterToHexagonsFromImage(
         const lng = xmin + (colStart + col + 0.5) * resX
         const cell = latLngToCell(lat, lng, config.h3Resolution)
         accumulator.set(cell, (accumulator.get(cell) ?? 0) + value)
+        if (pixelCounts) pixelCounts.set(cell, (pixelCounts.get(cell) ?? 0) + 1)
       }
     }
   }
 
   const records: PopulationRasterRecord[] = []
-  for (const [cell, populationCount] of accumulator) {
+  for (const [cell, sum] of accumulator) {
     const [centerLat, centerLng] = cellToLatLng(cell) as [number, number]
     if (!pointWithinBoundary([centerLng, centerLat], countryBoundary)) continue
 
+    const value = pixelCounts ? sum / (pixelCounts.get(cell) ?? 1) : sum
     const boundary = cellToBoundary(cell, true) as [number, number][]
     records.push({
       geometry: { type: 'Polygon', coordinates: [[...boundary, boundary[0]]] },
-      populationCount,
+      populationCount: value,
       countryCode,
       properties: { h3Cell: cell, source: config.sourceName },
     })

@@ -631,6 +631,29 @@
       "thresholdsTitle": "Şiddet Eşikleri"
     }
   },
+  "countryRiskIndex": {
+    "title": "Ülke Risk Endeksleri (INFORM vb.)",
+    "hint": "API'si olmayan, doğrudan yayınlanan yıllık bileşik risk skorları (örn. INFORM Index) — ülke başına yılda bir kez girilir.",
+    "addButton": "+ Ekle",
+    "editTitle": "Risk Endeksini Düzenle",
+    "createTitle": "Risk Endeksi Ekle",
+    "country": "Ülke",
+    "year": "Yıl",
+    "hazardExposure": "Tehlike ve Maruziyet",
+    "vulnerability": "Kırılganlık",
+    "copingCapacity": "Baş Etme Kapasitesi Eksikliği",
+    "composite": "Bileşik Skor",
+    "source": "Kaynak",
+    "notes": "Notlar",
+    "edit": "düzenle",
+    "remove": "kaldır",
+    "empty": "Henüz risk endeksi kaydı yok.",
+    "cancel": "İptal",
+    "save": "Kaydet",
+    "countryCodeInvalid": "Ülke kodu 2 harf olmalı.",
+    "yearInvalid": "Yıl geçerli bir sayı olmalı.",
+    "duplicateYear": "Bu ülke/yıl/kaynak için zaten bir kayıt var."
+  },
   "incidentTracking": {
     "aarLabel": "Değerlendirme notları",
     "viewOriginatingAlert": "Kaynak uyarıyı görüntüle",

@@ -631,6 +631,29 @@
       "thresholdsTitle": "Severity Thresholds"
     }
   },
+  "countryRiskIndex": {
+    "title": "Country Risk Indices (INFORM etc.)",
+    "hint": "Yearly, directly-published composite risk scores (e.g. INFORM Index) with no API — entered once per country per year.",
+    "addButton": "+ Add",
+    "editTitle": "Edit Risk Index",
+    "createTitle": "Add Risk Index",
+    "country": "Country",
+    "year": "Year",
+    "hazardExposure": "Hazard & Exposure",
+    "vulnerability": "Vulnerability",
+    "copingCapacity": "Lack of Coping Capacity",
+    "composite": "Composite Score",
+    "source": "Source",
+    "notes": "Notes",
+    "edit": "edit",
+    "remove": "remove",
+    "empty": "No risk index entries yet.",
+    "cancel": "Cancel",
+    "save": "Save",
+    "countryCodeInvalid": "Country code must be 2 letters.",
+    "yearInvalid": "Year must be a valid number.",
+    "duplicateYear": "An entry for this country/year/source already exists."
+  },
   "incidentTracking": {
     "aarLabel": "After-action notes",
     "viewOriginatingAlert": "View originating alert",

@@ -18,6 +18,7 @@ import { rowsToCsv, rowsToJson, triggerDownload } from '@/lib/auditExport.js'
 import { buildComplianceChecklist, TEMPLATE_VERSION } from '@/services/complianceChecklist.js'
 import ExposureDatasetManager from '@/components/impact/ExposureDatasetManager.vue'
 import RiskIndicatorConfig from '@/components/risk/RiskIndicatorConfig.vue'
+import CountryRiskIndexPanel from '@/components/risk/CountryRiskIndexPanel.vue'
 import RiskScoreDashboard from '@/components/risk/RiskScoreDashboard.vue'
 import ScenarioBuilder from '@/components/risk/ScenarioBuilder.vue'
 import ContactsPanel from '@/components/admin/ContactsPanel.vue'
@@ -2084,6 +2085,7 @@ onUnmounted(() => {
       <RiskIndicatorConfig />
       <RiskScoreDashboard />
       <ScenarioBuilder />
+      <CountryRiskIndexPanel />
     </div>
 
     <!-- ── Community Reports moderation tab (spec 036) ──────────────────────── -->

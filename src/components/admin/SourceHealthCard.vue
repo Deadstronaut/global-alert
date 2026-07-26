@@ -117,15 +117,42 @@ function relativeTime(iso) {
       </span>
     </div>
     <div v-if="canManage" class="source-actions">
-      <button v-if="canTriggerManually" class="btn-trigger" @click="$emit('trigger-now', source)">
+      <button
+        v-if="canTriggerManually"
+        class="btn-trigger"
+        title="Bu kaynağı hemen, bir sonraki zamanlamayı beklemeden çalıştır"
+        @click="$emit('trigger-now', source)"
+      >
         🔁 Şimdi Çalıştır
       </button>
-      <button class="btn-edit" @click="$emit('edit', source)">✏️ Düzenle</button>
-      <button class="btn-toggle" @click="$emit('toggle-active', source)">
+      <button
+        class="btn-edit"
+        title="Bu kaynağın ayarlarını düzenle"
+        @click="$emit('edit', source)"
+      >
+        ✏️ Düzenle
+      </button>
+      <button
+        class="btn-toggle"
+        :title="source.is_active ? 'Bu kaynağı devre dışı bırak (veri çekmeyi durdurur)' : 'Bu kaynağı yeniden etkinleştir'"
+        @click="$emit('toggle-active', source)"
+      >
         {{ source.is_active ? '⏸ Devre Dışı Bırak' : '▶ Etkinleştir' }}
       </button>
-      <button class="btn-audit" @click="$emit('view-audit', source)">📜 Geçmiş</button>
-      <button class="btn-delete" @click="$emit('delete', source)">🗑</button>
+      <button
+        class="btn-audit"
+        title="Bu kaynakla ilgili geçmiş değişiklik kayıtlarını (audit log) görüntüle"
+        @click="$emit('view-audit', source)"
+      >
+        📜 Geçmiş
+      </button>
+      <button
+        class="btn-delete"
+        title="Bu kaynağı kalıcı olarak sil (şifre onayı istenir)"
+        @click="$emit('delete', source)"
+      >
+        🗑️ Sil
+      </button>
     </div>
   </div>
 </template>
@@ -190,6 +217,19 @@ function relativeTime(iso) {
   align-items: center;
   justify-content: center;
   gap: 4px;
+  /* Fixed height (not height:100%) — with grid-auto-rows left at its default
+     "auto", each ROW sizes to its own tallest cell's content, so a row that
+     happens to hold two short single-line buttons ends up shorter than a
+     row holding a two-line label (e.g. "Devre Dışı Bırak" wraps, "Sil"
+     doesn't). height:100% then stretches every button to ITS OWN row's
+     height, so rows visibly differed in padding/size (2026-07-26 feedback:
+     "alttaki 4 tuşun paddingleri aynı değil"). Pinning every button to the
+     same fixed height regardless of row makes all cells identical
+     "hesap makinesi tuşu" size no matter how the label wraps or how many
+     rows this card has (4 vs 5 buttons).  */
+  width: 100%;
+  height: 40px;
+  box-sizing: border-box;
   padding: 6px 8px;
   border-radius: 6px;
   border: 1px solid rgba(255, 255, 255, 0.12);

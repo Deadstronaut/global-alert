@@ -743,7 +743,8 @@
       "ghsl": "السكان (GHSL)",
       "metaHdx": "السكان (Meta/HDX)",
       "glofasRiverDischarge": "تصريف النهر (GloFAS)",
-      "osmBuildings": "المرافق الحيوية (المباني)"
+      "osmBuildings": "المرافق الحيوية (المباني)",
+      "chirps": "هطول الأمطار (CHIRPS)"
     },
     "countryLabel": {
       "tr": "تركيا",

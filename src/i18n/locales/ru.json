@@ -743,7 +743,8 @@
       "ghsl": "Население (GHSL)",
       "metaHdx": "Население (Meta/HDX)",
       "glofasRiverDischarge": "Речной сток (GloFAS)",
-      "osmBuildings": "Критически важные объекты (здания)"
+      "osmBuildings": "Критически важные объекты (здания)",
+      "chirps": "Осадки (CHIRPS)"
     },
     "countryLabel": {
       "tr": "Турция",

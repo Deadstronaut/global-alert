@@ -45,7 +45,7 @@ export const POPULATION_RAMP = ['#ffffb2', '#fed976', '#fd8d3c', '#f03b20', '#bd
 // pattern instead of a heatmap. These need the same graduated-ramp +
 // thin/low-opacity outline treatment as population, just a visually
 // distinct ramp so the two categories don't look identical on the map.
-const GRID_METRIC_SOURCES = new Set(['gdo_spi', 'gdo_fapar_anomaly', 'gdo_soil_moisture_anomaly', 'glofas_river_discharge'])
+const GRID_METRIC_SOURCES = new Set(['gdo_spi', 'gdo_fapar_anomaly', 'gdo_soil_moisture_anomaly', 'glofas_river_discharge', 'chirps'])
 const GRID_METRIC_SWATCH_COLOR = '#2171b5'
 export const GRID_METRIC_RAMP = ['#f7fbff', '#c6dbef', '#6baed6', '#2171b5', '#08306b']
 

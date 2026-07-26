@@ -743,7 +743,8 @@
       "ghsl": "人口（GHSL）",
       "metaHdx": "人口（Meta/HDX）",
       "glofasRiverDischarge": "河流流量（GloFAS）",
-      "osmBuildings": "关键设施（建筑物）"
+      "osmBuildings": "关键设施（建筑物）",
+      "chirps": "降雨量（CHIRPS）"
     },
     "countryLabel": {
       "tr": "土耳其",

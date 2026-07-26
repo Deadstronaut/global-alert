@@ -20,6 +20,7 @@ const SOURCE_LABEL_KEYS = {
   meta_hdx: 'exposureLayers.sourceLabel.metaHdx',
   glofas_river_discharge: 'exposureLayers.sourceLabel.glofasRiverDischarge',
   'osm-buildings': 'exposureLayers.sourceLabel.osmBuildings',
+  chirps: 'exposureLayers.sourceLabel.chirps',
 }
 
 const COUNTRY_LABEL_KEYS = {

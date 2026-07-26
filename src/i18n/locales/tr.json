@@ -743,7 +743,8 @@
       "ghsl": "Nüfus (GHSL)",
       "metaHdx": "Nüfus (Meta/HDX)",
       "glofasRiverDischarge": "Nehir Debisi (GloFAS)",
-      "osmBuildings": "Kritik Tesisler (Bina)"
+      "osmBuildings": "Kritik Tesisler (Bina)",
+      "chirps": "Yağış (CHIRPS)"
     },
     "countryLabel": {
       "tr": "Türkiye",

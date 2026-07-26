@@ -743,7 +743,8 @@
       "ghsl": "Population (GHSL)",
       "metaHdx": "Population (Meta/HDX)",
       "glofasRiverDischarge": "Débit Fluvial (GloFAS)",
-      "osmBuildings": "Établissements Critiques (Bâtiments)"
+      "osmBuildings": "Établissements Critiques (Bâtiments)",
+      "chirps": "Précipitations (CHIRPS)"
     },
     "countryLabel": {
       "tr": "Turquie",

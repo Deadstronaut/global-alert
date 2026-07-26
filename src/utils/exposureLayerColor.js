@@ -1,13 +1,21 @@
 /**
  * Per-dataset color assignment for exposure map layers (spec 042, styling
- * pass 2026-07-19). Sources with an established real-world map convention
- * get a fixed color (rivers=dark blue, basins=light blue, roads=gray);
- * population sources are graduated (choropleth) by their metric value
- * instead of a single flat color. Any other/future source falls back to a
- * deterministic hash-based pick from a colorblind-safe categorical palette
- * (Okabe-Ito), so a brand-new source still renders distinguishably with
- * zero code changes (matches this project's existing "unknown source still
- * works, just unstyled" i18n fallback convention).
+ * pass 2026-07-19; per-category ramp pass 2026-07-26). Sources with an
+ * established real-world map convention get a fixed color (rivers=dark
+ * blue, basins=light blue, roads=gray, critical facilities=violet);
+ * population and other gridded-metric sources are graduated (choropleth)
+ * by their metric value instead of a single flat color. Any other/future
+ * source falls back to a deterministic hash-based pick from a
+ * colorblind-safe categorical palette (Okabe-Ito), so a brand-new source
+ * still renders distinguishably with zero code changes (matches this
+ * project's existing "unknown source still works, just unstyled" i18n
+ * fallback convention).
+ *
+ * 2026-07-26: previously every gridded-metric source (rainfall, drought,
+ * vegetation anomaly, soil moisture anomaly, river discharge) shared ONE
+ * blue ramp — they all looked identical on the map/layer panel despite
+ * being conceptually unrelated quantities. Each now gets its own
+ * thematically-appropriate ramp (see GRID_METRIC_RAMPS) instead.
  */
 
 const PALETTE = [
@@ -22,32 +30,43 @@ const PALETTE = [
 ]
 
 const FIXED_SOURCE_COLORS = {
-  hydrorivers: '#08306b', // dark blue
-  hydrobasins: '#a8d8f0', // light blue
-  osm: '#6c757d', // gray
+  hydrorivers: '#08306b', // dark blue — literal river network
+  hydrobasins: '#4a90a4', // slate teal — watershed boundary lines, distinct from both hydrorivers' blue and the soil-moisture ramp below
+  osm: '#6c757d', // gray — road network, standard cartographic road color
+  'osm-buildings': '#8e44ad', // violet — critical facilities/points of interest, distinct from every other category here
 }
 
 // Population sources are rendered as a graduated (choropleth) ramp instead
-// of one flat color — see populationFillExpression() below. This swatch
-// color is only used for the panel's small color-dot preview and the
-// opacity slider's accent color, a representative mid-ramp tone.
+// of one flat color — see populationFillExpression() below. The swatch
+// color (colorForDataset) uses a representative mid-ramp tone.
 const POPULATION_SOURCES = new Set(['kontur', 'worldpop', 'ghsl', 'meta_hdx'])
-const POPULATION_SWATCH_COLOR = '#fd8d3c'
-export const POPULATION_RAMP = ['#ffffb2', '#fed976', '#fd8d3c', '#f03b20', '#bd0026']
+// White -> red: the conventional population-density sequential ramp (low
+// density reads as "empty"/white, not as a competing hue).
+export const POPULATION_RAMP = ['#ffffff', '#fee5d9', '#fcae91', '#fb6a4a', '#cb181d']
 
 // Other per-pixel gridded metrics (GDO drought/vegetation/soil-moisture
-// anomalies, GloFAS river discharge) are built the same way population
-// rasters are — one small polygon per source pixel, covering an entire
-// country at ~0.08-0.1° resolution. Rendered with a single flat fill color
-// and a full-opacity 2px outline (the non-gridded default, meant for a
-// handful of large features like roads/rivers), thousands of adjacent
-// same-color cells with solid borders read as a dense, illegible grid/moiré
-// pattern instead of a heatmap. These need the same graduated-ramp +
-// thin/low-opacity outline treatment as population, just a visually
-// distinct ramp so the two categories don't look identical on the map.
+// anomalies, GloFAS river discharge, CHIRPS rainfall) are built the same
+// way population rasters are — one small polygon per source pixel/hexagon,
+// covering an entire country. Rendered with a graduated fill + a thin,
+// low-opacity outline (see MapView.vue's isGridded branch) rather than the
+// non-gridded default (meant for a handful of large features like roads/
+// rivers) — thousands of adjacent same-color cells with solid borders
+// otherwise read as a dense, illegible grid/moiré pattern instead of a
+// heatmap.
 const GRID_METRIC_SOURCES = new Set(['gdo_spi', 'gdo_fapar_anomaly', 'gdo_soil_moisture_anomaly', 'glofas_river_discharge', 'chirps'])
-const GRID_METRIC_SWATCH_COLOR = '#2171b5'
-export const GRID_METRIC_RAMP = ['#f7fbff', '#c6dbef', '#6baed6', '#2171b5', '#08306b']
+
+// One ramp per source, each chosen to match what the quantity actually is
+// rather than a single shared "generic data" blue:
+const GRID_METRIC_RAMPS = {
+  chirps: ['#f0f9ff', '#bae6fd', '#38bdf8', '#0284c7', '#075985'], // rainfall — light -> dark blue
+  gdo_fapar_anomaly: ['#f0fdf4', '#bbf7d0', '#4ade80', '#16a34a', '#14532d'], // vegetation anomaly — light -> dark green
+  gdo_soil_moisture_anomaly: ['#ecfeff', '#a5f3fc', '#22d3ee', '#0891b2', '#164e63'], // soil moisture anomaly — light -> dark teal/cyan (water-adjacent but distinct from rainfall's blue)
+  glofas_river_discharge: ['#eef2ff', '#c7d2fe', '#818cf8', '#4f46e5', '#312e81'], // river discharge — light -> dark indigo (also water-related, distinct hue from rainfall)
+  gdo_spi: ['#fefce8', '#fde68a', '#f59e0b', '#c2410c', '#7c2d12'], // drought severity (SPI) — light tan -> dark brown, the conventional "dry earth" drought palette
+}
+// Fallback for any future gridded-metric source not yet given its own ramp
+// above — keeps the old shared-blue behavior rather than erroring.
+const DEFAULT_GRID_METRIC_RAMP = ['#f7fbff', '#c6dbef', '#6baed6', '#2171b5', '#08306b']
 
 function hashString(str) {
   let hash = 0
@@ -66,14 +85,22 @@ export function isGridMetricSource(sourceName) {
   return GRID_METRIC_SOURCES.has(sourceName)
 }
 
+/** The graduated ramp a given gridded-metric source_name should render with (falls back to a generic blue for anything not individually categorized). */
+export function rampForGridMetric(sourceName) {
+  return GRID_METRIC_RAMPS[sourceName] ?? DEFAULT_GRID_METRIC_RAMP
+}
+
 /**
  * @param {{ id: string, source_name?: string|null }} dataset
  */
 export function colorForDataset(dataset) {
   const sourceName = dataset?.source_name
   if (sourceName && FIXED_SOURCE_COLORS[sourceName]) return FIXED_SOURCE_COLORS[sourceName]
-  if (sourceName && POPULATION_SOURCES.has(sourceName)) return POPULATION_SWATCH_COLOR
-  if (sourceName && GRID_METRIC_SOURCES.has(sourceName)) return GRID_METRIC_SWATCH_COLOR
+  if (sourceName && POPULATION_SOURCES.has(sourceName)) return POPULATION_RAMP[Math.floor(POPULATION_RAMP.length / 2)]
+  if (sourceName && GRID_METRIC_SOURCES.has(sourceName)) {
+    const ramp = rampForGridMetric(sourceName)
+    return ramp[Math.floor(ramp.length / 2)]
+  }
 
   const id = String(dataset?.id ?? '')
   const index = hashString(id) % PALETTE.length

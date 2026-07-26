@@ -29,7 +29,7 @@ import { useAuthStore } from '@/stores/auth.js'
 import { supabase } from '@/services/api/config.js'
 import { getShelterMarkerColor, getShelterMarkerIcon } from '@/services/shelterMarkerStyle.js'
 import { useExposureLayersStore } from '@/stores/exposureLayers.js'
-import { colorForDataset, isPopulationSource, isGridMetricSource, populationFillExpression, gridMetricFillExpression, GRID_METRIC_RAMP } from '@/utils/exposureLayerColor.js'
+import { colorForDataset, isPopulationSource, isGridMetricSource, populationFillExpression, gridMetricFillExpression, rampForGridMetric } from '@/utils/exposureLayerColor.js'
 import { buildFeaturePopupHtml } from '@/utils/exposureFeaturePopup.js'
 import { friendlyDatasetLabel } from '@/utils/exposureLayerLabel.js'
 
@@ -209,7 +209,7 @@ async function addExposureLayer(dataset) {
   // pattern instead of a heatmap, so both get a quantile-graduated fill and
   // a thin, low-opacity outline instead.
   const isGridded = isPopulation || isGridMetric
-  const fillColor = isPopulation ? populationFillExpression(geojson) : isGridMetric ? gridMetricFillExpression(geojson, GRID_METRIC_RAMP) : color
+  const fillColor = isPopulation ? populationFillExpression(geojson) : isGridMetric ? gridMetricFillExpression(geojson, rampForGridMetric(dataset.source_name)) : color
   map.addSource(sourceId, { type: 'geojson', data: geojson })
   map.addLayer({ id: `${sourceId}-fill`, type: 'fill', source: sourceId, filter: ['==', ['geometry-type'], 'Polygon'], paint: { 'fill-color': fillColor, 'fill-opacity': opacity * (isGridded ? 0.75 : 0.4) } })
   map.addLayer({ id: `${sourceId}-line`, type: 'line', source: sourceId, filter: ['in', ['geometry-type'], ['literal', ['LineString', 'Polygon']]], paint: { 'line-color': isGridded ? '#7f0000' : color, 'line-opacity': opacity * (isGridded ? 0.3 : 1), 'line-width': isGridded ? 0.5 : 2 } })

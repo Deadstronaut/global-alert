@@ -14,6 +14,10 @@
     "noData": "Veri bulunamadı",
     "offline": "Çevrimdışı - Önbellek verileri gösteriliyor"
   },
+  "common": {
+    "loadingEllipsis": "Yükleniyor...",
+    "pressEscToCancel": "İptal etmek için ESC'ye basın"
+  },
   "disasters": {
     "earthquake": "Deprem",
     "wildfire": "Yangın",
@@ -64,7 +68,13 @@
     "duration": "SÜRE",
     "dateRange": "ZAMAN ARALIĞI",
     "calendarSingleRange": "Takvim (Tek Gün / Aralık)",
-    "dateRangeHint": "1 seçim: tek gün. 2 seçim: aralık. Sonraki seçim yeni aralık başlatır.",
+    "dateRangeHint": "Tek bir gün için bitiş tarihini boş bırakın.",
+    "dateRangeStart": "Başlangıç tarihi",
+    "dateRangeEnd": "Bitiş tarihi (opsiyonel)",
+    "dateRangeApply": "Uygula",
+    "dateRangeClear": "Temizle",
+    "dateRangeInactive": "Aktif değil",
+    "durationDisabledByCalendar": "Takvim tarih aralığı aktifken süre kaydırıcısı devre dışı — tekrar kullanmak için aşağıdaki tarih aralığında Temizle'ye basın.",
     "viewModeSection": "Görünüm Modu",
     "modeNormal": "Durum",
     "modeHexagon": "Petek",
@@ -135,7 +145,9 @@
     "zoomIn": "Yakınlaştır",
     "zoomOut": "Uzaklaştır",
     "clusterCount": "{count} olay",
-    "viewDetails": "Detayları Gör"
+    "viewDetails": "Detayları Gör",
+    "markerTruncation": "{total} olaydan {shown} tanesi gösteriliyor — kritik ve yüksek şiddetli olaylar her zaman önceliklendirilir; daha fazlasını görmek için filtreleri daraltın veya yakınlaştırın.",
+    "markerTruncationTiered": "{total} olaydan {shown} tanesi gösteriliyor. Haritanın akıcı kalması için {tiers} şiddetli olaylar tamamen gizlendi — kritik olaylar asla gizlenmez. Görmek için tarih aralığını daraltın veya yakınlaştırın."
   },
   "detail": {
     "title": "Olay Detayı",
@@ -382,7 +394,11 @@
       "listTitle": "Etkilenme Veri Setleri",
       "empty": "Henüz etkilenme veri seti yok.",
       "features": "öğe",
-      "delete": "Sil"
+      "delete": "Sil",
+      "editName": "Adı Düzenle",
+      "displayNamePlaceholder": "Görünen ad (örn. Nüfus Yoğunluğu - Antananarivo)",
+      "save": "Kaydet",
+      "cancel": "İptal"
     },
     "panel": {
       "selectPrompt": "Etki analizine başlamak için haritada bir tehlike olayı seçin.",
@@ -412,7 +428,10 @@
       "breakdownEmpty": "Kırılım verisi yok.",
       "unclassified": "sınıflandırılmamış",
       "collapse": "Etki analizini küçült",
-      "expand": "Etki analizini aç"
+      "expand": "Etki analizini aç",
+      "autoSummaryTitle": "Etkilenen Kaynaklar (Otomatik)",
+      "autoSummaryEmpty": "Bu ülke için etkilenme veri seti bulunmuyor.",
+      "detailedTitle": "Detaylı Analiz"
     },
     "geocoding": {
       "label": "Haritada ülke, il, adres veya koordinat ara",
@@ -469,7 +488,10 @@
       "loadCurve": "Eğriyi Yükle",
       "impactLevel": "Etki seviyesi",
       "recordCount": "{count} geçmiş olaya dayanmaktadır",
-      "insufficientData": "Güvenilir bir eğri oluşturmak için yeterli geçmiş veri yok ({count} / minimum {minimum} kayıt)."
+      "insufficientData": "Güvenilir bir eğri oluşturmak için yeterli geçmiş veri yok ({count} / minimum {minimum} kayıt).",
+      "informReferenceTitle": "INFORM Referans Skoru",
+      "informReferenceHint": "{source} ({year}) — ülke seviyesinde, elle girilmiş bir referans; yukarıdaki hesaplamanın yerine geçmez.",
+      "informReferenceEmpty": "Bu ülke için henüz bir INFORM (veya benzer) referans skoru girilmemiş. Admin panelinden ekleyebilirsiniz."
     },
     "scenario": {
       "formTitle": "Hipotetik Senaryo Simüle Et",
@@ -502,6 +524,71 @@
       "noFormulaAvailable": "\"{hazardType}\" tehlike türü için senaryo simülasyonu henüz mevcut değil.",
       "errors": {
         "simulationFailed": "Simülasyon tamamlanamadı."
+      },
+      "evaluateCascades": "Zincirleme Riskleri Değerlendir"
+    },
+    "cascadeRules": {
+      "formTitle": "Zincirleme Risk Kuralı Yapılandır",
+      "intro": "Bir birincil tehlike olayının ne zaman ikincil bir riski tetiklemesi gerektiğini tanımlayın — örn. bir nehre yakın deprem, yükseltilmiş bir sel riski değerlendirmesini tetiklesin. Aşağıdaki her koşul deterministiktir ve admin tarafından yapılandırılır; bu kuralların değerlendirilmesinde hiçbir yerde yapay zeka kullanılmaz.",
+      "countryCode": "Ülke",
+      "triggerHazardType": "Tetikleyici Tehlike Türü",
+      "triggerHazardTypePlaceholder": "örn. earthquake, drought veya \"any\"",
+      "triggerHazardTypeHint": "Tehlike türünden bağımsız kontrol edilmesi gereken bir kural için (örn. zafiyet-tabanlı bir kural) \"any\" kullanın.",
+      "conditionsLegend": "Koşullar (en az biri gerekli)",
+      "minMagnitude": "Minimum Büyüklük/Şiddet",
+      "minMagnitudePlaceholder": "örn. 6.0",
+      "proximitySourceName": "Yakınlık Katmanı",
+      "proximitySourceNamePlaceholder": "örn. hydrorivers, hydrobasins",
+      "proximityDistanceKm": "Yakınlık Mesafesi (km)",
+      "proximityDistanceKmPlaceholder": "örn. 15",
+      "minVulnerabilityScore": "Minimum Zafiyet Skoru",
+      "minVulnerabilityScorePlaceholder": "0-10",
+      "minVulnerabilityScoreHint": "Risk ve Senaryo Modellemesi'ndeki bölgenin Zafiyet faktörünü yeniden kullanır — bölge için Zafiyet göstergelerinin yapılandırılmış olmasını gerektirir.",
+      "secondaryRiskCategory": "İkincil Risk Kategorisi",
+      "secondaryRiskCategoryPlaceholder": "örn. secondary_flood_risk, building_collapse_risk, famine_risk",
+      "recommendationTemplate": "Öneri Metni Şablonu",
+      "recommendationTemplatePlaceholder": "örn. [[area]]: [[distance_km]]km uzaklıktaki nehirden kaynaklı, büyüklüğü [[magnitude]] olan olay nedeniyle yükseltilmiş sel riski. Bölgede tahmini [[affected_population]] kişi.",
+      "recommendationTemplateHint": "Kullanılabilir yer tutucular: [[area]], [[magnitude]], [[distance_km]], [[vulnerability_score]], [[affected_population]]. Sadece düz yer değiştirme — üretilmiş metin yok.",
+      "isActive": "Aktif",
+      "save": "Kuralı Kaydet",
+      "saving": "Kaydediliyor...",
+      "cancelEdit": "İptal",
+      "listTitle": "Yapılandırılmış Zincirleme Risk Kuralları",
+      "empty": "Henüz yapılandırılmış zincirleme risk kuralı yok.",
+      "inactive": "pasif",
+      "edit": "Düzenle",
+      "delete": "Sil",
+      "errors": {
+        "noCondition": "En az bir koşul (büyüklük eşiği, yakınlık katmanı veya zafiyet eşiği) belirlenmelidir."
+      }
+    },
+    "cascadeAuto": {
+      "title": "Otomatik Zincirleme Değerlendirme (opsiyonel)",
+      "intro": "Etkinleştirildiğinde, bu ülkede yeni gerçek tehlike olayları otomatik olarak zincirleme risk kurallarına karşı kontrol edilir — manuel \"Değerlendir\" tıklamasına gerek kalmaz. Bu hiçbir zaman bir CAP uyarısı, dispatch veya herhangi bir dış bildirim oluşturmaz; sadece burada incelenmesi gereken bir öğe olarak görünür. Bunu sadece country_admin açıp kapatabilir. Varsayılan olarak kapalıdır.",
+      "toggleLabel": "Yeni gerçek olaylar için zincirleme risk kurallarını otomatik değerlendir",
+      "unacknowledgedTitle": "Onaylanmamış Otomatik Değerlendirmeler ({count})",
+      "noUnacknowledged": "Onaylanmamış otomatik değerlendirme yok.",
+      "acknowledge": "Onayla"
+    },
+    "cascade": {
+      "title": "Zincirleme Riskler",
+      "eventLat": "Olay Enlem",
+      "eventLng": "Olay Boylam",
+      "eventMagnitude": "Büyüklük/Şiddet",
+      "evaluate": "Zincirleme Riskleri Değerlendir",
+      "evaluating": "Değerlendiriliyor...",
+      "triggeredTitle": "Tetiklenen İkincil Riskler",
+      "notEvaluableTitle": "Değerlendirilemiyor",
+      "notEvaluableHint": "Bu kurallar, gerekli veri eksik olduğu için kontrol edilemedi.",
+      "noRiskTriggered": "Bu olay için hiçbir ikincil risk tetiklenmedi.",
+      "noRulesConfigured": "Bu tehlike türü için henüz hiçbir zincirleme risk kuralı yapılandırılmadı.",
+      "whyLabel": "Neden",
+      "affectedPopulation": "Tahmini etkilenen nüfus",
+      "simulatedLabel": "Simüle edilmiş (varsayımsal senaryo)",
+      "realEventLabel": "Gerçek olay",
+      "boundaryUnresolvable": "Bu konum için idari bölge belirlenemedi — burada zincirleme risk değerlendirmesi yapılamıyor.",
+      "errors": {
+        "evaluationFailed": "Zincirleme risk değerlendirmesi tamamlanamadı."
       }
     }
   },
@@ -731,7 +818,9 @@
     "emptyState": "Bu bölge için henüz etki alanı katmanı yok.",
     "selectCountryPrompt": "Etki alanı katmanlarını görmek için haritadan bir ülke seçin.",
     "featureCount": "{count} kayıt",
-    "loading": "Yükleniyor...",    "sourceLabel": {
+    "loading": "Yükleniyor...",
+    "loadingLayer": "{name} yükleniyor...",
+    "sourceLabel": {
       "osm": "Yol Ağı",
       "kontur": "Nüfus Yoğunluğu",
       "hydrorivers": "Nehir Ağı",
@@ -744,7 +833,8 @@
       "metaHdx": "Nüfus (Meta/HDX)",
       "glofasRiverDischarge": "Nehir Debisi (GloFAS)",
       "osmBuildings": "Kritik Tesisler (Bina)",
-      "chirps": "Yağış (CHIRPS)"
+      "chirps": "Yağış (CHIRPS)",
+      "demSlope": "Dik Arazi / Heyelan Riski (DEM Eğim)"
     },
     "countryLabel": {
       "tr": "Türkiye",
@@ -762,6 +852,7 @@
       "hexagonOption": "Altıgenler",
       "provinceOption": "İller",
       "districtOption": "İlçeler",
+      "villageOption": "Köyler",
       "unavailableTooltip": "Bu ülke için bu seviyede sınır verisi mevcut değil",
       "populationLabel": "Nüfus"
     }
@@ -843,6 +934,8 @@
     "createTitle": "Yeni Sığınak Ekle",
     "name": "İsim",
     "country": "Ülke",
+    "province": "İl",
+    "district": "İlçe",
     "lat": "Enlem",
     "lng": "Boylam",
     "capacity": "Kapasite (dolu/toplam)",
@@ -855,6 +948,14 @@
       "closed": "Kapalı",
       "full": "Dolu"
     },
+    "confidenceLevel": "Güven Düzeyi",
+    "confidenceLevels": {
+      "1": "Şüpheli",
+      "2": "Belirsiz",
+      "3": "Muhtemel",
+      "4": "Kesin",
+      "5": "Manuel Giriş"
+    },
     "linkedIncident": "Bağlı Olay",
     "noLinkedIncident": "— yok —",
     "active": "Aktif",
@@ -864,12 +965,21 @@
     "reactivate": "aktive et",
     "osmImportedHint": "OpenStreetMap'ten otomatik içe aktarıldı — kapasite bilgisi çoğunlukla tahmini/bilinmiyor.",
     "empty": "Henüz sığınak eklenmedi.",
+    "filterEmpty": "Bu filtreyle eşleşen sığınak yok.",
+    "filterSearchPlaceholder": "Ara...",
+    "filterSelectAll": "Tümünü Seç",
+    "filterClearAll": "Temizle",
     "save": "Kaydet",
     "cancel": "İptal",
     "nameRequired": "İsim zorunludur.",
     "noCountry": "Ülke zorunludur.",
     "capacityTotalInvalid": "Toplam kapasite pozitif bir sayı olmalıdır.",
     "occupancyExceedsCapacity": "Mevcut doluluk toplam kapasiteyi geçemez.",
+    "pagination": {
+      "perPage": "Sayfa başına:",
+      "pageOf": "Sayfa {page} / {total}",
+      "rowCount": "{count} kayıt"
+    },
     "map": {
       "toggleLabel": "Sığınakları Göster/Gizle",
       "occupancy": "Doluluk",

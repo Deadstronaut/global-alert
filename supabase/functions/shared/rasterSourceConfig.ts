@@ -110,3 +110,26 @@ export const GLOFAS_SOURCE_CONFIG: RasterSourceConfig = {
   pixelValueMeaning: 'mean',
   allowNegativeValues: false,
 }
+
+// DEM-derived slope (landslide susceptibility), from Copernicus GLO-30
+// (~30m) elevation tiles — see demSlopeFetch.ts. Unlike every other config
+// here, the importer only ever writes hexagons whose mean slope already
+// clears LANDSLIDE_SLOPE_THRESHOLD_DEG (demSlopeFetch.ts), so this dataset
+// is deliberately much sparser than WorldPop/GHSL for the same country —
+// "steep-terrain zones", not "slope everywhere". Resolution 7 (WorldPop's)
+// because a 30m pixel is fine-grained enough to support a smaller hexagon
+// than the ~1km-pixel sources above use.
+export const DEM_SLOPE_SOURCE_CONFIG: RasterSourceConfig = {
+  sourceName: 'dem_slope',
+  h3Resolution: 7,
+  pixelValueMeaning: 'mean',
+  allowNegativeValues: false,
+}
+
+// Landslide susceptibility literature (e.g. USGS coseismic-landslide
+// modeling, Nowicki Jessee et al. 2018) commonly treats slopes at/above
+// this steepness as meaningfully more susceptible to seismically-triggered
+// landsliding — a coarse, defensible cutoff, not a precise engineering
+// threshold. Admin-configurable slope-based cascade_rules still apply their
+// own min_magnitude/proximity_distance_km on top of this pre-filtered set.
+export const LANDSLIDE_SLOPE_THRESHOLD_DEG = 20

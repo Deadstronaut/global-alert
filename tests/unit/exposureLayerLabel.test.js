@@ -36,4 +36,32 @@ describe('friendlyDatasetLabel', () => {
     expect(friendlyDatasetLabel(t, null)).toBe('')
     expect(friendlyDatasetLabel(t, undefined)).toBe('')
   })
+
+  it('prefers display_name over the curated source+country label when set', () => {
+    expect(
+      friendlyDatasetLabel(t, {
+        source_name: 'osm',
+        country_code: 'tr',
+        name: 'osm — tr — 2026-07',
+        display_name: 'Türkiye Yol Ağı (Özel)',
+      }),
+    ).toBe('Türkiye Yol Ağı (Özel)')
+  })
+
+  it('prefers display_name over the raw-name fallback for an unknown source', () => {
+    expect(
+      friendlyDatasetLabel(t, {
+        source_name: 'future_source',
+        country_code: 'tr',
+        name: 'future_source — tr — 2026-08',
+        display_name: 'Yeni Kaynak (Türkiye)',
+      }),
+    ).toBe('Yeni Kaynak (Türkiye)')
+  })
+
+  it('ignores a blank/whitespace-only display_name and falls through normally', () => {
+    expect(
+      friendlyDatasetLabel(t, { source_name: 'osm', country_code: 'tr', name: 'osm — tr — 2026-07', display_name: '   ' }),
+    ).toBe('Yol Ağı (Türkiye)')
+  })
 })

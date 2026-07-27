@@ -14,6 +14,10 @@
     "noData": "No se encontraron datos",
     "offline": "Sin conexión - Mostrando datos en caché"
   },
+  "common": {
+    "loadingEllipsis": "Cargando...",
+    "pressEscToCancel": "Presiona ESC para cancelar"
+  },
   "disasters": {
     "earthquake": "Terremotos",
     "wildfire": "Incendios forestales",
@@ -382,7 +386,11 @@
       "listTitle": "Conjuntos de Datos de Exposición",
       "empty": "Aún no hay conjuntos de datos de exposición.",
       "features": "elementos",
-      "delete": "Eliminar"
+      "delete": "Eliminar",
+      "editName": "Editar Nombre",
+      "displayNamePlaceholder": "Nombre visible (ej. Densidad de Población - Antananarivo)",
+      "save": "Guardar",
+      "cancel": "Cancelar"
     },
     "panel": {
       "selectPrompt": "Seleccione un evento de peligro en el mapa para comenzar el análisis de impacto.",
@@ -469,7 +477,10 @@
       "impactLevel": "Nivel de impacto",
       "recordCount": "Basado en {count} eventos históricos",
       "insufficientData": "Datos históricos insuficientes ({count} de {minimum} registros mínimos) para generar una curva fiable.",
-      "hazardTypePlaceholder": "ej. earthquake"
+      "hazardTypePlaceholder": "ej. earthquake",
+      "informReferenceTitle": "Puntuación de Referencia INFORM",
+      "informReferenceHint": "{source} ({year}) — una referencia a nivel de país introducida manualmente; no reemplaza la puntuación calculada arriba.",
+      "informReferenceEmpty": "Aún no se ha introducido una puntuación de referencia INFORM (o similar) para este país. Puede agregar una desde el panel de administración."
     },
     "scenario": {
       "formTitle": "Simular Escenario Hipotético",
@@ -731,7 +742,9 @@
     "emptyState": "Aún no hay capas de exposición disponibles para esta área.",
     "selectCountryPrompt": "Selecciona un país en el mapa para ver sus capas de exposición.",
     "featureCount": "{count} elementos",
-    "loading": "Cargando...",    "sourceLabel": {
+    "loading": "Cargando...",
+    "loadingLayer": "Cargando {name}...",
+    "sourceLabel": {
       "osm": "Red de Carreteras",
       "kontur": "Densidad de Población",
       "hydrorivers": "Red Fluvial",
@@ -762,6 +775,7 @@
       "hexagonOption": "Hexágonos",
       "provinceOption": "Provincias",
       "districtOption": "Distritos",
+      "villageOption": "Aldeas",
       "unavailableTooltip": "No hay datos de límites disponibles para este país en este nivel",
       "populationLabel": "Población"
     }
@@ -843,6 +857,8 @@
     "createTitle": "Añadir Refugio",
     "name": "Nombre",
     "country": "País",
+    "province": "Provincia",
+    "district": "Distrito",
     "lat": "Latitud",
     "lng": "Longitud",
     "capacity": "Capacidad (ocupada/total)",
@@ -855,6 +871,14 @@
       "closed": "Cerrado",
       "full": "Lleno"
     },
+    "confidenceLevel": "Confianza",
+    "confidenceLevels": {
+      "5": "Entrada Manual",
+      "4": "Confirmado",
+      "3": "Probable",
+      "2": "Incierto",
+      "1": "Poco Fiable"
+    },
     "linkedIncident": "Incidente Vinculado",
     "noLinkedIncident": "— ninguno —",
     "active": "Activo",
@@ -864,12 +888,21 @@
     "reactivate": "reactivar",
     "osmImportedHint": "Importado automáticamente desde OpenStreetMap — la capacidad es mayormente estimada/desconocida.",
     "empty": "Aún no hay refugios.",
+    "filterEmpty": "Ningún refugio coincide con este filtro.",
+    "filterSearchPlaceholder": "Buscar...",
+    "filterSelectAll": "Seleccionar Todo",
+    "filterClearAll": "Limpiar",
     "save": "Guardar",
     "cancel": "Cancelar",
     "nameRequired": "El nombre es obligatorio.",
     "noCountry": "El país es obligatorio.",
     "capacityTotalInvalid": "La capacidad total debe ser un número positivo.",
     "occupancyExceedsCapacity": "La ocupación actual no puede superar la capacidad total.",
+    "pagination": {
+      "perPage": "Por página:",
+      "pageOf": "Página {page} de {total}",
+      "rowCount": "{count} filas"
+    },
     "map": {
       "toggleLabel": "Mostrar/Ocultar Refugios",
       "occupancy": "Ocupación",

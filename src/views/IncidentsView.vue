@@ -350,7 +350,11 @@ onMounted(loadIncidents)
 
 <style scoped>
 .incidents-page {
-  min-height: 100vh;
+  /* See CapView.vue's .cap-page comment — main.css fixes html/body/#app to
+     100dvh with overflow:hidden, so this page needs its own bounded height +
+     overflow-y to ever be scrollable once the list grows past one viewport. */
+  height: 100dvh;
+  overflow-y: auto;
   background: var(--color-bg, #0f1117);
   color: var(--color-text-primary, #e2e8f0);
   padding: 24px;

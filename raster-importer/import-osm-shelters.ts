@@ -62,6 +62,7 @@ export async function runOsmSheltersImport(): Promise<void> {
       is_active: true,
       source: 'osm',
       external_id: r.externalId,
+      confidence_level: r.confidenceLevel,
     }))
 
     for (let i = 0; i < rows.length; i += UPSERT_CHUNK_SIZE) {

@@ -30,15 +30,42 @@ export const useSheltersStore = defineStore('shelters', () => {
   const loading = ref(false);
   const error = ref(null);
 
+  // PostgREST silently caps a single request at 1000 rows (project default
+  // db-max-rows) — invisible while this table had <1000 rows, but live-
+  // verified 2026-07-27 that the expanded OSM import (~8500 rows) hits it
+  // and truncates the list. Pages through with .range() until a page comes
+  // back short of PAGE_SIZE, matching PostgREST's own hard cap so this
+  // still works even if the project's max-rows setting is ever raised.
+  const PAGE_SIZE = 1000;
+
   async function fetchShelters() {
     loading.value = true;
     error.value = null;
-    const { data, error: err } = await supabase
-      .from('shelters')
-      .select('*')
-      .order('name');
-    if (err) error.value = err.message;
-    else shelters.value = data ?? [];
+    const rows = [];
+    let page = 0;
+    while (true) {
+      // .order('name') alone has no deterministic tiebreak for the many
+      // rows sharing the OSM import's generic fallback name ("Toplanma
+      // Alanı (OSM)") — live-verified this let Postgres return ties in a
+      // different relative order between separate paginated queries,
+      // duplicating some rows across page boundaries and dropping others.
+      // .order('id') as a secondary key makes the ordering fully stable.
+      const { data, error: err } = await supabase
+        .from('shelters')
+        .select('*')
+        .order('name')
+        .order('id')
+        .range(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE - 1);
+      if (err) {
+        error.value = err.message;
+        loading.value = false;
+        return;
+      }
+      rows.push(...data);
+      if (data.length < PAGE_SIZE) break;
+      page += 1;
+    }
+    shelters.value = rows;
     loading.value = false;
   }
 

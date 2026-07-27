@@ -162,3 +162,129 @@ Madagascar, Malaysia), confirmed via clarifying questions to mean ADM2 only
 - `npx vitest run` (227/227), `npm run build`, and `npx eslint` (same single
   pre-existing unrelated error as before) all re-confirmed green after this
   extension.
+
+## Post-implementation extension 2: independent multi-toggle (not mutually exclusive)
+
+Requested directly after the ADM2 extension above, based on live feedback:
+Hexagons/Provinces/Districts should each be an independent on/off toggle —
+turning Provinces on/off must never affect Districts (or Hexagons), so any
+combination can render on the map at once, instead of only one "mode" being
+active at a time.
+
+- Replaced the single `populationViewMode` ref (`'hexagon' | 'province' |
+  'district'` — one active value per dataset) with `regionViewActive`
+  (`{ [datasetId]: { hexagon, province, district: boolean } }`, default
+  `{ hexagon: true, province: false, district: false }`) and a new
+  `toggleRegionLevel(dataset, level)` that flips only that one level's
+  boolean and calls `enableRegionView`/`disableRegionView`/
+  `setHexagonSubLayersVisibility` for that level alone — siblings untouched.
+- `regionViewLoading` (the "Yükleniyor…" state from the first extension)
+  is now keyed by `${datasetId}:${level}` instead of just `datasetId`, so
+  turning Provinces and Districts on back-to-back gives each its own
+  independent loading state instead of one clobbering the other.
+- **Z-order fix, needed once both could render together**: Districts must
+  always visually render above Provinces regardless of which the user
+  toggled on first. `map.addLayer()` with no `beforeId` always stacks a new
+  layer on top of everything already present — fine when Districts is
+  added after Provinces, but backwards if Provinces is (re-)enabled while
+  Districts is already active (it would land on top, hiding Districts).
+  Fixed by passing Districts' existing fill layer as `beforeId` when adding
+  Provinces' layers, only when Districts is already present — Districts
+  itself needs no special handling since a plain append already lands on
+  top of Provinces the other way around.
+- Live-verified in a real browser (test account) against Turkey: turned
+  Provinces on (Hexagons stayed active), turned Districts on too (all three
+  showed active simultaneously, district shapes correctly rendered above
+  province shapes), then turned Provinces off alone (Districts stayed
+  active and rendered, hexagon cells visible underneath in the gaps) — no
+  console errors, exactly the requested independence.
+- `npx vitest run` (227/227), `npm run build`, `npx eslint` (same single
+  pre-existing unrelated error) all re-confirmed green.
+
+## Post-implementation extension 3: fixed z-order so province borders stay visible over districts
+
+Requested directly after extension 2, based on live feedback that turning
+both Provinces and Districts on made it impossible to tell which district
+belongs to which province — the district fill/line/label group was landing
+entirely above the province group (extension 2's `insertBefore` logic moved
+one *whole* level's layers relative to the other's fill only), completely
+covering the province's own border line.
+
+- Replaced the per-level `insertBefore` heuristic with `enforceRegionLayerOrder(dataset)`,
+  called after every `enableRegionView()` add. It repeatedly calls
+  `map.moveLayer(id)` (no `beforeId` — MapLibre's "move to very top") across
+  a fixed list, bottom-to-top: province-fill, district-fill, district-line,
+  **province-line**, district-label, province-label. Calling `moveLayer`
+  with no `beforeId` in this exact sequence leaves every listed layer in
+  that relative order at the very top of the stack — regardless of which
+  order the toggles were actually clicked in — with hexagon's layers
+  (never touched) implicitly staying below all of them.
+- Styled province's line distinctly from district's: `line-width: 2.5`,
+  `line-color: '#ffffff'`, opacity floored at `0.85` (vs. district's
+  unchanged thin `#7f0000`/`width:1`) — reads as the "official" boundary
+  the district shapes sit inside of, per the live request ("resmi sınırlar
+  belli olmalı", "ilçeler o sınırların içinde kalmalı").
+- Left province's *fill* untouched (still renders normally when Districts
+  is off; gets fully covered by district's fill when both are on, which is
+  expected/harmless — only the *border line* needed fixing, not the fill).
+- Live-verified in a real browser (test account), Ankara area, TR, both
+  Provinces and Districts on simultaneously: a clearly visible thick white
+  province border now cuts across the view (e.g. along the Beypazarı/
+  Ankara-province edge) while district shapes and labels (Polatlı 87.7K,
+  Nallıhan 24K, Haymana 16.7K, etc.) render inside it — confirms districts
+  now read as visually grouped within their province's border.
+- `npx vitest run` (227/227), `npm run build`, `npx eslint` (same single
+  pre-existing unrelated error) all re-confirmed green.
+
+## Post-implementation extension 4: admin-uploadable district/village levels + level column
+
+Requested directly after extension 3, prompted by two concerns: (a) an
+admin might find a bundled/geoBoundaries-sourced level (e.g. Turkey's or
+Madagascar's district set) inaccurate and want to correct it themselves,
+and (b) village-level (ADM3) data has no free bundled source at all, so the
+only way it can ever exist is an admin uploading it.
+
+- **Migration `20260727040000_country_boundaries_level.sql`** (applied to
+  the linked remote project via `supabase db push`): adds a `level TEXT NOT
+  NULL DEFAULT 'province' CHECK (level IN ('province','district','village'))`
+  column to `country_boundaries`, and widens its primary key from
+  `(country_code)` to `(country_code, level)`. The default backfills every
+  existing row (previously one boundary set per country, e.g. Madagascar's
+  ADM1 from spec 040) to `'province'` — zero behavior change for anything
+  already uploaded.
+- **`src/data/boundaries/index.js`**: removed the `if (level === 'province')`
+  gate around the DB lookup — every level now checks `country_boundaries`
+  first (filtered by both `country_code` and the new `level` column), only
+  falling back to a bundled file if nothing's there. This is what makes
+  admin-correction of district data possible, and is the sole source for
+  village data (no `BUNDLED_LOADERS.village` exists).
+- **`BoundaryUploadForm.vue`** (Admin Panel → Veri Yönetimi → Sınır Verisi):
+  added a "Seviye *" dropdown (İl (ADM1) / İlçe (ADM2) / Köy (ADM3)) next to
+  the existing country selector. The upsert now includes `level` and targets
+  `onConflict: 'country_code,level'` (required once the PK became
+  composite) — re-uploading for the same country+level replaces only that
+  level, leaving the other two untouched.
+- **`MapView.vue`**: extended `REGION_LEVELS` to `['province', 'district',
+  'village']` and added a fourth "Köyler" toggle button, using the exact
+  same generalized `enableRegionView`/`enforceRegionLayerOrder` machinery
+  from extensions 2-3 — district's border styling was bumped from the
+  original thin style to a medium one (`width: 1.5`, floor opacity `0.5`)
+  now that it plays the same "coarser border over finer fill" role toward
+  village that province plays toward district.
+- **Found and fixed a real bug via live testing**: the fire-and-forget
+  boundary-availability check in `addExposureLayer()` was still hardcoded
+  to exactly `['province', 'district']` from extension 2 — adding
+  `'village'` to `REGION_LEVELS` elsewhere didn't automatically cover it, so
+  the Villages button stayed permanently disabled even with real data
+  present in the DB. Fixed by looping over `REGION_LEVELS` there too instead
+  of hardcoding the two levels.
+- **Live end-to-end test** (test account, super_admin): uploaded a 2-feature
+  test GeoJSON as Malaysia's `village` level through the real admin form,
+  confirmed the success message and the Villages button becoming enabled on
+  the map (after the bug fix above), then deleted the test row via the
+  app's own authenticated Supabase client (RLS `super_admin_delete_boundary`
+  policy) — confirmed via a direct `supabase db query` that only Malaysia's
+  original `province` row remains, no test residue left in the shared
+  database.
+- `npx vitest run` (227/227), `npm run build`, `npx eslint` (same single
+  pre-existing unrelated error) all re-confirmed green after this extension.

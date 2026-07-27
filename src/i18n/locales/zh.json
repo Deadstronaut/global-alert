@@ -14,6 +14,10 @@
     "noData": "未找到数据",
     "offline": "离线 - 显示缓存数据"
   },
+  "common": {
+    "loadingEllipsis": "加载中...",
+    "pressEscToCancel": "按 ESC 取消"
+  },
   "disasters": {
     "earthquake": "地震",
     "wildfire": "野火",
@@ -382,7 +386,11 @@
       "listTitle": "暴露数据集",
       "empty": "暂无暴露数据集。",
       "features": "个要素",
-      "delete": "删除"
+      "delete": "删除",
+      "editName": "编辑名称",
+      "displayNamePlaceholder": "显示名称（例如：人口密度 - 塔那那利佛）",
+      "save": "保存",
+      "cancel": "取消"
     },
     "panel": {
       "selectPrompt": "在地图上选择一个灾害事件以开始影响分析。",
@@ -469,7 +477,10 @@
       "impactLevel": "影响等级",
       "recordCount": "基于 {count} 次历史事件",
       "insufficientData": "历史数据不足（{count} / 至少需要 {minimum} 条记录），无法生成可靠曲线。",
-      "hazardTypePlaceholder": "例如：earthquake"
+      "hazardTypePlaceholder": "例如：earthquake",
+      "informReferenceTitle": "INFORM 参考分数",
+      "informReferenceHint": "{source}（{year}）— 手动录入的国家级参考值，不会替代上方计算出的分数。",
+      "informReferenceEmpty": "该国家尚未录入 INFORM（或类似）参考分数。您可以在管理面板中添加。"
     },
     "scenario": {
       "formTitle": "模拟假设情景",
@@ -731,7 +742,9 @@
     "emptyState": "该区域暂无可用的暴露层。",
     "selectCountryPrompt": "请在地图上选择一个国家以查看其暴露层。",
     "featureCount": "{count} 个要素",
-    "loading": "加载中...",    "sourceLabel": {
+    "loading": "加载中...",
+    "loadingLayer": "正在加载 {name}...",
+    "sourceLabel": {
       "osm": "道路网络",
       "kontur": "人口密度",
       "hydrorivers": "河流网络",
@@ -762,6 +775,7 @@
       "hexagonOption": "六边形",
       "provinceOption": "省份",
       "districtOption": "区县",
+      "villageOption": "村庄",
       "unavailableTooltip": "该国家在此级别暂无边界数据",
       "populationLabel": "人口"
     }
@@ -843,6 +857,8 @@
     "createTitle": "添加避难所",
     "name": "名称",
     "country": "国家",
+    "province": "省份",
+    "district": "地区",
     "lat": "纬度",
     "lng": "经度",
     "capacity": "容量（已占用/总计）",
@@ -855,6 +871,14 @@
       "closed": "关闭",
       "full": "已满"
     },
+    "confidenceLevel": "可信度",
+    "confidenceLevels": {
+      "5": "手动录入",
+      "4": "已确认",
+      "3": "可能",
+      "2": "不确定",
+      "1": "不可靠"
+    },
     "linkedIncident": "关联事件",
     "noLinkedIncident": "— 无 —",
     "active": "已启用",
@@ -864,12 +888,21 @@
     "reactivate": "启用",
     "osmImportedHint": "自动从 OpenStreetMap 导入 — 容量大多为估计值/未知。",
     "empty": "尚无避难所。",
+    "filterEmpty": "没有符合此筛选条件的避难所。",
+    "filterSearchPlaceholder": "搜索...",
+    "filterSelectAll": "全选",
+    "filterClearAll": "清除",
     "save": "保存",
     "cancel": "取消",
     "nameRequired": "名称为必填项。",
     "noCountry": "国家为必填项。",
     "capacityTotalInvalid": "总容量必须为正数。",
     "occupancyExceedsCapacity": "当前占用人数不能超过总容量。",
+    "pagination": {
+      "perPage": "每页显示：",
+      "pageOf": "第 {page} / {total} 页",
+      "rowCount": "共 {count} 条"
+    },
     "map": {
       "toggleLabel": "显示/隐藏避难所",
       "occupancy": "占用情况",

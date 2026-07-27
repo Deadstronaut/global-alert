@@ -1,16 +1,20 @@
 /**
  * Region boundaries — checks the admin-uploadable country_boundaries table
- * first (see supabase/migrations/20260705_country_boundaries.sql and
+ * first (see supabase/migrations/20260705_country_boundaries.sql,
+ * .../20260727040000_country_boundaries_level.sql, and
  * src/components/admin/BoundaryUploadForm.vue), falling back to a bundled
  * default file for countries we've pre-loaded (see README.md). Everything is
  * lazy: nothing is fetched until a country is actually requested, and
  * results are cached in-memory afterwards.
  *
- * `level` selects the administrative granularity: `'province'` (ADM1 — il/
- * state, the original/default) or `'district'` (ADM2 — ilçe). The
- * admin-uploadable `country_boundaries` table only has a province-level
- * concept today (no district upload feature exists yet), so the DB lookup
- * is skipped entirely for `'district'` — bundled-only for now.
+ * `level` selects the administrative granularity: `'province'` (ADM1 —
+ * il/state, the original/default), `'district'` (ADM2 — ilçe), or
+ * `'village'` (ADM3/commune — köy; DB-only, no bundled source exists at
+ * this granularity for any country). The DB is checked for *every* level,
+ * not just province — this both lets an admin correct a bundled level they
+ * find inaccurate (e.g. re-upload a country's district set) and is the only
+ * way village-level data can exist at all, since there's no free bundled
+ * source for it.
  */
 import { supabase } from '@/services/api/config.js'
 
@@ -24,6 +28,8 @@ const BUNDLED_LOADERS = {
     mg: () => import('./mg-districts.json'),
     my: () => import('./my-districts.json'),
   },
+  // village: DB-only — an admin upload is the sole source, no bundled
+  // default exists (or is expected to) at this granularity.
 }
 const BUNDLED_NAME_PROPERTY = 'shapeName'
 
@@ -38,17 +44,16 @@ export async function loadRegionBoundaries(countryCode, level = 'province') {
   const cacheKey = `${level}:${cc}`
   if (cache.has(cacheKey)) return cache.get(cacheKey)
 
-  if (level === 'province') {
-    const { data } = await supabase
-      .from('country_boundaries')
-      .select('geojson, name_property')
-      .eq('country_code', cc)
-      .maybeSingle()
-    if (data) {
-      const result = { featureCollection: data.geojson, nameProperty: data.name_property }
-      cache.set(cacheKey, result)
-      return result
-    }
+  const { data } = await supabase
+    .from('country_boundaries')
+    .select('geojson, name_property')
+    .eq('country_code', cc)
+    .eq('level', level)
+    .maybeSingle()
+  if (data) {
+    const result = { featureCollection: data.geojson, nameProperty: data.name_property }
+    cache.set(cacheKey, result)
+    return result
   }
 
   const loader = BUNDLED_LOADERS[level]?.[cc]

@@ -21,6 +21,7 @@ import RiskIndicatorConfig from '@/components/risk/RiskIndicatorConfig.vue'
 import CountryRiskIndexPanel from '@/components/risk/CountryRiskIndexPanel.vue'
 import RiskScoreDashboard from '@/components/risk/RiskScoreDashboard.vue'
 import ScenarioBuilder from '@/components/risk/ScenarioBuilder.vue'
+import CascadeRuleConfig from '@/components/risk/CascadeRuleConfig.vue'
 import ContactsPanel from '@/components/admin/ContactsPanel.vue'
 import DispatchPanel from '@/components/admin/DispatchPanel.vue'
 import IntegrationsPanel from '@/components/admin/IntegrationsPanel.vue'
@@ -2086,6 +2087,8 @@ onUnmounted(() => {
       <RiskScoreDashboard />
       <ScenarioBuilder />
       <CountryRiskIndexPanel />
+      <!-- ── Cascading Hazard Risk (spec 048) ───────────────────────────── -->
+      <CascadeRuleConfig />
     </div>
 
     <!-- ── Community Reports moderation tab (spec 036) ──────────────────────── -->

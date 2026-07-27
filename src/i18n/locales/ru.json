@@ -14,6 +14,10 @@
     "noData": "Данные не найдены",
     "offline": "Вне сети — показ кэшированных данных"
   },
+  "common": {
+    "loadingEllipsis": "Загрузка...",
+    "pressEscToCancel": "Нажмите ESC для отмены"
+  },
   "disasters": {
     "earthquake": "Землетрясения",
     "wildfire": "Лесные пожары",
@@ -382,7 +386,11 @@
       "listTitle": "Наборы данных подверженности",
       "empty": "Пока нет наборов данных подверженности.",
       "features": "объектов",
-      "delete": "Удалить"
+      "delete": "Удалить",
+      "editName": "Изменить Название",
+      "displayNamePlaceholder": "Отображаемое название (напр. Плотность Населения - Антананариву)",
+      "save": "Сохранить",
+      "cancel": "Отмена"
     },
     "panel": {
       "selectPrompt": "Выберите опасное событие на карте, чтобы начать анализ воздействия.",
@@ -469,7 +477,10 @@
       "impactLevel": "Уровень воздействия",
       "recordCount": "На основе {count} исторических событий",
       "insufficientData": "Недостаточно исторических данных ({count} из {minimum} минимально необходимых записей) для построения надёжной кривой.",
-      "hazardTypePlaceholder": "напр. earthquake"
+      "hazardTypePlaceholder": "напр. earthquake",
+      "informReferenceTitle": "Референсный показатель INFORM",
+      "informReferenceHint": "{source} ({year}) — вручную введённый показатель на уровне страны; не заменяет рассчитанный выше показатель.",
+      "informReferenceEmpty": "Для этой страны пока не введён референсный показатель INFORM (или аналогичный). Вы можете добавить его в панели администратора."
     },
     "scenario": {
       "formTitle": "Смоделировать гипотетический сценарий",
@@ -731,7 +742,9 @@
     "emptyState": "Для этой территории пока нет доступных слоёв уязвимости.",
     "selectCountryPrompt": "Выберите страну на карте, чтобы увидеть её слои уязвимости.",
     "featureCount": "{count} объектов",
-    "loading": "Загрузка...",    "sourceLabel": {
+    "loading": "Загрузка...",
+    "loadingLayer": "Загрузка {name}...",
+    "sourceLabel": {
       "osm": "Дорожная Сеть",
       "kontur": "Плотность Населения",
       "hydrorivers": "Речная Сеть",
@@ -762,6 +775,7 @@
       "hexagonOption": "Гексагоны",
       "provinceOption": "Провинции",
       "districtOption": "Районы",
+      "villageOption": "Деревни",
       "unavailableTooltip": "Для этой страны нет данных о границах на этом уровне",
       "populationLabel": "Население"
     }
@@ -843,6 +857,8 @@
     "createTitle": "Добавить Убежище",
     "name": "Название",
     "country": "Страна",
+    "province": "Провинция",
+    "district": "Район",
     "lat": "Широта",
     "lng": "Долгота",
     "capacity": "Вместимость (занято/всего)",
@@ -855,6 +871,14 @@
       "closed": "Закрыто",
       "full": "Заполнено"
     },
+    "confidenceLevel": "Достоверность",
+    "confidenceLevels": {
+      "5": "Ручной Ввод",
+      "4": "Подтверждено",
+      "3": "Вероятно",
+      "2": "Неопределённо",
+      "1": "Ненадёжно"
+    },
     "linkedIncident": "Связанное Происшествие",
     "noLinkedIncident": "— нет —",
     "active": "Активно",
@@ -864,12 +888,21 @@
     "reactivate": "активировать",
     "osmImportedHint": "Автоматически импортировано из OpenStreetMap — вместимость в основном оценочная/неизвестна.",
     "empty": "Убежищ пока нет.",
+    "filterEmpty": "Нет убежищ, соответствующих фильтру.",
+    "filterSearchPlaceholder": "Поиск...",
+    "filterSelectAll": "Выбрать Все",
+    "filterClearAll": "Очистить",
     "save": "Сохранить",
     "cancel": "Отмена",
     "nameRequired": "Название обязательно.",
     "noCountry": "Страна обязательна.",
     "capacityTotalInvalid": "Общая вместимость должна быть положительным числом.",
     "occupancyExceedsCapacity": "Текущая заполненность не может превышать общую вместимость.",
+    "pagination": {
+      "perPage": "На странице:",
+      "pageOf": "Страница {page} из {total}",
+      "rowCount": "{count} строк"
+    },
     "map": {
       "toggleLabel": "Показать/Скрыть Убежища",
       "occupancy": "Заполненность",

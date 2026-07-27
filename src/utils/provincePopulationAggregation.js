@@ -12,6 +12,7 @@
  */
 
 import { formatPopulationLabel } from './formatPopulationLabel.js'
+import { pointInGeometry, boundingBoxOf, pointInBBox } from './geoPointInPolygon.js'
 
 function centroidOf(geometry) {
   if (!geometry) return null
@@ -37,68 +38,6 @@ function centroidOf(geometry) {
   const lng = sumLng / ring.length
   const lat = sumLat / ring.length
   return Number.isFinite(lat) && Number.isFinite(lng) ? [lng, lat] : null
-}
-
-// Standard ray-casting point-in-ring test.
-function pointInRing([px, py], ring) {
-  let inside = false
-  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
-    const [xi, yi] = ring[i]
-    const [xj, yj] = ring[j]
-    const intersect = yi > py !== yj > py && px < ((xj - xi) * (py - yi)) / (yj - yi) + xi
-    if (intersect) inside = !inside
-  }
-  return inside
-}
-
-// A point is inside a Polygon's ring set if it's inside the outer ring
-// (index 0) and not inside any hole ring (index 1+).
-function pointInPolygonRings(point, rings) {
-  if (!rings || rings.length === 0) return false
-  if (!pointInRing(point, rings[0])) return false
-  for (let i = 1; i < rings.length; i++) {
-    if (pointInRing(point, rings[i])) return false
-  }
-  return true
-}
-
-function pointInGeometry(point, geometry) {
-  if (!geometry) return false
-  if (geometry.type === 'Polygon') return pointInPolygonRings(point, geometry.coordinates)
-  if (geometry.type === 'MultiPolygon') {
-    return geometry.coordinates.some((polygon) => pointInPolygonRings(point, polygon))
-  }
-  return false
-}
-
-// Axis-aligned bounding box of every coordinate in a Polygon/MultiPolygon —
-// a cheap O(1) reject before the O(ring-length) ray-cast below. Added after
-// a live test (research.md §4 addendum) found the naive nested loop took
-// ~77s against Turkey's real 81-province set (real GADM rings average ~690
-// vertices each) — the interactive budget research.md assumed didn't
-// account for real-world ring density. This isn't a spatial index, just a
-// precomputed bbox per province, checked once per centroid before falling
-// back to the real test.
-function boundingBoxOf(geometry) {
-  let minLng = Infinity
-  let minLat = Infinity
-  let maxLng = -Infinity
-  let maxLat = -Infinity
-  const visitRing = (ring) => {
-    for (const [lng, lat] of ring) {
-      if (lng < minLng) minLng = lng
-      if (lng > maxLng) maxLng = lng
-      if (lat < minLat) minLat = lat
-      if (lat > maxLat) maxLat = lat
-    }
-  }
-  if (geometry?.type === 'Polygon') geometry.coordinates.forEach(visitRing)
-  else if (geometry?.type === 'MultiPolygon') geometry.coordinates.forEach((poly) => poly.forEach(visitRing))
-  return [minLng, minLat, maxLng, maxLat]
-}
-
-function pointInBBox([lng, lat], [minLng, minLat, maxLng, maxLat]) {
-  return lng >= minLng && lng <= maxLng && lat >= minLat && lat <= maxLat
 }
 
 /**

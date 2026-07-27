@@ -14,6 +14,10 @@
     "noData": "لم يتم العثور على بيانات",
     "offline": "غير متصل - عرض البيانات المخزنة مؤقتًا"
   },
+  "common": {
+    "loadingEllipsis": "جاري التحميل...",
+    "pressEscToCancel": "اضغط ESC للإلغاء"
+  },
   "disasters": {
     "earthquake": "الزلازل",
     "wildfire": "حرائق الغابات",
@@ -382,7 +386,11 @@
       "listTitle": "مجموعات بيانات التعرض",
       "empty": "لا توجد مجموعات بيانات تعرض بعد.",
       "features": "عنصر",
-      "delete": "حذف"
+      "delete": "حذف",
+      "editName": "تعديل الاسم",
+      "displayNamePlaceholder": "الاسم المعروض (مثال: كثافة السكان - أنتاناناريفو)",
+      "save": "حفظ",
+      "cancel": "إلغاء"
     },
     "panel": {
       "selectPrompt": "اختر حدث خطر على الخريطة لبدء تحليل الأثر.",
@@ -469,7 +477,10 @@
       "impactLevel": "مستوى التأثير",
       "recordCount": "استنادًا إلى {count} حدثًا تاريخيًا",
       "insufficientData": "بيانات تاريخية غير كافية ({count} من أصل {minimum} سجل كحد أدنى) لإنشاء منحنى موثوق.",
-      "hazardTypePlaceholder": "مثال: earthquake"
+      "hazardTypePlaceholder": "مثال: earthquake",
+      "informReferenceTitle": "درجة مرجعية INFORM",
+      "informReferenceHint": "{source} ({year}) — مرجع على مستوى الدولة تم إدخاله يدويًا؛ لا يحل محل الدرجة المحسوبة أعلاه.",
+      "informReferenceEmpty": "لم يتم إدخال درجة مرجعية INFORM (أو ما شابه) لهذه الدولة بعد. يمكنك إضافتها من لوحة الإدارة."
     },
     "scenario": {
       "formTitle": "محاكاة سيناريو افتراضي",
@@ -731,7 +742,9 @@
     "emptyState": "لا توجد طبقات تعرض متاحة لهذه المنطقة حتى الآن.",
     "selectCountryPrompt": "اختر دولة على الخريطة لعرض طبقات التعرض الخاصة بها.",
     "featureCount": "{count} عنصر",
-    "loading": "جارٍ التحميل...",    "sourceLabel": {
+    "loading": "جارٍ التحميل...",
+    "loadingLayer": "جارٍ تحميل {name}...",
+    "sourceLabel": {
       "osm": "شبكة الطرق",
       "kontur": "الكثافة السكانية",
       "hydrorivers": "شبكة الأنهار",
@@ -762,6 +775,7 @@
       "hexagonOption": "سداسيات",
       "provinceOption": "المحافظات",
       "districtOption": "الأقضية",
+      "villageOption": "القرى",
       "unavailableTooltip": "لا تتوفر بيانات حدود لهذه الدولة عند هذا المستوى",
       "populationLabel": "السكان"
     }
@@ -843,6 +857,8 @@
     "createTitle": "إضافة ملجأ",
     "name": "الاسم",
     "country": "الدولة",
+    "province": "المحافظة",
+    "district": "المنطقة",
     "lat": "خط العرض",
     "lng": "خط الطول",
     "capacity": "السعة (المشغولة/الإجمالية)",
@@ -855,6 +871,14 @@
       "closed": "مغلق",
       "full": "ممتلئ"
     },
+    "confidenceLevel": "مستوى الثقة",
+    "confidenceLevels": {
+      "5": "إدخال يدوي",
+      "4": "مؤكد",
+      "3": "محتمل",
+      "2": "غير مؤكد",
+      "1": "غير موثوق"
+    },
     "linkedIncident": "الحادث المرتبط",
     "noLinkedIncident": "— لا شيء —",
     "active": "نشط",
@@ -864,12 +888,21 @@
     "reactivate": "إعادة التفعيل",
     "osmImportedHint": "تم استيراده تلقائيًا من OpenStreetMap — السعة غالبًا تقديرية/غير معروفة.",
     "empty": "لا توجد ملاجئ بعد.",
+    "filterEmpty": "لا توجد ملاجئ تطابق هذا الفلتر.",
+    "filterSearchPlaceholder": "بحث...",
+    "filterSelectAll": "تحديد الكل",
+    "filterClearAll": "مسح",
     "save": "حفظ",
     "cancel": "إلغاء",
     "nameRequired": "الاسم مطلوب.",
     "noCountry": "الدولة مطلوبة.",
     "capacityTotalInvalid": "يجب أن تكون السعة الإجمالية رقمًا موجبًا.",
     "occupancyExceedsCapacity": "لا يمكن أن يتجاوز الإشغال الحالي السعة الإجمالية.",
+    "pagination": {
+      "perPage": "لكل صفحة:",
+      "pageOf": "صفحة {page} من {total}",
+      "rowCount": "{count} سجل"
+    },
     "map": {
       "toggleLabel": "إظهار/إخفاء الملاجئ",
       "occupancy": "الإشغال",

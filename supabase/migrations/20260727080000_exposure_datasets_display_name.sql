@@ -1,0 +1,23 @@
+-- =====================================================
+-- Exposure datasets: admin-editable display name.
+--
+-- writeExposureDataset.ts (every automated import — WorldPop, GHSL, CHIRPS,
+-- roads, rivers, etc.) auto-generates `name` as a raw debug-log-style string:
+-- `${sourceName} — ${countryCode} — ${yyyy-mm}` (e.g. "worldpop — tr —
+-- 2026-07"). friendlyDatasetLabel() (src/utils/exposureLayerLabel.js) only
+-- turns that into a nice localized label for source_name values a developer
+-- has hand-added to its SOURCE_LABEL_KEYS table (+ matching i18n entries in
+-- all 7 locale files) — any FUTURE automated source (added by this project
+-- after handoff to a country team with no original developer involved)
+-- would show that raw string forever, in production, with no way to fix it
+-- short of a code change + redeploy.
+--
+-- display_name is the permanent fix: any admin can set/edit it directly from
+-- the "Veri Kaynakları" dataset list (ExposureDatasetManager.vue) with zero
+-- code changes, and friendlyDatasetLabel() checks it first, before falling
+-- back to the curated source_name lookup and finally the raw name. NULL by
+-- default — every existing dataset keeps behaving exactly as before until
+-- someone explicitly sets one.
+-- =====================================================
+
+ALTER TABLE exposure_datasets ADD COLUMN IF NOT EXISTS display_name TEXT;

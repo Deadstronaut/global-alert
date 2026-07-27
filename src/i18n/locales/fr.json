@@ -14,6 +14,10 @@
     "noData": "Aucune donnée trouvée",
     "offline": "Hors ligne - Affichage des données mises en cache"
   },
+  "common": {
+    "loadingEllipsis": "Chargement...",
+    "pressEscToCancel": "Appuyez sur ESC pour annuler"
+  },
   "disasters": {
     "earthquake": "Tremblements de terre",
     "wildfire": "Feux de forêt",
@@ -382,7 +386,11 @@
       "listTitle": "Jeux de Données d'Exposition",
       "empty": "Aucun jeu de données d'exposition pour le moment.",
       "features": "entités",
-      "delete": "Supprimer"
+      "delete": "Supprimer",
+      "editName": "Modifier le Nom",
+      "displayNamePlaceholder": "Nom affiché (ex. Densité de Population - Antananarivo)",
+      "save": "Enregistrer",
+      "cancel": "Annuler"
     },
     "panel": {
       "selectPrompt": "Sélectionnez un événement de danger sur la carte pour commencer l'analyse d'impact.",
@@ -469,7 +477,10 @@
       "impactLevel": "Niveau d'impact",
       "recordCount": "Basé sur {count} événements historiques",
       "insufficientData": "Données historiques insuffisantes ({count} sur {minimum} enregistrements minimum) pour générer une courbe fiable.",
-      "hazardTypePlaceholder": "ex. earthquake"
+      "hazardTypePlaceholder": "ex. earthquake",
+      "informReferenceTitle": "Score de Référence INFORM",
+      "informReferenceHint": "{source} ({year}) — une référence à l'échelle du pays saisie manuellement ; ne remplace pas le score calculé ci-dessus.",
+      "informReferenceEmpty": "Aucun score de référence INFORM (ou similaire) n'a encore été saisi pour ce pays. Vous pouvez en ajouter un depuis le panneau d'administration."
     },
     "scenario": {
       "formTitle": "Simuler un Scénario Hypothétique",
@@ -731,7 +742,9 @@
     "emptyState": "Aucune couche d'exposition disponible pour cette zone pour le moment.",
     "selectCountryPrompt": "Sélectionnez un pays sur la carte pour voir ses couches d'exposition.",
     "featureCount": "{count} éléments",
-    "loading": "Chargement...",    "sourceLabel": {
+    "loading": "Chargement...",
+    "loadingLayer": "Chargement de {name}...",
+    "sourceLabel": {
       "osm": "Réseau Routier",
       "kontur": "Densité de Population",
       "hydrorivers": "Réseau Fluvial",
@@ -762,6 +775,7 @@
       "hexagonOption": "Hexagones",
       "provinceOption": "Provinces",
       "districtOption": "Districts",
+      "villageOption": "Villages",
       "unavailableTooltip": "Aucune donnée de limites disponible pour ce pays à ce niveau",
       "populationLabel": "Population"
     }
@@ -843,6 +857,8 @@
     "createTitle": "Ajouter un Abri",
     "name": "Nom",
     "country": "Pays",
+    "province": "Province",
+    "district": "District",
     "lat": "Latitude",
     "lng": "Longitude",
     "capacity": "Capacité (occupée/totale)",
@@ -855,6 +871,14 @@
       "closed": "Fermé",
       "full": "Complet"
     },
+    "confidenceLevel": "Fiabilité",
+    "confidenceLevels": {
+      "5": "Saisie Manuelle",
+      "4": "Confirmé",
+      "3": "Probable",
+      "2": "Incertain",
+      "1": "Peu Fiable"
+    },
     "linkedIncident": "Incident Lié",
     "noLinkedIncident": "— aucun —",
     "active": "Actif",
@@ -864,12 +888,21 @@
     "reactivate": "réactiver",
     "osmImportedHint": "Importé automatiquement depuis OpenStreetMap — la capacité est majoritairement estimée/inconnue.",
     "empty": "Aucun abri pour le moment.",
+    "filterEmpty": "Aucun abri ne correspond à ce filtre.",
+    "filterSearchPlaceholder": "Rechercher...",
+    "filterSelectAll": "Tout Sélectionner",
+    "filterClearAll": "Effacer",
     "save": "Enregistrer",
     "cancel": "Annuler",
     "nameRequired": "Le nom est requis.",
     "noCountry": "Le pays est requis.",
     "capacityTotalInvalid": "La capacité totale doit être un nombre positif.",
     "occupancyExceedsCapacity": "L'occupation actuelle ne peut pas dépasser la capacité totale.",
+    "pagination": {
+      "perPage": "Par page :",
+      "pageOf": "Page {page} sur {total}",
+      "rowCount": "{count} lignes"
+    },
     "map": {
       "toggleLabel": "Afficher/Masquer les Abris",
       "occupancy": "Occupation",

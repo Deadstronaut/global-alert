@@ -142,12 +142,10 @@ async function handleSubmit() {
 
 <template>
   <div class="community-report-form">
-    <h2>{{ t('communityReport.form.title') }}</h2>
+    <p v-if="submitted" class="success-message">✓ {{ t('communityReport.form.successMessage') }}</p>
 
-    <p v-if="submitted" class="success-message">{{ t('communityReport.form.successMessage') }}</p>
-
-    <form v-else @submit.prevent="handleSubmit">
-      <label class="form-field">
+    <form v-else class="form-card" @submit.prevent="handleSubmit">
+      <label class="form-field span-2">
         <span>{{ t('communityReport.form.hazardType') }}</span>
         <select v-model="hazardType">
           <option value="" disabled>{{ t('communityReport.form.hazardTypePlaceholder') }}</option>
@@ -155,12 +153,12 @@ async function handleSubmit() {
         </select>
       </label>
 
-      <label class="form-field">
+      <label class="form-field span-2">
         <span>{{ t('communityReport.form.description') }}</span>
         <textarea v-model="description" rows="4" :placeholder="t('communityReport.form.descriptionPlaceholder')" />
       </label>
 
-      <div class="form-grid">
+      <div class="form-grid location-grid">
         <label class="form-field">
           <span>{{ t('communityReport.form.lat') }}</span>
           <input v-model="lat" type="number" step="any" />
@@ -169,39 +167,140 @@ async function handleSubmit() {
           <span>{{ t('communityReport.form.lng') }}</span>
           <input v-model="lng" type="number" step="any" />
         </label>
+        <button type="button" class="btn-location" @click="useMyLocation">
+          📍 {{ t('communityReport.form.useMyLocation') }}
+        </button>
       </div>
-      <button type="button" class="secondary-button" @click="useMyLocation">
-        {{ t('communityReport.form.useMyLocation') }}
-      </button>
 
-      <label class="form-field">
-        <span>{{ t('communityReport.form.photo') }}</span>
-        <input type="file" accept="image/jpeg,image/png,image/webp" @change="onPhotoChange" />
-        <small>{{ t('communityReport.form.photoHint') }}</small>
-      </label>
-      <p v-if="photoError" class="error-message">{{ photoError }}</p>
+      <div class="form-grid">
+        <label class="form-field">
+          <span>{{ t('communityReport.form.photo') }}</span>
+          <input type="file" accept="image/jpeg,image/png,image/webp" @change="onPhotoChange" />
+          <small>{{ t('communityReport.form.photoHint') }}</small>
+        </label>
+        <label class="form-field">
+          <span>{{ t('communityReport.form.audio') }}</span>
+          <input type="file" accept="audio/webm,audio/ogg,audio/mpeg,audio/mp4,audio/wav" @change="onAudioChange" />
+          <small>{{ t('communityReport.form.audioHint') }}</small>
+        </label>
+      </div>
+      <p v-if="photoError" class="form-error">{{ photoError }}</p>
+      <p v-if="audioError" class="form-error">{{ audioError }}</p>
 
-      <label class="form-field">
-        <span>{{ t('communityReport.form.audio') }}</span>
-        <input type="file" accept="audio/webm,audio/ogg,audio/mpeg,audio/mp4,audio/wav" @change="onAudioChange" />
-        <small>{{ t('communityReport.form.audioHint') }}</small>
-      </label>
-      <p v-if="audioError" class="error-message">{{ audioError }}</p>
-
-      <p v-if="errorMessage" class="error-message">{{ errorMessage }}</p>
-
-      <button type="submit" :disabled="submitting">
-        {{ submitting ? t('communityReport.form.submitting') : t('communityReport.form.submit') }}
-      </button>
+      <div class="form-actions">
+        <p v-if="errorMessage" class="form-error">{{ errorMessage }}</p>
+        <button type="submit" class="btn-submit" :disabled="submitting">
+          {{ submitting ? t('communityReport.form.submitting') : t('communityReport.form.submit') }}
+        </button>
+      </div>
     </form>
   </div>
 </template>
 
 <style scoped>
-.community-report-form { max-width: 32rem; margin: 0 auto; padding: 1rem; }
-.form-field { display: flex; flex-direction: column; gap: 4px; margin-bottom: 12px; }
-.form-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
-.secondary-button { margin-bottom: 12px; }
-.error-message { color: #c0392b; }
-.success-message { color: #1e7e34; font-weight: 600; }
+/* Same dark form language as AdminView.vue's .form-card/.form-field/
+   .btn-submit — this form used to be entirely unstyled browser-default
+   controls in a narrow centered box, standing out badly against the rest
+   of the app's dark, modern UI. */
+.community-report-form { max-width: 720px; margin: 0 auto; }
+
+.form-card {
+  background: rgba(2, 6, 23, 0.28);
+  border: 1px solid rgba(148, 163, 184, 0.12);
+  border-radius: 10px;
+  padding: 20px;
+}
+
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 14px;
+}
+.location-grid { align-items: end; }
+.span-2 { grid-column: span 2; }
+
+.form-field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  font-size: 0.82rem;
+  color: var(--color-text-muted, #94a3b8);
+  margin-bottom: 14px;
+}
+.form-grid .form-field { margin-bottom: 0; }
+
+.form-field input,
+.form-field select,
+.form-field textarea {
+  background: rgba(15, 23, 42, 0.86);
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 8px;
+  padding: 8px 10px;
+  color: #e2e8f0;
+  font-size: 0.88rem;
+  font-family: inherit;
+  width: 100%;
+}
+.form-field textarea { resize: vertical; }
+.form-field select { color-scheme: dark; }
+.form-field select option { background: #1e2330; color: #e2e8f0; }
+.form-field input:focus,
+.form-field select:focus,
+.form-field textarea:focus {
+  outline: none;
+  border-color: rgba(77, 163, 255, 0.5);
+}
+.form-field small { color: var(--color-text-muted, #94a3b8); font-size: 0.72rem; }
+
+.btn-location {
+  height: fit-content;
+  padding: 8px 14px;
+  background: rgba(77, 163, 255, 0.14);
+  border: 1px solid rgba(77, 163, 255, 0.35);
+  border-radius: 8px;
+  color: #4da3ff;
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.btn-location:hover { background: rgba(77, 163, 255, 0.24); }
+
+.form-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 6px;
+}
+.form-error { color: #ef4444; font-size: 0.82rem; flex: 1; }
+
+.btn-submit {
+  padding: 9px 20px;
+  background: rgba(34, 197, 94, 0.2);
+  border: 1px solid rgba(34, 197, 94, 0.4);
+  border-radius: 8px;
+  color: #22c55e;
+  font-weight: 600;
+  cursor: pointer;
+  font-size: 0.88rem;
+  transition: background 0.15s;
+}
+.btn-submit:disabled { opacity: 0.45; cursor: not-allowed; }
+.btn-submit:not(:disabled):hover { background: rgba(34, 197, 94, 0.3); }
+
+.success-message {
+  background: rgba(34, 197, 94, 0.12);
+  border: 1px solid rgba(34, 197, 94, 0.35);
+  border-radius: 10px;
+  padding: 20px;
+  color: #4ade80;
+  font-weight: 600;
+  font-size: 0.95rem;
+}
+
+@media (max-width: 640px) {
+  .form-grid { grid-template-columns: 1fr; }
+  .span-2 { grid-column: span 1; }
+}
 </style>

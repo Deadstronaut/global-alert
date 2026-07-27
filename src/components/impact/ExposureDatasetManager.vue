@@ -1,14 +1,12 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { useAuthStore } from '@/stores/auth.js'
 import { supabase } from '@/services/api/config.js'
 import { parseExposureFile } from '@/utils/exposureFileParser.js'
 import { friendlyDatasetLabel, coarseResolutionNote } from '@/utils/exposureLayerLabel.js'
 import DeletionJustificationModal from '@/components/admin/DeletionJustificationModal.vue'
 
 const { t } = useI18n()
-const auth = useAuthStore()
 
 const datasets = ref([])
 const loading = ref(false)
@@ -74,6 +72,42 @@ async function upload() {
   }
 }
 
+// Editable display_name (20260727080000_exposure_datasets_display_name.sql)
+// — the permanent fix for a future automated source's raw auto-generated
+// name (e.g. "chirps — mg — 2026-07") never getting a friendly label: any
+// admin can fix it here, once, with zero code changes, instead of needing a
+// developer to add a SOURCE_LABEL_KEYS + i18n entry (see
+// exposureLayerLabel.js's docstring).
+const editingNameId = ref(null)
+const editingNameValue = ref('')
+const savingName = ref(false)
+
+function startEditName(dataset) {
+  editingNameId.value = dataset.id
+  editingNameValue.value = dataset.display_name ?? ''
+}
+
+function cancelEditName() {
+  editingNameId.value = null
+  editingNameValue.value = ''
+}
+
+async function saveEditName(dataset) {
+  savingName.value = true
+  const trimmed = editingNameValue.value.trim()
+  const { error: err } = await supabase
+    .from('exposure_datasets')
+    .update({ display_name: trimmed || null })
+    .eq('id', dataset.id)
+  savingName.value = false
+  if (err) {
+    error.value = err.message
+    return
+  }
+  dataset.display_name = trimmed || null
+  cancelEditName()
+}
+
 function requestDelete(dataset) {
   deletionTarget.value = dataset
 }
@@ -127,12 +161,26 @@ onMounted(loadDatasets)
       <div v-if="loading" class="tab-loading">{{ t('impact.loading') }}</div>
       <div v-else-if="datasets.length === 0" class="tab-empty">{{ t('impact.exposure.empty') }}</div>
       <div v-else v-for="d in datasets" :key="d.id" class="exposure-row">
-        <div>
+        <div v-if="editingNameId === d.id" class="exposure-name-edit">
+          <input
+            v-model="editingNameValue"
+            class="exposure-name-input"
+            :placeholder="t('impact.exposure.displayNamePlaceholder')"
+            @keyup.enter="saveEditName(d)"
+            @keyup.escape="cancelEditName"
+          />
+          <button class="btn-link" :disabled="savingName" @click="saveEditName(d)">{{ t('impact.exposure.save') }}</button>
+          <button class="btn-link" @click="cancelEditName">{{ t('impact.exposure.cancel') }}</button>
+        </div>
+        <div v-else>
           <strong>{{ friendlyDatasetLabel(t, d) }}</strong>
           <span class="exposure-meta">{{ d.feature_count }} {{ t('impact.exposure.features') }}</span>
           <span v-if="coarseResolutionNote(t, d)" class="exposure-caveat">{{ coarseResolutionNote(t, d) }}</span>
         </div>
-        <button class="btn-delete" @click="requestDelete(d)">{{ t('impact.exposure.delete') }}</button>
+        <div class="exposure-row-actions">
+          <button v-if="editingNameId !== d.id" class="btn-link" @click="startEditName(d)">{{ t('impact.exposure.editName') }}</button>
+          <button class="btn-delete" @click="requestDelete(d)">{{ t('impact.exposure.delete') }}</button>
+        </div>
       </div>
     </div>
 
@@ -174,5 +222,15 @@ onMounted(loadDatasets)
 .btn-delete {
   padding: 4px 12px; background: rgba(239,68,68,.15); border: 1px solid rgba(239,68,68,.35);
   border-radius: 6px; color: #ef4444; font-size: .75rem; cursor: pointer;
+}
+.exposure-row-actions { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
+.btn-link {
+  background: none; border: none; color: #4aa3ff; cursor: pointer; font-size: .78rem; padding: 0;
+}
+.btn-link:disabled { opacity: .5; cursor: not-allowed; }
+.exposure-name-edit { display: flex; align-items: center; gap: 8px; flex: 1; margin-right: 12px; }
+.exposure-name-input {
+  flex: 1; background: #1e2330; border: 1px solid rgba(255,255,255,.15); border-radius: 8px;
+  padding: 5px 10px; color: #e2e8f0; font-size: .82rem;
 }
 </style>

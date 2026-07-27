@@ -3,6 +3,7 @@ import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useAuthStore } from '@/stores/auth.js'
 import { supabase, EDGE_FUNCTIONS } from '@/services/api/config.js'
+import CascadingRiskPanel from '@/components/risk/CascadingRiskPanel.vue'
 
 const { t } = useI18n()
 const auth = useAuthStore()
@@ -23,6 +24,39 @@ const curve = ref(null)
 const curveLoading = ref(false)
 const curveError = ref(null)
 
+// Country-level INFORM (or similar) reference score — a directly-entered
+// annual figure (country_risk_indices, see CountryRiskIndexPanel.vue), not
+// this dashboard's own sub-national/hazard-specific computation. Shown
+// alongside, never merged into, compute_risk_area_score's result: INFORM's
+// own index has no sub-national/per-hazard breakdown to blend in — it's a
+// single country-wide benchmark a user can compare their computed score
+// against, not a replacement input.
+const informReference = ref(null)
+const informLoading = ref(false)
+
+function fmt(value) {
+  return value === null || value === undefined ? '—' : value.toFixed ? value.toFixed(1) : value
+}
+
+async function fetchInformReference(countryCode) {
+  informReference.value = null
+  if (!countryCode) return
+  informLoading.value = true
+  // country_risk_indices stores country_code uppercase (see
+  // CountryRiskIndexPanel.vue's toPayload()), unlike most of this codebase's
+  // lowercase convention — matched here, not "fixed", to avoid touching an
+  // already-shipped table's existing rows.
+  const { data } = await supabase
+    .from('country_risk_indices')
+    .select('*')
+    .eq('country_code', countryCode.toUpperCase())
+    .order('year', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+  informReference.value = data ?? null
+  informLoading.value = false
+}
+
 // FR-007: a missing factor MUST be shown as explicitly unavailable, never
 // silently treated as zero (US2 acceptance scenario 2).
 function factorLabel(missingFactors, key, value) {
@@ -34,11 +68,15 @@ async function computeScore() {
   if (!countryCode.value || !adminBoundaryCode.value || !hazardType.value) return
   scoring.value = true
   scoreError.value = null
-  const { data, error } = await supabase.rpc('compute_risk_area_score', {
-    p_country_code: countryCode.value.toLowerCase(),
-    p_admin_boundary_code: adminBoundaryCode.value,
-    p_hazard_type: hazardType.value,
-  })
+  const [rpcResult] = await Promise.all([
+    supabase.rpc('compute_risk_area_score', {
+      p_country_code: countryCode.value.toLowerCase(),
+      p_admin_boundary_code: adminBoundaryCode.value,
+      p_hazard_type: hazardType.value,
+    }),
+    fetchInformReference(countryCode.value),
+  ])
+  const { data, error } = rpcResult
   if (error) {
     scoreError.value = error.message
   } else {
@@ -127,6 +165,51 @@ async function loadExceedanceCurve() {
       </div>
     </div>
 
+    <!-- ── Cascading Hazard Risk (spec 048) ─────────────────────────────── -->
+    <!-- No specific real hazard-table row is selected in this dashboard's
+         existing free-text country/area/hazard-type flow (unlike a picker
+         over hazard_event_history_view), so source_event_ref records that
+         this was a manual, in-dashboard description of a real-world event
+         rather than a specific stored row id. -->
+    <CascadingRiskPanel
+      v-if="countryCode && adminBoundaryCode && hazardType"
+      :country-code="countryCode"
+      :admin-boundary-code="adminBoundaryCode"
+      :hazard-type="hazardType"
+      source-type="real_event"
+      :source-event-ref="{ manual_entry: true, hazard_type: hazardType }"
+    />
+
+    <div v-if="score" class="risk-inform-reference">
+      <h4>{{ t('risk.dashboard.informReferenceTitle') }}</h4>
+      <p v-if="informLoading" class="risk-meta">{{ t('risk.dashboard.computing') }}</p>
+      <template v-else-if="informReference">
+        <p class="risk-meta">
+          {{ t('risk.dashboard.informReferenceHint', { source: informReference.source, year: informReference.year }) }}
+        </p>
+        <div class="risk-inform-grid">
+          <div class="risk-factor">
+            <span class="risk-factor-label">{{ t('risk.dashboard.hazard') }}</span>
+            <span class="risk-factor-value">{{ fmt(informReference.hazard_exposure_score) }}</span>
+          </div>
+          <div class="risk-factor">
+            <span class="risk-factor-label">{{ t('risk.dashboard.vulnerability') }}</span>
+            <span class="risk-factor-value">{{ fmt(informReference.vulnerability_score) }}</span>
+          </div>
+          <div class="risk-factor">
+            <span class="risk-factor-label">{{ t('risk.dashboard.copingCapacity') }}</span>
+            <span class="risk-factor-value">{{ fmt(informReference.lack_of_coping_capacity_score) }}</span>
+          </div>
+          <div class="risk-composite">
+            <span class="risk-factor-label">{{ t('risk.dashboard.composite') }}</span>
+            <span class="risk-composite-value">{{ fmt(informReference.composite_score) }}</span>
+          </div>
+        </div>
+        <p v-if="informReference.notes" class="risk-meta">{{ informReference.notes }}</p>
+      </template>
+      <p v-else class="risk-meta">{{ t('risk.dashboard.informReferenceEmpty') }}</p>
+    </div>
+
     <div class="risk-exceedance">
       <h4>{{ t('risk.dashboard.exceedanceCurveTitle') }}</h4>
       <button class="btn-compute" :disabled="curveLoading" @click="loadExceedanceCurve">
@@ -146,10 +229,12 @@ async function loadExceedanceCurve() {
 
 <style scoped>
 .risk-dashboard { display: flex; flex-direction: column; gap: 20px; }
-.risk-controls, .risk-score-panel, .risk-exceedance {
+.risk-controls, .risk-score-panel, .risk-exceedance, .risk-inform-reference {
   background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.1);
   border-radius: 12px; padding: 16px;
 }
+.risk-inform-reference h4 { margin: 0 0 8px; }
+.risk-inform-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 12px; margin-top: 8px; }
 .risk-controls { display: flex; gap: 12px; align-items: flex-end; flex-wrap: wrap; }
 .risk-field { display: flex; flex-direction: column; gap: 4px; font-size: .78rem; color: var(--color-text-muted, #94a3b8); }
 .risk-field input {

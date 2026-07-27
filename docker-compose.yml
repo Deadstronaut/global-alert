@@ -128,6 +128,30 @@ services:
     networks:
       - mhews
 
+  # ── DEM slope / landslide susceptibility importer (manual, run-to-completion) ─
+  # Downloads Copernicus GLO-30 elevation tiles per served country
+  # (demSlopeFetch.ts) and writes only the steep-terrain hexagons as the
+  # 'dem_slope' exposure source, feeding cascade_rules' landslide condition.
+  # No /rasters or manifest.json mount needed — tiles come straight from
+  # Copernicus's public S3 bucket. No scheduled equivalent: terrain doesn't
+  # change on any meaningful cadence, so this is manual-only like
+  # meta-ghsl-importer.
+  # `container_name` below only applies to `docker compose up` — a one-off
+  # `docker compose run` ignores it and auto-names the container
+  # `<service>-run-<hash>` instead, so pass --name explicitly to get the
+  # mhews-* naming every other service uses:
+  #   docker compose run --rm --name mhews-dem-slope-importer dem-slope-importer
+  dem-slope-importer:
+    build:
+      context: .
+      dockerfile: raster-importer/Dockerfile
+    container_name: mhews-dem-slope-importer
+    command: ["raster-importer/import-dem-slope.ts"]
+    env_file:
+      - ./server/.env
+    networks:
+      - mhews
+
   # ── CHIRPS monthly rainfall importer (manual, run-to-completion) ────────────
   # Single global monthly GeoTIFF (chirpsFetch.ts), no tile grid unlike GHSL —
   # no /rasters or manifest.json mount needed, just Supabase credentials and

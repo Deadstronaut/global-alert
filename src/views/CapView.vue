@@ -556,7 +556,13 @@ onMounted(() => {
 
 <style scoped>
 .cap-page {
-  min-height: 100vh;
+  /* main.css locks html/body/#app to a fixed 100dvh with overflow:hidden
+     (needed for the map view) — min-height:100vh alone doesn't create a new
+     scroll context, so content taller than one viewport used to get clipped
+     with no way to reach it. height + overflow-y here make this page scroll
+     on its own regardless of list length. */
+  height: 100dvh;
+  overflow-y: auto;
   background: var(--color-bg, #0f1117);
   color: var(--color-text-primary, #e2e8f0);
   padding: 24px;

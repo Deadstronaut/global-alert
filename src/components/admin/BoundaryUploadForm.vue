@@ -8,6 +8,12 @@ import countries from '@/configs/countries.json'
 const auth = useAuthStore()
 
 const countryCode = ref(auth.isSuperAdmin ? '' : (auth.countryCode || ''))
+// A country can have one boundary set per level (province/district/village)
+// at once — see migration 20260727040000_country_boundaries_level.sql.
+// Uploading again for the same country+level replaces that level only
+// (e.g. re-uploading 'district' fixes/corrects it without touching
+// 'province' or 'village').
+const level = ref('province')
 const nameProperty = ref('')
 const fileName = ref('')
 const parsed = ref(null) // { type, features }
@@ -21,6 +27,8 @@ const countryOptions = computed(() =>
     .map(([code, c]) => ({ code, name: c.nameEn }))
     .sort((a, b) => a.name.localeCompare(b.name)),
 )
+
+const levelLabels = { province: 'İl', district: 'İlçe', village: 'Köy' }
 
 function onFile(e) {
   const file = e.target.files?.[0]
@@ -58,13 +66,14 @@ async function upload() {
     if (!cc) throw new Error('Ülke seçilmedi')
     const { error: err } = await supabase.from('country_boundaries').upsert({
       country_code: cc,
+      level: level.value,
       name_property: nameProperty.value,
       geojson: parsed.value,
       uploaded_by: auth.session?.id,
-    })
+    }, { onConflict: 'country_code,level' })
     if (err) throw err
-    invalidateRegionCache(cc)
-    success.value = `${parsed.value.features.length} bölge yüklendi (${cc.toUpperCase()}).`
+    invalidateRegionCache(cc, level.value)
+    success.value = `${parsed.value.features.length} bölge yüklendi (${cc.toUpperCase()}, ${levelLabels[level.value]}).`
     parsed.value = null
     fileName.value = ''
   } catch (err) {
@@ -85,6 +94,14 @@ async function upload() {
           <option v-for="c in countryOptions" :key="c.code" :value="c.code">{{ c.name }} ({{ c.code }})</option>
         </select>
         <input v-else :value="countryCode.toUpperCase()" disabled />
+      </label>
+      <label class="form-field">
+        <span>Seviye *</span>
+        <select v-model="level">
+          <option value="province">İl (ADM1)</option>
+          <option value="district">İlçe (ADM2)</option>
+          <option value="village">Köy (ADM3)</option>
+        </select>
       </label>
       <label class="form-field span-2">
         <span>Sınır Dosyası (GeoJSON) *</span>

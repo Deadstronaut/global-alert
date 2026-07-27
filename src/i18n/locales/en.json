@@ -14,6 +14,10 @@
     "noData": "No data found",
     "offline": "Offline - Showing cached data"
   },
+  "common": {
+    "loadingEllipsis": "Loading...",
+    "pressEscToCancel": "Press ESC to cancel"
+  },
   "disasters": {
     "earthquake": "Earthquake",
     "wildfire": "Wildfire",
@@ -64,7 +68,13 @@
     "duration": "DURATION",
     "dateRange": "DATE RANGE",
     "calendarSingleRange": "Calendar (Single Day / Range)",
-    "dateRangeHint": "1 pick: single day. 2 picks: range. Next pick starts a new range.",
+    "dateRangeHint": "Leave end date empty for a single day.",
+    "dateRangeStart": "Start date",
+    "dateRangeEnd": "End date (optional)",
+    "dateRangeApply": "Apply",
+    "dateRangeClear": "Clear",
+    "dateRangeInactive": "Not active",
+    "durationDisabledByCalendar": "Duration is disabled while a calendar date range is active — press Clear on the date range below to use it again.",
     "viewModeSection": "View Mode",
     "modeNormal": "Status",
     "modeHexagon": "Hexbin",
@@ -135,7 +145,9 @@
     "zoomIn": "Zoom In",
     "zoomOut": "Zoom Out",
     "clusterCount": "{count} events",
-    "viewDetails": "View Details"
+    "viewDetails": "View Details",
+    "markerTruncation": "Showing {shown} of {total} events — critical and high-severity events are always prioritized; widen filters or zoom in to see more.",
+    "markerTruncationTiered": "Showing {shown} of {total} events. {tiers}-severity events are hidden entirely to keep the map responsive — critical events are never hidden. Narrow the date range or zoom in to see them."
   },
   "detail": {
     "title": "Event Details",
@@ -382,7 +394,11 @@
       "listTitle": "Exposure Datasets",
       "empty": "No exposure datasets yet.",
       "features": "features",
-      "delete": "Delete"
+      "delete": "Delete",
+      "editName": "Edit Name",
+      "displayNamePlaceholder": "Display name (e.g. Population Density - Antananarivo)",
+      "save": "Save",
+      "cancel": "Cancel"
     },
     "panel": {
       "selectPrompt": "Select a hazard event on the map to begin impact analysis.",
@@ -412,7 +428,10 @@
       "breakdownEmpty": "No breakdown data.",
       "unclassified": "unclassified",
       "collapse": "Collapse impact analysis",
-      "expand": "Expand impact analysis"
+      "expand": "Expand impact analysis",
+      "autoSummaryTitle": "Affected Resources (Automatic)",
+      "autoSummaryEmpty": "No exposure datasets available for this country.",
+      "detailedTitle": "Detailed Analysis"
     },
     "geocoding": {
       "label": "Search country, province, address, or coordinates on the map",
@@ -469,7 +488,10 @@
       "loadCurve": "Load Curve",
       "impactLevel": "Impact level",
       "recordCount": "Based on {count} historical events",
-      "insufficientData": "Insufficient historical data ({count} of {minimum} minimum records) to generate a reliable curve."
+      "insufficientData": "Insufficient historical data ({count} of {minimum} minimum records) to generate a reliable curve.",
+      "informReferenceTitle": "INFORM Reference Score",
+      "informReferenceHint": "{source} ({year}) — a directly-entered, country-level reference; does not replace the computed score above.",
+      "informReferenceEmpty": "No INFORM (or similar) reference score has been entered for this country yet. You can add one from the admin panel."
     },
     "scenario": {
       "formTitle": "Simulate Hypothetical Scenario",
@@ -502,6 +524,71 @@
       "noFormulaAvailable": "Scenario simulation is not yet available for hazard type \"{hazardType}\".",
       "errors": {
         "simulationFailed": "The simulation could not be completed."
+      },
+      "evaluateCascades": "Evaluate Cascades"
+    },
+    "cascadeRules": {
+      "formTitle": "Configure Cascade Rule",
+      "intro": "Define when a primary hazard event should elevate a secondary risk — e.g. an earthquake near a river triggering an elevated flood-risk assessment. Every condition below is deterministic and admin-configured; no AI/ML is used anywhere in evaluating these rules.",
+      "countryCode": "Country",
+      "triggerHazardType": "Trigger Hazard Type",
+      "triggerHazardTypePlaceholder": "e.g. earthquake, drought, or \"any\"",
+      "triggerHazardTypeHint": "Use \"any\" for a rule that should be checked regardless of hazard type (e.g. a vulnerability-based rule).",
+      "conditionsLegend": "Conditions (at least one required)",
+      "minMagnitude": "Minimum Magnitude/Severity",
+      "minMagnitudePlaceholder": "e.g. 6.0",
+      "proximitySourceName": "Proximity Layer",
+      "proximitySourceNamePlaceholder": "e.g. hydrorivers, hydrobasins",
+      "proximityDistanceKm": "Proximity Distance (km)",
+      "proximityDistanceKmPlaceholder": "e.g. 15",
+      "minVulnerabilityScore": "Minimum Vulnerability Score",
+      "minVulnerabilityScorePlaceholder": "0-10",
+      "minVulnerabilityScoreHint": "Reuses the area's Vulnerability factor from Risk & Scenario Modeling — requires Vulnerability indicators to be configured for the area.",
+      "secondaryRiskCategory": "Secondary Risk Category",
+      "secondaryRiskCategoryPlaceholder": "e.g. secondary_flood_risk, building_collapse_risk, famine_risk",
+      "recommendationTemplate": "Recommendation Text Template",
+      "recommendationTemplatePlaceholder": "e.g. [[area]]: elevated flood risk from a magnitude [[magnitude]] event [[distance_km]]km from the river. Estimated [[affected_population]] people in the area.",
+      "recommendationTemplateHint": "Available placeholders: [[area]], [[magnitude]], [[distance_km]], [[vulnerability_score]], [[affected_population]]. Plain substitution only — no generated text.",
+      "isActive": "Active",
+      "save": "Save Rule",
+      "saving": "Saving...",
+      "cancelEdit": "Cancel",
+      "listTitle": "Configured Cascade Rules",
+      "empty": "No cascade rules configured yet.",
+      "inactive": "inactive",
+      "edit": "Edit",
+      "delete": "Delete",
+      "errors": {
+        "noCondition": "At least one condition (magnitude threshold, proximity layer, or vulnerability threshold) must be set."
+      }
+    },
+    "cascadeAuto": {
+      "title": "Automatic Cascade Evaluation (opt-in)",
+      "intro": "When enabled, new real hazard events in this country are automatically checked against your cascade rules — no manual \"Evaluate\" click needed. This never creates a CAP alert, dispatch, or external notification of any kind; it only shows up here as an item to review. Only country_admin can turn this on or off. Off by default.",
+      "toggleLabel": "Automatically evaluate cascade rules for new real events",
+      "unacknowledgedTitle": "Unacknowledged Automatic Assessments ({count})",
+      "noUnacknowledged": "No unacknowledged automatic assessments.",
+      "acknowledge": "Acknowledge"
+    },
+    "cascade": {
+      "title": "Cascading Risks",
+      "eventLat": "Event Latitude",
+      "eventLng": "Event Longitude",
+      "eventMagnitude": "Magnitude/Severity",
+      "evaluate": "Evaluate Cascades",
+      "evaluating": "Evaluating...",
+      "triggeredTitle": "Triggered Secondary Risks",
+      "notEvaluableTitle": "Not Evaluable",
+      "notEvaluableHint": "These rules could not be checked because required data is missing.",
+      "noRiskTriggered": "No secondary risk was triggered for this event.",
+      "noRulesConfigured": "No cascade rules are configured for this hazard type yet.",
+      "whyLabel": "Why",
+      "affectedPopulation": "Estimated affected population",
+      "simulatedLabel": "Simulated (hypothetical scenario)",
+      "realEventLabel": "Real event",
+      "boundaryUnresolvable": "Could not determine the administrative area for this location — cascading risk evaluation is not available here.",
+      "errors": {
+        "evaluationFailed": "Cascade evaluation could not be completed."
       }
     }
   },
@@ -731,7 +818,9 @@
     "emptyState": "No exposure layers available for this area yet.",
     "selectCountryPrompt": "Select a country on the map to see its exposure layers.",
     "featureCount": "{count} features",
-    "loading": "Loading...",    "sourceLabel": {
+    "loading": "Loading...",
+    "loadingLayer": "Loading {name}...",
+    "sourceLabel": {
       "osm": "Road Network",
       "kontur": "Population Density",
       "hydrorivers": "River Network",
@@ -744,7 +833,8 @@
       "metaHdx": "Population (Meta/HDX)",
       "glofasRiverDischarge": "River Discharge (GloFAS)",
       "osmBuildings": "Critical Facilities (Buildings)",
-      "chirps": "Rainfall (CHIRPS)"
+      "chirps": "Rainfall (CHIRPS)",
+      "demSlope": "Steep Terrain / Landslide Risk (DEM Slope)"
     },
     "countryLabel": {
       "tr": "Turkey",
@@ -762,6 +852,7 @@
       "hexagonOption": "Hexagons",
       "provinceOption": "Provinces",
       "districtOption": "Districts",
+      "villageOption": "Villages",
       "unavailableTooltip": "No boundary data available for this country at this level",
       "populationLabel": "Population"
     }
@@ -843,6 +934,8 @@
     "createTitle": "Add Shelter",
     "name": "Name",
     "country": "Country",
+    "province": "Province",
+    "district": "District",
     "lat": "Latitude",
     "lng": "Longitude",
     "capacity": "Capacity (occupied/total)",
@@ -855,6 +948,14 @@
       "closed": "Closed",
       "full": "Full"
     },
+    "confidenceLevel": "Confidence",
+    "confidenceLevels": {
+      "1": "Unreliable",
+      "2": "Uncertain",
+      "3": "Likely",
+      "4": "Confirmed",
+      "5": "Manual Entry"
+    },
     "linkedIncident": "Linked Incident",
     "noLinkedIncident": "— none —",
     "active": "Active",
@@ -864,12 +965,21 @@
     "reactivate": "reactivate",
     "osmImportedHint": "Automatically imported from OpenStreetMap — capacity is mostly estimated/unknown.",
     "empty": "No shelters yet.",
+    "filterEmpty": "No shelters match this filter.",
+    "filterSearchPlaceholder": "Search...",
+    "filterSelectAll": "Select All",
+    "filterClearAll": "Clear",
     "save": "Save",
     "cancel": "Cancel",
     "nameRequired": "Name is required.",
     "noCountry": "Country is required.",
     "capacityTotalInvalid": "Total capacity must be a positive number.",
     "occupancyExceedsCapacity": "Current occupancy cannot exceed total capacity.",
+    "pagination": {
+      "perPage": "Per page:",
+      "pageOf": "Page {page} of {total}",
+      "rowCount": "{count} rows"
+    },
     "map": {
       "toggleLabel": "Show/Hide Shelters",
       "occupancy": "Occupancy",

@@ -1,5 +1,5 @@
 <script setup>
-import { computed, ref, watch, onMounted } from 'vue'
+import { computed, ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useDisasterStore } from '@/stores/disaster.js'
 import { useUIStore, MIN_HEX_RES, MAX_HEX_RES } from '@/stores/ui.js'
@@ -165,7 +165,51 @@ const selectedTimeRange = computed(() => timeRanges[selectedTimeRangeIndex.value
 const today = new Date().toISOString().slice(0, 10)
 const rangeStartDate = ref(today)
 const rangeEndDate = ref('')
-const calendarPickValue = ref(today)
+
+// Live-testing finding (real bug): the duration slider and the calendar
+// date range used to both write to disasterStore.startDate/endDate through
+// independent watchers that could race — moving the slider to "20 Yıl"
+// while a calendar date was still set from earlier could silently get
+// overwritten right back to that old date by the calendar's own watcher,
+// so the slider's choice never actually took effect. Fixed by making the
+// two mutually exclusive via one explicit mode flag: only one control is
+// ever "live" at a time, and only an explicit action (moving the slider,
+// or pressing the calendar's Apply button) switches which one is active —
+// no more implicit auto-apply-on-every-keystroke for the calendar either
+// (the second reported complaint — picking a range was confusing because
+// every intermediate pick immediately re-filtered the map).
+const dateFilterMode = ref('duration') // 'duration' | 'calendar'
+
+function clearCalendarRange() {
+  dateFilterMode.value = 'duration'
+  rangeStartDate.value = today
+  rangeEndDate.value = ''
+  disasterStore.startDate = null
+  disasterStore.endDate = null
+  disasterStore.refreshAll()
+}
+
+function applyDateRange() {
+  if (!rangeStartDate.value) return
+  const startDateObj = new Date(rangeStartDate.value)
+  startDateObj.setHours(0, 0, 0, 0)
+
+  const endDateObj = rangeEndDate.value ? new Date(rangeEndDate.value) : new Date(rangeStartDate.value)
+  endDateObj.setHours(23, 59, 59, 999)
+
+  // Swap if the user picked the end date before the start date.
+  if (endDateObj < startDateObj) {
+    const tmp = rangeStartDate.value
+    rangeStartDate.value = rangeEndDate.value
+    rangeEndDate.value = tmp
+    return applyDateRange()
+  }
+
+  dateFilterMode.value = 'calendar'
+  disasterStore.startDate = startDateObj.toISOString()
+  disasterStore.endDate = endDateObj.toISOString()
+  disasterStore.refreshAll()
+}
 
 async function handleLogout() {
   await authStore.logout()
@@ -210,39 +254,14 @@ function handleTimeSliderInput(event) {
   const hours = timeRangeMap[rangeLabel] || 24
   disasterStore.selectedTimeRange = hours
 
-  // Selecting a quick range should logically clear the custom calendar range
-  // to avoid confusion, and reset back to "now" focused polling.
+  // Moving the slider always makes duration mode the active one — clears
+  // the calendar's picked dates so it can't silently keep overriding this
+  // choice (see dateFilterMode's declaration above for the bug this fixes).
+  dateFilterMode.value = 'duration'
   rangeStartDate.value = today
   rangeEndDate.value = ''
-  calendarPickValue.value = today
-
-  // Reset store to default "poll" mode without specific day boundaries
-  // Not: watch([selectedTimeRange, startDate, endDate]) zaten loadFromSupabase(true) tetikliyor
   disasterStore.startDate = null
   disasterStore.endDate = null
-}
-
-function handleSingleCalendarPick(event) {
-  const picked = event.target.value
-  if (!picked) return
-
-  // Start a new selection cycle if there is no active range yet
-  // or an existing range is already complete.
-  if (!rangeStartDate.value || rangeEndDate.value) {
-    rangeStartDate.value = picked
-    rangeEndDate.value = ''
-    calendarPickValue.value = picked
-    return
-  }
-
-  // Complete the range on the second pick.
-  if (picked < rangeStartDate.value) {
-    rangeEndDate.value = rangeStartDate.value
-    rangeStartDate.value = picked
-  } else {
-    rangeEndDate.value = picked
-  }
-  calendarPickValue.value = picked
 }
 
 const selectedRangeLabel = computed(() => {
@@ -250,28 +269,6 @@ const selectedRangeLabel = computed(() => {
   if (!rangeEndDate.value || rangeEndDate.value === rangeStartDate.value)
     return rangeStartDate.value
   return `${rangeStartDate.value} - ${rangeEndDate.value}`
-})
-
-watch([rangeStartDate, rangeEndDate], ([start, end]) => {
-  if (!start) return
-
-  const startDateObj = new Date(start)
-  startDateObj.setHours(0, 0, 0, 0)
-  disasterStore.startDate = startDateObj.toISOString()
-
-  let endDateObj = null
-  if (end) {
-    endDateObj = new Date(end)
-  } else {
-    // Single day selected, use that for the end date as well (end of the day)
-    endDateObj = new Date(start)
-  }
-
-  endDateObj.setHours(23, 59, 59, 999)
-  disasterStore.endDate = endDateObj.toISOString()
-
-  // Auto-fetch using the new date boundaries
-  disasterStore.refreshAll()
 })
 </script>
 
@@ -642,7 +639,7 @@ watch([rangeStartDate, rangeEndDate], ([start, end]) => {
             <div class="filter-ends"><span>0 km</span><span>25+ km</span></div>
           </div>
 
-          <div class="filter-row time-slider-row">
+          <div class="filter-row time-slider-row" :class="{ 'filter-row-inactive': dateFilterMode === 'calendar' }">
             <div class="filter-label">
               <span>{{ t('sidebar.duration') }}</span>
               <span class="filter-val accent">{{ selectedTimeRange }}</span>
@@ -652,6 +649,7 @@ watch([rangeStartDate, rangeEndDate], ([start, end]) => {
               :min="0"
               :max="timeRanges.length - 1"
               :value="selectedTimeRangeIndex"
+              :disabled="dateFilterMode === 'calendar'"
               @input="handleTimeSliderInput"
               class="filter-range"
             />
@@ -659,26 +657,39 @@ watch([rangeStartDate, rangeEndDate], ([start, end]) => {
               <span>{{ timeRanges[0] }}</span>
               <span>{{ timeRanges[timeRanges.length - 1] }}</span>
             </div>
+            <p v-if="dateFilterMode === 'calendar'" class="date-hint">
+              {{ t('sidebar.durationDisabledByCalendar') }}
+            </p>
           </div>
 
-          <div class="date-filter-card inline-date-filter">
+          <div class="date-filter-card inline-date-filter" :class="{ 'filter-row-inactive': dateFilterMode === 'duration' }">
             <div class="filter-label">
               <span>{{ t('sidebar.dateRange') }}</span>
-              <span class="filter-val accent">{{ selectedRangeLabel }}</span>
+              <span class="filter-val accent">{{ dateFilterMode === 'calendar' ? selectedRangeLabel : t('sidebar.dateRangeInactive') }}</span>
             </div>
             <div class="date-filters">
               <label class="date-label">
-                <span>{{ t('sidebar.calendarSingleRange') }}</span>
-                <input
-                  type="date"
-                  class="date-input"
-                  :value="calendarPickValue"
-                  @change="handleSingleCalendarPick"
-                />
+                <span>{{ t('sidebar.dateRangeStart') }}</span>
+                <input type="date" class="date-input" v-model="rangeStartDate" />
               </label>
-              <span class="date-hint">
-                {{ t('sidebar.dateRangeHint') }}
-              </span>
+              <label class="date-label">
+                <span>{{ t('sidebar.dateRangeEnd') }}</span>
+                <input type="date" class="date-input" v-model="rangeEndDate" :min="rangeStartDate" />
+              </label>
+              <span class="date-hint">{{ t('sidebar.dateRangeHint') }}</span>
+              <div class="date-filter-actions">
+                <button type="button" class="btn-date-apply" @click="applyDateRange">
+                  {{ t('sidebar.dateRangeApply') }}
+                </button>
+                <button
+                  v-if="dateFilterMode === 'calendar'"
+                  type="button"
+                  class="btn-date-clear"
+                  @click="clearCalendarRange"
+                >
+                  {{ t('sidebar.dateRangeClear') }}
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -1329,6 +1340,46 @@ watch([rangeStartDate, rangeEndDate], ([start, end]) => {
   font-size: 0.64rem;
   line-height: 1.35;
   color: var(--color-text-muted);
+}
+
+/* Duration slider and calendar range are mutually exclusive (see
+   dateFilterMode in the script) — the inactive one is dimmed rather than
+   silently letting both apply at once. The slider row is also genuinely
+   disabled (native `disabled` attribute on the range input) when calendar
+   mode wins, since dragging it takes effect immediately with no separate
+   "apply" step. The calendar card is only ever dimmed, never blocked —
+   it must stay clickable so picking a date + pressing Uygula remains the
+   way to switch INTO calendar mode even while duration mode is active. */
+.filter-row-inactive {
+  opacity: 0.45;
+}
+
+.date-filter-actions {
+  display: flex;
+  gap: 6px;
+  margin-top: 2px;
+}
+
+.btn-date-apply {
+  flex: 1;
+  padding: 7px 10px;
+  background: rgba(77, 163, 255, 0.2);
+  border: 1px solid rgba(77, 163, 255, 0.4);
+  border-radius: 8px;
+  color: #4da3ff;
+  font-weight: 600;
+  font-size: 0.75rem;
+  cursor: pointer;
+}
+
+.btn-date-clear {
+  padding: 7px 10px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--glass-border);
+  border-radius: 8px;
+  color: var(--color-text-muted);
+  font-size: 0.75rem;
+  cursor: pointer;
 }
 
 .sidebar-icons-only {

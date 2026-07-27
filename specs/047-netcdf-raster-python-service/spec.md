@@ -4,7 +4,12 @@
 
 **Created**: 2026-07-20
 
-**Status**: Draft — prepared and held pending explicit go-ahead; not scheduled for implementation yet.
+**Status**: Closed — implemented and live-verified, via a pivot (see tasks.md). User Story 1's
+premise turned out wrong (GDO Soil Moisture/FAPAR didn't need this service, a WCS shortcut was
+found instead); the service got built anyway and became the real fix for GloFAS river discharge's
+GRIB2/NetCDF output, discovered mid-implementation. Tracked as it happened in
+`docs/NEW_GAME_PLAN.md` §4.2/§4.5/§4.5b rather than through this spec's own task loop — see
+tasks.md for the retrospective closure record.
 
 **Input**: User description: "Prepare a separate spec for the Python-related work and hold it — we'll do everything else first." Context: this project's Deno/Edge-Function raster pipeline (geotiff.js + h3-js, no GDAL/native dependency, per Constitution Principle VIII) is GeoTIFF-only. Two real drought/vegetation indicators the Data Sources Inventory has found live, working data for — the Global Drought Observatory's Soil Moisture Anomaly and FAPAR anomaly — are published ONLY as NetCDF4/HDF5 bulk archives (live-verified: HDF5 magic bytes, ~260MB/year per indicator) or as WMS "quicklook" rendered images (FAPAR anomaly specifically) — neither is raw, GeoTIFF-readable data. No pure-JS/Deno library exists for NetCDF4/HDF5 parsing or gamma-distribution statistical fitting comparable to what Python's `xarray`/`netCDF4`/`h5py`/`rasterio`/`scipy` ecosystem provides. This project already runs a persistent, non-serverless Docker container (`server/` — the Node.js "aggregator", see `docker-compose.yml`) for each self-hosted deployment, so adding a second, Python-based container is an additive service to an existing compose stack, not new deployment infrastructure or a new hosting model.
 

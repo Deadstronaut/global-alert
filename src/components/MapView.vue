@@ -35,6 +35,7 @@ import { buildFeaturePopupHtml } from '@/utils/exposureFeaturePopup.js'
 import { friendlyDatasetLabel } from '@/utils/exposureLayerLabel.js'
 import { formatPopulationLabel } from '@/utils/formatPopulationLabel.js'
 import { loadRegionBoundaries } from '@/data/boundaries/index.js'
+import LoadingOverlay from '@/components/LoadingOverlay.vue'
 
 // spec 012: OGC WMS/WFS map layer registry — admin-registered external
 // overlays rendered live on this map (never stored/normalized, FR-008).
@@ -53,6 +54,28 @@ const auth = useAuthStore()
 const layerVisibility = ref({}) // { [layerId]: boolean }
 const layerOpacity = ref({}) // { [layerId]: number 0..1 }
 const DEFAULT_LAYER_OPACITY = 0.7
+
+// Exposure layer fetches (get_dataset_features_geojson) are a single big
+// RPC call per dataset — 10-15s for a country-wide population grid is
+// typical — that used to leave the panel looking frozen/broken with no
+// feedback for the whole wait. loadingExposureLayer tracks which dataset
+// (if any) is currently in flight so a LoadingOverlay can cover the screen
+// until it resolves; exposureLayerLoadToken lets ESC "cancel" it (there's no
+// real abort handle on a Supabase RPC call, so cancelling just means
+// discarding the response when it eventually arrives and flipping the
+// toggle back off, rather than actually stopping the in-flight request).
+const loadingExposureLayer = ref(null)
+let exposureLayerLoadToken = 0
+
+function cancelExposureLayerLoading() {
+  const dataset = loadingExposureLayer.value
+  if (dataset) {
+    exposureLayerLoadToken += 1
+    const key = exposureLayerKey(dataset)
+    layerVisibility.value = { ...layerVisibility.value, [key]: false }
+  }
+  loadingExposureLayer.value = null
+}
 
 function isLayerVisible(layerId) {
   return !!layerVisibility.value[layerId]
@@ -180,12 +203,19 @@ async function addExposureLayer(dataset) {
 
   let geojson = exposureFeatureCache.get(dataset.id)
   if (!geojson) {
+    const myToken = (exposureLayerLoadToken += 1)
+    loadingExposureLayer.value = dataset
     // ~55m tolerance at the equator — imprecise at country-scale zoom levels
     // this panel renders at, but meaningfully shrinks the ST_AsGeoJSON
     // payload/serialization cost for line-heavy datasets (live-verified:
     // Turkey's 65,010-feature road network went from timing out
     // server-side to completing in ~11s once this was passed).
     const { data, error } = await supabase.rpc('get_dataset_features_geojson', { dataset_id: dataset.id, simplify_tolerance: 0.0005 })
+    // ESC (cancelExposureLayerLoading) bumped the token while this was in
+    // flight — the toggle's already been flipped back off, so just drop the
+    // response instead of racing to render a layer the user cancelled.
+    if (myToken !== exposureLayerLoadToken) return
+    if (loadingExposureLayer.value === dataset) loadingExposureLayer.value = null
     if (error || !data) return // silent render failure — matches addWfsLayer's existing convention
     // Population values run into the hundreds of thousands/millions — a
     // hexagon is too small to fit "482,367" without overflow, so population
@@ -213,14 +243,15 @@ async function addExposureLayer(dataset) {
   const isPopulation = isPopulationSource(dataset.source_name)
   const isGridMetric = isGridMetricSource(dataset.source_name)
   // spec 046 US2: kick off (fire-and-forget) the region-boundary
-  // availability check (both province/ADM1 and district/ADM2) for this
-  // dataset's country as soon as its hexagon data is on the map — the
-  // toggle buttons in the panel read regionBoundaryCache reactively once
-  // this resolves, so a country without boundary data at a given level
-  // (FR-007) simply never enables that button.
+  // availability check for every level (province/ADM1, district/ADM2,
+  // village/ADM3) for this dataset's country as soon as its hexagon data is
+  // on the map — the toggle buttons in the panel read regionBoundaryCache
+  // reactively once this resolves, so a country without boundary data at a
+  // given level (FR-007) simply never enables that button. Loops over
+  // REGION_LEVELS (not hardcoded) so adding a future level here needs no
+  // second edit elsewhere.
   if (isPopulation) {
-    ensureRegionBoundaryChecked(dataset.country_code, 'province')
-    ensureRegionBoundaryChecked(dataset.country_code, 'district')
+    for (const level of REGION_LEVELS) ensureRegionBoundaryChecked(dataset.country_code, level)
   }
   // Both population and other gridded metrics (GDO anomalies, GloFAS
   // discharge) are thousands of small per-pixel cells covering a whole
@@ -298,11 +329,10 @@ function removeExposureLayerRendering(dataset) {
   }
   if (map.getSource(sourceId)) map.removeSource(sourceId)
 
-  // spec 046 US2: also tear down region-view rendering (province and/or
-  // district, whichever was active) if it was active for this dataset, and
-  // reset back to 'hexagon' mode — re-toggling this dataset on later always
-  // starts fresh regardless of which view was last active (no stale layer
-  // left behind from a prior session).
+  // spec 046 US2: also tear down any active region-view rendering (province
+  // and/or district — both may be on at once, see below) and reset back to
+  // defaults (hexagon on, province/district off) — re-toggling this dataset
+  // on later always starts fresh regardless of what was active.
   for (const level of REGION_LEVELS) {
     const regSourceId = regionSourceId(dataset, level)
     for (const suffix of ['-fill', '-line', '-label']) {
@@ -310,23 +340,32 @@ function removeExposureLayerRendering(dataset) {
     }
     if (map.getSource(regSourceId)) map.removeSource(regSourceId)
   }
-  if (dataset.id in populationViewMode.value) {
-    const next = { ...populationViewMode.value }
+  if (dataset.id in regionViewActive.value) {
+    const next = { ...regionViewActive.value }
     delete next[dataset.id]
-    populationViewMode.value = next
+    regionViewActive.value = next
   }
 }
 
 // ── Region-level population view (spec 046 US2, extended for ADM2) ─────────
-// Distinct, manually-toggled per-dataset display mode; independent of the
+// Hexagons / Provinces / Districts are three INDEPENDENT toggles per
+// dataset, not a single mutually-exclusive mode — turning Provinces on/off
+// must never affect Districts and vice versa (live user request: "ikisini
+// aynı anda çalıştırabilmeliyim", any combination can render at once).
+// Distinct, manually-toggled per-dataset display state; independent of the
 // automatic zoom-based hex resolution and spec 045's manual resolution
 // slider (data-model.md's State additions / spec.md Assumptions).
 // 'province' = ADM1 (il/state), 'district' = ADM2 (ilçe) — same rendering/
 // aggregation path for both, just a different bundled boundary source
 // (src/data/boundaries/index.js's `level` param) and layer-id suffix.
-const REGION_LEVELS = ['province', 'district']
+// Coarsest to finest — used both for the toggle set and to derive each
+// level's border prominence (coarser = thicker/more opaque border, always
+// rendered above finer levels' fills; see enforceRegionLayerOrder()).
+const REGION_LEVELS = ['province', 'district', 'village']
+const DEFAULT_REGION_VIEW_STATE = { hexagon: true, province: false, district: false, village: false }
 
-const populationViewMode = ref({}) // { [datasetId]: 'hexagon' | 'province' | 'district' }
+// { [datasetId]: { hexagon, province, district: boolean } }
+const regionViewActive = ref({})
 // { [level]: { [countryCode]: loadRegionBoundaries() result | null } } —
 // null once confirmed unavailable, absent key = not checked yet this session.
 // shallowRef, not ref: this holds real GeoJSON FeatureCollections that get
@@ -341,18 +380,24 @@ const populationViewMode = ref({}) // { [datasetId]: 'hexagon' | 'province' | 'd
 // been populated). shallowRef never wraps nested data, so every reassigned
 // value here stays a plain, clonable object — no toRaw() needed anywhere.
 const regionBoundaryCache = shallowRef({ province: {}, district: {} })
-// Whether the worker-computed aggregation is currently in flight for a
-// dataset — drives the toggle buttons' disabled/label state so the wait
-// reads as "working", not a frozen UI (live user feedback: without this the
-// switch felt like it hung, then "suddenly" popped in).
+// Whether the worker-computed aggregation is currently in flight — keyed
+// per dataset *and* level (not just dataset) so turning both Provinces and
+// Districts on back-to-back gets two independent loading states instead of
+// one clobbering the other. Drives the toggle buttons' disabled/label state
+// so the wait reads as "working", not a frozen UI (live user feedback:
+// without this the switch felt like it hung, then "suddenly" popped in).
 const regionViewLoading = ref({})
 
 function regionSourceId(dataset, level) {
   return `${exposureSourceId(dataset)}-${level}`
 }
 
-function regionViewLoadingFor(dataset) {
-  return !!regionViewLoading.value[dataset.id]
+function regionViewLoadingKey(dataset, level) {
+  return `${dataset.id}:${level}`
+}
+
+function regionViewLoadingFor(dataset, level) {
+  return !!regionViewLoading.value[regionViewLoadingKey(dataset, level)]
 }
 
 // Dedicated worker (not hexWorker — its lazy-init is tied to the unrelated
@@ -381,8 +426,12 @@ function runRegionAggregation(populationFeatures, regionFeatureCollection, nameP
   })
 }
 
-function populationViewModeFor(dataset) {
-  return populationViewMode.value[dataset.id] ?? 'hexagon'
+function regionViewStateFor(dataset) {
+  return regionViewActive.value[dataset.id] ?? DEFAULT_REGION_VIEW_STATE
+}
+
+function isRegionLevelActive(dataset, level) {
+  return !!regionViewStateFor(dataset)[level]
 }
 
 function isRegionViewAvailable(dataset, level) {
@@ -423,7 +472,7 @@ function buildRegionPopupHtml(regionName, totalPopulation) {
 }
 
 async function enableRegionView(dataset, level) {
-  if (!map || regionViewLoadingFor(dataset)) return
+  if (!map || regionViewLoadingFor(dataset, level)) return
   const boundary = regionBoundaryCache.value[level]?.[dataset.country_code]
   const populationGeojson = exposureFeatureCache.get(dataset.id)
   if (!boundary || !populationGeojson) return // toggle shouldn't be reachable in this state, but degrade safely (FR-007)
@@ -431,23 +480,36 @@ async function enableRegionView(dataset, level) {
   const sourceId = regionSourceId(dataset, level)
   if (map.getSource(sourceId)) return // already rendered
 
-  regionViewLoading.value = { ...regionViewLoading.value, [dataset.id]: true }
+  const loadingKey = regionViewLoadingKey(dataset, level)
+  regionViewLoading.value = { ...regionViewLoading.value, [loadingKey]: true }
   const aggregated = await runRegionAggregation(populationGeojson, boundary.featureCollection, boundary.nameProperty)
-  regionViewLoading.value = { ...regionViewLoading.value, [dataset.id]: false }
+  regionViewLoading.value = { ...regionViewLoading.value, [loadingKey]: false }
 
-  // The user may have switched to another view (hexagon, or the other
-  // region level) — or toggled the whole dataset off — while the worker was
-  // computing. Don't render a stale result over whatever state they're in
-  // now.
-  if (!map || populationViewModeFor(dataset) !== level || map.getSource(sourceId)) return
-
-  // Hide (not remove) the hexagon layers so switching back restores them
-  // exactly, with no lost opacity/toggle state (FR-008). Unconditional and
-  // idempotent — a no-op if already hidden (e.g. switching province<->district).
-  setHexagonSubLayersVisibility(dataset, 'none')
+  // The user may have turned this level back off (or toggled the whole
+  // dataset off) while the worker was computing. Don't render a stale
+  // result over whatever state they're in now — note this only checks
+  // *this* level; Provinces/Districts are independent, so the other
+  // level's state is irrelevant here.
+  if (!map || !isRegionLevelActive(dataset, level) || map.getSource(sourceId)) return
 
   const opacity = getLayerOpacity(exposureLayerKey(dataset))
   map.addSource(sourceId, { type: 'geojson', data: aggregated })
+
+  // A coarser level's border must read as the "official" outline finer
+  // levels sit inside of (live feedback: turning Provinces and Districts on
+  // together made it impossible to tell which district belongs to which
+  // province, because the district fill completely covered the province's
+  // own border line) — border prominence scales with coarseness: Provinces
+  // draw the thickest/most opaque (white) border, Districts a medium one,
+  // Villages the original thin/subtle style. Actual stacking (so the
+  // thicker border isn't itself covered by a finer level's fill) is
+  // enforced separately via enforceRegionLayerOrder() below, regardless of
+  // which order the user clicks the toggles in.
+  const REGION_LINE_PAINT = {
+    province: { 'line-color': '#ffffff', 'line-opacity': Math.max(opacity, 0.85), 'line-width': 2.5 },
+    district: { 'line-color': '#7f0000', 'line-opacity': Math.max(opacity * 0.3, 0.5), 'line-width': 1.5 },
+    village: { 'line-color': '#7f0000', 'line-opacity': opacity * 0.3, 'line-width': 1 },
+  }
   map.addLayer({
     id: `${sourceId}-fill`,
     type: 'fill',
@@ -462,7 +524,7 @@ async function enableRegionView(dataset, level) {
     id: `${sourceId}-line`,
     type: 'line',
     source: sourceId,
-    paint: { 'line-color': '#7f0000', 'line-opacity': opacity * 0.3, 'line-width': 1 },
+    paint: REGION_LINE_PAINT[level],
   })
   // Always-on name + population label (live feedback: names weren't visible
   // at all before, only on click) — district level can run into the
@@ -482,6 +544,7 @@ async function enableRegionView(dataset, level) {
     },
     paint: { 'text-color': '#ffffff', 'text-halo-color': '#000000', 'text-halo-width': 1.5 },
   })
+  enforceRegionLayerOrder(dataset)
 
   map.on('click', `${sourceId}-fill`, (e) => {
     const f = e.features?.[0]
@@ -494,6 +557,35 @@ async function enableRegionView(dataset, level) {
   })
 }
 
+// Any combination of Provinces/Districts/Villages can be on at once
+// (independent toggles), and each addLayer() call by default just stacks on
+// top of whatever's already there — so the *order* toggles were clicked in
+// would otherwise decide what's visible, not what should be. This enforces
+// one fixed, sensible order every time any level's layers change: fills
+// coarsest-to-finest at the bottom (a finer level's fill, added later in
+// this list, ends up on top of a coarser one's — it's the more detailed
+// layer, its colors should read clearly), then borders finest-to-coarsest
+// (so Provinces' thick border ends up on top of *everything*, never
+// obscured by Districts'/Villages' fill — the actual bug this fixes; a
+// medium Districts border likewise stays above Villages'), then labels in
+// that same finest-to-coarsest order. moveLayer(id) with no beforeId moves
+// that layer to the very top; calling it in this exact sequence leaves
+// every listed layer in exactly this relative order at the top of the
+// stack, above hexagon's layers (never touched, so implicitly stay lowest).
+function enforceRegionLayerOrder(dataset) {
+  if (!map) return
+  const coarseToFine = REGION_LEVELS
+  const fineToCoarse = [...REGION_LEVELS].reverse()
+  const order = [
+    ...coarseToFine.map((level) => `${regionSourceId(dataset, level)}-fill`),
+    ...fineToCoarse.map((level) => `${regionSourceId(dataset, level)}-line`),
+    ...fineToCoarse.map((level) => `${regionSourceId(dataset, level)}-label`),
+  ]
+  for (const id of order) {
+    if (map.getLayer(id)) map.moveLayer(id)
+  }
+}
+
 function disableRegionView(dataset, level) {
   if (!map) return
   const sourceId = regionSourceId(dataset, level)
@@ -503,17 +595,22 @@ function disableRegionView(dataset, level) {
   if (map.getSource(sourceId)) map.removeSource(sourceId)
 }
 
-function setPopulationViewMode(dataset, mode) {
-  const current = populationViewModeFor(dataset)
-  if (current === mode) return
-  if (mode !== 'hexagon' && !isRegionViewAvailable(dataset, mode)) return // FR-007: disabled option is not clickable-through
+// Each of Hexagons/Provinces/Districts is an independent on/off toggle, not
+// a mutually-exclusive mode — toggling one never turns another off (live
+// user request: turning Provinces on/off must leave Districts exactly as
+// it was, and vice versa; any combination can be active at once).
+function toggleRegionLevel(dataset, level) {
+  if (level !== 'hexagon' && !isRegionViewAvailable(dataset, level)) return // FR-007: disabled option is not clickable-through
+  if (level !== 'hexagon' && regionViewLoadingFor(dataset, level)) return // ignore re-click while its own load is in flight
 
-  populationViewMode.value = { ...populationViewMode.value, [dataset.id]: mode }
+  const current = regionViewStateFor(dataset)
+  const next = { ...current, [level]: !current[level] }
+  regionViewActive.value = { ...regionViewActive.value, [dataset.id]: next }
   if (!mapLoaded) return
 
-  if (current !== 'hexagon') disableRegionView(dataset, current)
-  if (mode === 'hexagon') setHexagonSubLayersVisibility(dataset, 'visible')
-  else enableRegionView(dataset, mode)
+  if (level === 'hexagon') setHexagonSubLayersVisibility(dataset, next.hexagon ? 'visible' : 'none')
+  else if (next[level]) enableRegionView(dataset, level)
+  else disableRegionView(dataset, level)
 }
 
 // Only the currently selected country's own exposure datasets — the panel
@@ -1884,7 +1981,18 @@ function updateShelterMarkers() {
   if (!uiStore.showShelters) return
 
   sheltersStore.shelters
-    .filter((shelter) => shelter.is_active && shelter.lat != null && shelter.lng != null)
+    // confidence_level 1-3 (amenity=shelter's low/unclassifiable-confidence
+    // OSM rows — see the shelters_confidence_level migration) are visible in
+    // the admin list but excluded from the map by default: at 4-5 the
+    // popup's "bu bir sığınak" implication is trustworthy, below that it's
+    // as likely a bus-stop shelter as a real one.
+    .filter(
+      (shelter) =>
+        shelter.is_active &&
+        shelter.lat != null &&
+        shelter.lng != null &&
+        (shelter.confidence_level ?? 5) >= 4,
+    )
     .forEach((shelter) => {
       const color = getShelterMarkerColor(shelter.status)
 
@@ -2050,6 +2158,70 @@ function hexToRgba(hex, alpha) {
   return `rgba(${r}, ${g}, ${b}, ${alpha})`
 }
 
+// Rendering every marker in a multi-year/all-type view (potentially tens of
+// thousands of events) would both look like solid noise and cause real
+// jank creating that many DOM marker nodes — so `updateMarkers()` below
+// keeps the render count near MARKER_COMFORTABLE_COUNT, filling
+// strongest-severity-first (critical → high → moderate → low → minimal).
+//
+// Live-testing finding (severity: high — real regression): an earlier
+// version of this function dropped an entire tier wholesale once the
+// count exceeded budget. That's a cliff: for a long time range, the
+// server-side fetch (fetchRecentDisasters) already applies a magnitude
+// floor (>365 days → M5.5+), so almost everything left client-side is
+// already 'high' severity — dropping 'high' entirely collapsed a
+// legitimate ~3000-event view down to the 1-2 true 'critical' (M7+)
+// events, making the map look broken/empty instead of merely trimmed.
+// Fixed by filling PARTIALLY from a tier when it doesn't fully fit the
+// remaining budget, instead of all-or-nothing per tier — a tier is only
+// ever reported as "hidden" in the UI note when zero of its events made
+// it through, not when it was merely truncated like everything else.
+const MARKER_COMFORTABLE_COUNT = 1500
+const MARKER_RENDER_CAP = 2500
+const SEVERITY_TIERS_STRONGEST_FIRST = ['critical', 'high', 'moderate', 'low', 'minimal']
+
+function selectEventsForMarkers(events, comfortableCount, hardCap) {
+  const total = events.length
+  if (total <= comfortableCount) return { shown: events, total, hiddenTiers: [] }
+
+  const buckets = { critical: [], high: [], moderate: [], low: [], minimal: [] }
+  const unrecognized = []
+  for (const event of events) {
+    (buckets[event.severity] ?? unrecognized).push(event)
+  }
+
+  let shown = []
+  const hiddenTiers = []
+  for (const tier of SEVERITY_TIERS_STRONGEST_FIRST) {
+    const bucket = buckets[tier]
+    if (bucket.length === 0) continue
+    const room = comfortableCount - shown.length
+    if (room <= 0) {
+      hiddenTiers.push(tier) // zero of this tier made it through — genuinely hidden
+    } else if (bucket.length <= room) {
+      shown = shown.concat(bucket)
+    } else {
+      shown = shown.concat(bucket.slice(0, room)) // partial fill — truncated, not "hidden"
+    }
+  }
+  if (unrecognized.length > 0) {
+    const room = comfortableCount - shown.length
+    if (room > 0) shown = shown.concat(unrecognized.slice(0, room))
+  }
+
+  // Safety net: comfortableCount is always <= hardCap by construction
+  // (see updateMarkers' call site), so this should never actually trigger.
+  if (shown.length > hardCap) shown = shown.slice(0, hardCap)
+
+  return { shown, total, hiddenTiers }
+}
+
+const markerTruncation = ref(null) // null | { shown: number, total: number, hiddenTiers: string[] }
+const markerHiddenTiersLabel = computed(() => {
+  const tiers = markerTruncation.value?.hiddenTiers ?? []
+  return tiers.map((tier) => t(`severity.${tier}`)).join(', ')
+})
+
 function updateMarkers() {
   if (!map || !mapLoaded) return
 
@@ -2061,7 +2233,12 @@ function updateMarkers() {
 
   clearMarkers()
 
-  disasterStore.allEvents.slice(0, 2500).forEach((event) => {
+  const { shown, total, hiddenTiers } = selectEventsForMarkers(
+    disasterStore.allEvents, MARKER_COMFORTABLE_COUNT, MARKER_RENDER_CAP,
+  )
+  markerTruncation.value = total > shown.length ? { shown: shown.length, total, hiddenTiers } : null
+
+  shown.forEach((event) => {
     const color = getSeverityHex(event.severity)
     const rgbaColor = hexToRgba(color, 0.5)
     const isPulse = event.severity === 'critical'
@@ -2456,6 +2633,12 @@ onBeforeUnmount(() => {
     <div ref="mapContainer" class="map-leaflet"></div>
     <div class="zoom-indicator">x {{ currentZoom }}</div>
 
+    <LoadingOverlay
+      :visible="!!loadingExposureLayer"
+      :message="loadingExposureLayer ? t('exposureLayers.loadingLayer', { name: friendlyDatasetLabel(t, loadingExposureLayer) }) : ''"
+      @cancel="cancelExposureLayerLoading"
+    />
+
     <!-- Heatmap legend -->
     <div
       v-if="uiStore.showHeatmap"
@@ -2495,6 +2678,12 @@ onBeforeUnmount(() => {
           <span class="sev-dot" style="background: #7c3aed"></span><span>Kritik</span>
         </div>
       </div>
+      <p v-if="markerTruncation && markerTruncation.hiddenTiers.length > 0" class="marker-truncation-note">
+        {{ t('map.markerTruncationTiered', { shown: markerTruncation.shown, total: markerTruncation.total, tiers: markerHiddenTiersLabel }) }}
+      </p>
+      <p v-else-if="markerTruncation" class="marker-truncation-note">
+        {{ t('map.markerTruncation', { shown: markerTruncation.shown, total: markerTruncation.total }) }}
+      </p>
     </div>
 
     <button
@@ -2645,25 +2834,33 @@ onBeforeUnmount(() => {
             <button
               type="button"
               class="population-view-btn"
-              :class="{ active: populationViewModeFor(dataset) === 'hexagon' }"
-              @click="setPopulationViewMode(dataset, 'hexagon')"
+              :class="{ active: isRegionLevelActive(dataset, 'hexagon') }"
+              @click="toggleRegionLevel(dataset, 'hexagon')"
             >{{ t('exposureLayers.regionView.hexagonOption') }}</button>
             <button
               type="button"
               class="population-view-btn"
-              :class="{ active: populationViewModeFor(dataset) === 'province', loading: regionViewLoadingFor(dataset) && populationViewModeFor(dataset) === 'province' }"
-              :disabled="!isRegionViewAvailable(dataset, 'province') || regionViewLoadingFor(dataset)"
+              :class="{ active: isRegionLevelActive(dataset, 'province'), loading: regionViewLoadingFor(dataset, 'province') }"
+              :disabled="!isRegionViewAvailable(dataset, 'province') || regionViewLoadingFor(dataset, 'province')"
               :title="isRegionViewAvailable(dataset, 'province') ? '' : t('exposureLayers.regionView.unavailableTooltip')"
-              @click="setPopulationViewMode(dataset, 'province')"
-            >{{ regionViewLoadingFor(dataset) && populationViewModeFor(dataset) === 'province' ? t('exposureLayers.loading') : t('exposureLayers.regionView.provinceOption') }}</button>
+              @click="toggleRegionLevel(dataset, 'province')"
+            >{{ regionViewLoadingFor(dataset, 'province') ? t('exposureLayers.loading') : t('exposureLayers.regionView.provinceOption') }}</button>
             <button
               type="button"
               class="population-view-btn"
-              :class="{ active: populationViewModeFor(dataset) === 'district', loading: regionViewLoadingFor(dataset) && populationViewModeFor(dataset) === 'district' }"
-              :disabled="!isRegionViewAvailable(dataset, 'district') || regionViewLoadingFor(dataset)"
+              :class="{ active: isRegionLevelActive(dataset, 'district'), loading: regionViewLoadingFor(dataset, 'district') }"
+              :disabled="!isRegionViewAvailable(dataset, 'district') || regionViewLoadingFor(dataset, 'district')"
               :title="isRegionViewAvailable(dataset, 'district') ? '' : t('exposureLayers.regionView.unavailableTooltip')"
-              @click="setPopulationViewMode(dataset, 'district')"
-            >{{ regionViewLoadingFor(dataset) && populationViewModeFor(dataset) === 'district' ? t('exposureLayers.loading') : t('exposureLayers.regionView.districtOption') }}</button>
+              @click="toggleRegionLevel(dataset, 'district')"
+            >{{ regionViewLoadingFor(dataset, 'district') ? t('exposureLayers.loading') : t('exposureLayers.regionView.districtOption') }}</button>
+            <button
+              type="button"
+              class="population-view-btn"
+              :class="{ active: isRegionLevelActive(dataset, 'village'), loading: regionViewLoadingFor(dataset, 'village') }"
+              :disabled="!isRegionViewAvailable(dataset, 'village') || regionViewLoadingFor(dataset, 'village')"
+              :title="isRegionViewAvailable(dataset, 'village') ? '' : t('exposureLayers.regionView.unavailableTooltip')"
+              @click="toggleRegionLevel(dataset, 'village')"
+            >{{ regionViewLoadingFor(dataset, 'village') ? t('exposureLayers.loading') : t('exposureLayers.regionView.villageOption') }}</button>
           </div>
         </div>
       </div>
@@ -3025,6 +3222,16 @@ onBeforeUnmount(() => {
 
 .map-legend.legend-sidebar-collapsed {
   left: calc(var(--sidebar-collapsed, 56px) + 12px);
+}
+
+.marker-truncation-note {
+  margin: 8px 0 0;
+  padding-top: 8px;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  font-size: 0.68rem;
+  line-height: 1.35;
+  color: var(--color-text-muted, #94a3b8);
+  max-width: 190px;
 }
 
 .legend-title {

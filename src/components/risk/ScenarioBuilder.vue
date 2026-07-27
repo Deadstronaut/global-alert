@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n'
 import { supabase } from '@/services/api/config.js'
 import { useHazardTypesStore } from '@/stores/hazardTypes.js'
 import { friendlyDatasetLabel } from '@/utils/exposureLayerLabel.js'
+import CascadingRiskPanel from '@/components/risk/CascadingRiskPanel.vue'
 
 const { t } = useI18n()
 const hazardTypesStore = useHazardTypesStore()
@@ -30,13 +31,21 @@ const form = ref({
   exposureDatasetIds: [],
 })
 
+// hazard_scenarios has no country_code/admin_boundary_code of its own (the
+// area is only implied by which exposure datasets were ticked) — spec 048's
+// "evaluate cascades for this scenario" (US3) needs both explicitly, so they
+// are captured here rather than inferred.
+const cascadeCountryCode = ref('')
+const cascadeAdminBoundaryCode = ref('')
+const savedScenarioId = ref(null)
+
 async function loadData() {
   loading.value = true
   if (!hazardTypesStore.loaded) hazardTypesStore.fetchHazardTypes()
   const [datasetsRes, scenariosRes] = await Promise.all([
     supabase
       .from('exposure_datasets')
-      .select('id, name, source_name, country_code')
+      .select('id, name, source_name, country_code, display_name')
       .order('created_at', { ascending: false }),
     supabase.from('hazard_scenarios').select('*').order('created_at', { ascending: false }),
   ])
@@ -60,6 +69,7 @@ async function runSimulation() {
   simulating.value = true
   error.value = null
   result.value = null
+  savedScenarioId.value = null
   const { data, error: invokeError } = await supabase.functions.invoke('simulate-hazard-scenario', {
     body: {
       hazardType: form.value.hazardType,
@@ -86,21 +96,26 @@ async function runSimulation() {
 
 async function saveScenario() {
   if (!result.value || !form.value.name.trim()) return
-  const { error: err } = await supabase.from('hazard_scenarios').insert({
-    name: form.value.name,
-    hazard_type: form.value.hazardType,
-    parameters: {
-      magnitude: Number(form.value.magnitude),
-      epicenterLat: Number(form.value.epicenterLat),
-      epicenterLng: Number(form.value.epicenterLng),
-    },
-    footprint_geojson: result.value.footprint_geojson,
-    estimated_impact: result.value.estimated_impact,
-    formula_range_warning: result.value.formula_range_warning,
-  })
+  const { data, error: err } = await supabase
+    .from('hazard_scenarios')
+    .insert({
+      name: form.value.name,
+      hazard_type: form.value.hazardType,
+      parameters: {
+        magnitude: Number(form.value.magnitude),
+        epicenterLat: Number(form.value.epicenterLat),
+        epicenterLng: Number(form.value.epicenterLng),
+      },
+      footprint_geojson: result.value.footprint_geojson,
+      estimated_impact: result.value.estimated_impact,
+      formula_range_warning: result.value.formula_range_warning,
+    })
+    .select()
+    .single()
   if (err) {
     error.value = err.message
   } else {
+    savedScenarioId.value = data?.id ?? null
     await loadData()
   }
 }
@@ -119,6 +134,7 @@ function reloadScenario(scenario) {
     estimated_impact: scenario.estimated_impact,
     formula_range_warning: scenario.formula_range_warning,
   }
+  savedScenarioId.value = scenario.id
 }
 
 onMounted(loadData)
@@ -180,6 +196,31 @@ onMounted(loadData)
         <span>{{ t('risk.scenario.featureCount') }}: {{ impact.feature_count }}</span>
       </div>
       <button class="btn-save" @click="saveScenario">{{ t('risk.scenario.save') }}</button>
+    </div>
+
+    <!-- ── Cascading Hazard Risk (spec 048, US3) ────────────────────────── -->
+    <div v-if="result" class="scenario-result">
+      <h4>{{ t('risk.scenario.evaluateCascades') }}</h4>
+      <label class="risk-field">
+        <span>{{ t('risk.cascadeRules.countryCode') }}</span>
+        <input v-model="cascadeCountryCode" :placeholder="t('risk.dashboard.countryCodePlaceholder')" maxlength="2" />
+      </label>
+      <label class="risk-field">
+        <span>{{ t('risk.dashboard.adminBoundaryCode') }}</span>
+        <input v-model="cascadeAdminBoundaryCode" :placeholder="t('risk.dashboard.adminBoundaryPlaceholder')" />
+      </label>
+      <CascadingRiskPanel
+        v-if="cascadeCountryCode && cascadeAdminBoundaryCode"
+        :key="`${form.hazardType}-${form.epicenterLat}-${form.epicenterLng}-${form.magnitude}`"
+        :country-code="cascadeCountryCode"
+        :admin-boundary-code="cascadeAdminBoundaryCode"
+        :hazard-type="form.hazardType"
+        source-type="hypothetical_scenario"
+        :source-event-ref="{ hazard_scenario_id: savedScenarioId }"
+        :initial-lat="form.epicenterLat"
+        :initial-lng="form.epicenterLng"
+        :initial-magnitude="form.magnitude"
+      />
     </div>
 
     <div class="scenario-list">

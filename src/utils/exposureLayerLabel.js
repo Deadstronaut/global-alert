@@ -5,6 +5,15 @@
  * back to the raw dataset name, matching this project's i18n fallback
  * convention: a new exposure source still appears automatically with zero
  * code changes, just without a friendly label until one is added here.
+ *
+ * dataset.display_name (20260727080000_exposure_datasets_display_name.sql)
+ * takes priority over all of that — an admin-editable override (set from
+ * ExposureDatasetManager.vue) for exactly the case this fallback convention
+ * doesn't solve: a *future* automated source's raw auto-generated name
+ * (`${sourceName} — ${countryCode} — ${yyyy-mm}`) with nobody available to
+ * add a SOURCE_LABEL_KEYS + i18n entry for it. No per-locale translation —
+ * whatever the admin typed, verbatim, in every language — which is still
+ * strictly better than a debug-log-looking string in production forever.
  */
 
 const SOURCE_LABEL_KEYS = {
@@ -21,6 +30,7 @@ const SOURCE_LABEL_KEYS = {
   glofas_river_discharge: 'exposureLayers.sourceLabel.glofasRiverDischarge',
   'osm-buildings': 'exposureLayers.sourceLabel.osmBuildings',
   chirps: 'exposureLayers.sourceLabel.chirps',
+  dem_slope: 'exposureLayers.sourceLabel.demSlope',
 }
 
 const COUNTRY_LABEL_KEYS = {
@@ -31,10 +41,12 @@ const COUNTRY_LABEL_KEYS = {
 
 /**
  * @param {(key: string) => string} t - vue-i18n translate function
- * @param {{ name?: string, source_name?: string|null, country_code?: string|null }} dataset
+ * @param {{ name?: string, display_name?: string|null, source_name?: string|null, country_code?: string|null }} dataset
  */
 export function friendlyDatasetLabel(t, dataset) {
   if (!dataset) return ''
+
+  if (dataset.display_name?.trim()) return dataset.display_name.trim()
 
   const sourceKey = SOURCE_LABEL_KEYS[dataset.source_name]
   const countryKey = COUNTRY_LABEL_KEYS[dataset.country_code]

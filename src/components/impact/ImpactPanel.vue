@@ -8,6 +8,9 @@ import { defaultBufferRadiusKm } from '@/lib/hazardBuffer.js'
 import { friendlyDatasetLabel } from '@/utils/exposureLayerLabel.js'
 import { classifyTrend } from '@/lib/trendSparkline.js'
 import { rowsToCsv, rowsToJson, triggerDownload } from '@/lib/auditExport.js'
+import { loadRegionBoundaries } from '@/data/boundaries/index.js'
+import { findRegion } from '@/utils/pointInPolygon.js'
+import CascadingRiskPanel from '@/components/risk/CascadingRiskPanel.vue'
 
 const props = defineProps({
   selectedEvent: { type: Object, default: null },
@@ -43,6 +46,38 @@ const completeness = ref(null) // null | { ratio: number|null } | 'error'
 
 const canAnalyze = computed(() => auth.isSuperAdmin || ['country_admin', 'org_admin'].includes(auth.session?.role))
 
+// spec 049 US1: resolves the selected event's administrative boundary via
+// this project's existing client-side point-in-polygon utilities (same
+// ones used elsewhere for country/province tagging) rather than inventing
+// new boundary-resolution logic — CascadingRiskPanel needs an
+// admin_boundary_code, but map events only carry lat/lng.
+const cascadeBoundaryCode = ref(null)
+const cascadeBoundaryResolving = ref(false)
+const cascadeBoundaryUnresolvable = ref(false)
+
+async function resolveCascadeBoundary() {
+  cascadeBoundaryCode.value = null
+  cascadeBoundaryUnresolvable.value = false
+  if (!props.selectedEvent) return
+  // No country in focus at all (e.g. an event outside every served
+  // country) is itself an "unresolvable area" outcome — must be shown
+  // explicitly (FR-002), not silently omitted like the earlier version of
+  // this function did (live-testing finding).
+  if (!effectiveCountryCode.value) {
+    cascadeBoundaryUnresolvable.value = true
+    return
+  }
+  cascadeBoundaryResolving.value = true
+  const boundary = await loadRegionBoundaries(effectiveCountryCode.value, 'province')
+  if (boundary) {
+    cascadeBoundaryCode.value = findRegion(
+      props.selectedEvent.lat, props.selectedEvent.lng, boundary.featureCollection, boundary.nameProperty,
+    )
+  }
+  cascadeBoundaryUnresolvable.value = !cascadeBoundaryCode.value
+  cascadeBoundaryResolving.value = false
+}
+
 const effectiveRadiusKm = computed(() => {
   if (radiusOverride.value !== null && radiusOverride.value !== '') return Number(radiusOverride.value)
   return props.selectedEvent ? defaultBufferRadiusKm(props.selectedEvent) : null
@@ -70,6 +105,65 @@ const trend = computed(() => {
 async function loadDatasets() {
   const { data } = await supabase.from('exposure_datasets').select('*').order('created_at', { ascending: false })
   datasets.value = data || []
+}
+
+// Auto-run summary (live-testing finding): the manual step1→step2→step3
+// workflow below requires picking one dataset and clicking "Run Analysis"
+// at a time, which is invisible/confusing for a user expecting to just
+// select a hazard and immediately see what's affected (river/buildings/
+// population) side by side. This runs compute_zonal_stats for every
+// dataset scoped to the event's country in parallel, keyed by dataset id,
+// as soon as an event is selected — no button, no per-layer clicking. The
+// manual workflow further down is left intact for radius overrides,
+// critical-infrastructure/breakdown drill-down, export, and saved
+// scenarios, which still make sense as an explicit single-dataset action.
+const autoSummary = ref({}) // datasetId -> { analyzing, result: null|{total_value,feature_count}|'error' }
+
+// live-testing finding: running every served dataset (climate anomaly
+// layers included) for every hazard type produced a long, mostly-irrelevant
+// list (e.g. rainfall/vegetation anomaly rows for an earthquake) and multiplied
+// the number of parallel compute_zonal_stats calls well past what's actually
+// useful to a user checking "what did this hazard hit". Scopes the automatic
+// summary to the exposure sources that are actually meaningful for a given
+// hazard type; the full dataset list (including climate layers) remains
+// available below via the manual per-dataset "Detailed Analysis" dropdown.
+const HAZARD_RELEVANT_SOURCES = {
+  earthquake: ['worldpop', 'osm-buildings', 'hydrorivers', 'dem_slope'],
+  flood: ['hydrorivers', 'hydrobasins', 'worldpop', 'osm-buildings', 'glofas_river_discharge'],
+  drought: ['chirps', 'gdo_soil_moisture_anomaly', 'gdo_fapar_anomaly', 'worldpop'],
+  wildfire: ['gdo_fapar_anomaly', 'worldpop', 'osm-buildings'],
+  cyclone: ['worldpop', 'osm-buildings', 'ghsl'],
+  tsunami: ['worldpop', 'osm-buildings'],
+  volcano: ['worldpop', 'osm-buildings'],
+  epidemic: ['worldpop', 'kontur'],
+  food_security: ['chirps', 'gdo_fapar_anomaly', 'worldpop'],
+}
+const DEFAULT_RELEVANT_SOURCES = ['worldpop', 'osm-buildings']
+
+const relevantDatasets = computed(() => {
+  const sources = HAZARD_RELEVANT_SOURCES[props.selectedEvent?.type] ?? DEFAULT_RELEVANT_SOURCES
+  return filteredDatasets.value.filter((d) => sources.includes(d.source_name))
+})
+
+async function runAutoSummary() {
+  autoSummary.value = {}
+  if (!props.selectedEvent) return
+  const targets = relevantDatasets.value
+  const { lat, lng } = props.selectedEvent
+  const radius = effectiveRadiusKm.value
+  autoSummary.value = Object.fromEntries(targets.map((d) => [d.id, { analyzing: true, result: null }]))
+  await Promise.all(targets.map(async (d) => {
+    const { data, error } = await supabase.rpc('compute_zonal_stats', {
+      dataset_id: d.id,
+      center_lat: lat,
+      center_lng: lng,
+      radius_km: radius,
+    })
+    autoSummary.value[d.id] = {
+      analyzing: false,
+      result: error ? 'error' : (data?.[0] ?? { total_value: 0, feature_count: 0 }),
+    }
+  }))
 }
 
 // Scopes the "Etkilenme veri seti" dropdown to the relevant country instead
@@ -218,11 +312,15 @@ watch(() => props.selectedEvent, () => {
   criticalInfrastructure.value = null
   breakdown.value = null
   completeness.value = null
+  resolveCascadeBoundary()
+  runAutoSummary()
 })
 
-onMounted(() => {
-  loadDatasets()
+onMounted(async () => {
+  await loadDatasets()
   loadScenarios()
+  resolveCascadeBoundary()
+  runAutoSummary()
 })
 </script>
 
@@ -245,9 +343,44 @@ onMounted(() => {
         </svg>
       </div>
 
+      <!-- ── Cascading Risks (spec 049 — map integration of spec 048) ─────── -->
+      <div v-if="canAnalyze" class="impact-cascade-section">
+        <h4>{{ t('risk.cascade.title') }}</h4>
+        <p v-if="cascadeBoundaryResolving" class="risk-meta">{{ t('impact.loading') }}</p>
+        <p v-else-if="cascadeBoundaryUnresolvable" class="impact-notice">{{ t('risk.cascade.boundaryUnresolvable') }}</p>
+        <CascadingRiskPanel
+          v-else-if="cascadeBoundaryCode"
+          :key="`${selectedEvent.id}-${cascadeBoundaryCode}`"
+          :country-code="effectiveCountryCode"
+          :admin-boundary-code="cascadeBoundaryCode"
+          :hazard-type="selectedEvent.type"
+          source-type="real_event"
+          :source-event-ref="{ table: selectedEvent.type, id: selectedEvent.id }"
+          :initial-lat="selectedEvent.lat"
+          :initial-lng="selectedEvent.lng"
+          :initial-magnitude="selectedEvent.magnitude"
+        />
+      </div>
+
+      <div v-if="canAnalyze" class="impact-auto-summary">
+        <h4>{{ t('impact.panel.autoSummaryTitle') }}</h4>
+        <div v-if="!relevantDatasets.length" class="impact-notice">{{ t('impact.panel.autoSummaryEmpty') }}</div>
+        <ul v-else class="impact-auto-summary-list">
+          <li v-for="d in relevantDatasets" :key="d.id">
+            <span class="impact-auto-summary-label">{{ friendlyDatasetLabel(t, d) }}</span>
+            <span v-if="!autoSummary[d.id] || autoSummary[d.id].analyzing" class="impact-auto-summary-value impact-auto-summary-loading">{{ t('impact.panel.analyzing') }}</span>
+            <span v-else-if="autoSummary[d.id].result === 'error'" class="impact-auto-summary-value impact-auto-summary-error">{{ t('impact.panel.error') }}</span>
+            <span v-else-if="autoSummary[d.id].result.feature_count === 0" class="impact-auto-summary-value impact-auto-summary-muted">{{ t('impact.panel.noOverlap') }}</span>
+            <span v-else class="impact-auto-summary-value">
+              {{ autoSummary[d.id].result.total_value }} · {{ t('impact.panel.featuresCount', { count: autoSummary[d.id].result.feature_count }) }}
+            </span>
+          </li>
+        </ul>
+      </div>
+
       <div v-if="canAnalyze" class="impact-workflow">
         <label class="impact-field">
-          <span>{{ t('impact.panel.step1') }}: {{ t('impact.panel.datasetLabel') }}</span>
+          <span>{{ t('impact.panel.detailedTitle') }} — {{ t('impact.panel.step1') }}: {{ t('impact.panel.datasetLabel') }}</span>
           <select v-model="selectedDatasetId">
             <option :value="null">—</option>
             <option v-for="d in filteredDatasets" :key="d.id" :value="d.id">{{ friendlyDatasetLabel(t, d) }}</option>
@@ -346,6 +479,20 @@ onMounted(() => {
   border-radius: 8px; color: #4da3ff; font-weight: 600; cursor: pointer; margin-bottom: 10px;
 }
 .btn-analyze:disabled { opacity: .5; cursor: not-allowed; }
+.impact-cascade-section { margin-bottom: 14px; }
+.impact-auto-summary { margin-bottom: 14px; }
+.impact-auto-summary h4 { margin: 0 0 8px; font-size: .85rem; }
+.impact-auto-summary-list { list-style: none; padding: 0; margin: 0; font-size: .78rem; display: flex; flex-direction: column; gap: 6px; }
+.impact-auto-summary-list li {
+  display: flex; justify-content: space-between; gap: 8px; padding: 6px 8px;
+  background: rgba(255,255,255,.04); border-radius: 6px;
+}
+.impact-auto-summary-label { color: #e2e8f0; }
+.impact-auto-summary-value { color: #22c55e; font-weight: 600; text-align: right; }
+.impact-auto-summary-loading { color: var(--color-text-muted, #94a3b8); font-weight: 400; }
+.impact-auto-summary-muted { color: var(--color-text-muted, #94a3b8); font-weight: 400; }
+.impact-auto-summary-error { color: #ef4444; }
+.impact-cascade-section h4 { margin: 0 0 8px; font-size: .85rem; }
 .impact-notice { padding: 8px 10px; border-radius: 8px; background: rgba(255,255,255,.06); font-size: .78rem; margin-bottom: 10px; }
 .impact-notice-error { background: rgba(239,68,68,.12); color: #ef4444; }
 .impact-result { text-align: center; padding: 10px; background: rgba(34,197,94,.08); border-radius: 8px; margin-bottom: 10px; }

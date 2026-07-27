@@ -2,6 +2,7 @@
 import { ref, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { supabase } from '@/services/api/config.js'
+import { friendlyDatasetLabel } from '@/utils/exposureLayerLabel.js'
 
 const { t } = useI18n()
 
@@ -16,8 +17,11 @@ const form = ref({ exposureDatasetId: '', category: 'vulnerability', weight: '',
 async function loadData() {
   loading.value = true
   const [datasetsRes, indicatorsRes] = await Promise.all([
-    supabase.from('exposure_datasets').select('id, name').order('created_at', { ascending: false }),
-    supabase.from('risk_indicators').select('*, exposure_datasets(name)').order('created_at', { ascending: false }),
+    // source_name/country_code/display_name are needed by friendlyDatasetLabel()
+    // below — without them this dropdown showed writeExposureDataset.ts's raw
+    // auto-generated name (e.g. "chirps — mg — 2026-07") for every dataset.
+    supabase.from('exposure_datasets').select('id, name, source_name, country_code, display_name').order('created_at', { ascending: false }),
+    supabase.from('risk_indicators').select('*, exposure_datasets(name, source_name, country_code, display_name)').order('created_at', { ascending: false }),
   ])
   if (!datasetsRes.error) datasets.value = datasetsRes.data || []
   if (!indicatorsRes.error) indicators.value = indicatorsRes.data || []
@@ -66,7 +70,7 @@ onMounted(loadData)
         <span>{{ t('risk.indicators.dataset') }}</span>
         <select v-model="form.exposureDatasetId">
           <option value="" disabled>{{ t('risk.indicators.datasetPlaceholder') }}</option>
-          <option v-for="d in datasets" :key="d.id" :value="d.id">{{ d.name }}</option>
+          <option v-for="d in datasets" :key="d.id" :value="d.id">{{ friendlyDatasetLabel(t, d) }}</option>
         </select>
       </label>
       <label class="risk-field">
@@ -101,7 +105,7 @@ onMounted(loadData)
       <div v-else-if="indicators.length === 0" class="tab-empty">{{ t('risk.indicators.empty') }}</div>
       <div v-else v-for="i in indicators" :key="i.id" class="risk-row">
         <div>
-          <strong>{{ i.exposure_datasets?.name }}</strong>
+          <strong>{{ friendlyDatasetLabel(t, i.exposure_datasets) }}</strong>
           <span class="risk-meta">{{ t(`risk.indicators.category${i.category === 'coping_capacity' ? 'CopingCapacity' : i.category === 'exposure' ? 'Exposure' : 'Vulnerability'}`) }} · {{ (i.weight * 100).toFixed(0) }}%</span>
         </div>
       </div>

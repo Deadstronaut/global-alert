@@ -21,7 +21,17 @@ const { t } = useI18n()
 </template>
 
 <style scoped>
-.hazard-encyclopedia-page { max-width: 1100px; margin: 0 auto; padding: 24px 20px 60px; }
+/* Matches CapView.vue/IncidentsView.vue/ShelterInfoView.vue's page pattern —
+   see ShelterInfoView.vue's comment for why height+overflow-y (not
+   min-height) is needed here. */
+.hazard-encyclopedia-page {
+  height: 100dvh;
+  overflow-y: auto;
+  background: var(--color-bg, #0f1117);
+  color: var(--color-text-primary, #e2e8f0);
+  padding: 24px;
+  font-family: var(--font-sans, 'Inter', sans-serif);
+}
 .page-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 18px; }
 .btn-back { background: none; border: none; color: var(--color-text-muted,#94a3b8); cursor: pointer; font-size: .85rem; padding: 0 0 8px; }
 .page-title { margin: 0; color: #e2e8f0; font-size: 1.4rem; }

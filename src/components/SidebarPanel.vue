@@ -665,7 +665,9 @@ const selectedRangeLabel = computed(() => {
           <div class="date-filter-card inline-date-filter" :class="{ 'filter-row-inactive': dateFilterMode === 'duration' }">
             <div class="filter-label">
               <span>{{ t('sidebar.dateRange') }}</span>
-              <span class="filter-val accent">{{ dateFilterMode === 'calendar' ? selectedRangeLabel : t('sidebar.dateRangeInactive') }}</span>
+              <span class="filter-val accent" :class="{ 'filter-val-active': dateFilterMode === 'calendar' }">
+                {{ dateFilterMode === 'calendar' ? t('sidebar.dateRangeActiveLabel', { range: selectedRangeLabel }) : t('sidebar.dateRangeInactive') }}
+              </span>
             </div>
             <div class="date-filters">
               <label class="date-label">
@@ -1257,6 +1259,13 @@ const selectedRangeLabel = computed(() => {
 
 .filter-val.accent {
   color: var(--color-accent);
+}
+
+/* Distinct from the plain accent color so "Aktif: ..." reads as a clearly
+   different (on) state from "Aktif değil" at a glance, not just a color
+   variant of the same badge. */
+.filter-val-active {
+  color: #34d399;
 }
 
 .filter-range {

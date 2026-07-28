@@ -138,6 +138,10 @@
   "map": {
     "zoomIn": "Приблизить",
     "zoomOut": "Отдалить",
+    "terrain3D": "Показать 3D-рельеф (горы приподняты)",
+    "terrain2D": "Вернуться к плоскому 2D-виду",
+    "terrain3DShort": "3D",
+    "terrain2DShort": "2D",
     "clusterCount": "{count} событий",
     "viewDetails": "Подробнее"
   },

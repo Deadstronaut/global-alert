@@ -74,6 +74,7 @@
     "dateRangeApply": "Apply",
     "dateRangeClear": "Clear",
     "dateRangeInactive": "Not active",
+    "dateRangeActiveLabel": "Active: {range}",
     "durationDisabledByCalendar": "Duration is disabled while a calendar date range is active — press Clear on the date range below to use it again.",
     "viewModeSection": "View Mode",
     "modeNormal": "Status",
@@ -144,6 +145,10 @@
   "map": {
     "zoomIn": "Zoom In",
     "zoomOut": "Zoom Out",
+    "terrain3D": "Show 3D terrain (raised mountains)",
+    "terrain2D": "Switch back to flat 2D view",
+    "terrain3DShort": "3D",
+    "terrain2DShort": "2D",
     "clusterCount": "{count} events",
     "viewDetails": "View Details",
     "markerTruncation": "Showing {shown} of {total} events — critical and high-severity events are always prioritized; widen filters or zoom in to see more.",

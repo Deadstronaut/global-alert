@@ -138,6 +138,10 @@
   "map": {
     "zoomIn": "تكبير",
     "zoomOut": "تصغير",
+    "terrain3D": "إظهار التضاريس ثلاثية الأبعاد (جبال مرتفعة)",
+    "terrain2D": "العودة إلى العرض المسطح ثنائي الأبعاد",
+    "terrain3DShort": "3D",
+    "terrain2DShort": "2D",
     "clusterCount": "{count} أحداث",
     "viewDetails": "عرض التفاصيل"
   },

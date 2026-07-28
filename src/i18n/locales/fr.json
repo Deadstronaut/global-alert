@@ -138,6 +138,10 @@
   "map": {
     "zoomIn": "Zoomer",
     "zoomOut": "Dézoomer",
+    "terrain3D": "Afficher le relief 3D (montagnes surélevées)",
+    "terrain2D": "Revenir à la vue plate 2D",
+    "terrain3DShort": "3D",
+    "terrain2DShort": "2D",
     "clusterCount": "{count} événements",
     "viewDetails": "Voir les détails"
   },

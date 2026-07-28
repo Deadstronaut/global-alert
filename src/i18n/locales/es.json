@@ -138,6 +138,10 @@
   "map": {
     "zoomIn": "Acercar",
     "zoomOut": "Alejar",
+    "terrain3D": "Mostrar terreno 3D (montañas elevadas)",
+    "terrain2D": "Volver a la vista plana 2D",
+    "terrain3DShort": "3D",
+    "terrain2DShort": "2D",
     "clusterCount": "{count} eventos",
     "viewDetails": "Ver detalles"
   },

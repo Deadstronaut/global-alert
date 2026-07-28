@@ -74,6 +74,7 @@
     "dateRangeApply": "Uygula",
     "dateRangeClear": "Temizle",
     "dateRangeInactive": "Aktif değil",
+    "dateRangeActiveLabel": "Aktif: {range}",
     "durationDisabledByCalendar": "Takvim tarih aralığı aktifken süre kaydırıcısı devre dışı — tekrar kullanmak için aşağıdaki tarih aralığında Temizle'ye basın.",
     "viewModeSection": "Görünüm Modu",
     "modeNormal": "Durum",
@@ -144,6 +145,10 @@
   "map": {
     "zoomIn": "Yakınlaştır",
     "zoomOut": "Uzaklaştır",
+    "terrain3D": "3B araziyi göster (dağlar kabartmalı)",
+    "terrain2D": "2B düz görünüme dön",
+    "terrain3DShort": "3B",
+    "terrain2DShort": "2B",
     "clusterCount": "{count} olay",
     "viewDetails": "Detayları Gör",
     "markerTruncation": "{total} olaydan {shown} tanesi gösteriliyor — kritik ve yüksek şiddetli olaylar her zaman önceliklendirilir; daha fazlasını görmek için filtreleri daraltın veya yakınlaştırın.",

@@ -1166,6 +1166,29 @@ const MAP_STYLES = [
   { label: 'Açık', url: 'https://tiles.openfreemap.org/styles/liberty', preview: 'preview-street' },
 ]
 
+// 3D terrain (satellite view only): free, no-API-key elevation tiles from
+// AWS's public "Terrarium"-encoded DEM bucket (ex-Mapzen, still widely used
+// by MapLibre demos). Fetched through a custom 'demcache' protocol so
+// already-downloaded tiles are served from the Cache Storage API instead of
+// re-fetched every time the same area/country is revisited.
+const DEM_TILE_URL = 'https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png'
+const DEM_CACHE_NAME = 'mhews-dem-tiles-v1'
+const DEM_TERRAIN_SOURCE_ID = 'terrain-dem'
+
+maplibregl.addProtocol('demcache', async (params, abortController) => {
+  const realUrl = params.url.replace('demcache://', '')
+  const cache = await caches.open(DEM_CACHE_NAME)
+  const cached = await cache.match(realUrl)
+  if (cached) {
+    return { data: await cached.arrayBuffer() }
+  }
+  const response = await fetch(realUrl, { signal: abortController.signal })
+  if (!response.ok) throw new Error(`DEM tile fetch failed: ${response.status}`)
+  // Cache a clone — the original body is still needed below to return data.
+  cache.put(realUrl, response.clone())
+  return { data: await response.arrayBuffer() }
+})
+
 const ESRI_SATELLITE_STYLE = {
   version: 8,
   sources: {
@@ -1182,6 +1205,7 @@ const ESRI_SATELLITE_STYLE = {
 }
 
 const isSatellite = computed(() => mapStyleIndex.value === 1)
+const terrain3DEnabled = ref(false)
 
 function getBaseStyle() {
   const s = MAP_STYLES[mapStyleIndex.value]
@@ -1198,10 +1222,38 @@ function zoomOut() {
   map.zoomOut()
 }
 
+function toggleTerrain3D() {
+  if (!map || !isSatellite.value) return
+  terrain3DEnabled.value = !terrain3DEnabled.value
+  if (terrain3DEnabled.value) {
+    if (!map.getSource(DEM_TERRAIN_SOURCE_ID)) {
+      map.addSource(DEM_TERRAIN_SOURCE_ID, {
+        type: 'raster-dem',
+        tiles: [`demcache://${DEM_TILE_URL}`],
+        tileSize: 256,
+        maxzoom: 15,
+        encoding: 'terrarium',
+      })
+    }
+    map.setTerrain({ source: DEM_TERRAIN_SOURCE_ID, exaggeration: 1.5 })
+    // Straight-down (pitch 0) hides elevation displacement almost entirely —
+    // a tilt is what actually makes "raised mountains" visible.
+    map.easeTo({ pitch: 60, duration: 800 })
+  } else {
+    map.setTerrain(null)
+    map.easeTo({ pitch: 0, duration: 800 })
+  }
+}
+
 function cycleMapStyle() {
   mapStyleIndex.value = (mapStyleIndex.value + 1) % MAP_STYLES.length
   if (!map) return
   map.setMaxZoom(isSatellite.value ? 17.4 : 20)
+  // Leaving satellite: map.setStyle() (inside applyBaseStyle) wipes all
+  // sources/layers including the DEM terrain anyway, so this just keeps the
+  // toggle's own displayed state truthful instead of showing "3B" as still
+  // active on a style where the button is no longer even shown.
+  if (!isSatellite.value) terrain3DEnabled.value = false
   applyBaseStyle()
 }
 
@@ -2938,6 +2990,18 @@ onBeforeUnmount(() => {
     </div>
 
     <button
+      v-if="isSatellite"
+      type="button"
+      class="terrain-toggle-btn"
+      :class="{ active: terrain3DEnabled }"
+      :title="terrain3DEnabled ? t('map.terrain2D') : t('map.terrain3D')"
+      :aria-label="terrain3DEnabled ? t('map.terrain2D') : t('map.terrain3D')"
+      @click="toggleTerrain3D"
+    >
+      {{ terrain3DEnabled ? t('map.terrain2DShort') : t('map.terrain3DShort') }}
+    </button>
+
+    <button
       class="map-download-btn"
       type="button"
       :title="t('impact.downloadMap')"
@@ -3490,6 +3554,43 @@ onBeforeUnmount(() => {
   white-space: nowrap;
 }
 
+/* 2B/3B terrain toggle — satellite view only, sits directly above the
+   download button in the same right-hand control column (same 64px width),
+   so the two read as one stacked group. */
+.terrain-toggle-btn {
+  position: absolute;
+  bottom: 126px; /* .map-download-btn's bottom(96) + height(22) + 8px gap */
+  right: var(--map-control-offset);
+  z-index: 10;
+  width: 64px;
+  height: 22px;
+  padding: 0;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  background: rgba(20, 24, 33, 0.96);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+  transition: background 0.15s, border-color 0.15s;
+}
+.terrain-toggle-btn:hover {
+  background: #164f7a;
+  border-color: #75bfff;
+}
+.terrain-toggle-btn.active {
+  background: rgba(77, 163, 255, 0.28);
+  border-color: #4da3ff;
+}
+.terrain-toggle-btn:focus-visible {
+  outline: 2px solid #75bfff;
+  outline-offset: 2px;
+}
+
 /* Wide, short bar sitting above the satellite thumbnail (.layer-switcher):
    same 64px width, about a third of its height — reads as a header strip
    for the square below it rather than a separate floating icon. */
@@ -3938,6 +4039,10 @@ onBeforeUnmount(() => {
 
   .map-download-btn {
     bottom: calc(var(--impact-panel-mobile-height) + 176px);
+  }
+
+  .terrain-toggle-btn {
+    bottom: calc(var(--impact-panel-mobile-height) + 206px);
   }
 
   .layer-panel-stack {

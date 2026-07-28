@@ -138,6 +138,10 @@
   "map": {
     "zoomIn": "放大",
     "zoomOut": "缩小",
+    "terrain3D": "显示3D地形（凸起的山脉）",
+    "terrain2D": "切换回平面2D视图",
+    "terrain3DShort": "3D",
+    "terrain2DShort": "2D",
     "clusterCount": "{count} 个事件",
     "viewDetails": "查看详情"
   },

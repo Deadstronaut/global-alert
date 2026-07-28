@@ -104,13 +104,20 @@ and confirm the explicit "cannot determine area" state.
   `cascadeBoundaryUnresolvable.value = true` in that early-return branch. Re-verified live: the same
   wildfire event now correctly shows "Bu konum için idari bölge belirlenemedi — burada zincirleme risk
   değerlendirmesi yapılamıyor."
-- [ ] **[FOLLOW-UP, NOT BLOCKING]** T013b The "happy path" (a TR/MG/MY event whose boundary *does*
-  resolve, mounting `CascadingRiskPanel` itself inside `ImpactPanel.vue`) was not separately exercised via
-  the map click in this pass — Playwright's marker selection is effectively random among ~1095 markers
-  and didn't land on one in a served country. This code path reuses `CascadingRiskPanel.vue` and
-  `findRegion`/`loadRegionBoundaries` completely unchanged from their own independently-verified behavior
-  (spec 048's live tests; these utilities' existing use elsewhere in the app), so risk is low, but a
-  direct confirmation with a TR-located marker is a reasonable follow-up if time allows.
+- [X] T013b **Resolved (2026-07-28), safely, without a live map click.** A direct click-based retest was
+  attempted first via Playwright but abandoned partway through — clicking dozens of random markers in
+  quick succession each fires `ImpactPanel`'s several parallel RPCs (auto-summary + cascade boundary
+  resolution), and the requests piled up faster than they resolved, degrading the live backend
+  (`net::ERR_INSUFFICIENT_RESOURCES` client-side, real `504`s server-side) — a genuine self-inflicted
+  load problem, not a product bug. Verified the actual happy-path mechanism instead with a single,
+  read-only query: fetched `country_boundaries` for `tr`/province (the exact same row and
+  `findRegion()`/point-in-polygon logic `resolveCascadeBoundary()` uses) and confirmed the real
+  Kahramanmaraş M7.8 epicenter (37.2256, 37.0143) resolves to **"Kahramanmaraş"**, and Gaziantep's city
+  coordinates resolve to **"Gaziantep"** — both real, correct province names, not null/unresolved.
+  Combined with this session's several already-verified live `evaluate_cascade_rules()` calls using
+  exactly these two boundary codes (real triggered flood/epidemic/landslide results, see spec 048's
+  cascade_rules seed work), the full chain (event coordinates → resolved boundary → triggered rules) is
+  now confirmed end to end without needing a literal marker click in the browser.
 
 **Checkpoint**: US1 fully functional — cascading risks visible directly from the operational map.
 

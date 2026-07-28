@@ -1,0 +1,423 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Global Alert (MHEWS) — Project Status &amp; System Overview</title>
+<style>
+  :root {
+    --ink: #1a2233;
+    --muted: #5b6478;
+    --line: #dde3ec;
+    --accent: #1d4ed8;
+    --accent-soft: #eef2ff;
+    --good: #16a34a;
+    --good-bg: #ecfdf3;
+    --warn: #b45309;
+    --warn-bg: #fff7ed;
+    --paper: #ffffff;
+    --bg: #f4f6fa;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 0; background: var(--bg); color: var(--ink);
+    font-family: "Segoe UI", Helvetica, Arial, sans-serif;
+    line-height: 1.55; font-size: 15.5px;
+  }
+  .page {
+    max-width: 880px; margin: 0 auto; background: var(--paper);
+    padding: 56px 64px 64px; box-shadow: 0 0 0 1px var(--line);
+  }
+  header.cover {
+    text-align: center; padding: 40px 0 32px; border-bottom: 3px solid var(--accent);
+    margin-bottom: 40px;
+  }
+  header.cover .kicker {
+    text-transform: uppercase; letter-spacing: .12em; font-size: 12.5px;
+    color: var(--accent); font-weight: 700; margin-bottom: 10px;
+  }
+  header.cover h1 { font-size: 32px; margin: 0 0 8px; color: var(--ink); }
+  header.cover .sub { font-size: 16px; color: var(--muted); margin-bottom: 18px; }
+  header.cover .meta { font-size: 13px; color: var(--muted); }
+  h2 {
+    font-size: 21px; color: var(--ink); margin: 44px 0 14px;
+    padding-bottom: 8px; border-bottom: 2px solid var(--line);
+  }
+  h2 .num { color: var(--accent); margin-right: 8px; }
+  h3 { font-size: 16.5px; margin: 26px 0 10px; color: var(--ink); }
+  p { margin: 0 0 12px; }
+  ul, ol { margin: 0 0 14px; padding-left: 22px; }
+  li { margin-bottom: 6px; }
+  .lead {
+    font-size: 16.5px; color: var(--ink); background: var(--accent-soft);
+    border-left: 4px solid var(--accent); padding: 16px 20px; border-radius: 4px;
+    margin-bottom: 18px;
+  }
+  .stat-row { display: flex; gap: 16px; margin: 20px 0 8px; flex-wrap: wrap; }
+  .stat-box {
+    flex: 1; min-width: 150px; background: var(--good-bg); border: 1px solid #bbf0cc;
+    border-radius: 8px; padding: 16px 18px; text-align: center;
+  }
+  .stat-box .n { font-size: 30px; font-weight: 800; color: var(--good); display: block; }
+  .stat-box .l { font-size: 12.5px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+  .diagram {
+    display: flex; align-items: stretch; gap: 6px; margin: 18px 0 22px; flex-wrap: wrap;
+    font-size: 13.5px;
+  }
+  .diagram .box {
+    flex: 1; min-width: 130px; background: #f8fafc; border: 1.5px solid var(--line);
+    border-radius: 8px; padding: 12px 10px; text-align: center;
+  }
+  .diagram .box .t { font-weight: 700; color: var(--ink); margin-bottom: 4px; }
+  .diagram .box .d { color: var(--muted); font-size: 12px; }
+  .diagram .arrow { align-self: center; color: var(--accent); font-size: 20px; padding: 0 2px; }
+  table { width: 100%; border-collapse: collapse; margin: 14px 0 22px; font-size: 13.5px; }
+  th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line); }
+  th { background: #f8fafc; color: var(--ink); font-weight: 700; font-size: 12.5px; text-transform: uppercase; letter-spacing: .03em; }
+  tr:last-child td { border-bottom: none; }
+  .pct-bar { display: inline-flex; align-items: center; gap: 8px; width: 100%; }
+  .pct-track { flex: 1; height: 8px; background: #edf1f7; border-radius: 4px; overflow: hidden; }
+  .pct-fill { height: 100%; background: var(--good); }
+  .pct-fill.warn { background: var(--warn); }
+  .pct-label { font-weight: 700; font-size: 12.5px; width: 40px; text-align: right; }
+  .cluster-table td.count { color: var(--muted); }
+  .callout {
+    border: 1px solid var(--line); border-left: 4px solid var(--warn);
+    background: var(--warn-bg); border-radius: 4px; padding: 14px 18px; margin: 14px 0 18px;
+  }
+  .callout h4 { margin: 0 0 6px; font-size: 14px; color: var(--warn); }
+  .callout p:last-child { margin-bottom: 0; }
+  .badge {
+    display: inline-block; font-size: 11px; font-weight: 700; padding: 2px 8px;
+    border-radius: 10px; text-transform: uppercase; letter-spacing: .03em;
+  }
+  .badge.blocked { background: #fee2e2; color: #b91c1c; }
+  .badge.external { background: #fef3c7; color: #92400e; }
+  .badge.planned { background: #e0e7ff; color: #3730a3; }
+  footer {
+    margin-top: 48px; padding-top: 18px; border-top: 1px solid var(--line);
+    font-size: 12px; color: var(--muted); text-align: center;
+  }
+  @media print {
+    body { background: #fff; }
+    .page { box-shadow: none; max-width: none; padding: 0 24px; }
+    h2 { break-after: avoid; }
+    table, .diagram { break-inside: avoid; }
+  }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <header class="cover">
+    <div class="kicker">Project Status &amp; System Overview</div>
+    <h1>Global Alert — Multi-Hazard Early Warning System (MHEWS)</h1>
+    <div class="sub">A plain-language briefing for project leadership, partner organizations, and incoming engineers</div>
+    <div class="meta">Prepared 2026-07-28 &nbsp;·&nbsp; Reflects live production status of the system as of this date</div>
+  </header>
+
+  <div class="lead">
+    <strong>In one sentence:</strong> Global Alert is a real-time, multi-hazard early warning platform —
+    it watches earthquakes, wildfires, floods, drought, food-security crises, tsunamis, cyclones and disease
+    outbreaks worldwide, shows them on a live map alongside the population and infrastructure they threaten,
+    and gives disaster-management staff the tools to turn that information into an official public alert.
+  </div>
+
+  <div class="stat-row">
+    <div class="stat-box"><span class="n">99.8%</span><span class="l">of tracked engineering work complete</span></div>
+    <div class="stat-box"><span class="n">50</span><span class="l">feature modules specified &amp; built</span></div>
+    <div class="stat-box"><span class="n">3</span><span class="l">countries live today (TR / MG / MY)</span></div>
+    <div class="stat-box"><span class="n">2</span><span class="l">non-blocking items left open</span></div>
+  </div>
+
+  <h2><span class="num">1.</span>What This Project Is</h2>
+  <p>
+    Global Alert (internally also called GEWS/MHEWS — Multi-Hazard Early Warning System) is a platform that
+    disaster-management authorities use to do three things: <strong>see</strong> what hazards are happening
+    right now anywhere in the world, <strong>understand</strong> who and what is actually at risk from a given
+    hazard, and <strong>act</strong> — draft, approve, and send an official, standards-compliant public alert
+    through email, WhatsApp, and a public web portal.
+  </p>
+  <p>
+    It is built to be handed over, country by country, as a self-contained product: each country's disaster
+    agency gets its own administrators, its own users, and — eventually, once the setup wizard described in
+    Section&nbsp;3 is built — its own independently hosted copy of the entire system.
+  </p>
+
+  <h2><span class="num">2.</span>How the System Works — Architecture &amp; Data Pipeline</h2>
+  <p>
+    The system has three moving parts working together at all times: a set of automated data collectors, a
+    central database that everything reads from and writes to, and the map/admin application that a human
+    actually uses. Nothing here requires manual data entry to function — hazard events flow in on their own,
+    continuously.
+  </p>
+
+  <h3>2.1 — Data flows in from real, independent sources</h3>
+  <div class="diagram">
+    <div class="box"><div class="t">Live hazard feeds</div><div class="d">USGS, EMSC, AFAD, Kandilli, GEOFON (earthquakes) · NASA FIRMS (wildfire) · GDACS (multi-hazard) · WHO / PTWC / FEWS NET (epidemic, tsunami, food security)</div></div>
+    <div class="arrow">&rarr;</div>
+    <div class="box"><div class="t">Aggregator service</div><div class="d">Always-on background process. Normalizes every source into one common event shape, removes duplicates (e.g. two agencies reporting the same quake), and stores the result.</div></div>
+    <div class="arrow">&rarr;</div>
+    <div class="box"><div class="t">Database</div><div class="d">Supabase (PostgreSQL + real-time updates). Every connected map updates the instant a new event is written — no page refresh needed.</div></div>
+  </div>
+  <p>
+    A country's disaster agency can also add its own additional data source at any time from the admin panel —
+    no engineering work required — and the same pipeline picks it up automatically.
+  </p>
+
+  <h3>2.2 — Context layers: what's actually on the ground</h3>
+  <p>
+    A hazard event on its own only says "something happened here." To answer "who is affected," the system
+    separately (and independently of the live hazard feeds) imports real-world context data for each served
+    country and keeps it ready on the map:
+  </p>
+  <table>
+    <tr><th>Layer</th><th>Real source</th><th>What it answers</th></tr>
+    <tr><td>Population density</td><td>WorldPop, Meta/HDX, GHSL (three independent population datasets)</td><td>How many people live near this hazard?</td></tr>
+    <tr><td>Critical infrastructure</td><td>OpenStreetMap (schools, clinics/hospitals, emergency services)</td><td>Which specific facilities are nearby, filterable by category</td></tr>
+    <tr><td>General building density</td><td>Microsoft's global building-footprint dataset</td><td>How dense is construction in this area? (~128,000 measured cells for Turkey alone)</td></tr>
+    <tr><td>Rivers &amp; watersheds</td><td>HydroRIVERS / HydroBASINS, GloFAS river discharge</td><td>Flood/liquefaction exposure near water</td></tr>
+    <tr><td>Terrain steepness</td><td>Copernicus satellite elevation data</td><td>Landslide-susceptible zones after an earthquake</td></tr>
+    <tr><td>Rainfall &amp; drought indicators</td><td>CHIRPS rainfall, vegetation/soil-moisture anomaly indices</td><td>Drought and food-security risk trends</td></tr>
+  </table>
+  <p>
+    These imports run as separate, independent background jobs (Docker containers) — they can be re-run per
+    country at any time to refresh the data, without touching the live hazard-monitoring pipeline at all.
+  </p>
+
+  <h3>2.3 — Turning data into a decision: the cascading-risk engine</h3>
+  <p>
+    A defining feature of this system is that it can flag <strong>secondary</strong> risks a hazard creates —
+    e.g. "this earthquake is close enough to a river that liquefaction-driven flooding is plausible," or
+    "terrain steepness near this epicenter suggests landslide risk." This is done with
+    <strong>simple, transparent, admin-editable rules</strong> ("if magnitude ≥ X and distance to Y ≤ Z km,
+    then flag risk category W") — deliberately <em>not</em> a machine-learning model. Every triggered
+    recommendation can be traced back to the exact rule and threshold that produced it, which matters a great
+    deal for an external body auditing the system's reasoning (e.g. a UN partner reviewing methodology).
+  </p>
+
+  <h3>2.4 — From detection to public alert</h3>
+  <div class="diagram">
+    <div class="box"><div class="t">Detected event</div><div class="d">Real hazard on the live map, or a manually reported community incident</div></div>
+    <div class="arrow">&rarr;</div>
+    <div class="box"><div class="t">Draft alert (CAP)</div><div class="d">Operator drafts a standards-compliant (OASIS CAP v1.2) public warning</div></div>
+    <div class="arrow">&rarr;</div>
+    <div class="box"><div class="t">Four-eyes approval</div><div class="d">A second, separate approver must sign off before anything goes out</div></div>
+    <div class="arrow">&rarr;</div>
+    <div class="box"><div class="t">Dispatch</div><div class="d">Email, WhatsApp, and a public web portal — with automatic retry and delivery tracking</div></div>
+  </div>
+  <p>
+    Every step above — every login, edit, approval, and dispatch — is written to a tamper-evident audit log
+    (a cryptographic hash chain, the same integrity idea used in blockchains), so the full history of any
+    alert can be reconstructed and verified later.
+  </p>
+
+  <h2><span class="num">3.</span>What Happens Next: The Federated Setup Wizard</h2>
+  <p>
+    Today, every served country (Turkey, Madagascar, Malaysia) runs on <strong>one shared, centrally-hosted
+    system</strong> that we operate — already fully separated by country (a Turkey administrator cannot see
+    Madagascar's private data, and vice versa; this isolation is already built, tested, and running in
+    production). The next stage of the project is letting each country instead run its
+    <strong>own, fully independent copy</strong> — its own server, its own database, full data ownership —
+    for organizations that require this for sovereignty or compliance reasons.
+  </p>
+
+  <h3>3.1 — What already exists and will not need to be rebuilt</h3>
+  <ul>
+    <li>The secure user-invitation system (a new user gets a one-time secure email link to set their own
+      password — the same industry-standard mechanism used by major cloud platforms).</li>
+    <li>The four-tier role hierarchy: <strong>Super Admin → Country Admin → Org Admin → Viewer</strong>,
+      where a Country Admin can only invite/manage users within their own country, and so on down the chain.</li>
+    <li>Self-service onboarding of a brand-new hazard type (e.g. "landslide") from the admin panel, with zero
+      engineering work required.</li>
+  </ul>
+
+  <h3>3.2 — What still needs to be built</h3>
+  <ol>
+    <li><strong>The installer/setup wizard itself</strong> — a guided script that stands up a country's own
+      database, applies all of this system's database structure to it, deploys the backend logic, and
+      configures everything for that country's own domain and server.</li>
+    <li><strong>A "first account" bootstrap step</strong> — today every account must be invited by an existing
+      administrator; a brand-new installation has no administrator yet, so the installer needs to safely
+      create exactly one first account to get started.</li>
+    <li><strong>Verification on real self-hosted infrastructure</strong> — the system depends on several
+      background-automation features of our current hosting provider (Supabase) that are assumed, but not yet
+      confirmed, to work identically once a country is running its own copy. This needs a real test
+      installation before being promised to a country as ready.</li>
+  </ol>
+
+  <h3>3.3 — What a country will need to provide / do</h3>
+  <ul>
+    <li>Its own server (a VPS or on-premises machine) and a domain name with an SSL certificate.</li>
+    <li>Someone with basic system-administration ability to run the guided installer and answer its prompts
+      (technical, but not a software engineer).</li>
+    <li>An initial access request sent to the central team, so the very first administrator account for that
+      country can be created.</li>
+  </ul>
+
+  <h3>3.4 — What "done" looks like</h3>
+  <p>
+    A country's own IT contact runs one guided installer end to end and finishes with a fully working,
+    completely independent copy of this entire system — their own map, their own alerts, their own data,
+    running on infrastructure they control. From that point on, the central team is not involved in their
+    day-to-day operation at all; the country's own Country Admin invites and manages their own staff going
+    forward, using the role system described above.
+  </p>
+  <p>
+    <strong>Recommended build order:</strong> (1) a trial self-host installation on a test server first, to
+    confirm the assumptions in 3.2.3 above, before (2) building the first-account bootstrap step, then
+    (3) building and testing the guided installer end to end, and only then (4) writing the step-by-step
+    documentation — written last, so it describes what the installer actually does rather than the other way
+    around.
+  </p>
+
+  <h2><span class="num">4.</span>Recent Feature Highlights</h2>
+  <p>The most recently completed capabilities, in plain terms:</p>
+  <ul>
+    <li><strong>Cascading hazard risk</strong> — the system can now say "this earthquake also raises flood,
+      epidemic, or landslide risk nearby," with every judgment traceable to an explicit, admin-editable rule
+      (Section&nbsp;2.3).</li>
+    <li><strong>"How far does this reach" visualization</strong> — selecting any earthquake or wildfire on the
+      map now shows a translucent circle sized to that event's real estimated impact radius (based on the
+      earthquake's actual magnitude, or the wildfire's actual satellite-measured fire intensity), with a
+      slider to explore "what if this had been stronger/weaker."</li>
+    <li><strong>Distance-graded facility risk</strong> — schools, clinics, and emergency facilities near a
+      selected hazard are now color-graded from yellow to red by how close they are to the epicenter, with an
+      explicit on-screen note that this is a distance-based estimate, not a confirmed damage assessment.</li>
+    <li><strong>Building density mapping</strong> — a new layer showing real building density per area (not
+      just critical facilities), sourced from a global satellite-derived building dataset, for all three
+      served countries.</li>
+    <li><strong>Landslide-susceptibility mapping</strong> — steep-terrain zones (from real satellite elevation
+      data) that meaningfully raise landslide risk after an earthquake, for all three served countries.</li>
+    <li><strong>Category-filterable critical infrastructure</strong> — an operator can show/hide schools,
+      health facilities, and emergency services independently (e.g. "it's nighttime, hide schools, show only
+      health facilities").</li>
+  </ul>
+
+  <h2><span class="num">5.</span>Completion Status by Module</h2>
+  <p>
+    This project is built using a formal "spec-first" engineering process: every feature is written up as a
+    specification with an explicit task checklist <em>before</em> it is built, so completion can be measured
+    directly and honestly rather than estimated. The table below is generated directly from those checklists.
+  </p>
+
+  <h3>5.1 — By functional area</h3>
+  <table class="cluster-table">
+    <tr><th>Functional area</th><th>Modules</th><th>Status</th></tr>
+    <tr><td>Data Ingestion &amp; Source Monitoring</td><td class="count">3 modules</td><td><span class="pct-bar"><span class="pct-track"><span class="pct-fill" style="width:100%"></span></span><span class="pct-label">100%</span></span></td></tr>
+    <tr><td>Administration, Access &amp; Security</td><td class="count">7 modules</td><td><span class="pct-bar"><span class="pct-track"><span class="pct-fill" style="width:100%"></span></span><span class="pct-label">100%</span></span></td></tr>
+    <tr><td>Alert Authoring (CAP) &amp; Dispatch</td><td class="count">7 modules</td><td><span class="pct-bar"><span class="pct-track"><span class="pct-fill" style="width:100%"></span></span><span class="pct-label">100%</span></span></td></tr>
+    <tr><td>Impact Analysis &amp; Exposure Data</td><td class="count">10 modules</td><td><span class="pct-bar"><span class="pct-track"><span class="pct-fill" style="width:100%"></span></span><span class="pct-label">100%</span></span></td></tr>
+    <tr><td>Risk &amp; Scenario Modeling (incl. cascading risk)</td><td class="count">3 modules</td><td><span class="pct-bar"><span class="pct-track"><span class="pct-fill warn" style="width:97%"></span></span><span class="pct-label">97%</span></span></td></tr>
+    <tr><td>Incident Tracking &amp; Drills/Exercises</td><td class="count">8 modules</td><td><span class="pct-bar"><span class="pct-track"><span class="pct-fill" style="width:100%"></span></span><span class="pct-label">100%</span></span></td></tr>
+    <tr><td>Audit &amp; Compliance</td><td class="count">7 modules</td><td><span class="pct-bar"><span class="pct-track"><span class="pct-fill" style="width:100%"></span></span><span class="pct-label">100%</span></span></td></tr>
+    <tr><td>Map Visualization &amp; Hazard Taxonomy</td><td class="count">5 modules</td><td><span class="pct-bar"><span class="pct-track"><span class="pct-fill" style="width:100%"></span></span><span class="pct-label">100%</span></span></td></tr>
+  </table>
+
+  <h3>5.2 — Full module-by-module detail</h3>
+  <table>
+    <tr><th>#</th><th>Module</th><th>Tasks done</th><th>Completion</th></tr>
+    <tr><td>001</td><td>Data Ingestion &amp; Source Monitoring</td><td>34 / 34</td><td><span class="pct-bar"><span class="pct-track"><span class="pct-fill" style="width:100%"></span></span><span class="pct-label">100%</span></span></td></tr>
+    <tr><td>002</td><td>Source Country-Scoping</td><td>16 / 16</td><td><span class="pct-bar"><span class="pct-track"><span class="pct-fill" style="width:100%"></span></span><span class="pct-label">100%</span></span></td></tr>
+    <tr><td>003</td><td>GDACS Multi-Hazard Source</td><td>12 / 12</td><td><span class="pct-bar"><span class="pct-track"><span class="pct-fill" style="width:100%"></span></span><span class="pct-label">100%</span></span></td></tr>
+    <tr><td>004</td><td>Admin Access Hardening (RBAC)</td><td>25 / 25</td><td><span class="pct-bar"><span class="pct-track"><span class="pct-fill" style="width:100%"></span></span><span class="pct-label">100%</span></span></td></tr>
+    <tr><td>005</td><td>MFA Login (TOTP)</td><td>28 / 28</td><td><span class="pct-bar"><span class="pct-track"><span class="pct-fill" style="width:100%"></span></span><span class="pct-label">100%</span></span></td></tr>
+    <tr><td>006</td><td>CAP Alert Authoring</td><td>30 / 30</td><td><span class="pct-bar"><span class="pct-track"><span class="pct-fill" style="width:100%"></span></span><span class="pct-label">100%</span></span></td></tr>
+    <tr><td>007</td><td>Audit &amp; Compliance (base)</td><td>26 / 26</td><td><span class="pct-bar"><span class="pct-track"><span class="pct-fill" style="width:100%"></span></span><span class="pct-label">100%</span></span></td></tr>
+    <tr><td>008</td><td>Impact Analysis (core)</td><td>40 / 40</td><td><span class="pct-bar"><span class="pct-track"><span class="pct-fill" style="width:100%"></span></span><span class="pct-label">100%</span></span></td></tr>
+    <tr><td>009</td><td>Dissemination &amp; Dispatch</td><td>52 / 52</td><td><span class="pct-bar"><span class="pct-track"><span class="pct-fill" style="width:100%"></span></span><span class="pct-label">100%</span></span></td></tr>
+    <tr><td>010</td><td>Hazard Taxonomy Admin</td><td>37 / 37</td><td><span class="pct-bar"><span class="pct-track"><span class="pct-fill" style="width:100%"></span></span><span class="pct-label">100%</span></span></td></tr>
+    <tr><td>011</td><td>Incident Tracking</td><td>34 / 34</td><td><span class="pct-bar"><span class="pct-track"><span class="pct-fill" style="width:100%"></span></span><span class="pct-label">100%</span></span></td></tr>
+    <tr><td>012</td><td>OGC WMS/WFS Map Layers</td><td>27 / 27</td><td><span class="pct-bar"><span class="pct-track"><span class="pct-fill" style="width:100%"></span></span><span class="pct-label">100%</span></span></td></tr>
+    <tr><td>013</td><td>Drill Mode Safety (CAP)</td><td>14 / 14</td><td><span class="pct-bar"><span class="pct-track"><span class="pct-fill" style="width:100%"></span></span><span class="pct-label">100%</span></span></td></tr>
+    <tr><td>014</td><td>CAP v1.2 Envelope Export</td><td>21 / 21</td><td><span class="pct-bar"><span class="pct-track"><span class="pct-fill" style="width:100%"></span></span><span class="pct-label">100%</span></span></td></tr>
+    <tr><td>015</td><td>Region-Coded Dispatch Targeting</td><td>11 / 11</td><td><span class="pct-bar"><span class="pct-track"><span class="pct-fill" style="width:100%"></span></span><span class="pct-label">100%</span></span></td></tr>
+    <tr><td>016</td><td>Backend Threshold Sync</td><td>14 / 14</td><td><span class="pct-bar"><span class="pct-track"><span class="pct-fill" style="width:100%"></span></span><span class="pct-label">100%</span></span></td></tr>
+    <tr><td>017</td><td>Drill Response Metrics</td><td>16 / 16</td><td><span class="pct-bar"><span class="pct-track"><span class="pct-fill" style="width:100%"></span></span><span class="pct-label">100%</span></span></td></tr>
+    <tr><td>018</td><td>Admin Capability Grants</td><td>19 / 19</td><td><span class="pct-bar"><span class="pct-track"><span class="pct-fill" style="width:100%"></span></span><span class="pct-label">100%</span></span></td></tr>
+    <tr><td>019</td><td>Scheduled Compliance Reports</td><td>15 / 15</td><td><span class="pct-bar"><span class="pct-track"><span class="pct-fill" style="width:100%"></span></span><span class="pct-label">100%</span></span></td></tr>
+    <tr><td>020</td><td>Regional Threshold Overrides</td><td>20 / 20</td><td><span class="pct-bar"><span class="pct-track"><span class="pct-fill" style="width:100%"></span></span><span class="pct-label">100%</span></span></td></tr>
+    <tr><td>021</td><td>Shelter Management</td><td>23 / 23</td><td><span class="pct-bar"><span class="pct-track"><span class="pct-fill" style="width:100%"></span></span><span class="pct-label">100%</span></span></td></tr>
+    <tr><td>022</td><td>WhatsApp Integration Credentials</td><td>19 / 19</td><td><span class="pct-bar"><span class="pct-track"><span class="pct-fill" style="width:100%"></span></span><span class="pct-label">100%</span></span></td></tr>
+    <tr><td>023</td><td>Shapefile Exposure Upload</td><td>12 / 12</td><td><span class="pct-bar"><span class="pct-track"><span class="pct-fill" style="width:100%"></span></span><span class="pct-label">100%</span></span></td></tr>
+    <tr><td>024</td><td>Hazard Taxonomy Hierarchy</td><td>18 / 18</td><td><span class="pct-bar"><span class="pct-track"><span class="pct-fill" style="width:100%"></span></span><span class="pct-label">100%</span></span></td></tr>
+    <tr><td>025</td><td>Generic Integration Credentials</td><td>20 / 20</td><td><span class="pct-bar"><span class="pct-track"><span class="pct-fill" style="width:100%"></span></span><span class="pct-label">100%</span></span></td></tr>
+    <tr><td>026</td><td>Incident Timeline &amp; Reports</td><td>17 / 17</td><td><span class="pct-bar"><span class="pct-track"><span class="pct-fill" style="width:100%"></span></span><span class="pct-label">100%</span></span></td></tr>
+    <tr><td>027</td><td>Shelter Map Display</td><td>15 / 15</td><td><span class="pct-bar"><span class="pct-track"><span class="pct-fill" style="width:100%"></span></span><span class="pct-label">100%</span></span></td></tr>
+    <tr><td>028</td><td>Access Review &amp; Account Lockout</td><td>18 / 18</td><td><span class="pct-bar"><span class="pct-track"><span class="pct-fill" style="width:100%"></span></span><span class="pct-label">100%</span></span></td></tr>
+    <tr><td>029</td><td>Audit Log Resilience</td><td>10 / 10</td><td><span class="pct-bar"><span class="pct-track"><span class="pct-fill" style="width:100%"></span></span><span class="pct-label">100%</span></span></td></tr>
+    <tr><td>030</td><td>Compliance Checklist Export</td><td>9 / 9</td><td><span class="pct-bar"><span class="pct-track"><span class="pct-fill" style="width:100%"></span></span><span class="pct-label">100%</span></span></td></tr>
+    <tr><td>031</td><td>Dissemination Reliability &amp; Compliance</td><td>21 / 21</td><td><span class="pct-bar"><span class="pct-track"><span class="pct-fill" style="width:100%"></span></span><span class="pct-label">100%</span></span></td></tr>
+    <tr><td>032</td><td>Drill Reporting &amp; Feedback</td><td>16 / 16</td><td><span class="pct-bar"><span class="pct-track"><span class="pct-fill" style="width:100%"></span></span><span class="pct-label">100%</span></span></td></tr>
+    <tr><td>033</td><td>SOP Versioning &amp; Search</td><td>12 / 12</td><td><span class="pct-bar"><span class="pct-track"><span class="pct-fill" style="width:100%"></span></span><span class="pct-label">100%</span></span></td></tr>
+    <tr><td>034</td><td>Impact Analysis Gaps (critical infra, snapshots)</td><td>16 / 16</td><td><span class="pct-bar"><span class="pct-track"><span class="pct-fill" style="width:100%"></span></span><span class="pct-label">100%</span></span></td></tr>
+    <tr><td>035</td><td>Audit/Compliance Retention &amp; Evidence Export</td><td>24 / 24</td><td><span class="pct-bar"><span class="pct-track"><span class="pct-fill" style="width:100%"></span></span><span class="pct-label">100%</span></span></td></tr>
+    <tr><td>036</td><td>Community Hazard Reporting</td><td>45 / 45</td><td><span class="pct-bar"><span class="pct-track"><span class="pct-fill" style="width:100%"></span></span><span class="pct-label">100%</span></span></td></tr>
+    <tr><td>037</td><td>Drill Hazard Injection</td><td>24 / 24</td><td><span class="pct-bar"><span class="pct-track"><span class="pct-fill" style="width:100%"></span></span><span class="pct-label">100%</span></span></td></tr>
+    <tr><td>038</td><td>Population Exposure Sources</td><td>36 / 36</td><td><span class="pct-bar"><span class="pct-track"><span class="pct-fill" style="width:100%"></span></span><span class="pct-label">100%</span></span></td></tr>
+    <tr><td>039</td><td>Risk &amp; Scenario Modeling</td><td>38 / 39</td><td><span class="pct-bar"><span class="pct-track"><span class="pct-fill warn" style="width:97%"></span></span><span class="pct-label">97%</span></span></td></tr>
+    <tr><td>040</td><td>OSM Roads Exposure</td><td>30 / 30</td><td><span class="pct-bar"><span class="pct-track"><span class="pct-fill" style="width:100%"></span></span><span class="pct-label">100%</span></span></td></tr>
+    <tr><td>041</td><td>HydroRIVERS Exposure</td><td>32 / 32</td><td><span class="pct-bar"><span class="pct-track"><span class="pct-fill" style="width:100%"></span></span><span class="pct-label">100%</span></span></td></tr>
+    <tr><td>042</td><td>Exposure Layer Map Visualization</td><td>26 / 26</td><td><span class="pct-bar"><span class="pct-track"><span class="pct-fill" style="width:100%"></span></span><span class="pct-label">100%</span></span></td></tr>
+    <tr><td>043</td><td>WorldPop Raster Population</td><td>25 / 25</td><td><span class="pct-bar"><span class="pct-track"><span class="pct-fill" style="width:100%"></span></span><span class="pct-label">100%</span></span></td></tr>
+    <tr><td>044</td><td>Country-Locked Exclusive Layers</td><td>17 / 17</td><td><span class="pct-bar"><span class="pct-track"><span class="pct-fill" style="width:100%"></span></span><span class="pct-label">100%</span></span></td></tr>
+    <tr><td>045</td><td>Hexagon Resolution Panel</td><td>24 / 24</td><td><span class="pct-bar"><span class="pct-track"><span class="pct-fill" style="width:100%"></span></span><span class="pct-label">100%</span></span></td></tr>
+    <tr><td>046</td><td>Population Hex Labels / Provinces</td><td>20 / 20</td><td><span class="pct-bar"><span class="pct-track"><span class="pct-fill" style="width:100%"></span></span><span class="pct-label">100%</span></span></td></tr>
+    <tr><td>047</td><td>NetCDF Raster Service (Python)</td><td>21 / 21</td><td><span class="pct-bar"><span class="pct-track"><span class="pct-fill" style="width:100%"></span></span><span class="pct-label">100%</span></span></td></tr>
+    <tr><td>048</td><td>Cascading Hazard Risk (engine)</td><td>21 / 22</td><td><span class="pct-bar"><span class="pct-track"><span class="pct-fill warn" style="width:95%"></span></span><span class="pct-label">95%</span></span></td></tr>
+    <tr><td>049</td><td>Cascade Map Integration &amp; Auto-Alert</td><td>26 / 26</td><td><span class="pct-bar"><span class="pct-track"><span class="pct-fill" style="width:100%"></span></span><span class="pct-label">100%</span></span></td></tr>
+    <tr><td>050</td><td>Hazard Impact Halo Visualization</td><td>19 / 19</td><td><span class="pct-bar"><span class="pct-track"><span class="pct-fill" style="width:100%"></span></span><span class="pct-label">100%</span></span></td></tr>
+  </table>
+  <p style="text-align:right; font-size:12.5px; color:var(--muted);"><strong>Overall: 1,145 / 1,147 tracked tasks complete — 99.8%</strong></p>
+
+  <h2><span class="num">6.</span>Outstanding Items</h2>
+
+  <h3>6.1 — Internal, non-blocking (2 items)</h3>
+  <div class="callout">
+    <h4><span class="badge blocked">Waiting on partner</span> Module 039 — Risk &amp; Scenario Modeling</h4>
+    <p>One open question about whether a specific risk-index methodology (the INFORM index) should be adopted
+      at the global/country level or with hand-curated sub-regional data, and whether that process repeats for
+      every new country — this is waiting on a response from the UN partner team and cannot be resolved by
+      engineering work alone.</p>
+  </div>
+  <div class="callout">
+    <h4><span class="badge planned">Follow-up test</span> Module 048 — Cascading Hazard Risk</h4>
+    <p>A defense-in-depth security test (confirming a real, non-super-admin country administrator is correctly
+      denied access to another country's cascade-risk configuration) has not yet been separately exercised
+      with a live non-admin account — the same access-control pattern is already proven correct elsewhere in
+      the system, so risk is assessed as low, but this is flagged for completeness.</p>
+  </div>
+
+  <h3>6.2 — External dependencies (outside our control)</h3>
+  <p style="font-size:13px;color:var(--muted);"><em>Last verified 2026-07-23 — recommend a quick re-check with the engineering team before including these in a live presentation, as external status can change.</em></p>
+  <table>
+    <tr><th>Item</th><th>Status</th><th>Why it's outside our control</th></tr>
+    <tr><td>ReliefWeb (flood data source)</td><td><span class="badge external">Pending approval</span></td><td>API access request submitted; awaiting the provider's approval email.</td></tr>
+    <tr><td>GDO SPI (drought severity index)</td><td><span class="badge blocked">Permanently blocked</span></td><td>The upstream provider's own API returns broken/inconsistent data — a data-quality issue on their side, not ours.</td></tr>
+    <tr><td>OpenStreetMap roads/buildings (2 of 3 countries)</td><td><span class="badge external">Filling in gradually</span></td><td>The free query service enforces its own usage limits; a weekly automatic retry completes it over time with no action needed from us.</td></tr>
+    <tr><td>Cloud platform Edge Function redeploy</td><td><span class="badge external">Cosmetic only</span></td><td>A hosting-platform bug prevents redeploying a specific type of backend function; all real workloads already run in Docker instead, so there is no functional impact — only an unused backup copy is affected.</td></tr>
+  </table>
+
+  <h3>6.3 — Planned, not yet started</h3>
+  <p>
+    The federated setup wizard described in Section&nbsp;3 in full — this is intentionally a separate,
+    upcoming initiative, not a gap in the current system's own functionality.
+  </p>
+
+  <h2><span class="num">7.</span>Summary</h2>
+  <p>
+    The system's core mission — detect hazards in real time, understand their impact, and issue a compliant
+    public alert — is fully built, tested, and running in production for three countries today, with
+    <strong>99.8%</strong> of all formally tracked engineering work complete. The only two items still open
+    within the current scope are non-blocking and well understood. The next major initiative is not a
+    missing feature but a deployment model change: giving each country its own fully independent, self-hosted
+    copy of the same proven system.
+  </p>
+
+  <footer>
+    Global Alert (MHEWS) — Project Status &amp; System Overview &nbsp;·&nbsp; Generated 2026-07-28 &nbsp;·&nbsp;
+    Internal engineering document, safe to share with project management and partner organizations
+  </footer>
+
+</div>
+</body>
+</html>

@@ -945,6 +945,19 @@ let countryHexFeatures = null // raw Feature[] from FILL_GRID (geometry only, fo
 const mapStyleIndex = ref(0)
 const currentZoom = ref(3)
 
+// Tracks the WMS/exposure layer-panel-stack's real rendered width so
+// GeocodingSearch (a sibling component) can center itself in the actual free
+// map area instead of guessing a worst-case panel width — stays accurate
+// whether the panel is absent, narrow, or widened by a long dataset name.
+const layerPanelStack = ref(null)
+const layerPanelWidth = ref(0)
+let layerPanelResizeObserver = null
+
+// Collapses the exposure-layers panel down to a small layers-icon square
+// anchored at its own top-right corner — current full size is the max, it
+// never grows past that.
+const exposureLayersPanelCollapsed = ref(false)
+
 // ── Country interaction state ────────────────────────────────────────────────
 let hoveredFeatureId = null
 let selectedFeatureId = null
@@ -1715,16 +1728,6 @@ async function applyCountryLockedCamera() {
     .eq('country_code', code)
     .maybeSingle()
 
-  // Live-verified: this flyTo (fired async, after the Supabase round-trip
-  // above) doesn't reliably reach the persistent 'zoom'/'moveend' listeners
-  // set up in initMap() in every environment — the zoom-control-bar's
-  // readout was found stuck at currentZoom's ref(3) default until the
-  // user's first manual zoom gesture corrected it. A one-time listener
-  // scoped to this exact flyTo guarantees the sync regardless.
-  map.once('moveend', () => {
-    currentZoom.value = Math.round(map.getZoom() * 10) / 10
-  })
-
   if (data?.default_zoom != null) {
     map.flyTo({ center: bounds.getCenter(), zoom: data.default_zoom, essential: true })
   } else {
@@ -1886,12 +1889,9 @@ function initMap() {
     preserveDrawingBuffer: true, // PNG download için gerekli
   })
 
-  window.__debugMap = map // TEMP: zoom-button bug investigation, remove after
-
-  // Custom horizontal zoom bar (template below) replaces the default
-  // NavigationControl — [−] [x N] [+] in one strip instead of the stock
-  // vertical +/- stack with the zoom level floating separately at the
-  // opposite corner.
+  // Custom vertical zoom bar (template below) replaces the default
+  // NavigationControl — [+] / [x N] / [−] stacked to the left of the
+  // download/satellite-thumbnail column.
 
   map.on('error', (e) => {
     console.error('[MapLibre] Error:', e.error)
@@ -1909,19 +1909,19 @@ function initMap() {
       }, 150)
     }
   })
-  // Belt-and-suspenders sync for the zoom readout: live-verified the
-  // country-locked account's initial camera fit (applyCountryLockedCamera's
-  // flyTo, fired async after a Supabase round-trip) can settle the map at a
-  // real zoom level (e.g. 0.97) while currentZoom stays stuck at its ref(3)
-  // default — the zoom-control-bar then shows a stale number until the user's
-  // first manual zoom gesture corrects it. 'moveend' fires after every
-  // camera change (gesture or programmatic) with no such gap.
+  // Keeps the zoom-control-bar readout synced through any programmatic
+  // camera change (flyTo/easeTo), not just user gestures.
   map.on('moveend', () => {
     currentZoom.value = Math.round(map.getZoom() * 10) / 10
   })
 
   map.on('load', () => {
     mapLoaded = true
+    // Sync the zoom-control-bar readout to the map's real zoom as soon as it
+    // exists. Accounts without a country lock never trigger a flyTo (see
+    // applyCountryLockedCamera's early return below), so without this the
+    // readout would sit at currentZoom's ref() default forever.
+    currentZoom.value = Math.round(map.getZoom() * 10) / 10
     addSourcesAndLayers()
     brightenDarkLabels()
     updateMarkers()
@@ -2837,6 +2837,12 @@ onMounted(() => {
   // for super_admin) — no-op if none is active
   loadActiveDrillEvents()
   if (!hazardTypesStore.loaded) hazardTypesStore.fetchHazardTypes()
+  if (layerPanelStack.value) {
+    layerPanelResizeObserver = new ResizeObserver((entries) => {
+      layerPanelWidth.value = entries[0]?.contentRect.width ?? 0
+    })
+    layerPanelResizeObserver.observe(layerPanelStack.value)
+  }
   requestAnimationFrame(function tryInit() {
     if (!mapContainer.value) return
     const { offsetWidth, offsetHeight } = mapContainer.value
@@ -2850,6 +2856,7 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   window.removeEventListener('keydown', handleMapModeKey)
+  layerPanelResizeObserver?.disconnect()
   clearMarkers()
   clearShelterMarkers()
   if (userMarkerObj) {
@@ -2865,7 +2872,11 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="map-view-wrapper" :class="{ 'impact-panel-collapsed': uiStore.impactPanelCollapsed }">
+  <div
+    class="map-view-wrapper"
+    :class="{ 'impact-panel-collapsed': uiStore.impactPanelCollapsed }"
+    :style="{ '--layer-panel-total-width': `${layerPanelWidth}px` }"
+  >
     <div ref="mapContainer" class="map-leaflet"></div>
     <div class="zoom-control-bar">
       <button class="zoom-btn" :disabled="currentZoom >= (isSatellite ? 17.4 : 20)" @click="zoomIn">+</button>
@@ -3023,7 +3034,7 @@ onBeforeUnmount(() => {
 
     <!-- Layer panel stack: WMS/WFS (spec 012) + Exposure layers (spec 042) share one
          positioned column so neither overlaps the other when both are present. -->
-    <div class="layer-panel-stack">
+    <div ref="layerPanelStack" class="layer-panel-stack">
       <!-- OGC WMS/WFS Map Layers (spec 012): toggle + opacity, session-only state -->
       <div v-if="mapLayersStore.activeMapLayers.length" class="map-layers-panel">
         <h4 class="map-layers-title">{{ t('mapLayers.panelTitle') }}</h4>
@@ -3046,15 +3057,45 @@ onBeforeUnmount(() => {
       <!-- Exposure layers (spec 042): roads/population/rivers/basins etc, generic
            geometry-driven rendering + click-to-inspect. Toggle + opacity share the
            same session-only state shape as the WMS/WFS panel above. -->
-      <div v-if="exposureLayersStore.loaded" class="map-layers-panel exposure-layers-panel">
-        <h4 class="map-layers-title">{{ t('exposureLayers.panelTitle') }}</h4>
-        <!-- Gated on selectedCountryName, not selectedCountryCode: a custom
-             territory (e.g. KKTC) can be genuinely selected with no country
-             code at all, and should read as "no layers for this place" —
-             not as if nothing were selected yet. -->
-        <p v-if="!selectedCountryName" class="exposure-layers-empty">{{ t('exposureLayers.selectCountryPrompt') }}</p>
-        <p v-else-if="visibleExposureDatasets.length === 0" class="exposure-layers-empty">{{ t('exposureLayers.emptyState') }}</p>
-        <div v-for="dataset in visibleExposureDatasets" :key="dataset.id" class="map-layer-row exposure-layer-row">
+      <div
+        v-if="exposureLayersStore.loaded"
+        class="map-layers-panel exposure-layers-panel"
+        :class="{ 'exposure-layers-panel--collapsed': exposureLayersPanelCollapsed }"
+      >
+        <button
+          v-if="exposureLayersPanelCollapsed"
+          type="button"
+          class="exposure-layers-collapse-btn exposure-layers-collapse-btn--collapsed"
+          :aria-label="t('exposureLayers.expand')"
+          :title="t('exposureLayers.expand')"
+          @click="exposureLayersPanelCollapsed = false"
+        >
+          <svg class="exposure-layers-icon" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M12 2 L2 7 L12 12 L22 7 Z" />
+            <path d="M2 12 L12 17 L22 12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" />
+            <path d="M2 17 L12 22 L22 17" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" />
+          </svg>
+        </button>
+        <template v-else>
+          <button
+            type="button"
+            class="exposure-layers-collapse-btn"
+            :aria-label="t('exposureLayers.collapse')"
+            :title="t('exposureLayers.collapse')"
+            @click="exposureLayersPanelCollapsed = true"
+          >
+            <svg class="exposure-layers-arrow" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M7 17 L17 7 M17 7 H9 M17 7 V15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+            </svg>
+          </button>
+          <h4 class="map-layers-title">{{ t('exposureLayers.panelTitle') }}</h4>
+          <!-- Gated on selectedCountryName, not selectedCountryCode: a custom
+               territory (e.g. KKTC) can be genuinely selected with no country
+               code at all, and should read as "no layers for this place" —
+               not as if nothing were selected yet. -->
+          <p v-if="!selectedCountryName" class="exposure-layers-empty">{{ t('exposureLayers.selectCountryPrompt') }}</p>
+          <p v-else-if="visibleExposureDatasets.length === 0" class="exposure-layers-empty">{{ t('exposureLayers.emptyState') }}</p>
+          <div v-for="dataset in visibleExposureDatasets" :key="dataset.id" class="map-layer-row exposure-layer-row">
           <label class="map-layer-toggle">
             <input type="checkbox" :checked="isLayerVisible(`exposure-dataset-${dataset.id}`)" @change="toggleExposureLayer(dataset)" />
             <span class="exposure-layer-swatch" :style="{ background: colorForDataset(dataset) }"></span>
@@ -3126,6 +3167,7 @@ onBeforeUnmount(() => {
             >{{ t('assetCategory.' + category, category) }}</button>
           </div>
         </div>
+        </template>
       </div>
     </div>
 
@@ -3178,6 +3220,7 @@ onBeforeUnmount(() => {
   z-index: 5;
   display: flex;
   flex-direction: column;
+  align-items: flex-end;
   gap: 10px;
   max-height: calc(100% - 32px);
   overflow-y: auto;
@@ -3192,8 +3235,67 @@ onBeforeUnmount(() => {
   color: #e2e8f0;
   font-size: .8rem;
 }
-.exposure-layers-panel { max-width: 420px; }
+.exposure-layers-panel {
+  position: relative;
+  max-width: 420px;
+  /* Current full size is the ceiling — collapsing shrinks it down to a
+     small layers-icon square anchored at its own top-right corner
+     (.layer-panel-stack's align-items: flex-end keeps that corner fixed
+     while the box's own width/height animate), never grows past this. */
+  transition: width 0.35s ease, min-width 0.35s ease, max-width 0.35s ease, height 0.35s ease, padding 0.35s ease;
+  overflow: hidden;
+}
+.exposure-layers-panel.exposure-layers-panel--collapsed {
+  width: 44px;
+  min-width: 44px;
+  max-width: 44px;
+  height: 44px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.exposure-layers-collapse-btn {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: none;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 6px;
+  color: #e2e8f0;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s;
+}
+.exposure-layers-collapse-btn:hover {
+  background: rgba(255, 255, 255, 0.16);
+}
+.exposure-layers-collapse-btn--collapsed {
+  position: static;
+  width: 100%;
+  height: 100%;
+  border-radius: 10px;
+  background: transparent;
+}
+.exposure-layers-collapse-btn--collapsed:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+.exposure-layers-arrow {
+  width: 14px;
+  height: 14px;
+}
+.exposure-layers-icon {
+  width: 22px;
+  height: 22px;
+  fill: #4da3ff;
+}
 .map-layers-title { margin: 0 0 8px; font-size: .8rem; font-weight: 700; }
+.exposure-layers-panel .map-layers-title { margin-right: 28px; }
 .map-layer-row { margin-bottom: 8px; }
 .map-layer-toggle { display: flex; align-items: center; gap: 6px; cursor: pointer; }
 .map-layer-type { margin-left: auto; font-size: .68rem; color: var(--color-text-muted,#94a3b8); }
@@ -3332,13 +3434,18 @@ onBeforeUnmount(() => {
    conditional colors. */
 .zoom-control-bar {
   position: absolute;
-  bottom: 96px; /* aligns with .layer-switcher's own bottom offset */
+  bottom: 20px; /* aligns with .layer-switcher's own bottom offset */
   right: calc(var(--map-control-offset) + 74px); /* 64px thumbnail + 10px gap */
   z-index: 10;
   display: flex;
   flex-direction: column;
   align-items: center;
+  justify-content: space-between;
   width: 40px;
+  /* Matches the stacked download-btn + layer-switcher column's total height
+     (64px + 12px gap + 22px) so its top edge lines up with .map-download-btn's
+     top edge and its bottom edge lines up with .layer-switcher's bottom edge. */
+  height: 98px;
   background: rgba(20, 24, 33, 0.88);
   border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 8px;
@@ -3388,7 +3495,7 @@ onBeforeUnmount(() => {
    for the square below it rather than a separate floating icon. */
 .map-download-btn {
   position: absolute;
-  bottom: 172px;
+  bottom: 96px;
   right: var(--map-control-offset);
   z-index: 10;
   width: 64px;
@@ -3437,7 +3544,7 @@ onBeforeUnmount(() => {
 
 .layer-switcher {
   position: absolute;
-  bottom: 96px;
+  bottom: 20px;
   right: var(--map-control-offset);
   z-index: 10;
   cursor: pointer;

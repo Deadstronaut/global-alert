@@ -739,6 +739,8 @@
   },
   "exposureLayers": {
     "panelTitle": "Couches d'Exposition",
+    "collapse": "Réduire le panneau",
+    "expand": "Développer le panneau des couches",
     "emptyState": "Aucune couche d'exposition disponible pour cette zone pour le moment.",
     "selectCountryPrompt": "Sélectionnez un pays sur la carte pour voir ses couches d'exposition.",
     "featureCount": "{count} éléments",

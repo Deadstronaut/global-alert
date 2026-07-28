@@ -739,6 +739,8 @@
   },
   "exposureLayers": {
     "panelTitle": "طبقات التعرض",
+    "collapse": "طي اللوحة",
+    "expand": "توسيع لوحة الطبقات",
     "emptyState": "لا توجد طبقات تعرض متاحة لهذه المنطقة حتى الآن.",
     "selectCountryPrompt": "اختر دولة على الخريطة لعرض طبقات التعرض الخاصة بها.",
     "featureCount": "{count} عنصر",

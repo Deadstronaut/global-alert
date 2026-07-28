@@ -377,12 +377,26 @@ function clearQuery() {
 <style scoped>
 .geocoding-search {
   position: absolute; top: var(--space-md);
-  left: 50%; transform: translateX(-50%);
+  /* Centered in the free map area between the left sidebar and the
+     right-hand layer panel — using the panel's real, live rendered width
+     (--layer-panel-total-width, set from MapView.vue via a ResizeObserver),
+     not a guessed worst case. When the panel is absent or narrow this lands
+     within a couple px of true viewport-center; it only shifts left as much
+     as the panel actually needs. A plain 50%-transform center (or a
+     max-width shrink toward one) both collapse into real overlap at common
+     laptop widths (~1300-1400px) once the panel is genuinely wide — there's
+     no room left to stay centered there, so this favors "no overlap,
+     ~centered" over "centered, sometimes overlapping". */
+  left: calc(var(--sidebar-width, 280px) + 12px);
+  right: calc(var(--map-control-offset, 336px) + var(--layer-panel-total-width, 0px) + 12px);
+  margin: 0 auto;
+  width: max-content;
+  max-width: 445px;
   z-index: 20; display: flex; flex-direction: column; align-items: center; gap: 4px;
-  transition: top 0.2s ease;
+  transition: top 0.2s ease, left 0.35s ease, right 0.2s ease;
 }
-.geocoding-row { display: flex; }
-.geocoding-input-wrap { position: relative; width: 360px; }
+.geocoding-row { display: flex; width: 100%; }
+.geocoding-input-wrap { position: relative; flex: 1 1 360px; min-width: 140px; }
 .geocoding-input {
   width: 100%; padding: 11px 34px 11px 16px; border-radius: 22px 0 0 22px;
   border: 1px solid rgba(255,255,255,.2); background: rgba(15,17,23,.85);
@@ -407,6 +421,7 @@ function clearQuery() {
 .geocoding-suggestion--active,
 .geocoding-suggestion:hover { background: rgba(77,163,255,.2); }
 .geocoding-btn {
+  flex: 0 0 auto; white-space: nowrap;
   padding: 11px 20px; border-radius: 0 22px 22px 0; border: 1px solid rgba(255,255,255,.2);
   border-left: none; background: rgba(77,163,255,.25); color: #4da3ff; font-size: .88rem;
   font-weight: 600; cursor: pointer;
@@ -427,6 +442,7 @@ function clearQuery() {
     top: var(--space-sm);
     left: var(--space-sm);
     right: var(--space-sm);
+    max-width: none;
     transform: none;
     align-items: stretch;
   }
@@ -436,6 +452,7 @@ function clearQuery() {
   }
 
   .geocoding-input-wrap {
+    flex-basis: auto;
     width: 100%;
     min-width: 0;
   }

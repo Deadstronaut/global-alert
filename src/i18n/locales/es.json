@@ -739,6 +739,8 @@
   },
   "exposureLayers": {
     "panelTitle": "Capas de Exposición",
+    "collapse": "Contraer panel",
+    "expand": "Expandir panel de capas",
     "emptyState": "Aún no hay capas de exposición disponibles para esta área.",
     "selectCountryPrompt": "Selecciona un país en el mapa para ver sus capas de exposición.",
     "featureCount": "{count} elementos",

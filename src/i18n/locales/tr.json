@@ -819,6 +819,8 @@
   },
   "exposureLayers": {
     "panelTitle": "Etki Alanı Katmanları",
+    "collapse": "Paneli küçült",
+    "expand": "Katmanlar panelini genişlet",
     "emptyState": "Bu bölge için henüz etki alanı katmanı yok.",
     "selectCountryPrompt": "Etki alanı katmanlarını görmek için haritadan bir ülke seçin.",
     "featureCount": "{count} kayıt",

@@ -819,6 +819,8 @@
   },
   "exposureLayers": {
     "panelTitle": "Exposure Layers",
+    "collapse": "Collapse panel",
+    "expand": "Expand layers panel",
     "emptyState": "No exposure layers available for this area yet.",
     "selectCountryPrompt": "Select a country on the map to see its exposure layers.",
     "featureCount": "{count} features",

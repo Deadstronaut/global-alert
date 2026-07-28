@@ -61,9 +61,18 @@ No new project/dependency setup needed — single existing Vue app, no new npm p
 
 ---
 
-## Phase 5: User Story 3 - Individual building-level affected estimate (Priority: P3, BLOCKED)
+## Phase 5: User Story 3 - Individual building-level affected estimate (Priority: P3)
 
-**Not implemented in this pass.** Requires a new country-scale data import (Microsoft Global ML Building Footprints — see research.md §3) that is large enough to warrant its own `/speckit-plan` cycle when picked up. No tasks defined here beyond the research already captured in spec.md/research.md/data-model.md, so a future planning pass has a documented starting point instead of rediscovering it.
+**Done (picked back up and completed the same day as US1/US2, 2026-07-28).** Built exactly the pattern this section originally deferred to: `supabase/functions/shared/buildingFootprintsFetch.ts` + `raster-importer/import-building-footprints.ts`, fetching Microsoft's Global ML Building Footprints tiles (see research.md §3) and aggregating to per-H3-hexagon building COUNT (not one row per building — real per-country volumes turned out to be tens of millions).
+
+- [X] Fetch module + importer entrypoint + docker-compose service (`building-footprints-importer`)
+- [X] New `data_sources` row (reuses existing `buildings` hazard_type — no CHECK-constraint widen needed)
+- [X] Live-tested end to end against Malaysia first (98 tiles, ~40s/tile average), then Turkey + Madagascar run in parallel
+- [X] Real per-country results: **Turkey 128,323 hexagons, Madagascar 48,249 hexagons, Malaysia 39,833 hexagons** — all verified rendering via `get_dataset_features_geojson` (Turkey ~33s, closest to the 60s timeout of the three — worth revisiting with a coarser h3Resolution if it ever proves flaky under concurrent load, same lesson as WorldPop/Meta's earlier fix)
+- [X] Live-testing finding: rendered as one flat color at first (`building_footprints` wasn't registered in `exposureLayerColor.js`'s gridded-metric set) — fixed with a white→red density ramp, same fix pattern as dem_slope's earlier miss
+- [X] Friendly Turkish/English label added ("Bina Yoğunluğu" / "Building Density")
+
+**Not done / explicitly out of scope still:** per-building point-level detail (this renders density per hexagon, not "here is building #4,382,991" — matches this spec's data-model.md's own noted direction to aggregate rather than store one row per building).
 
 ---
 

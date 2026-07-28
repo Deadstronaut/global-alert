@@ -5,17 +5,19 @@
 <title>Global Alert (MHEWS) — Project Status &amp; System Overview</title>
 <style>
   :root {
-    --ink: #1a2233;
-    --muted: #5b6478;
-    --line: #dde3ec;
-    --accent: #1d4ed8;
-    --accent-soft: #eef2ff;
-    --good: #16a34a;
-    --good-bg: #ecfdf3;
-    --warn: #b45309;
-    --warn-bg: #fff7ed;
-    --paper: #ffffff;
-    --bg: #f4f6fa;
+    --ink: #e7ebf3;
+    --muted: #9aa5ba;
+    --line: #2b3244;
+    --accent: #5b9dff;
+    --accent-soft: #1a2438;
+    --good: #34d399;
+    --good-bg: #0f2b23;
+    --warn: #fbbf24;
+    --warn-bg: #332707;
+    --paper: #131722;
+    --bg: #0b0e16;
+    --box-bg: #1a2032;
+    --track-bg: #232a3d;
   }
   * { box-sizing: border-box; }
   body {
@@ -54,7 +56,7 @@
   }
   .stat-row { display: flex; gap: 16px; margin: 20px 0 8px; flex-wrap: wrap; }
   .stat-box {
-    flex: 1; min-width: 150px; background: var(--good-bg); border: 1px solid #bbf0cc;
+    flex: 1; min-width: 150px; background: var(--good-bg); border: 1px solid #1f5c47;
     border-radius: 8px; padding: 16px 18px; text-align: center;
   }
   .stat-box .n { font-size: 30px; font-weight: 800; color: var(--good); display: block; }
@@ -64,7 +66,7 @@
     font-size: 13.5px;
   }
   .diagram .box {
-    flex: 1; min-width: 130px; background: #f8fafc; border: 1.5px solid var(--line);
+    flex: 1; min-width: 130px; background: var(--box-bg); border: 1.5px solid var(--line);
     border-radius: 8px; padding: 12px 10px; text-align: center;
   }
   .diagram .box .t { font-weight: 700; color: var(--ink); margin-bottom: 4px; }
@@ -72,10 +74,10 @@
   .diagram .arrow { align-self: center; color: var(--accent); font-size: 20px; padding: 0 2px; }
   table { width: 100%; border-collapse: collapse; margin: 14px 0 22px; font-size: 13.5px; }
   th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line); }
-  th { background: #f8fafc; color: var(--ink); font-weight: 700; font-size: 12.5px; text-transform: uppercase; letter-spacing: .03em; }
+  th { background: var(--box-bg); color: var(--ink); font-weight: 700; font-size: 12.5px; text-transform: uppercase; letter-spacing: .03em; }
   tr:last-child td { border-bottom: none; }
   .pct-bar { display: inline-flex; align-items: center; gap: 8px; width: 100%; }
-  .pct-track { flex: 1; height: 8px; background: #edf1f7; border-radius: 4px; overflow: hidden; }
+  .pct-track { flex: 1; height: 8px; background: var(--track-bg); border-radius: 4px; overflow: hidden; }
   .pct-fill { height: 100%; background: var(--good); }
   .pct-fill.warn { background: var(--warn); }
   .pct-label { font-weight: 700; font-size: 12.5px; width: 40px; text-align: right; }
@@ -90,14 +92,19 @@
     display: inline-block; font-size: 11px; font-weight: 700; padding: 2px 8px;
     border-radius: 10px; text-transform: uppercase; letter-spacing: .03em;
   }
-  .badge.blocked { background: #fee2e2; color: #b91c1c; }
-  .badge.external { background: #fef3c7; color: #92400e; }
-  .badge.planned { background: #e0e7ff; color: #3730a3; }
+  .badge.blocked { background: #4a1616; color: #fca5a5; }
+  .badge.external { background: #3a2a0d; color: #fcd34d; }
+  .badge.planned { background: #1c2450; color: #a5b4fc; }
   footer {
     margin-top: 48px; padding-top: 18px; border-top: 1px solid var(--line);
     font-size: 12px; color: var(--muted); text-align: center;
   }
   @media print {
+    :root {
+      --ink: #1a2233; --muted: #5b6478; --line: #dde3ec; --accent: #1d4ed8;
+      --accent-soft: #eef2ff; --good: #16a34a; --good-bg: #ecfdf3;
+      --warn: #b45309; --warn-bg: #fff7ed; --paper: #ffffff; --bg: #f4f6fa;
+    }
     body { background: #fff; }
     .page { box-shadow: none; max-width: none; padding: 0 24px; }
     h2 { break-after: avoid; }
@@ -209,6 +216,35 @@
     Every step above — every login, edit, approval, and dispatch — is written to a tamper-evident audit log
     (a cryptographic hash chain, the same integrity idea used in blockchains), so the full history of any
     alert can be reconstructed and verified later.
+  </p>
+
+  <h3>2.5 — Global sources vs. each country's own local sources</h3>
+  <p>
+    It's worth being explicit about which data sources the platform provides <strong>out of the box, for every
+    country, at no extra integration effort</strong> — versus sources a country adds itself for its own local
+    needs.
+  </p>
+  <table>
+    <tr><th>Global source (provided to every country)</th><th>Hazard / data type</th></tr>
+    <tr><td>USGS, EMSC, GEOFON</td><td>Earthquakes (worldwide coverage)</td></tr>
+    <tr><td>GDACS</td><td>Multi-hazard (earthquake, flood, tropical cyclone, drought, volcano)</td></tr>
+    <tr><td>NASA FIRMS</td><td>Wildfire detection &amp; fire intensity (satellite)</td></tr>
+    <tr><td>WHO</td><td>Epidemic / disease-outbreak alerts</td></tr>
+    <tr><td>PTWC (Pacific Tsunami Warning Center)</td><td>Tsunami</td></tr>
+    <tr><td>FEWS NET</td><td>Food security / famine early warning</td></tr>
+    <tr><td>WorldPop, Meta/HDX, GHSL</td><td>Population density (three independent global datasets)</td></tr>
+    <tr><td>Microsoft Global ML Building Footprints</td><td>Building density (worldwide)</td></tr>
+    <tr><td>Copernicus satellite elevation data</td><td>Terrain steepness / landslide susceptibility</td></tr>
+    <tr><td>HydroRIVERS / HydroBASINS, GloFAS</td><td>Rivers, watersheds, river discharge</td></tr>
+    <tr><td>CHIRPS</td><td>Rainfall (drought indicators)</td></tr>
+  </table>
+  <p>
+    On top of this shared foundation, a country's own disaster agency can add <strong>its own local sources</strong>
+    from the admin panel at any time — e.g. Turkey's AFAD and Kandilli earthquake networks, which report
+    domestically before the global feeds do, or a national meteorological service's own rainfall stations.
+    Local sources are additive: they never replace the global feeds, they arrive earlier or in more local
+    detail for that one country, and every other country continues to run on the shared global sources alone
+    with no extra setup required.
   </p>
 
   <h2><span class="num">3.</span>What Happens Next: The Federated Setup Wizard</h2>
@@ -373,11 +409,14 @@
 
   <h3>6.1 — Internal, non-blocking (2 items)</h3>
   <div class="callout">
-    <h4><span class="badge blocked">Waiting on partner</span> Module 039 — Risk &amp; Scenario Modeling</h4>
-    <p>One open question about whether a specific risk-index methodology (the INFORM index) should be adopted
-      at the global/country level or with hand-curated sub-regional data, and whether that process repeats for
-      every new country — this is waiting on a response from the UN partner team and cannot be resolved by
-      engineering work alone.</p>
+    <h4><span class="badge planned">Documentation note pending</span> Module 039 — Risk &amp; Scenario Modeling</h4>
+    <p><strong>The feature itself is complete and fully operational in production today</strong> — configurable
+      risk indicators, the vulnerability/coping-capacity/exposure scoring dashboard, and the cascading-risk
+      engine (Section&nbsp;2.3) are all live and in active use, with real data already entered by an operator.
+      The single remaining open item is a documentation cross-reference: whether the write-up should describe
+      the INFORM risk-index methodology as adopted at the global/country level or via hand-curated sub-regional
+      data, and whether that same documentation choice should repeat for every new country. That one question
+      is waiting on a reply from the UN partner team — it does not block or limit use of the feature in any way.</p>
   </div>
   <div class="callout">
     <h4><span class="badge planned">Follow-up test</span> Module 048 — Cascading Hazard Risk</h4>

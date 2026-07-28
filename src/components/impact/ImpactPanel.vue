@@ -372,7 +372,7 @@ onMounted(async () => {
             <span v-else-if="autoSummary[d.id].result === 'error'" class="impact-auto-summary-value impact-auto-summary-error">{{ t('impact.panel.error') }}</span>
             <span v-else-if="autoSummary[d.id].result.feature_count === 0" class="impact-auto-summary-value impact-auto-summary-muted">{{ t('impact.panel.noOverlap') }}</span>
             <span v-else class="impact-auto-summary-value">
-              {{ autoSummary[d.id].result.total_value }} · {{ t('impact.panel.featuresCount', { count: autoSummary[d.id].result.feature_count }) }}
+              {{ Number(autoSummary[d.id].result.total_value ?? 0).toLocaleString() }} · {{ t('impact.panel.featuresCount', { count: Number(autoSummary[d.id].result.feature_count ?? 0).toLocaleString() }) }}
             </span>
           </li>
         </ul>
@@ -397,8 +397,8 @@ onMounted(async () => {
         <div v-if="result === 'error'" class="impact-notice impact-notice-error">{{ t('impact.panel.error') }}</div>
         <div v-else-if="result && result.feature_count === 0" class="impact-notice">{{ t('impact.panel.noOverlap') }}</div>
         <div v-else-if="result" class="impact-result">
-          <div class="impact-result-value">{{ result.total_value }}</div>
-          <div class="impact-result-label">{{ t('impact.panel.featuresCount', { count: result.feature_count }) }}</div>
+          <div class="impact-result-value">{{ Number(result.total_value ?? 0).toLocaleString() }}</div>
+          <div class="impact-result-label">{{ t('impact.panel.featuresCount', { count: Number(result.feature_count ?? 0).toLocaleString() }) }}</div>
           <div v-if="completeness && completeness !== 'error'" class="impact-completeness">
             {{ t('impact.panel.completenessLabel') }}:
             <strong v-if="completeness.ratio !== null">{{ Math.round(completeness.ratio * 100) }}%</strong>
@@ -433,7 +433,7 @@ onMounted(async () => {
           <ul v-else class="impact-breakdown-list">
             <li v-for="g in breakdown" :key="g.group_key">
               <span>{{ g.group_key === 'unclassified' ? t('impact.panel.unclassified') : g.group_key }}</span>
-              <span>{{ g.total_value }} ({{ g.feature_count }})</span>
+              <span>{{ Number(g.total_value ?? 0).toLocaleString() }} ({{ Number(g.feature_count ?? 0).toLocaleString() }})</span>
             </li>
           </ul>
         </div>

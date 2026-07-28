@@ -192,8 +192,8 @@ onMounted(loadData)
       <p class="risk-hint">{{ t('risk.scenario.resultHint') }}</p>
       <p v-if="result.formula_range_warning" class="risk-warning">{{ t('risk.scenario.rangeWarning') }}</p>
       <div v-for="impact in result.estimated_impact" :key="impact.exposure_dataset_id" class="risk-row">
-        <span>{{ t('risk.scenario.totalValue') }}: {{ impact.total_value }}</span>
-        <span>{{ t('risk.scenario.featureCount') }}: {{ impact.feature_count }}</span>
+        <span>{{ t('risk.scenario.totalValue') }}: {{ Number(impact.total_value ?? 0).toLocaleString() }}</span>
+        <span>{{ t('risk.scenario.featureCount') }}: {{ Number(impact.feature_count ?? 0).toLocaleString() }}</span>
       </div>
       <button class="btn-save" @click="saveScenario">{{ t('risk.scenario.save') }}</button>
     </div>

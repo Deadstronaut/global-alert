@@ -60,17 +60,25 @@ const DEFAULT_LAYER_OPACITY = 0.7
 // typical — that used to leave the panel looking frozen/broken with no
 // feedback for the whole wait. loadingExposureLayer tracks which dataset
 // (if any) is currently in flight so a LoadingOverlay can cover the screen
-// until it resolves; exposureLayerLoadToken lets ESC "cancel" it (there's no
+// until it resolves; exposureLayerLoadTokens lets ESC "cancel" it (there's no
 // real abort handle on a Supabase RPC call, so cancelling just means
 // discarding the response when it eventually arrives and flipping the
 // toggle back off, rather than actually stopping the in-flight request).
+//
+// Keyed per dataset.id (not a single shared counter) — live-testing finding:
+// toggling on two population layers back-to-back (e.g. Meta/HDX then
+// WorldPop) used to bump one shared token, so the FIRST layer's response
+// would arrive, see the token had moved on (because of the SECOND layer's
+// unrelated load starting), and silently discard itself — checkbox stayed
+// on, but the layer never rendered. Scoping the token per dataset means one
+// dataset's load starting/cancelling never invalidates another's.
 const loadingExposureLayer = ref(null)
-let exposureLayerLoadToken = 0
+const exposureLayerLoadTokens = new Map() // datasetId -> token
 
 function cancelExposureLayerLoading() {
   const dataset = loadingExposureLayer.value
   if (dataset) {
-    exposureLayerLoadToken += 1
+    exposureLayerLoadTokens.set(dataset.id, (exposureLayerLoadTokens.get(dataset.id) ?? 0) + 1)
     const key = exposureLayerKey(dataset)
     layerVisibility.value = { ...layerVisibility.value, [key]: false }
   }
@@ -203,7 +211,8 @@ async function addExposureLayer(dataset) {
 
   let geojson = exposureFeatureCache.get(dataset.id)
   if (!geojson) {
-    const myToken = (exposureLayerLoadToken += 1)
+    const myToken = (exposureLayerLoadTokens.get(dataset.id) ?? 0) + 1
+    exposureLayerLoadTokens.set(dataset.id, myToken)
     loadingExposureLayer.value = dataset
     // ~55m tolerance at the equator — imprecise at country-scale zoom levels
     // this panel renders at, but meaningfully shrinks the ST_AsGeoJSON
@@ -211,10 +220,12 @@ async function addExposureLayer(dataset) {
     // Turkey's 65,010-feature road network went from timing out
     // server-side to completing in ~11s once this was passed).
     const { data, error } = await supabase.rpc('get_dataset_features_geojson', { dataset_id: dataset.id, simplify_tolerance: 0.0005 })
-    // ESC (cancelExposureLayerLoading) bumped the token while this was in
-    // flight — the toggle's already been flipped back off, so just drop the
-    // response instead of racing to render a layer the user cancelled.
-    if (myToken !== exposureLayerLoadToken) return
+    // ESC (cancelExposureLayerLoading) bumped this dataset's own token while
+    // this was in flight — the toggle's already been flipped back off, so
+    // just drop the response instead of racing to render a layer the user
+    // cancelled. A DIFFERENT dataset's load starting/cancelling in the
+    // meantime never affects this check (see this block's header comment).
+    if (myToken !== exposureLayerLoadTokens.get(dataset.id)) return
     if (loadingExposureLayer.value === dataset) loadingExposureLayer.value = null
     if (error || !data) return // silent render failure — matches addWfsLayer's existing convention
     // Population values run into the hundreds of thousands/millions — a

@@ -53,7 +53,7 @@ export const POPULATION_RAMP = ['#ffffff', '#fee5d9', '#fcae91', '#fb6a4a', '#cb
 // rivers) — thousands of adjacent same-color cells with solid borders
 // otherwise read as a dense, illegible grid/moiré pattern instead of a
 // heatmap.
-const GRID_METRIC_SOURCES = new Set(['gdo_spi', 'gdo_fapar_anomaly', 'gdo_soil_moisture_anomaly', 'glofas_river_discharge', 'chirps'])
+const GRID_METRIC_SOURCES = new Set(['gdo_spi', 'gdo_fapar_anomaly', 'gdo_soil_moisture_anomaly', 'glofas_river_discharge', 'chirps', 'dem_slope'])
 
 // One ramp per source, each chosen to match what the quantity actually is
 // rather than a single shared "generic data" blue:
@@ -63,6 +63,7 @@ const GRID_METRIC_RAMPS = {
   gdo_soil_moisture_anomaly: ['#ecfeff', '#a5f3fc', '#22d3ee', '#0891b2', '#164e63'], // soil moisture anomaly — light -> dark teal/cyan (water-adjacent but distinct from rainfall's blue)
   glofas_river_discharge: ['#eef2ff', '#c7d2fe', '#818cf8', '#4f46e5', '#312e81'], // river discharge — light -> dark indigo (also water-related, distinct hue from rainfall)
   gdo_spi: ['#fefce8', '#fde68a', '#f59e0b', '#c2410c', '#7c2d12'], // drought severity (SPI) — light tan -> dark brown, the conventional "dry earth" drought palette
+  dem_slope: ['#fef9c3', '#fde047', '#f97316', '#dc2626', '#7f1d1d'], // landslide susceptibility (slope) — every cell here is already >= the 20deg threshold (rasterSourceConfig.ts), so this ramp is distinguishing steep-but-passable from genuinely severe terrain, not "flat vs hilly"
 }
 // Fallback for any future gridded-metric source not yet given its own ramp
 // above — keeps the old shared-blue behavior rather than erroring.

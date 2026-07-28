@@ -105,7 +105,7 @@ defineExpose({ evaluate })
           <p class="risk-recommendation">{{ a.recommendation_text }}</p>
           <p class="risk-meta">
             {{ t('risk.cascade.affectedPopulation') }}:
-            {{ a.affected_population !== null && a.affected_population !== undefined ? Math.round(a.affected_population) : t('risk.dashboard.notAvailable') }}
+            {{ a.affected_population !== null && a.affected_population !== undefined ? Math.round(a.affected_population).toLocaleString() : t('risk.dashboard.notAvailable') }}
           </p>
           <details class="risk-why">
             <summary>{{ t('risk.cascade.whyLabel') }}</summary>

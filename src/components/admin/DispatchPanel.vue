@@ -152,8 +152,8 @@ onMounted(loadJobs)
                 {{ t('dispatch.impactSnapshotUnavailable') }}
               </div>
               <div v-else class="impact-snapshot-detail">
-                <span>{{ t('impact.panel.featuresCount', { count: snapshotByCapDraft[job.cap_draft_id].snapshot_data?.feature_count ?? 0 }) }}</span>
-                <span>{{ snapshotByCapDraft[job.cap_draft_id].snapshot_data?.total_value }}</span>
+                <span>{{ t('impact.panel.featuresCount', { count: Number(snapshotByCapDraft[job.cap_draft_id].snapshot_data?.feature_count ?? 0).toLocaleString() }) }}</span>
+                <span>{{ Number(snapshotByCapDraft[job.cap_draft_id].snapshot_data?.total_value ?? 0).toLocaleString() }}</span>
               </div>
             </td>
           </tr>

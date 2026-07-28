@@ -32,23 +32,28 @@ export interface RasterSourceConfig {
   allowNegativeValues?: boolean
 }
 
+// Resolution 6 (not 7) — live-testing finding: Turkey's WorldPop dataset at
+// resolution 7 produced 138,932 hexagons, and get_dataset_features_geojson
+// (one jsonb_agg of every row's simplified geometry, no pagination) hit both
+// this project's Postgres statement_timeout AND the edge proxy in front of
+// it (520/521, not just 500 — raising the function's own statement_timeout
+// alone did not fix it, see 20260728091000's migration header). Matches
+// GHSL's own resolution-6 choice and reasoning: WorldPop's ~100m pixel
+// shouldn't be bucketed finer than a few pixels per hexagon anyway.
 export const WORLDPOP_SOURCE_CONFIG: RasterSourceConfig = {
   sourceName: 'worldpop',
-  h3Resolution: 7,
+  h3Resolution: 6,
   pixelValueMeaning: 'count',
 }
 
-// Meta/HDX Population — NOT currently used by any fetch module (spec 044
-// attempt abandoned: Meta's per-country GeoTIFFs are ~10-11GB uncompressed,
-// too large for this pipeline's Edge Function-based download step — see
-// 20260720160000_meta_hdx_population_exposure_source.sql for the full
-// finding). Left here, resolution matching WorldPop's, for whoever
-// eventually builds a working import path (likely needs disk-streaming or
-// server-side processing this repo doesn't have yet, not just a fetch
-// module).
+// Meta/HDX Population — same resolution-6 fix as WorldPop above (live-tested
+// 2026-07-28: Turkey's dataset at resolution 7 was 126,118 hexagons, same
+// get_dataset_features_geojson failure). Meta's own pixel is ~30m, even
+// finer than WorldPop's, so resolution 6 is if anything more conservative
+// here than for WorldPop.
 export const META_SOURCE_CONFIG: RasterSourceConfig = {
   sourceName: 'meta_hdx',
-  h3Resolution: 7,
+  h3Resolution: 6,
   pixelValueMeaning: 'count',
 }
 

@@ -51,12 +51,34 @@ export async function resolveWorldPopDownloadUrl(iso3: string): Promise<string |
   return latest.files?.[0] ?? null
 }
 
+const DOWNLOAD_RETRIES = 3
+const RETRY_DELAYS_MS = [5_000, 15_000, 30_000]
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+// Live-testing finding: Turkey's raster is 535MB (largest of the three
+// served countries) and its download intermittently hit this function's own
+// 600s timeout or a mid-transfer network hiccup on a host already running
+// several other importer containers — same class of transient
+// resource-contention failure demSlopeFetch.ts's downloadTile hit and fixed
+// with retries (see that file's header comment for the fuller diagnosis).
+// Retried here for the same reason rather than failing the whole country
+// outright on one slow attempt.
 async function downloadGeoTiff(url: string): Promise<ArrayBuffer> {
-  const response = await fetch(url, { signal: AbortSignal.timeout(300_000) })
-  if (!response.ok) {
-    throw new Error(`Failed to download WorldPop GeoTIFF: HTTP ${response.status}`)
+  let lastError: unknown
+  for (let attempt = 0; attempt <= DOWNLOAD_RETRIES; attempt++) {
+    try {
+      const response = await fetch(url, { signal: AbortSignal.timeout(600_000) })
+      if (!response.ok) throw new Error(`Failed to download WorldPop GeoTIFF: HTTP ${response.status}`)
+      return await response.arrayBuffer()
+    } catch (e) {
+      lastError = e
+      if (attempt < DOWNLOAD_RETRIES) await sleep(RETRY_DELAYS_MS[attempt])
+    }
   }
-  return await response.arrayBuffer()
+  throw lastError
 }
 
 async function fetchCountryBoundary(countryCode: string): Promise<GeoJSON.Geometry | null> {

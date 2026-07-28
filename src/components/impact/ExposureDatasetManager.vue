@@ -174,7 +174,7 @@ onMounted(loadDatasets)
         </div>
         <div v-else>
           <strong>{{ friendlyDatasetLabel(t, d) }}</strong>
-          <span class="exposure-meta">{{ d.feature_count }} {{ t('impact.exposure.features') }}</span>
+          <span class="exposure-meta">{{ Number(d.feature_count ?? 0).toLocaleString() }} {{ t('impact.exposure.features') }}</span>
           <span v-if="coarseResolutionNote(t, d)" class="exposure-caveat">{{ coarseResolutionNote(t, d) }}</span>
         </div>
         <div class="exposure-row-actions">

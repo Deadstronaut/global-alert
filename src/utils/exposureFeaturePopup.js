@@ -39,8 +39,12 @@ function hexToRgba(hex, alpha) {
  * @param {{ name?: string, metric_property_name?: string, source_name?: string|null, country_code?: string|null }} dataset
  * @param {number|null|undefined} metricValue
  * @param {Record<string, unknown>|null|undefined} properties
+ * @param {number|null|undefined} haloSeverity - spec 050 US2: 0-1 distance-based
+ *   estimate when this point is inside a selected event's impact halo, else
+ *   null/undefined. When present, an explicit FR-005 disclaimer is shown —
+ *   this is never a confirmed damage assessment.
  */
-export function buildFeaturePopupHtml(t, dataset, metricValue, properties) {
+export function buildFeaturePopupHtml(t, dataset, metricValue, properties, haloSeverity) {
   const color = colorForDataset(dataset)
   const label = friendlyDatasetLabel(t, dataset) || dataset?.name || ''
 
@@ -63,6 +67,10 @@ export function buildFeaturePopupHtml(t, dataset, metricValue, properties) {
   const countryText = dataset?.country_code ? escapeHtml(dataset.country_code.toUpperCase()) : ''
   const sourceText = dataset?.source_name ? escapeHtml(dataset.source_name.toUpperCase()) : ''
 
+  const haloDisclaimerHtml = haloSeverity !== null && haloSeverity !== undefined
+    ? `<p class="popup-halo-disclaimer">${escapeHtml(t('exposureLayers.haloSeverityDisclaimer'))}</p>`
+    : ''
+
   return `
     <div class="disaster-popup-modern" style="--severity-color: ${color}; --severity-rgba: ${hexToRgba(color, 0.18)};">
       <div class="popup-header">
@@ -70,6 +78,7 @@ export function buildFeaturePopupHtml(t, dataset, metricValue, properties) {
       </div>
       <div class="popup-body">
         ${metricsHtml}
+        ${haloDisclaimerHtml}
       </div>
       <div class="popup-footer">
         <span class="popup-date">${countryText}</span>

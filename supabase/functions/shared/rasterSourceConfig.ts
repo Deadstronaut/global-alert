@@ -138,3 +138,14 @@ export const DEM_SLOPE_SOURCE_CONFIG: RasterSourceConfig = {
 // threshold. Admin-configurable slope-based cascade_rules still apply their
 // own min_magnitude/proximity_distance_km on top of this pre-filtered set.
 export const LANDSLIDE_SLOPE_THRESHOLD_DEG = 20
+
+// Building footprints (spec 050 US3) — Microsoft Global ML Building
+// Footprints, aggregated to per-hexagon building COUNT (not one row per
+// building; a served country can have tens of millions of individual
+// buildings — see buildingFootprintsFetch.ts's header). Resolution 7
+// matches WorldPop's own choice: a comparably-scaled density metric.
+export const BUILDING_FOOTPRINTS_SOURCE_CONFIG: RasterSourceConfig = {
+  sourceName: 'building_footprints',
+  h3Resolution: 7,
+  pixelValueMeaning: 'count',
+}

@@ -78,6 +78,14 @@ function hashString(str) {
   return Math.abs(hash)
 }
 
+// Distance-based estimated-severity gradient for critical-infrastructure
+// points inside a selected event's impact halo (spec 050 US2) — yellow (far/
+// edge of halo) -> red (near epicenter). Deliberately a different, more
+// saturated ramp than dem_slope's (which shades a whole country's terrain);
+// this one only ever applies to a handful of points near one selected event,
+// so it can afford to be bolder/higher-contrast.
+export const HALO_SEVERITY_RAMP = ['#fde047', '#f97316', '#dc2626', '#7f1d1d']
+
 export function isPopulationSource(sourceName) {
   return POPULATION_SOURCES.has(sourceName)
 }

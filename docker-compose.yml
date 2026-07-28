@@ -152,6 +152,26 @@ services:
     networks:
       - mhews
 
+  # ── Building footprints importer (manual, run-to-completion) ────────────────
+  # Downloads Microsoft Global ML Building Footprints tiles per served
+  # country (buildingFootprintsFetch.ts) and writes per-hexagon building
+  # counts as the 'building_footprints' exposure source (spec 050 US3).
+  # No /rasters or manifest.json mount needed — tiles come from Microsoft's
+  # public Azure blob storage. No scheduled equivalent — manual-only like
+  # dem-slope-importer/meta-ghsl-importer. Turkey alone is ~1.7GB compressed
+  # across 266 tiles; expect this to take a while.
+  #   docker compose run --rm --name mhews-building-footprints-importer building-footprints-importer
+  building-footprints-importer:
+    build:
+      context: .
+      dockerfile: raster-importer/Dockerfile
+    container_name: mhews-building-footprints-importer
+    command: ["raster-importer/import-building-footprints.ts"]
+    env_file:
+      - ./server/.env
+    networks:
+      - mhews
+
   # ── CHIRPS monthly rainfall importer (manual, run-to-completion) ────────────
   # Single global monthly GeoTIFF (chirpsFetch.ts), no tile grid unlike GHSL —
   # no /rasters or manifest.json mount needed, just Supabase credentials and

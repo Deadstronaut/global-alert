@@ -21,7 +21,14 @@ const props = defineProps({
   // since their own account scope is a stronger signal than whatever
   // happens to be focused on the map.
   countryCode: { type: String, default: null },
+  // spec 050 US1: MapView owns the actual halo layer/opacity (it has the
+  // map instance); this panel only hosts the slider control, v-model'd back
+  // up via update:haloOpacity so the two stay in sync without duplicating
+  // halo state here.
+  haloOpacity: { type: Number, default: 0.6 },
 })
+
+const emit = defineEmits(['update:haloOpacity', 'update:haloRadiusKm'])
 
 const { t } = useI18n()
 const auth = useAuthStore()
@@ -40,6 +47,19 @@ const loadedScenario = ref(null)
 // breakdown, and data-completeness score, all derived from the same
 // dataset/point/radius as the main compute_zonal_stats analysis above.
 const criticalInfrastructure = ref(null) // null | [] | array | 'error'
+// live-testing finding: listing every single critical-infrastructure
+// feature one row at a time (e.g. "Eğitim Kurumu — 1" repeated dozens of
+// times for a large campus/city) is unreadable — grouped into a per-
+// category count instead ("14 Eğitim Kurumu" etc.), matching how the user
+// actually wants to read this ("14 okul, 22 hastane" style).
+const criticalInfrastructureSummary = computed(() => {
+  if (!Array.isArray(criticalInfrastructure.value)) return []
+  const counts = new Map()
+  for (const f of criticalInfrastructure.value) {
+    counts.set(f.asset_category, (counts.get(f.asset_category) ?? 0) + 1)
+  }
+  return [...counts.entries()].sort((a, b) => b[1] - a[1])
+})
 const breakdownType = ref('sector') // 'sector' | 'boundary'
 const breakdown = ref(null) // null | [] | array | 'error'
 const completeness = ref(null) // null | { ratio: number|null } | 'error'
@@ -82,6 +102,15 @@ const effectiveRadiusKm = computed(() => {
   if (radiusOverride.value !== null && radiusOverride.value !== '') return Number(radiusOverride.value)
   return props.selectedEvent ? defaultBufferRadiusKm(props.selectedEvent) : null
 })
+
+// spec 050 US1 follow-up (live-testing finding, user-reported): the map's
+// impact halo used to compute its own radius independently from the raw
+// selected event, so typing a value into "Yarıçap geçersiz kılma" here had
+// no effect on it — the halo and this panel's own analysis radius
+// silently disagreed. Emitting effectiveRadiusKm up makes MapView's halo
+// track whatever radius this panel is actually using (override or default),
+// so the two can never drift apart.
+watch(effectiveRadiusKm, (km) => emit('update:haloRadiusKm', km), { immediate: true })
 
 // Lightweight, dependency-free 24h trend (research.md §6) — count of same-type
 // events seen in each of six 4-hour buckets across the last 24h, purely from
@@ -145,6 +174,11 @@ const relevantDatasets = computed(() => {
   return filteredDatasets.value.filter((d) => sources.includes(d.source_name))
 })
 
+// Always this country's own critical-infrastructure (osm-buildings) dataset
+// — never whatever the user happens to have picked in the manual step-1
+// dropdown (see runAnalysis's comment on why that was wrong).
+const criticalInfraDatasetId = computed(() => filteredDatasets.value.find((d) => d.source_name === 'osm-buildings')?.id ?? null)
+
 async function runAutoSummary() {
   autoSummary.value = {}
   if (!props.selectedEvent) return
@@ -206,8 +240,20 @@ async function runAnalysis() {
     return
   }
   result.value = data?.[0] ?? { total_value: 0, feature_count: 0 }
+  // live-testing finding: this used to reuse rpcParams.dataset_id (whatever
+  // the user picked in step 1) for the critical-infrastructure lookup too —
+  // so analyzing e.g. the river or population layer always came back
+  // "no critical infrastructure" even when real critical facilities existed
+  // nearby (visible on the map / in the auto-summary above), simply because
+  // that OTHER dataset's features never carry an asset_category. Critical
+  // infrastructure is always resolved from this country's own
+  // 'osm-buildings' dataset instead, independent of the step-1 selection.
+  if (criticalInfraDatasetId.value) {
+    loadCriticalInfrastructure({ ...rpcParams, dataset_id: criticalInfraDatasetId.value })
+  } else {
+    criticalInfrastructure.value = []
+  }
   await Promise.all([
-    loadCriticalInfrastructure(rpcParams),
     loadBreakdown(rpcParams),
     loadCompleteness(rpcParams),
   ])
@@ -330,17 +376,35 @@ onMounted(async () => {
 
     <template v-else>
       <div class="impact-event">
-        <h4>{{ selectedEvent.title }}</h4>
-        <div class="impact-event-meta">
-          <span>{{ t('disasters.' + selectedEvent.type) }}</span>
-          <span>{{ t('severity.' + selectedEvent.severity) }}</span>
+        <div class="impact-event-main">
+          <h4>{{ selectedEvent.title }}</h4>
+          <div class="impact-event-meta">
+            <span>{{ t('disasters.' + selectedEvent.type) }}</span>
+            <span>{{ t('severity.' + selectedEvent.severity) }}</span>
+          </div>
+          <svg v-if="trend" class="trend-sparkline" viewBox="0 0 100 30" preserveAspectRatio="none">
+            <polyline
+              :points="trend.points.map((v, i) => `${(i / (trend.points.length - 1 || 1)) * 100},${30 - (v / Math.max(...trend.points, 1)) * 28}`).join(' ')"
+              :class="'trend-' + trend.direction"
+            />
+          </svg>
         </div>
-        <svg v-if="trend" class="trend-sparkline" viewBox="0 0 100 30" preserveAspectRatio="none">
-          <polyline
-            :points="trend.points.map((v, i) => `${(i / (trend.points.length - 1 || 1)) * 100},${30 - (v / Math.max(...trend.points, 1)) * 28}`).join(' ')"
-            :class="'trend-' + trend.direction"
+        <!-- spec 050 US1: vertical intensity control for the map's impact
+             halo — deliberately vertical (drag up = more intense, down =
+             fade out/hidden), unlike this app's other, horizontal
+             layer-opacity sliders. -->
+        <div class="impact-halo-control" :title="t('impact.panel.haloIntensityHint')">
+          <span class="impact-halo-value">{{ Math.round(haloOpacity * 100) }}%</span>
+          <input
+            type="range"
+            class="impact-halo-slider"
+            min="0" max="1" step="0.05"
+            :value="haloOpacity"
+            :aria-label="t('impact.panel.haloIntensity')"
+            @input="emit('update:haloOpacity', Number($event.target.value))"
           />
-        </svg>
+          <span class="impact-halo-label">{{ t('impact.panel.haloIntensity') }}</span>
+        </div>
       </div>
 
       <!-- ── Cascading Risks (spec 049 — map integration of spec 048) ─────── -->
@@ -416,8 +480,9 @@ onMounted(async () => {
           <div v-if="criticalInfrastructure === 'error'" class="impact-notice impact-notice-error">{{ t('impact.panel.error') }}</div>
           <div v-else-if="!criticalInfrastructure || !criticalInfrastructure.length" class="impact-notice">{{ t('impact.panel.criticalInfrastructureEmpty') }}</div>
           <ul v-else class="impact-critical-list">
-            <li v-for="f in criticalInfrastructure" :key="f.id">
-              {{ t('assetCategory.' + f.asset_category, f.asset_category) }} — {{ f.metric_value }}
+            <li v-for="[category, count] in criticalInfrastructureSummary" :key="category">
+              <span>{{ t('assetCategory.' + category, category) }}</span>
+              <span class="impact-critical-count">{{ count.toLocaleString() }}</span>
             </li>
           </ul>
         </div>
@@ -462,6 +527,18 @@ onMounted(async () => {
   padding: 16px; color: #e2e8f0; font-size: .85rem;
 }
 .impact-empty { color: var(--color-text-muted, #94a3b8); text-align: center; padding: 40px 10px; }
+.impact-event { display: flex; gap: 14px; align-items: flex-start; }
+.impact-event-main { flex: 1; min-width: 0; }
+.impact-halo-control {
+  display: flex; flex-direction: column; align-items: center; gap: 4px;
+  flex-shrink: 0; padding-top: 2px;
+}
+.impact-halo-value { font-size: .68rem; color: #ef4444; font-weight: 600; }
+.impact-halo-label { font-size: .6rem; color: var(--color-text-muted, #94a3b8); text-align: center; max-width: 48px; line-height: 1.2; }
+.impact-halo-slider {
+  writing-mode: vertical-lr; direction: rtl;
+  width: 6px; height: 90px; accent-color: #ef4444; cursor: pointer;
+}
 .impact-event h4 { margin: 0 0 6px; font-size: 1rem; }
 .impact-event-meta { display: flex; gap: 8px; font-size: .75rem; color: var(--color-text-muted, #94a3b8); margin-bottom: 8px; }
 .trend-sparkline { width: 100%; height: 30px; margin-bottom: 12px; }
@@ -517,6 +594,8 @@ onMounted(async () => {
 .impact-critical, .impact-breakdown { margin-bottom: 14px; }
 .impact-critical h5, .impact-breakdown h5 { margin: 0 0 8px; font-size: .8rem; }
 .impact-critical-list, .impact-breakdown-list { list-style: none; padding: 0; margin: 0; font-size: .78rem; display: flex; flex-direction: column; gap: 6px; }
+.impact-critical-list li { display: flex; justify-content: space-between; }
+.impact-critical-count { color: #22c55e; font-weight: 600; }
 .impact-breakdown-list li { display: flex; justify-content: space-between; }
 .impact-breakdown-toggle { display: flex; gap: 6px; margin-bottom: 8px; }
 .impact-breakdown-toggle button {

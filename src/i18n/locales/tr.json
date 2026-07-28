@@ -431,7 +431,9 @@
       "expand": "Etki analizini aç",
       "autoSummaryTitle": "Etkilenen Kaynaklar (Otomatik)",
       "autoSummaryEmpty": "Bu ülke için etkilenme veri seti bulunmuyor.",
-      "detailedTitle": "Detaylı Analiz"
+      "detailedTitle": "Detaylı Analiz",
+      "haloIntensity": "Etki Halkası Yoğunluğu",
+      "haloIntensityHint": "Yukarı çekince haritadaki etki halkası belirginleşir, aşağı çekince kaybolur."
     },
     "geocoding": {
       "label": "Haritada ülke, il, adres veya koordinat ara",
@@ -855,7 +857,8 @@
       "villageOption": "Köyler",
       "unavailableTooltip": "Bu ülke için bu seviyede sınır verisi mevcut değil",
       "populationLabel": "Nüfus"
-    }
+    },
+    "haloSeverityDisclaimer": "Bu, olay merkezine mesafeye dayalı kaba bir tahmindir — gerçek bir hasar değerlendirmesi değildir."
   },
   "admin": {
     "drillResponseTime": "Tepki Süresi",

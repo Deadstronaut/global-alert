@@ -431,7 +431,9 @@
       "expand": "Expand impact analysis",
       "autoSummaryTitle": "Affected Resources (Automatic)",
       "autoSummaryEmpty": "No exposure datasets available for this country.",
-      "detailedTitle": "Detailed Analysis"
+      "detailedTitle": "Detailed Analysis",
+      "haloIntensity": "Impact Halo Intensity",
+      "haloIntensityHint": "Drag up to intensify the map's impact halo, drag down to fade it out."
     },
     "geocoding": {
       "label": "Search country, province, address, or coordinates on the map",
@@ -855,7 +857,8 @@
       "villageOption": "Villages",
       "unavailableTooltip": "No boundary data available for this country at this level",
       "populationLabel": "Population"
-    }
+    },
+    "haloSeverityDisclaimer": "This is a rough distance-from-epicenter estimate — not a confirmed damage assessment."
   },
   "admin": {
     "drillResponseTime": "Response Time",

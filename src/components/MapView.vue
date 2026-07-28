@@ -30,7 +30,9 @@ import { useAuthStore } from '@/stores/auth.js'
 import { supabase } from '@/services/api/config.js'
 import { getShelterMarkerColor, getShelterMarkerIcon } from '@/services/shelterMarkerStyle.js'
 import { useExposureLayersStore } from '@/stores/exposureLayers.js'
-import { colorForDataset, isPopulationSource, isGridMetricSource, populationFillExpression, gridMetricFillExpression, rampForGridMetric, POPULATION_RAMP } from '@/utils/exposureLayerColor.js'
+import { colorForDataset, isPopulationSource, isGridMetricSource, populationFillExpression, gridMetricFillExpression, rampForGridMetric, POPULATION_RAMP, HALO_SEVERITY_RAMP } from '@/utils/exposureLayerColor.js'
+import { circlePolygon, distanceKm } from '@/utils/circleGeometry.js'
+import { defaultBufferRadiusKm } from '@/lib/hazardBuffer.js'
 import { buildFeaturePopupHtml } from '@/utils/exposureFeaturePopup.js'
 import { friendlyDatasetLabel } from '@/utils/exposureLayerLabel.js'
 import { formatPopulationLabel } from '@/utils/formatPopulationLabel.js'
@@ -234,13 +236,24 @@ async function addExposureLayer(dataset) {
     // instead of the generic comma-separated formatMetricValueLabel used by
     // every other gridded metric (SPI/anomaly/discharge values are small
     // floats that already fit).
+    // osm-buildings' metric_value is always 1 (one row per facility, not a
+    // real count) — labeling every single point "1" is meaningless clutter
+    // (live-testing finding, user-reported: a whole campus of buildings each
+    // showing "1"). The facility's own name is far more useful there.
+    const isCriticalInfra = dataset.source_name === 'osm-buildings'
     const buildLabel = isPopulationSource(dataset.source_name) ? formatPopulationLabel : formatMetricValueLabel
     geojson = {
       type: 'FeatureCollection',
       features: data.map((row) => ({
         type: 'Feature',
         geometry: JSON.parse(row.geom_geojson),
-        properties: { ...row.properties, __metricValue: row.metric_value, __metricValueLabel: buildLabel(row.metric_value) },
+        properties: {
+          ...row.properties,
+          __metricValue: row.metric_value,
+          __metricValueLabel: isCriticalInfra
+            ? String(row.properties?.name ?? '').slice(0, 28)
+            : buildLabel(row.metric_value),
+        },
       })),
     }
     exposureFeatureCache.set(dataset.id, geojson)
@@ -306,7 +319,15 @@ async function addExposureLayer(dataset) {
       // "shrinking" even though it's technically constant. Grows from 14px
       // at VALUE_LABEL_MINZOOM (8) to 23px by zoom 14 (~30% bigger than the
       // original 11-18 range, per live legibility feedback 2026-07-23).
-      'text-size': ['interpolate', ['linear'], ['zoom'], VALUE_LABEL_MINZOOM, 14, 14, 23],
+      // osm-buildings' labels are facility NAMES (longer strings than every
+      // other source's short numeric label) — live-testing finding,
+      // user-reported: at the very close zoom this app's 3D-building view
+      // encourages, the same 23px cap read as oversized next to small
+      // building footprints, so this source gets its own gentler curve
+      // (caps lower and tapers back down instead of staying flat past z14).
+      'text-size': dataset.source_name === 'osm-buildings'
+        ? ['interpolate', ['linear'], ['zoom'], VALUE_LABEL_MINZOOM, 11, 14, 15, 18, 12]
+        : ['interpolate', ['linear'], ['zoom'], VALUE_LABEL_MINZOOM, 14, 14, 23],
       'text-allow-overlap': false,
       visibility: 'visible',
     },
@@ -322,14 +343,19 @@ async function addExposureLayer(dataset) {
     map.on('click', `${sourceId}${suffix}`, (e) => {
       const f = e.features?.[0]
       if (!f) return
-      const { __metricValue, __metricValueLabel, ...properties } = f.properties ?? {}
+      const { __metricValue, __metricValueLabel, __haloSeverity, ...properties } = f.properties ?? {}
       if (exposurePopup) exposurePopup.remove()
       exposurePopup = new maplibregl.Popup({ offset: 12, className: 'modern-popup-container' })
         .setLngLat(e.lngLat)
-        .setHTML(buildFeaturePopupHtml(t, dataset, __metricValue, properties))
+        .setHTML(buildFeaturePopupHtml(t, dataset, __metricValue, properties, __haloSeverity))
         .addTo(map)
     })
   }
+
+  // spec 050 US2: this dataset's points may need to render already-colored
+  // by distance from a currently-selected event (e.g. the user toggled the
+  // critical-infrastructure layer on AFTER already selecting an event).
+  if (dataset.source_name === 'osm-buildings') updateCriticalInfraSeverityColoring()
 }
 
 function removeExposureLayerRendering(dataset) {
@@ -670,6 +696,112 @@ function setExposureLayerOpacity(dataset, value) {
 // Impact Analysis (spec 008): selected event for the split-view side panel,
 // set from marker clicks below — independent of the existing popup behavior.
 const selectedImpactEvent = ref(null)
+
+// Impact halo (spec 050 US1/US2): a translucent circle at the selected
+// event's existing defaultBufferRadiusKm() radius, plus distance-graded
+// severity coloring for critical-infrastructure points inside it. Purely
+// client-side — no new network round-trip, reuses data already loaded for
+// the map (SC-001/SC-002 in spec.md).
+const haloOpacity = ref(0.6) // 0-1, driven by ImpactPanel's vertical slider
+// ImpactPanel is the source of truth for the radius actually in use (it
+// accounts for the user's manual "Yarıçap geçersiz kılma" override, spec 050
+// US1 follow-up) — falls back to the raw defaultBufferRadiusKm() only
+// before ImpactPanel has had a chance to report in (e.g. the instant an
+// event is first selected).
+const externalHaloRadiusKm = ref(null)
+const haloRadiusKm = computed(() => {
+  if (!selectedImpactEvent.value) return null
+  return externalHaloRadiusKm.value ?? defaultBufferRadiusKm(selectedImpactEvent.value)
+})
+
+function updateImpactHalo() {
+  if (!map || !mapLoaded || !map.getSource('impact-halo')) return
+  const event = selectedImpactEvent.value
+  if (!event || haloRadiusKm.value == null) {
+    map.getSource('impact-halo').setData({ type: 'FeatureCollection', features: [] })
+    map.setPaintProperty('impact-halo-fill', 'fill-opacity', 0)
+    map.setPaintProperty('impact-halo-line', 'line-opacity', 0)
+    updateCriticalInfraSeverityColoring()
+    return
+  }
+  const polygon = circlePolygon(event.lat, event.lng, haloRadiusKm.value)
+  map.getSource('impact-halo').setData({ type: 'FeatureCollection', features: [{ type: 'Feature', geometry: polygon, properties: {} }] })
+  map.setPaintProperty('impact-halo-fill', 'fill-opacity', haloOpacity.value * 0.25)
+  map.setPaintProperty('impact-halo-line', 'line-opacity', haloOpacity.value)
+  updateCriticalInfraSeverityColoring()
+}
+
+// A feature's representative point for distance purposes — its own
+// coordinate for a Point, otherwise a simple average of the outer ring's
+// vertices (good enough at halo-radius scale; not a true area centroid, but
+// osmBuildingsFetch.ts's `nwr[...]` Overpass query returns some critical
+// facilities as ways/polygons (e.g. a whole hospital/campus compound), not
+// just point nodes — live-testing finding, user-reported: a large campus
+// polygon rendered with the flat fixed color, never picking up US2's
+// distance grading at all, because only the Point sub-layer was recolored).
+function representativePoint(geometry) {
+  if (geometry.type === 'Point') return geometry.coordinates
+  const ring = geometry.type === 'Polygon' ? geometry.coordinates[0] : geometry.type === 'MultiPolygon' ? geometry.coordinates[0][0] : null
+  if (!ring || ring.length === 0) return null
+  const sum = ring.reduce((acc, [lng, lat]) => [acc[0] + lng, acc[1] + lat], [0, 0])
+  return [sum[0] / ring.length, sum[1] / ring.length]
+}
+
+// US2: recolors the already-loaded osm-buildings (critical-infrastructure)
+// exposure layer's points AND polygons by distance from the selected event,
+// IF that layer happens to be toggled visible on the map. Mutates the
+// cached GeoJSON's feature properties in place (no re-fetch) and re-sets
+// the source data + paint expressions; clears back to the fixed violet
+// color when no event is selected or the layer isn't on.
+function updateCriticalInfraSeverityColoring() {
+  if (!map) return
+  const criticalInfraDataset = exposureLayersStore.datasets.find((d) => d.source_name === 'osm-buildings')
+  if (!criticalInfraDataset) return
+  const sourceId = exposureSourceId(criticalInfraDataset)
+  const source = map.getSource(sourceId)
+  const geojson = exposureFeatureCache.get(criticalInfraDataset.id)
+  if (!source || !geojson) return
+
+  const event = selectedImpactEvent.value
+  const radius = haloRadiusKm.value
+  const pointLayerId = `${sourceId}-point`
+  const fillLayerId = `${sourceId}-fill`
+  if (!map.getLayer(pointLayerId)) return
+
+  const fixedColor = colorForDataset(criticalInfraDataset)
+  if (!event || radius == null) {
+    for (const feature of geojson.features) delete feature.properties.__haloSeverity
+    source.setData(geojson)
+    map.setPaintProperty(pointLayerId, 'circle-color', fixedColor)
+    if (map.getLayer(fillLayerId)) map.setPaintProperty(fillLayerId, 'fill-color', fixedColor)
+    return
+  }
+
+  for (const feature of geojson.features) {
+    const point = representativePoint(feature.geometry)
+    if (!point) continue
+    const [lng, lat] = point
+    const d = distanceKm(event.lat, event.lng, lat, lng)
+    feature.properties.__haloSeverity = d <= radius ? 1 - Math.min(d / radius, 1) : null
+  }
+  source.setData(geojson)
+  const severityColorExpression = [
+    'case',
+    ['==', ['get', '__haloSeverity'], null], fixedColor,
+    ['interpolate', ['linear'], ['get', '__haloSeverity'],
+      0, HALO_SEVERITY_RAMP[0],
+      1, HALO_SEVERITY_RAMP[HALO_SEVERITY_RAMP.length - 1]],
+  ]
+  map.setPaintProperty(pointLayerId, 'circle-color', severityColorExpression)
+  if (map.getLayer(fillLayerId)) map.setPaintProperty(fillLayerId, 'fill-color', severityColorExpression)
+}
+
+watch(selectedImpactEvent, () => {
+  externalHaloRadiusKm.value = null // avoid briefly reusing the previous event's override radius
+  updateImpactHalo()
+})
+watch(haloOpacity, () => updateImpactHalo())
+watch(externalHaloRadiusKm, () => updateImpactHalo())
 
 function onLocationSelected(location) {
   if (!map) return
@@ -1076,6 +1208,25 @@ function addSourcesAndLayers() {
   map.addSource('disaster-heat', {
     type: 'geojson',
     data: { type: 'FeatureCollection', features: [] },
+  })
+
+  // Impact halo (spec 050 US1) — starts fully transparent; updateImpactHalo()
+  // drives geometry/opacity once an event is selected.
+  map.addSource('impact-halo', {
+    type: 'geojson',
+    data: { type: 'FeatureCollection', features: [] },
+  })
+  map.addLayer({
+    id: 'impact-halo-fill',
+    type: 'fill',
+    source: 'impact-halo',
+    paint: { 'fill-color': '#dc2626', 'fill-opacity': 0 },
+  })
+  map.addLayer({
+    id: 'impact-halo-line',
+    type: 'line',
+    source: 'impact-halo',
+    paint: { 'line-color': '#dc2626', 'line-width': 2, 'line-opacity': 0 },
   })
 
   map.addSource('disaster-hex', {
@@ -2778,7 +2929,13 @@ onBeforeUnmount(() => {
         :class="{ flipped: uiStore.settingsPanelOpen }"
       >
         <div class="dock-face dock-face-front">
-          <ImpactPanel :selected-event="selectedImpactEvent" :country-code="selectedCountryCode" />
+          <ImpactPanel
+            :selected-event="selectedImpactEvent"
+            :country-code="selectedCountryCode"
+            :halo-opacity="haloOpacity"
+            @update:halo-opacity="haloOpacity = $event"
+            @update:halo-radius-km="externalHaloRadiusKm = $event"
+          />
         </div>
         <div class="dock-face dock-face-back">
           <SettingsPanel hide-header />
@@ -3764,6 +3921,14 @@ onBeforeUnmount(() => {
 
 .exposure-popup-empty {
   font-style: italic;
+}
+
+.popup-halo-disclaimer {
+  font-size: 10.5px;
+  color: #f59e0b;
+  font-style: italic;
+  margin: 6px 0 0;
+  line-height: 1.4;
 }
 
 .popup-metrics {

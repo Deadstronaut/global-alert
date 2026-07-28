@@ -66,26 +66,43 @@ export function aggregatePopulationByProvince(populationFeatures, provinceFeatur
     }
   }
 
+  // User-reported: the same province/district name repeated several times
+  // in the same area when panning ("Aydın Aydın Aydın..."). Root cause:
+  // this function emits one label per INPUT feature, but a boundary source
+  // can carry the same named province/district as several separate Feature
+  // entries (islands, disconnected mainland fragments) instead of one
+  // MultiPolygon — every fragment got its own label at its own centroid.
+  // Every fragment still needs its own FILL feature (so all islands still
+  // get colored), but only the first-seen fragment per name keeps a label —
+  // the rest get an empty __provinceLabel so nothing renders there.
+  const labeledNames = new Set()
+
   return {
     type: 'FeatureCollection',
-    features: provinces.map((feature, i) => ({
-      type: 'Feature',
-      geometry: feature.geometry,
-      properties: {
-        ...feature.properties,
-        provinceName: feature.properties?.[nameProperty],
-        totalPopulation: totals[i],
-        // Mirrors the hexagon layer's own property name so
-        // populationFillExpression() (exposureLayerColor.js) can render this
-        // FeatureCollection with zero new color logic — same value,
-        // duplicated under the name that function already reads.
-        __metricValue: totals[i],
-        // Always-on map label (province view has only dozens of features,
-        // not tens of thousands like the hexagon grid, so no zoom-gating is
-        // needed — MapLibre's own text-allow-overlap:false handles crowding
-        // for the smallest provinces at low zoom).
-        __provinceLabel: `${feature.properties?.[nameProperty] ?? ''}\n${formatPopulationLabel(totals[i])}`,
-      },
-    })),
+    features: provinces.map((feature, i) => {
+      const name = feature.properties?.[nameProperty]
+      const isFirstFragmentForThisName = !labeledNames.has(name)
+      if (isFirstFragmentForThisName) labeledNames.add(name)
+
+      return {
+        type: 'Feature',
+        geometry: feature.geometry,
+        properties: {
+          ...feature.properties,
+          provinceName: name,
+          totalPopulation: totals[i],
+          // Mirrors the hexagon layer's own property name so
+          // populationFillExpression() (exposureLayerColor.js) can render this
+          // FeatureCollection with zero new color logic — same value,
+          // duplicated under the name that function already reads.
+          __metricValue: totals[i],
+          // Always-on map label (province view has only dozens of features,
+          // not tens of thousands like the hexagon grid, so no zoom-gating is
+          // needed — MapLibre's own text-allow-overlap:false handles crowding
+          // for the smallest provinces at low zoom).
+          __provinceLabel: isFirstFragmentForThisName ? `${name ?? ''}\n${formatPopulationLabel(totals[i])}` : '',
+        },
+      }
+    }),
   }
 }

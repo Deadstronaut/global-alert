@@ -838,7 +838,8 @@
       "glofasRiverDischarge": "Nehir Debisi (GloFAS)",
       "osmBuildings": "Kritik Tesisler (Bina)",
       "chirps": "Yağış (CHIRPS)",
-      "demSlope": "Dik Arazi / Heyelan Riski (DEM Eğim)"
+      "demSlope": "Dik Arazi / Heyelan Riski (DEM Eğim)",
+      "buildingFootprints": "Bina Yoğunluğu"
     },
     "countryLabel": {
       "tr": "Türkiye",

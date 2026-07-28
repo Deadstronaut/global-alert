@@ -31,6 +31,7 @@ const SOURCE_LABEL_KEYS = {
   'osm-buildings': 'exposureLayers.sourceLabel.osmBuildings',
   chirps: 'exposureLayers.sourceLabel.chirps',
   dem_slope: 'exposureLayers.sourceLabel.demSlope',
+  building_footprints: 'exposureLayers.sourceLabel.buildingFootprints',
 }
 
 const COUNTRY_LABEL_KEYS = {

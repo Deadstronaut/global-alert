@@ -838,7 +838,8 @@
       "glofasRiverDischarge": "River Discharge (GloFAS)",
       "osmBuildings": "Critical Facilities (Buildings)",
       "chirps": "Rainfall (CHIRPS)",
-      "demSlope": "Steep Terrain / Landslide Risk (DEM Slope)"
+      "demSlope": "Steep Terrain / Landslide Risk (DEM Slope)",
+      "buildingFootprints": "Building Density"
     },
     "countryLabel": {
       "tr": "Turkey",

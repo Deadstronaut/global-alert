@@ -74,4 +74,20 @@ describe('aggregatePopulationByProvince', () => {
     const a = result.features.find((f) => f.properties.provinceName === 'Province A')
     expect(a.properties.__provinceLabel).toBe('Province A\n482K')
   })
+
+  it('user-reported: a province split into multiple disconnected fragments (islands) only labels the first one, not every fragment', () => {
+    const fragmentedProvinces = {
+      type: 'FeatureCollection',
+      features: [
+        { type: 'Feature', properties: { shapeName: 'Aydın' }, geometry: { type: 'Polygon', coordinates: [[[0, 0], [0, 10], [10, 10], [10, 0], [0, 0]]] } },
+        // Same name, a separate disconnected fragment (e.g. an island) far from the first
+        { type: 'Feature', properties: { shapeName: 'Aydın' }, geometry: { type: 'Polygon', coordinates: [[[40, 0], [40, 10], [50, 10], [50, 0], [40, 0]]] } },
+        { type: 'Feature', properties: { shapeName: 'Province B' }, geometry: { type: 'Polygon', coordinates: [[[20, 0], [20, 10], [30, 10], [30, 0], [20, 0]]] } },
+      ],
+    }
+    const result = aggregatePopulationByProvince({ type: 'FeatureCollection', features: [] }, fragmentedProvinces, 'shapeName')
+    expect(result.features).toHaveLength(3) // every fragment still gets its own FILL feature
+    const aydinLabels = result.features.filter((f) => f.properties.provinceName === 'Aydın').map((f) => f.properties.__provinceLabel)
+    expect(aydinLabels.filter((label) => label !== '')).toHaveLength(1) // but only one of them carries a visible label
+  })
 })

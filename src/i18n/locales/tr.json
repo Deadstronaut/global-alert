@@ -471,7 +471,12 @@
       "save": "Göstergeyi Kaydet",
       "saving": "Kaydediliyor...",
       "listTitle": "Yapılandırılmış Göstergeler",
-      "empty": "Henüz risk göstergesi yapılandırılmadı."
+      "empty": "Henüz risk göstergesi yapılandırılmadı.",
+      "formTitleEdit": "Göstergeyi Düzenle",
+      "datasetLockedWhileEditing": "Düzenlerken veri seti değiştirilemez.",
+      "update": "Güncelle",
+      "cancelEdit": "Vazgeç",
+      "edit": "Düzenle"
     },
     "dashboard": {
       "countryCode": "Ülke",
@@ -593,6 +598,11 @@
       "boundaryUnresolvable": "Bu konum için idari bölge belirlenemedi — burada zincirleme risk değerlendirmesi yapılamıyor.",
       "errors": {
         "evaluationFailed": "Zincirleme risk değerlendirmesi tamamlanamadı."
+      },
+      "why": {
+        "magnitude": "Büyüklük/Şiddet",
+        "distanceKm": "En yakın kaynağa mesafe",
+        "vulnerabilityScore": "Zafiyet skoru"
       }
     }
   },

@@ -13,6 +13,30 @@ const error = ref(null)
 const saving = ref(false)
 
 const form = ref({ exposureDatasetId: '', category: 'vulnerability', weight: '', normalizeMin: '', normalizeMax: '' })
+// User-reported: save_risk_indicator's own RPC already upserts by
+// exposure_dataset_id (re-saving the same dataset updates its existing row
+// instead of erroring/duplicating), but there was no UI path to discover or
+// use that — a saved indicator could never be revisited. editingId tracks
+// which indicator (if any) the form currently represents, purely to drive
+// the button label/cancel affordance; the actual update behavior is 100%
+// the RPC's pre-existing logic, unchanged.
+const editingId = ref(null)
+
+function startEdit(indicator) {
+  editingId.value = indicator.id
+  form.value = {
+    exposureDatasetId: indicator.exposure_dataset_id,
+    category: indicator.category,
+    weight: indicator.weight,
+    normalizeMin: indicator.normalize_min,
+    normalizeMax: indicator.normalize_max,
+  }
+}
+
+function cancelEdit() {
+  editingId.value = null
+  form.value = { exposureDatasetId: '', category: 'vulnerability', weight: '', normalizeMin: '', normalizeMax: '' }
+}
 
 async function loadData() {
   loading.value = true
@@ -53,6 +77,7 @@ async function saveIndicator() {
     // error (US1 acceptance scenario 3 / T010).
     error.value = err.message
   } else {
+    editingId.value = null
     form.value = { exposureDatasetId: '', category: 'vulnerability', weight: '', normalizeMin: '', normalizeMax: '' }
     await loadData()
   }
@@ -65,13 +90,14 @@ onMounted(loadData)
 <template>
   <div class="risk-indicator-config">
     <div class="risk-form">
-      <h4>{{ t('risk.indicators.formTitle') }}</h4>
+      <h4>{{ editingId ? t('risk.indicators.formTitleEdit') : t('risk.indicators.formTitle') }}</h4>
       <label class="risk-field">
         <span>{{ t('risk.indicators.dataset') }}</span>
-        <select v-model="form.exposureDatasetId">
+        <select v-model="form.exposureDatasetId" :disabled="!!editingId">
           <option value="" disabled>{{ t('risk.indicators.datasetPlaceholder') }}</option>
           <option v-for="d in datasets" :key="d.id" :value="d.id">{{ friendlyDatasetLabel(t, d) }}</option>
         </select>
+        <span v-if="editingId" class="risk-hint">{{ t('risk.indicators.datasetLockedWhileEditing') }}</span>
       </label>
       <label class="risk-field">
         <span>{{ t('risk.indicators.category') }}</span>
@@ -82,7 +108,7 @@ onMounted(loadData)
         </select>
       </label>
       <label class="risk-field">
-        <span>{{ t('risk.indicators.weight') }} ({{ t('risk.indicators.weightHint', { sum: categoryWeightSum(form.category).toFixed(2) }) }})</span>
+        <span>{{ t('risk.indicators.weight') }} ({{ t('risk.indicators.weightHint', { sum: categoryWeightSum(form.category, editingId).toFixed(2) }) }})</span>
         <input v-model="form.weight" type="number" min="0" max="1" step="0.01" :placeholder="t('risk.indicators.weightPlaceholder')" />
       </label>
       <label class="risk-field">
@@ -94,9 +120,12 @@ onMounted(loadData)
         <input v-model="form.normalizeMax" type="number" step="any" :placeholder="t('risk.indicators.normalizeMaxPlaceholder')" />
       </label>
       <p v-if="error" class="risk-error">{{ error }}</p>
-      <button class="btn-save" :disabled="saving" @click="saveIndicator">
-        {{ saving ? t('risk.indicators.saving') : t('risk.indicators.save') }}
-      </button>
+      <div class="risk-form-actions">
+        <button class="btn-save" :disabled="saving" @click="saveIndicator">
+          {{ saving ? t('risk.indicators.saving') : (editingId ? t('risk.indicators.update') : t('risk.indicators.save')) }}
+        </button>
+        <button v-if="editingId" type="button" class="btn-cancel-edit" @click="cancelEdit">{{ t('risk.indicators.cancelEdit') }}</button>
+      </div>
     </div>
 
     <div class="risk-list">
@@ -108,6 +137,7 @@ onMounted(loadData)
           <strong>{{ friendlyDatasetLabel(t, i.exposure_datasets) }}</strong>
           <span class="risk-meta">{{ t(`risk.indicators.category${i.category === 'coping_capacity' ? 'CopingCapacity' : i.category === 'exposure' ? 'Exposure' : 'Vulnerability'}`) }} · {{ (i.weight * 100).toFixed(0) }}%</span>
         </div>
+        <button type="button" class="btn-edit-indicator" @click="startEdit(i)">{{ t('risk.indicators.edit') }}</button>
       </div>
     </div>
   </div>
@@ -131,9 +161,19 @@ onMounted(loadData)
   border-radius: 8px; color: #22c55e; font-weight: 600; cursor: pointer;
 }
 .btn-save:disabled { opacity: .5; cursor: not-allowed; }
+.risk-form-actions { display: flex; gap: 8px; align-items: center; }
+.btn-cancel-edit {
+  padding: 8px 14px; background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.15);
+  border-radius: 8px; color: #e2e8f0; font-size: .8rem; cursor: pointer;
+}
+.risk-hint { font-size: .68rem; opacity: .8; }
 .risk-row {
   display: flex; align-items: center; justify-content: space-between;
   padding: 8px 0; border-bottom: 1px solid rgba(255,255,255,.06); font-size: .85rem;
 }
 .risk-meta { margin-left: 10px; color: var(--color-text-muted, #94a3b8); font-size: .75rem; }
+.btn-edit-indicator {
+  padding: 4px 12px; background: rgba(77,163,255,.15); border: 1px solid rgba(77,163,255,.35);
+  border-radius: 6px; color: #4da3ff; font-size: .72rem; cursor: pointer; flex-shrink: 0;
+}
 </style>

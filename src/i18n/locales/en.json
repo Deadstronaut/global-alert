@@ -471,7 +471,12 @@
       "save": "Save Indicator",
       "saving": "Saving...",
       "listTitle": "Configured Indicators",
-      "empty": "No risk indicators configured yet."
+      "empty": "No risk indicators configured yet.",
+      "formTitleEdit": "Edit Risk Indicator",
+      "datasetLockedWhileEditing": "Dataset cannot be changed while editing.",
+      "update": "Update Indicator",
+      "cancelEdit": "Cancel",
+      "edit": "Edit"
     },
     "dashboard": {
       "countryCode": "Country",
@@ -593,6 +598,11 @@
       "boundaryUnresolvable": "Could not determine the administrative area for this location — cascading risk evaluation is not available here.",
       "errors": {
         "evaluationFailed": "Cascade evaluation could not be completed."
+      },
+      "why": {
+        "magnitude": "Magnitude",
+        "distanceKm": "Distance to nearest source",
+        "vulnerabilityScore": "Vulnerability score"
       }
     }
   },

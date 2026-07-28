@@ -58,6 +58,24 @@ async function evaluate() {
   evaluating.value = false
 }
 
+// User-reported: the "Why" section used to dump raw JSON
+// ({"magnitude":7.8,"distance_km":1.15...}) — unlabeled decimal numbers
+// that read as coordinates to a non-technical user, easy to mistake for
+// lat/lng. input_values only ever holds a fixed, known set of keys (see
+// evaluate_cascade_rules' jsonb_build_object call) — mapped here to
+// human-readable, translated labels instead of a raw dump.
+const INPUT_VALUE_LABELS = {
+  magnitude: 'risk.cascade.why.magnitude',
+  distance_km: 'risk.cascade.why.distanceKm',
+  vulnerability_score: 'risk.cascade.why.vulnerabilityScore',
+}
+function formattedInputValues(inputValues) {
+  return Object.entries(inputValues ?? {}).map(([key, value]) => ({
+    label: t(INPUT_VALUE_LABELS[key] ?? key),
+    value: typeof value === 'number' ? (key === 'distance_km' ? `${value.toFixed(1)} km` : value.toFixed(1)) : value,
+  }))
+}
+
 defineExpose({ evaluate })
 </script>
 
@@ -109,7 +127,11 @@ defineExpose({ evaluate })
           </p>
           <details class="risk-why">
             <summary>{{ t('risk.cascade.whyLabel') }}</summary>
-            <pre>{{ JSON.stringify(a.input_values, null, 2) }}</pre>
+            <ul class="risk-why-list">
+              <li v-for="f in formattedInputValues(a.input_values)" :key="f.label">
+                <span>{{ f.label }}:</span> <strong>{{ f.value }}</strong>
+              </li>
+            </ul>
           </details>
         </div>
       </div>
@@ -155,5 +177,7 @@ defineExpose({ evaluate })
 .risk-row-block { flex-direction: column; align-items: flex-start; gap: 4px; }
 .risk-recommendation { font-size: .82rem; margin: 2px 0; }
 .risk-why { font-size: .72rem; color: var(--color-text-muted, #94a3b8); cursor: pointer; }
-.risk-why pre { white-space: pre-wrap; font-size: .7rem; margin-top: 4px; }
+.risk-why-list { list-style: none; margin: 6px 0 0; padding: 0; font-size: .75rem; display: flex; flex-direction: column; gap: 3px; }
+.risk-why-list span { color: var(--color-text-muted, #94a3b8); }
+.risk-why-list strong { color: #e2e8f0; margin-left: 4px; }
 </style>

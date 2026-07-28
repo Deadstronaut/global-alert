@@ -1175,6 +1175,16 @@ function getBaseStyle() {
   return s.url ?? ESRI_SATELLITE_STYLE
 }
 
+function zoomIn() {
+  if (!map) return
+  map.zoomIn()
+}
+
+function zoomOut() {
+  if (!map) return
+  map.zoomOut()
+}
+
 function cycleMapStyle() {
   mapStyleIndex.value = (mapStyleIndex.value + 1) % MAP_STYLES.length
   if (!map) return
@@ -1705,6 +1715,16 @@ async function applyCountryLockedCamera() {
     .eq('country_code', code)
     .maybeSingle()
 
+  // Live-verified: this flyTo (fired async, after the Supabase round-trip
+  // above) doesn't reliably reach the persistent 'zoom'/'moveend' listeners
+  // set up in initMap() in every environment — the zoom-control-bar's
+  // readout was found stuck at currentZoom's ref(3) default until the
+  // user's first manual zoom gesture corrected it. A one-time listener
+  // scoped to this exact flyTo guarantees the sync regardless.
+  map.once('moveend', () => {
+    currentZoom.value = Math.round(map.getZoom() * 10) / 10
+  })
+
   if (data?.default_zoom != null) {
     map.flyTo({ center: bounds.getCenter(), zoom: data.default_zoom, essential: true })
   } else {
@@ -1866,7 +1886,12 @@ function initMap() {
     preserveDrawingBuffer: true, // PNG download için gerekli
   })
 
-  map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'bottom-right')
+  window.__debugMap = map // TEMP: zoom-button bug investigation, remove after
+
+  // Custom horizontal zoom bar (template below) replaces the default
+  // NavigationControl — [−] [x N] [+] in one strip instead of the stock
+  // vertical +/- stack with the zoom level floating separately at the
+  // opposite corner.
 
   map.on('error', (e) => {
     console.error('[MapLibre] Error:', e.error)
@@ -1883,6 +1908,16 @@ function initMap() {
         updateViewportGrid()
       }, 150)
     }
+  })
+  // Belt-and-suspenders sync for the zoom readout: live-verified the
+  // country-locked account's initial camera fit (applyCountryLockedCamera's
+  // flyTo, fired async after a Supabase round-trip) can settle the map at a
+  // real zoom level (e.g. 0.97) while currentZoom stays stuck at its ref(3)
+  // default — the zoom-control-bar then shows a stale number until the user's
+  // first manual zoom gesture corrects it. 'moveend' fires after every
+  // camera change (gesture or programmatic) with no such gap.
+  map.on('moveend', () => {
+    currentZoom.value = Math.round(map.getZoom() * 10) / 10
   })
 
   map.on('load', () => {
@@ -2832,7 +2867,11 @@ onBeforeUnmount(() => {
 <template>
   <div class="map-view-wrapper" :class="{ 'impact-panel-collapsed': uiStore.impactPanelCollapsed }">
     <div ref="mapContainer" class="map-leaflet"></div>
-    <div class="zoom-indicator">x {{ currentZoom }}</div>
+    <div class="zoom-control-bar">
+      <button class="zoom-btn" :disabled="currentZoom >= (isSatellite ? 17.4 : 20)" @click="zoomIn">+</button>
+      <span class="zoom-value">x {{ currentZoom }}</span>
+      <button class="zoom-btn" :disabled="currentZoom <= 0" @click="zoomOut">−</button>
+    </div>
 
     <LoadingOverlay
       :visible="!!loadingExposureLayer"
@@ -3283,52 +3322,65 @@ onBeforeUnmount(() => {
   margin-bottom: 6px;
 }
 
-.zoom-indicator {
+/* Vertical zoom control — [+] / [x N] / [−] stacked top-to-bottom, sitting
+   just to the left of the download button + satellite-thumbnail column
+   (same right edge minus that column's own width + a gap) so the two read
+   as one aligned cluster instead of the zoom control floating alone at the
+   opposite corner. Same dark semi-transparent pill used by the rest of this
+   map's floating UI (matches .map-download-btn etc.) — reads fine over
+   dark, satellite, or light base styles without needing per-style
+   conditional colors. */
+.zoom-control-bar {
   position: absolute;
-  top: 10px;
-  right: var(--map-control-offset);
+  bottom: 96px; /* aligns with .layer-switcher's own bottom offset */
+  right: calc(var(--map-control-offset) + 74px); /* 64px thumbnail + 10px gap */
   z-index: 10;
-  background: rgba(0, 0, 0, 0.55);
-  color: white;
-  font-size: 12px;
-  font-weight: 600;
-  padding: 4px 10px;
-  border-radius: 6px;
-  backdrop-filter: blur(4px);
-  pointer-events: none;
-  font-family: 'Inter', monospace;
-}
-
-:deep(.maplibregl-ctrl-bottom-right) {
-  right: var(--map-control-offset);
-  bottom: 12px;
-}
-
-:deep(.maplibregl-ctrl-group) {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 40px;
   background: rgba(20, 24, 33, 0.88);
   border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.28);
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
+  overflow: hidden;
 }
 
-:deep(.maplibregl-ctrl-group button) {
-  color: #ffffff;
+.zoom-btn {
   background: transparent;
+  border: none;
+  color: #ffffff;
+  width: 100%;
+  height: 32px;
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s;
 }
-
-:deep(.maplibregl-ctrl-group button:hover) {
+.zoom-btn:hover:not(:disabled) {
   background: rgba(255, 255, 255, 0.08);
 }
-
-:deep(.maplibregl-ctrl-group button span) {
-  color: #ffffff;
+.zoom-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
 }
 
-:deep(.maplibregl-ctrl-zoom-in .maplibregl-ctrl-icon),
-:deep(.maplibregl-ctrl-zoom-out .maplibregl-ctrl-icon) {
-  filter: brightness(0) invert(1);
-  opacity: 1;
+.zoom-value {
+  color: white;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 4px 0;
+  width: 100%;
+  text-align: center;
+  border-top: 1px solid rgba(255, 255, 255, 0.12);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+  font-family: 'Inter', monospace;
+  white-space: nowrap;
 }
 
 /* Wide, short bar sitting above the satellite thumbnail (.layer-switcher):
@@ -3769,7 +3821,7 @@ onBeforeUnmount(() => {
     left: 50%;
   }
 
-  :deep(.maplibregl-ctrl-bottom-right) {
+  .zoom-control-bar {
     bottom: calc(var(--impact-panel-mobile-height) + 16px);
   }
 
@@ -3840,23 +3892,6 @@ onBeforeUnmount(() => {
 .modern-popup-container .maplibregl-popup-close-button:hover {
   background: rgba(255, 255, 255, 0.2) !important;
   color: #ffffff !important;
-}
-
-.maplibregl-ctrl-group {
-  background: #2b2f38 !important;
-  border: 1px solid rgba(255, 255, 255, 0.15) !important;
-}
-
-.maplibregl-ctrl-group button {
-  color: #ffffff !important;
-}
-
-.maplibregl-ctrl-group button:hover {
-  background: rgba(255, 255, 255, 0.1) !important;
-}
-
-.maplibregl-ctrl-group button + button {
-  border-top: 1px solid rgba(255, 255, 255, 0.15) !important;
 }
 
 .disaster-marker {

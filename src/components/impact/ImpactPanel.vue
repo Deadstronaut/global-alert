@@ -37,6 +37,14 @@ const disaster = useDisasterStore()
 const datasets = ref([])
 const selectedDatasetId = ref(null)
 const radiusOverride = ref(null)
+// spec 050 follow-up: earthquake-only magnitude slider — the halo/analysis
+// radius already comes from defaultBufferRadiusKm() (2^magnitude km for
+// earthquakes), so dragging THIS should recompute the radius through that
+// same formula automatically rather than requiring a manual km typed into
+// radiusOverride. Mutually exclusive with radiusOverride (same "one
+// control wins, not two silently fighting" lesson as the sidebar's
+// duration-slider/calendar fix) — moving one clears the other.
+const magnitudeOverride = ref(null)
 const result = ref(null) // null | { total_value, feature_count } | 'error'
 const analyzing = ref(false)
 const scenarios = ref([])
@@ -98,10 +106,36 @@ async function resolveCascadeBoundary() {
   cascadeBoundaryResolving.value = false
 }
 
+// Hazard types with a real, dedicated magnitude-based radius formula
+// (src/lib/hazardBuffer.js's BUFFER_STRATEGIES) get a slider; anything else
+// only has the generic severity-tier fallback, which isn't a single
+// continuous number a slider could meaningfully drive.
+const MAGNITUDE_SLIDER_CONFIG = {
+  earthquake: { min: 4, max: 9.5, step: 0.1, decimals: 1 },
+  // Wildfire's magnitude is FRP (MW) — real satellite-measured intensity,
+  // heavily right-skewed (most fires are single-digit MW; the slider's
+  // range covers the practical/common range, not rare extreme outliers —
+  // the plain km override field below remains the escape hatch for those).
+  wildfire: { min: 0, max: 500, step: 5, decimals: 0 },
+}
+const magnitudeSliderConfig = computed(() => MAGNITUDE_SLIDER_CONFIG[props.selectedEvent?.type] ?? null)
+
 const effectiveRadiusKm = computed(() => {
   if (radiusOverride.value !== null && radiusOverride.value !== '') return Number(radiusOverride.value)
+  if (magnitudeOverride.value !== null && magnitudeSliderConfig.value) {
+    return defaultBufferRadiusKm({ ...props.selectedEvent, magnitude: magnitudeOverride.value })
+  }
   return props.selectedEvent ? defaultBufferRadiusKm(props.selectedEvent) : null
 })
+
+function applyMagnitudeOverride(value) {
+  magnitudeOverride.value = Number(value)
+  radiusOverride.value = null // mutually exclusive — a magnitude change should drive the radius, not fight a manual km value
+}
+
+function clearMagnitudeOverride() {
+  magnitudeOverride.value = null
+}
 
 // spec 050 US1 follow-up (live-testing finding, user-reported): the map's
 // impact halo used to compute its own radius independently from the raw
@@ -354,6 +388,7 @@ async function exportGeoJson() {
 watch(() => props.selectedEvent, () => {
   result.value = null
   radiusOverride.value = null
+  magnitudeOverride.value = null
   loadedScenario.value = null
   criticalInfrastructure.value = null
   breakdown.value = null
@@ -450,9 +485,18 @@ onMounted(async () => {
             <option v-for="d in filteredDatasets" :key="d.id" :value="d.id">{{ friendlyDatasetLabel(t, d) }}</option>
           </select>
         </label>
+        <label v-if="magnitudeSliderConfig" class="impact-field">
+          <span>{{ t('impact.panel.magnitudeOverride') }}: <strong>{{ (magnitudeOverride ?? selectedEvent.magnitude ?? 0).toFixed(magnitudeSliderConfig.decimals) }}</strong> → {{ t('impact.panel.defaultRadius', { km: Math.round(effectiveRadiusKm ?? 0) }) }}</span>
+          <input
+            type="range" :min="magnitudeSliderConfig.min" :max="magnitudeSliderConfig.max" :step="magnitudeSliderConfig.step"
+            :value="magnitudeOverride ?? selectedEvent.magnitude ?? magnitudeSliderConfig.min"
+            @input="applyMagnitudeOverride($event.target.value)"
+          />
+          <button v-if="magnitudeOverride !== null" type="button" class="impact-magnitude-reset" @click="clearMagnitudeOverride">{{ t('impact.panel.magnitudeReset') }}</button>
+        </label>
         <label class="impact-field">
           <span>{{ t('impact.panel.radiusOverride') }} ({{ t('impact.panel.defaultRadius', { km: defaultBufferRadiusKm(selectedEvent) }) }})</span>
-          <input type="number" v-model="radiusOverride" :placeholder="String(defaultBufferRadiusKm(selectedEvent))" />
+          <input type="number" v-model="radiusOverride" :placeholder="String(defaultBufferRadiusKm(selectedEvent))" @input="magnitudeOverride = null" />
         </label>
         <button class="btn-analyze" :disabled="!selectedDatasetId || analyzing" @click="runAnalysis">
           {{ analyzing ? t('impact.panel.analyzing') : t('impact.panel.runAnalysis') }}
@@ -550,6 +594,11 @@ onMounted(async () => {
 .impact-field input, .impact-field select {
   background: #1e2330; border: 1px solid rgba(255,255,255,.15); border-radius: 8px;
   padding: 6px 10px; color: #e2e8f0; font-size: .82rem;
+}
+.impact-field input[type="range"] { background: none; border: none; padding: 0; accent-color: #ef4444; }
+.impact-magnitude-reset {
+  align-self: flex-start; background: none; border: none; padding: 0; margin-top: 2px;
+  color: #4da3ff; font-size: .7rem; cursor: pointer; text-decoration: underline;
 }
 .btn-analyze {
   width: 100%; padding: 8px; background: rgba(77,163,255,.2); border: 1px solid rgba(77,163,255,.4);

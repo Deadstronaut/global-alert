@@ -433,7 +433,9 @@
       "autoSummaryEmpty": "Bu ülke için etkilenme veri seti bulunmuyor.",
       "detailedTitle": "Detaylı Analiz",
       "haloIntensity": "Etki Halkası Yoğunluğu",
-      "haloIntensityHint": "Yukarı çekince haritadaki etki halkası belirginleşir, aşağı çekince kaybolur."
+      "haloIntensityHint": "Yukarı çekince haritadaki etki halkası belirginleşir, aşağı çekince kaybolur.",
+      "magnitudeOverride": "Büyüklük (simülasyon)",
+      "magnitudeReset": "Gerçek büyüklüğe dön"
     },
     "geocoding": {
       "label": "Haritada ülke, il, adres veya koordinat ara",

@@ -433,7 +433,9 @@
       "autoSummaryEmpty": "No exposure datasets available for this country.",
       "detailedTitle": "Detailed Analysis",
       "haloIntensity": "Impact Halo Intensity",
-      "haloIntensityHint": "Drag up to intensify the map's impact halo, drag down to fade it out."
+      "haloIntensityHint": "Drag up to intensify the map's impact halo, drag down to fade it out.",
+      "magnitudeOverride": "Magnitude (simulation)",
+      "magnitudeReset": "Reset to real magnitude"
     },
     "geocoding": {
       "label": "Search country, province, address, or coordinates on the map",

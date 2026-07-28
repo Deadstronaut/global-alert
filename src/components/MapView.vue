@@ -355,7 +355,10 @@ async function addExposureLayer(dataset) {
   // spec 050 US2: this dataset's points may need to render already-colored
   // by distance from a currently-selected event (e.g. the user toggled the
   // critical-infrastructure layer on AFTER already selecting an event).
-  if (dataset.source_name === 'osm-buildings') updateCriticalInfraSeverityColoring()
+  if (dataset.source_name === 'osm-buildings') {
+    updateCriticalInfraSeverityColoring()
+    applyCriticalInfraCategoryFilter()
+  }
 }
 
 function removeExposureLayerRendering(dataset) {
@@ -802,6 +805,42 @@ watch(selectedImpactEvent, () => {
 })
 watch(haloOpacity, () => updateImpactHalo())
 watch(externalHaloRadiusKm, () => updateImpactHalo())
+
+// Critical-infrastructure category filter (user-requested follow-up to
+// spec 050): "deprem gece oldu, okulları düşünmemize gerek yok, sağlık
+// ocaklarını düşünmeliyiz" — lets an operator show/hide facility
+// categories independently (e.g. hide schools at night, hide a category
+// once its buildings are known to be destroyed), same visual pattern as
+// the population layer's hexagon/province/district/village toggle row,
+// but purely a client-side MapLibre filter — no new fetch, the points are
+// already loaded.
+const CRITICAL_INFRA_CATEGORIES = ['critical_infrastructure_health', 'critical_infrastructure_education', 'critical_infrastructure_emergency']
+const criticalInfraCategoryFilter = ref(Object.fromEntries(CRITICAL_INFRA_CATEGORIES.map((c) => [c, true])))
+
+function isCriticalInfraCategoryActive(category) {
+  return criticalInfraCategoryFilter.value[category] !== false
+}
+
+function toggleCriticalInfraCategory(category) {
+  criticalInfraCategoryFilter.value = { ...criticalInfraCategoryFilter.value, [category]: !isCriticalInfraCategoryActive(category) }
+  applyCriticalInfraCategoryFilter()
+}
+
+function applyCriticalInfraCategoryFilter() {
+  if (!map) return
+  const criticalInfraDataset = exposureLayersStore.datasets.find((d) => d.source_name === 'osm-buildings')
+  if (!criticalInfraDataset) return
+  const sourceId = exposureSourceId(criticalInfraDataset)
+  const activeCategories = CRITICAL_INFRA_CATEGORIES.filter((c) => isCriticalInfraCategoryActive(c))
+  const categoryFilter = ['in', ['get', 'asset_category'], ['literal', activeCategories]]
+
+  const fillLayerId = `${sourceId}-fill`
+  const lineLayerId = `${sourceId}-line`
+  const pointLayerId = `${sourceId}-point`
+  if (map.getLayer(fillLayerId)) map.setFilter(fillLayerId, ['all', ['==', ['geometry-type'], 'Polygon'], categoryFilter])
+  if (map.getLayer(lineLayerId)) map.setFilter(lineLayerId, ['all', ['in', ['geometry-type'], ['literal', ['LineString', 'Polygon']]], categoryFilter])
+  if (map.getLayer(pointLayerId)) map.setFilter(pointLayerId, ['all', ['==', ['geometry-type'], 'Point'], categoryFilter])
+}
 
 function onLocationSelected(location) {
   if (!map) return
@@ -3029,6 +3068,23 @@ onBeforeUnmount(() => {
               :title="isRegionViewAvailable(dataset, 'village') ? '' : t('exposureLayers.regionView.unavailableTooltip')"
               @click="toggleRegionLevel(dataset, 'village')"
             >{{ regionViewLoadingFor(dataset, 'village') ? t('exposureLayers.loading') : t('exposureLayers.regionView.villageOption') }}</button>
+          </div>
+          <!-- spec 050 follow-up: category filter for critical infrastructure
+               (schools/health/emergency) — e.g. hide schools for a
+               night-time event, or after a category's buildings are known
+               destroyed. Pure client-side filter, no new fetch. -->
+          <div
+            v-if="dataset.source_name === 'osm-buildings' && isLayerVisible(`exposure-dataset-${dataset.id}`)"
+            class="population-view-toggle"
+          >
+            <button
+              v-for="category in CRITICAL_INFRA_CATEGORIES"
+              :key="category"
+              type="button"
+              class="population-view-btn"
+              :class="{ active: isCriticalInfraCategoryActive(category) }"
+              @click="toggleCriticalInfraCategory(category)"
+            >{{ t('assetCategory.' + category, category) }}</button>
           </div>
         </div>
       </div>

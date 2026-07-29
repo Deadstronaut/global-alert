@@ -142,6 +142,12 @@
     "terrain2D": "Revenir à la vue plate 2D",
     "terrain3DShort": "3D",
     "terrain2DShort": "2D",
+    "terrain3DWarningTitle": "Avertissement de performance du relief 3D",
+    "terrain3DWarningMessage": "Le relief 3D superpose l'image satellite sur un modèle d'élévation qui se remodèle en permanence, ce qui peut entraîner une baisse importante de performance (surtout en faisant pivoter/incliner la carte). Cela peut persister jusqu'à la fermeture de cet onglet. Voulez-vous quand même l'activer ?",
+    "terrain3DWarningConfirm": "Oui, activer",
+    "terrain3DWarningCancel": "Annuler",
+    "terrainPitchLabel": "Angle",
+    "terrainDetailLabel": "Détail des tuiles",
     "clusterCount": "{count} événements",
     "viewDetails": "Voir les détails"
   },

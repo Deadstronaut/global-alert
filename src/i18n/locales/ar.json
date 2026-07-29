@@ -142,6 +142,12 @@
     "terrain2D": "العودة إلى العرض المسطح ثنائي الأبعاد",
     "terrain3DShort": "3D",
     "terrain2DShort": "2D",
+    "terrain3DWarningTitle": "تحذير أداء التضاريس ثلاثية الأبعاد",
+    "terrain3DWarningMessage": "تُغطّي التضاريس ثلاثية الأبعاد صورة القمر الصناعي فوق نموذج ارتفاع يتغير باستمرار، مما قد يتسبب في انخفاض كبير في الأداء (خاصة عند تدوير/إمالة الخريطة). قد يستمر هذا حتى تغلق علامة التبويب هذه. هل ما زلت تريد تفعيلها؟",
+    "terrain3DWarningConfirm": "نعم، تفعيل",
+    "terrain3DWarningCancel": "إلغاء",
+    "terrainPitchLabel": "الزاوية",
+    "terrainDetailLabel": "تفاصيل المربعات",
     "clusterCount": "{count} أحداث",
     "viewDetails": "عرض التفاصيل"
   },

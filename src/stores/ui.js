@@ -75,7 +75,7 @@ export const useUIStore = defineStore('ui', () => {
 
     // Community report map layer visibility (spec 036) — same independent,
     // always-relevant-regardless-of-mapMode pattern as showShelters above.
-    const showCommunityReports = ref(true);
+    const showCommunityReports = ref(false);
     function toggleCommunityReports() {
         showCommunityReports.value = !showCommunityReports.value;
     }

@@ -38,6 +38,7 @@ import { friendlyDatasetLabel } from '@/utils/exposureLayerLabel.js'
 import { formatPopulationLabel } from '@/utils/formatPopulationLabel.js'
 import { loadRegionBoundaries } from '@/data/boundaries/index.js'
 import LoadingOverlay from '@/components/LoadingOverlay.vue'
+import ConfirmDialog from '@/components/ConfirmDialog.vue'
 
 // spec 012: OGC WMS/WFS map layer registry — admin-registered external
 // overlays rendered live on this map (never stored/normalized, FR-008).
@@ -1222,27 +1223,93 @@ function zoomOut() {
   map.zoomOut()
 }
 
+// Draping satellite imagery over an actively-reshaping 3D mesh is
+// expensive in WebGL regardless of pitch angle — live-tested to drop as
+// low as 6-7 FPS while rotating. Not something a tile-count/pitch tweak
+// fixes outright, so instead of silently degrading the experience, the
+// first time a browser turns this on it sees an explicit warning; the
+// choice is remembered (localStorage) so it doesn't nag on every toggle
+// within — or across — sessions.
+const TERRAIN_WARNING_ACK_KEY = 'mhews-3d-terrain-warning-ack'
+const showTerrainWarning = ref(false)
+
 function toggleTerrain3D() {
   if (!map || !isSatellite.value) return
-  terrain3DEnabled.value = !terrain3DEnabled.value
   if (terrain3DEnabled.value) {
-    if (!map.getSource(DEM_TERRAIN_SOURCE_ID)) {
-      map.addSource(DEM_TERRAIN_SOURCE_ID, {
-        type: 'raster-dem',
-        tiles: [`demcache://${DEM_TILE_URL}`],
-        tileSize: 256,
-        maxzoom: 15,
-        encoding: 'terrarium',
-      })
-    }
-    map.setTerrain({ source: DEM_TERRAIN_SOURCE_ID, exaggeration: 1.5 })
-    // Straight-down (pitch 0) hides elevation displacement almost entirely —
-    // a tilt is what actually makes "raised mountains" visible.
-    map.easeTo({ pitch: 60, duration: 800 })
-  } else {
-    map.setTerrain(null)
-    map.easeTo({ pitch: 0, duration: 800 })
+    disableTerrain3D()
+    return
   }
+  if (localStorage.getItem(TERRAIN_WARNING_ACK_KEY)) {
+    enableTerrain3D()
+  } else {
+    showTerrainWarning.value = true
+  }
+}
+
+function confirmEnableTerrain3D() {
+  localStorage.setItem(TERRAIN_WARNING_ACK_KEY, '1')
+  showTerrainWarning.value = false
+  enableTerrain3D()
+}
+
+// Live tuning knobs (spec-less follow-up, 2026-07-28): pitch and DEM tile
+// detail are the two actual performance levers for the drape-over-3D-mesh
+// cost discussed above — exposed as sliders next to the 3B button so this
+// can be tuned by feel instead of guessing at fixed values. Higher pitch
+// looks toward the horizon and needs MORE tiles (not fewer), so this is
+// deliberately NOT auto-linked to the detail slider — the two are
+// independent, sometimes opposing, levers.
+const terrainPitch = ref(60)
+const terrainDetailMaxZoom = ref(15)
+
+function enableTerrain3D() {
+  if (!map) return
+  terrain3DEnabled.value = true
+  if (!map.getSource(DEM_TERRAIN_SOURCE_ID)) {
+    map.addSource(DEM_TERRAIN_SOURCE_ID, {
+      type: 'raster-dem',
+      tiles: [`demcache://${DEM_TILE_URL}`],
+      tileSize: 256,
+      maxzoom: terrainDetailMaxZoom.value,
+      encoding: 'terrarium',
+    })
+  }
+  map.setTerrain({ source: DEM_TERRAIN_SOURCE_ID, exaggeration: 1.5 })
+  // Straight-down (pitch 0) hides elevation displacement almost entirely —
+  // a tilt is what actually makes "raised mountains" visible.
+  map.easeTo({ pitch: terrainPitch.value, duration: 800 })
+}
+
+function disableTerrain3D() {
+  if (!map) return
+  terrain3DEnabled.value = false
+  map.setTerrain(null)
+  map.easeTo({ pitch: 0, duration: 800 })
+}
+
+function updateTerrainPitch(value) {
+  terrainPitch.value = value
+  if (!map || !terrain3DEnabled.value) return
+  map.easeTo({ pitch: value, duration: 200 })
+}
+
+// Changing a raster-dem source's maxzoom isn't a live-updatable property —
+// MapLibre only reads it at source-add time — so this removes and re-adds
+// the source (a full tile re-fetch at the new detail level, cached tiles
+// notwithstanding) rather than trying to mutate it in place.
+function updateTerrainDetail(value) {
+  terrainDetailMaxZoom.value = value
+  if (!map || !terrain3DEnabled.value) return
+  map.setTerrain(null)
+  if (map.getSource(DEM_TERRAIN_SOURCE_ID)) map.removeSource(DEM_TERRAIN_SOURCE_ID)
+  map.addSource(DEM_TERRAIN_SOURCE_ID, {
+    type: 'raster-dem',
+    tiles: [`demcache://${DEM_TILE_URL}`],
+    tileSize: 256,
+    maxzoom: value,
+    encoding: 'terrarium',
+  })
+  map.setTerrain({ source: DEM_TERRAIN_SOURCE_ID, exaggeration: 1.5 })
 }
 
 function cycleMapStyle() {
@@ -2942,6 +3009,16 @@ onBeforeUnmount(() => {
       @cancel="cancelExposureLayerLoading"
     />
 
+    <ConfirmDialog
+      v-if="showTerrainWarning"
+      :title="t('map.terrain3DWarningTitle')"
+      :message="t('map.terrain3DWarningMessage')"
+      :confirm-label="t('map.terrain3DWarningConfirm')"
+      :cancel-label="t('map.terrain3DWarningCancel')"
+      @confirm="confirmEnableTerrain3D"
+      @cancel="showTerrainWarning = false"
+    />
+
     <!-- Heatmap legend -->
     <div
       v-if="uiStore.showHeatmap"
@@ -2987,6 +3064,30 @@ onBeforeUnmount(() => {
       <p v-else-if="markerTruncation" class="marker-truncation-note">
         {{ t('map.markerTruncation', { shown: markerTruncation.shown, total: markerTruncation.total }) }}
       </p>
+    </div>
+
+    <!-- Live pitch/detail tuning (spec-less follow-up, 2026-07-28): only
+         while 3D terrain is actually on — tuning knobs for a feature that's
+         off are meaningless clutter. -->
+    <div v-if="isSatellite && terrain3DEnabled" class="terrain-tuning-panel">
+      <label class="terrain-tuning-row">
+        <span class="terrain-tuning-label">{{ t('map.terrainPitchLabel') }} {{ terrainPitch }}°</span>
+        <input
+          type="range" min="30" max="60" step="5"
+          :value="terrainPitch"
+          @input="updateTerrainPitch(Number($event.target.value))"
+          class="terrain-tuning-slider"
+        />
+      </label>
+      <label class="terrain-tuning-row">
+        <span class="terrain-tuning-label">{{ t('map.terrainDetailLabel') }} {{ terrainDetailMaxZoom }}</span>
+        <input
+          type="range" min="5" max="15" step="1"
+          :value="terrainDetailMaxZoom"
+          @change="updateTerrainDetail(Number($event.target.value))"
+          class="terrain-tuning-slider"
+        />
+      </label>
     </div>
 
     <button
@@ -3554,6 +3655,45 @@ onBeforeUnmount(() => {
   white-space: nowrap;
 }
 
+/* Pitch/detail tuning sliders — sits directly above the 2B/3B button,
+   widened past the 64px column since two labeled sliders don't fit that
+   narrow; right-aligned to the same column edge so it still reads as part
+   of the same stack rather than a floating, unrelated panel. */
+.terrain-tuning-panel {
+  position: absolute;
+  bottom: 158px; /* .terrain-toggle-btn's bottom(126) + height(22) + 10px gap */
+  right: var(--map-control-offset);
+  z-index: 10;
+  /* Spans exactly from .zoom-control-bar's left edge to .map-download-btn's
+     right edge (both share this same right offset) — 40px zoom bar + 74px
+     gap-to-column = 114px total, so the panel reads as capping that column
+     instead of floating at an arbitrary width. */
+  width: 114px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: rgba(20, 24, 33, 0.96);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.terrain-tuning-row {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.terrain-tuning-label {
+  font-size: 10px;
+  color: #cbd5e1;
+  white-space: nowrap;
+}
+.terrain-tuning-slider {
+  width: 100%;
+  accent-color: #4da3ff;
+  cursor: pointer;
+}
+
 /* 2B/3B terrain toggle — satellite view only, sits directly above the
    download button in the same right-hand control column (same 64px width),
    so the two read as one stacked group. */
@@ -4043,6 +4183,10 @@ onBeforeUnmount(() => {
 
   .terrain-toggle-btn {
     bottom: calc(var(--impact-panel-mobile-height) + 206px);
+  }
+
+  .terrain-tuning-panel {
+    bottom: calc(var(--impact-panel-mobile-height) + 238px);
   }
 
   .layer-panel-stack {

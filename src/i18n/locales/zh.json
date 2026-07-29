@@ -142,6 +142,12 @@
     "terrain2D": "切换回平面2D视图",
     "terrain3DShort": "3D",
     "terrain2DShort": "2D",
+    "terrain3DWarningTitle": "3D地形性能警告",
+    "terrain3DWarningMessage": "3D地形会将卫星图像贴合到不断变化的高程模型上，可能导致明显的性能下降（尤其是在旋转/倾斜地图时）。此问题可能会持续到您关闭此浏览器标签页为止。仍要开启吗？",
+    "terrain3DWarningConfirm": "是，开启",
+    "terrain3DWarningCancel": "取消",
+    "terrainPitchLabel": "角度",
+    "terrainDetailLabel": "瓦片精度",
     "clusterCount": "{count} 个事件",
     "viewDetails": "查看详情"
   },

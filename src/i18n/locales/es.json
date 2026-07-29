@@ -142,6 +142,12 @@
     "terrain2D": "Volver a la vista plana 2D",
     "terrain3DShort": "3D",
     "terrain2DShort": "2D",
+    "terrain3DWarningTitle": "Aviso de rendimiento del terreno 3D",
+    "terrain3DWarningMessage": "El terreno 3D superpone la imagen satelital sobre un modelo de elevación que cambia constantemente, lo que puede causar una caída importante de rendimiento (especialmente al rotar/inclinar el mapa). Esto puede persistir hasta que cierres esta pestaña. ¿Aún así quieres activarlo?",
+    "terrain3DWarningConfirm": "Sí, activar",
+    "terrain3DWarningCancel": "Cancelar",
+    "terrainPitchLabel": "Ángulo",
+    "terrainDetailLabel": "Detalle de teselas",
     "clusterCount": "{count} eventos",
     "viewDetails": "Ver detalles"
   },

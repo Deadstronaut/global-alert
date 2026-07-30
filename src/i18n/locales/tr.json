@@ -28,6 +28,7 @@
     "cyclone": "Kasırga",
     "volcano": "Volkan",
     "epidemic": "Salgın",
+    "landslide": "Heyelan",
     "all": "Tüm Afetler"
   },
   "severity": {
@@ -428,6 +429,12 @@
       "scenarioNamePlaceholder": "Senaryo adı...",
       "saveScenario": "Senaryoyu Kaydet",
       "savedScenarios": "Kaydedilmiş Senaryolar",
+      "editName": "Adı düzenle",
+      "delete": "Sil",
+      "save": "Kaydet",
+      "cancel": "İptal",
+      "confirmDeleteScenarioTitle": "Senaryoyu sil",
+      "confirmDeleteScenarioMessage": "\"{name}\" senaryosunu silmek istediğinize emin misiniz? Bu işlem geri alınamaz.",
       "dataUnavailable": "referans veri artık mevcut değil",
       "completenessLabel": "Veri Tamlığı",
       "completenessNoData": "veri yok",
@@ -602,7 +609,7 @@
       "notEvaluableHint": "Bu kurallar, gerekli veri eksik olduğu için kontrol edilemedi.",
       "noRiskTriggered": "Bu olay için hiçbir ikincil risk tetiklenmedi.",
       "noRulesConfigured": "Bu tehlike türü için henüz hiçbir zincirleme risk kuralı yapılandırılmadı.",
-      "whyLabel": "Neden",
+      "whyLabel": "Eşik Verileri",
       "affectedPopulation": "Tahmini etkilenen nüfus",
       "simulatedLabel": "Simüle edilmiş (varsayımsal senaryo)",
       "realEventLabel": "Gerçek olay",
@@ -1010,10 +1017,13 @@
       "rowCount": "{count} kayıt"
     },
     "map": {
-      "toggleLabel": "Sığınakları Göster/Gizle",
+      "toggleLabel": "Sığınaklar",
       "occupancy": "Doluluk",
       "status": "Durum",
-      "linkedIncident": "İlgili bir olaya bağlı"
+      "linkedIncident": "İlgili bir olaya bağlı",
+      "panelTitle": "Sığınak ve Bildirim Katmanları",
+      "panelCollapse": "Paneli küçült",
+      "panelExpand": "Sığınaklar ve bildirimler panelini genişlet"
     }
   },
   "communityReport": {
@@ -1057,7 +1067,7 @@
       "playAudio": "Sesli notu dinle"
     },
     "map": {
-      "toggleLabel": "Vatandaş Bildirimlerini Göster/Gizle",
+      "toggleLabel": "Vatandaş Bildirimleri",
       "popupHazardType": "Tür",
       "popupDescription": "Açıklama",
       "popupSubmittedAt": "Gönderim zamanı",

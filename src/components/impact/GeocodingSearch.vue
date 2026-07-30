@@ -376,24 +376,14 @@ function clearQuery() {
 
 <style scoped>
 .geocoding-search {
-  position: absolute; top: var(--space-md);
-  /* Centered in the free map area between the left sidebar and the
-     right-hand layer panel — using the panel's real, live rendered width
-     (--layer-panel-total-width, set from MapView.vue via a ResizeObserver),
-     not a guessed worst case. When the panel is absent or narrow this lands
-     within a couple px of true viewport-center; it only shifts left as much
-     as the panel actually needs. A plain 50%-transform center (or a
-     max-width shrink toward one) both collapse into real overlap at common
-     laptop widths (~1300-1400px) once the panel is genuinely wide — there's
-     no room left to stay centered there, so this favors "no overlap,
-     ~centered" over "centered, sometimes overlapping". */
-  left: calc(var(--sidebar-width, 280px) + 12px);
-  right: calc(var(--map-control-offset, 336px) + var(--layer-panel-total-width, 0px) + 12px);
-  margin: 0 auto;
+  /* Middle column of MapView's .top-controls-row 3-col grid (1fr auto 1fr)
+     — the two equal-width outer columns keep this auto-sized column exactly
+     centered in the row regardless of how wide the shelters/exposure-layer
+     panels flanking it currently are, so no manual centering math is
+     needed here. */
   width: max-content;
   max-width: 445px;
-  z-index: 20; display: flex; flex-direction: column; align-items: center; gap: 4px;
-  transition: top 0.2s ease, left 0.35s ease, right 0.2s ease;
+  display: flex; flex-direction: column; align-items: center; gap: 4px;
 }
 .geocoding-row { display: flex; width: 100%; }
 .geocoding-input-wrap { position: relative; flex: 1 1 360px; min-width: 140px; }
@@ -439,11 +429,8 @@ function clearQuery() {
 
 @media (max-width: 768px) {
   .geocoding-search {
-    top: var(--space-sm);
-    left: var(--space-sm);
-    right: var(--space-sm);
+    width: 100%;
     max-width: none;
-    transform: none;
     align-items: stretch;
   }
 

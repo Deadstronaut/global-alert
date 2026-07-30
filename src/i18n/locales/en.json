@@ -28,6 +28,7 @@
     "cyclone": "Cyclone",
     "volcano": "Volcano",
     "epidemic": "Epidemic",
+    "landslide": "Landslide",
     "all": "All Disasters"
   },
   "severity": {
@@ -428,6 +429,12 @@
       "scenarioNamePlaceholder": "Scenario name...",
       "saveScenario": "Save Scenario",
       "savedScenarios": "Saved Scenarios",
+      "editName": "Edit name",
+      "delete": "Delete",
+      "save": "Save",
+      "cancel": "Cancel",
+      "confirmDeleteScenarioTitle": "Delete scenario",
+      "confirmDeleteScenarioMessage": "Are you sure you want to delete \"{name}\"? This cannot be undone.",
       "dataUnavailable": "referenced data no longer available",
       "completenessLabel": "Data Completeness",
       "completenessNoData": "no data",
@@ -602,7 +609,7 @@
       "notEvaluableHint": "These rules could not be checked because required data is missing.",
       "noRiskTriggered": "No secondary risk was triggered for this event.",
       "noRulesConfigured": "No cascade rules are configured for this hazard type yet.",
-      "whyLabel": "Why",
+      "whyLabel": "Threshold Values",
       "affectedPopulation": "Estimated affected population",
       "simulatedLabel": "Simulated (hypothetical scenario)",
       "realEventLabel": "Real event",
@@ -1010,10 +1017,13 @@
       "rowCount": "{count} rows"
     },
     "map": {
-      "toggleLabel": "Show/Hide Shelters",
+      "toggleLabel": "Shelters",
       "occupancy": "Occupancy",
       "status": "Status",
-      "linkedIncident": "Linked to an incident"
+      "linkedIncident": "Linked to an incident",
+      "panelTitle": "Shelter & Report Layers",
+      "panelCollapse": "Collapse panel",
+      "panelExpand": "Expand shelters & reports panel"
     }
   },
   "communityReport": {
@@ -1057,7 +1067,7 @@
       "playAudio": "Play voice note"
     },
     "map": {
-      "toggleLabel": "Show/Hide Community Reports",
+      "toggleLabel": "Community Reports",
       "popupHazardType": "Type",
       "popupDescription": "Description",
       "popupSubmittedAt": "Submitted at",

@@ -49,6 +49,12 @@ export const useUIStore = defineStore('ui', () => {
     const colorblindMode = ref(false);
 
     // Map visualization mode: 'normal' | 'hexagon' | 'heatmap'
+    // Default 'hexagon' matches the app's own initial state — viewMode
+    // starts at 'globe' (3D), and the user wants 3D to read as "Petek" while
+    // 2D reads as "Isı" (2026-07-30); transitionToMap/transitionToGlobe below
+    // keep it in sync as the user switches between the two. Selecting a
+    // country in the 2D map still forces 'hexagon' on its own regardless
+    // (see MapView's selectCountry).
     const mapMode = ref('hexagon');
     // Computed aliases kept for backward compat with MapView watches
     const showHeatmap = computed(() => mapMode.value === 'heatmap');
@@ -103,6 +109,7 @@ export const useUIStore = defineStore('ui', () => {
 
         setTimeout(() => {
             viewMode.value = 'map';
+            mapMode.value = 'heatmap';
             transitionState.value = 'complete';
         }, 800);
     }
@@ -112,6 +119,7 @@ export const useUIStore = defineStore('ui', () => {
 
         setTimeout(() => {
             viewMode.value = 'globe';
+            mapMode.value = 'hexagon';
             selectedRegion.value = null;
             transitionState.value = 'idle';
         }, 800);

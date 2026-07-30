@@ -3,7 +3,7 @@ import { ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { supabase } from '@/services/api/config.js'
 
-const { t } = useI18n()
+const { t, te } = useI18n()
 
 const props = defineProps({
   countryCode: { type: String, required: true },
@@ -69,6 +69,19 @@ const INPUT_VALUE_LABELS = {
   distance_km: 'risk.cascade.why.distanceKm',
   vulnerability_score: 'risk.cascade.why.vulnerabilityScore',
 }
+// secondary_risk_category (and trigger_hazard_type) come straight from the
+// admin-authored cascade rule row (see CascadeRuleConfig.vue) as free text,
+// not a fixed enum — but in practice they're almost always one of the
+// existing disaster-type keys (flood, epidemic, landslide, ...), which were
+// showing up here as raw untranslated English/snake_case. Reuse the
+// `disasters.*` translations when the value matches one; otherwise fall
+// back to the raw value rather than a broken `disasters.foo` key string.
+function localizedRiskCategory(category) {
+  if (!category) return category
+  const key = `disasters.${category}`
+  return te(key) ? t(key) : category
+}
+
 function formattedInputValues(inputValues) {
   return Object.entries(inputValues ?? {}).map(([key, value]) => ({
     label: t(INPUT_VALUE_LABELS[key] ?? key),
@@ -119,7 +132,7 @@ defineExpose({ evaluate })
       <div v-if="result.triggered.length > 0" class="risk-cascade-section">
         <h5>{{ t('risk.cascade.triggeredTitle') }}</h5>
         <div v-for="a in result.triggered" :key="a.assessment_id" class="risk-row risk-row-block">
-          <strong>{{ a.secondary_risk_category }}</strong>
+          <strong>{{ localizedRiskCategory(a.secondary_risk_category) }}</strong>
           <p class="risk-recommendation">{{ a.recommendation_text }}</p>
           <p class="risk-meta">
             {{ t('risk.cascade.affectedPopulation') }}:
@@ -140,7 +153,7 @@ defineExpose({ evaluate })
         <h5>{{ t('risk.cascade.notEvaluableTitle') }}</h5>
         <p class="risk-hint">{{ t('risk.cascade.notEvaluableHint') }}</p>
         <div v-for="ne in result.not_evaluable" :key="ne.rule_id" class="risk-row">
-          <span>{{ ne.secondary_risk_category }}</span>
+          <span>{{ localizedRiskCategory(ne.secondary_risk_category) }}</span>
           <span class="risk-meta">{{ ne.missing_prerequisite }}</span>
         </div>
       </div>

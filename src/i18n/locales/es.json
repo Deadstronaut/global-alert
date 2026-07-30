@@ -28,7 +28,8 @@
     "tsunami": "Tsunami",
     "cyclone": "Ciclón",
     "volcano": "Volcán",
-    "epidemic": "Epidemia"
+    "epidemic": "Epidemia",
+    "landslide": "Deslizamiento de Tierra"
   },
   "severity": {
     "critical": "Crítico",
@@ -419,6 +420,12 @@
       "scenarioNamePlaceholder": "Nombre del escenario...",
       "saveScenario": "Guardar Escenario",
       "savedScenarios": "Escenarios Guardados",
+      "editName": "Editar nombre",
+      "delete": "Eliminar",
+      "save": "Guardar",
+      "cancel": "Cancelar",
+      "confirmDeleteScenarioTitle": "Eliminar escenario",
+      "confirmDeleteScenarioMessage": "¿Seguro que quieres eliminar \"{name}\"? Esta acción no se puede deshacer.",
       "dataUnavailable": "los datos referenciados ya no están disponibles",
       "completenessLabel": "Integridad de Datos",
       "completenessNoData": "sin datos",
@@ -916,10 +923,13 @@
       "rowCount": "{count} filas"
     },
     "map": {
-      "toggleLabel": "Mostrar/Ocultar Refugios",
+      "toggleLabel": "Refugios",
       "occupancy": "Ocupación",
       "status": "Estado",
-      "linkedIncident": "Vinculado a un incidente"
+      "linkedIncident": "Vinculado a un incidente",
+      "panelTitle": "Capas de Refugios e Informes",
+      "panelCollapse": "Contraer panel",
+      "panelExpand": "Expandir panel de refugios e informes"
     }
   },
   "communityReport": {
@@ -963,7 +973,7 @@
       "rejectReasonPlaceholder": "Explica brevemente por qué se rechaza este informe..."
     },
     "map": {
-      "toggleLabel": "Mostrar/Ocultar Reportes Comunitarios",
+      "toggleLabel": "Reportes Comunitarios",
       "popupHazardType": "Tipo",
       "popupDescription": "Descripción",
       "popupSubmittedAt": "Enviado el",

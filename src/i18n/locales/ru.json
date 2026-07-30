@@ -28,7 +28,8 @@
     "tsunami": "Цунами",
     "cyclone": "Циклон",
     "volcano": "Вулкан",
-    "epidemic": "Эпидемия"
+    "epidemic": "Эпидемия",
+    "landslide": "Оползень"
   },
   "severity": {
     "critical": "Критическая",
@@ -419,6 +420,12 @@
       "scenarioNamePlaceholder": "Название сценария...",
       "saveScenario": "Сохранить сценарий",
       "savedScenarios": "Сохранённые сценарии",
+      "editName": "Изменить название",
+      "delete": "Удалить",
+      "save": "Сохранить",
+      "cancel": "Отмена",
+      "confirmDeleteScenarioTitle": "Удалить сценарий",
+      "confirmDeleteScenarioMessage": "Вы уверены, что хотите удалить «{name}»? Это действие нельзя отменить.",
       "dataUnavailable": "связанные данные больше недоступны",
       "completenessLabel": "Полнота Данных",
       "completenessNoData": "нет данных",
@@ -916,10 +923,13 @@
       "rowCount": "{count} строк"
     },
     "map": {
-      "toggleLabel": "Показать/Скрыть Убежища",
+      "toggleLabel": "Убежища",
       "occupancy": "Заполненность",
       "status": "Статус",
-      "linkedIncident": "Связано с инцидентом"
+      "linkedIncident": "Связано с инцидентом",
+      "panelTitle": "Слои убежищ и сообщений",
+      "panelCollapse": "Свернуть панель",
+      "panelExpand": "Развернуть панель убежищ и сообщений"
     }
   },
   "communityReport": {
@@ -963,7 +973,7 @@
       "rejectReasonPlaceholder": "Кратко объясните, почему это сообщение отклоняется..."
     },
     "map": {
-      "toggleLabel": "Показать/Скрыть сообщения от граждан",
+      "toggleLabel": "Сообщения от граждан",
       "popupHazardType": "Тип",
       "popupDescription": "Описание",
       "popupSubmittedAt": "Отправлено",

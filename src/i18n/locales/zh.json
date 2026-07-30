@@ -28,7 +28,8 @@
     "tsunami": "海啸",
     "cyclone": "气旋",
     "volcano": "火山",
-    "epidemic": "流行病"
+    "epidemic": "流行病",
+    "landslide": "山体滑坡"
   },
   "severity": {
     "critical": "极端",
@@ -419,6 +420,12 @@
       "scenarioNamePlaceholder": "情景名称...",
       "saveScenario": "保存情景",
       "savedScenarios": "已保存的情景",
+      "editName": "编辑名称",
+      "delete": "删除",
+      "save": "保存",
+      "cancel": "取消",
+      "confirmDeleteScenarioTitle": "删除情景",
+      "confirmDeleteScenarioMessage": "确定要删除“{name}”吗？此操作无法撤销。",
       "dataUnavailable": "引用的数据已不可用",
       "completenessLabel": "数据完整度",
       "completenessNoData": "无数据",
@@ -916,10 +923,13 @@
       "rowCount": "共 {count} 条"
     },
     "map": {
-      "toggleLabel": "显示/隐藏避难所",
+      "toggleLabel": "避难所",
       "occupancy": "占用情况",
       "status": "状态",
-      "linkedIncident": "已关联事件"
+      "linkedIncident": "已关联事件",
+      "panelTitle": "避难所与报告图层",
+      "panelCollapse": "收起面板",
+      "panelExpand": "展开避难所和报告面板"
     }
   },
   "communityReport": {
@@ -963,7 +973,7 @@
       "rejectReasonPlaceholder": "简要说明拒绝此报告的原因……"
     },
     "map": {
-      "toggleLabel": "显示/隐藏民众报告",
+      "toggleLabel": "民众报告",
       "popupHazardType": "类型",
       "popupDescription": "描述",
       "popupSubmittedAt": "提交时间",

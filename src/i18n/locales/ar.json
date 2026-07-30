@@ -28,7 +28,8 @@
     "tsunami": "تسونامي",
     "cyclone": "إعصار",
     "volcano": "بركان",
-    "epidemic": "وباء"
+    "epidemic": "وباء",
+    "landslide": "انزلاق أرضي"
   },
   "severity": {
     "critical": "حرجة",
@@ -419,6 +420,12 @@
       "scenarioNamePlaceholder": "اسم السيناريو...",
       "saveScenario": "حفظ السيناريو",
       "savedScenarios": "السيناريوهات المحفوظة",
+      "editName": "تعديل الاسم",
+      "delete": "حذف",
+      "save": "حفظ",
+      "cancel": "إلغاء",
+      "confirmDeleteScenarioTitle": "حذف السيناريو",
+      "confirmDeleteScenarioMessage": "هل أنت متأكد أنك تريد حذف \"{name}\"؟ لا يمكن التراجع عن هذا الإجراء.",
       "dataUnavailable": "البيانات المرجعية لم تعد متوفرة",
       "completenessLabel": "اكتمال البيانات",
       "completenessNoData": "لا توجد بيانات",
@@ -916,10 +923,13 @@
       "rowCount": "{count} سجل"
     },
     "map": {
-      "toggleLabel": "إظهار/إخفاء الملاجئ",
+      "toggleLabel": "الملاجئ",
       "occupancy": "الإشغال",
       "status": "الحالة",
-      "linkedIncident": "مرتبط بحادثة"
+      "linkedIncident": "مرتبط بحادثة",
+      "panelTitle": "طبقات الملاجئ والبلاغات",
+      "panelCollapse": "طي اللوحة",
+      "panelExpand": "توسيع لوحة الملاجئ والبلاغات"
     }
   },
   "communityReport": {
@@ -963,7 +973,7 @@
       "rejectReasonPlaceholder": "اشرح باختصار سبب رفض هذا البلاغ..."
     },
     "map": {
-      "toggleLabel": "إظهار/إخفاء بلاغات المجتمع",
+      "toggleLabel": "بلاغات المجتمع",
       "popupHazardType": "النوع",
       "popupDescription": "الوصف",
       "popupSubmittedAt": "وقت الإرسال",

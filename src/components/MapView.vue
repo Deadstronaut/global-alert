@@ -1,8 +1,8 @@
 <script setup>
-import { ref, shallowRef, computed, onMounted, onBeforeUnmount, watch } from 'vue'
+import { ref, shallowRef, computed, onMounted, onBeforeUnmount, watch, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { useDisasterStore } from '@/stores/disaster.js'
-import { useUIStore, MAX_HEX_RES } from '@/stores/ui.js'
+import { useUIStore, MIN_HEX_RES } from '@/stores/ui.js'
 import { useGeolocationStore } from '@/stores/geolocation.js'
 import { useI18n } from 'vue-i18n'
 import { numericToAlpha2 } from '@/data/isoMapping.js'
@@ -350,6 +350,7 @@ async function addExposureLayer(dataset) {
         .setLngLat(e.lngLat)
         .setHTML(buildFeaturePopupHtml(t, dataset, __metricValue, properties, __haloSeverity))
         .addTo(map)
+      registerPopupCascade(exposurePopup)
     })
   }
 
@@ -595,6 +596,7 @@ async function enableRegionView(dataset, level) {
       .setLngLat(e.lngLat)
       .setHTML(buildRegionPopupHtml(f.properties?.provinceName, f.properties?.totalPopulation))
       .addTo(map)
+    registerPopupCascade(exposurePopup)
   })
 }
 
@@ -914,6 +916,29 @@ let map = null
 let mapLoaded = false
 let styleLoadVersion = 0
 let markerObjects = []
+let popupZIndexCounter = 1000 // bring-to-front stacking order for open popups
+
+// "İskambil kağıdı" fan-out (user-reported, 2026-07-30): the earlier bring-
+// to-front z-index fix only decides which popup is ON TOP when two overlap
+// — it does nothing when they sit at the exact same screen point (a marker
+// popup and a population-hex-click popup opened in roughly the same spot
+// is the exact reported case), which just fully hides the back one with no
+// way to even click it. This nudges each additional simultaneously-open
+// popup a bit further from its true anchor (MapLibre's own `setOffset`,
+// not a CSS transform — a raw transform would fight MapLibre's own
+// position-tracking transform on the same element) so they fan out like a
+// spread hand of cards and every one stays reachable.
+let openPopups = []
+function registerPopupCascade(popup) {
+  popup.on('open', () => {
+    if (!openPopups.includes(popup)) openPopups.push(popup)
+    const idx = openPopups.indexOf(popup)
+    popup.setOffset([12 + idx * 22, 12 + idx * 22])
+  })
+  popup.on('close', () => {
+    openPopups = openPopups.filter((p) => p !== popup)
+  })
+}
 let shelterMarkerObjects = []
 let drillEventMarkerObjects = []
 let userMarkerObj = null
@@ -927,13 +952,13 @@ const hexGridCache = new Map()
 // Resolution stored in DB via backfill (res 7)
 const DB_HEX_RES = 7
 
-const SEVERITY_COLOR = {
-  critical: '#7c3aed',
-  high: '#ef4444',
-  moderate: '#f97316',
-  low: '#fbbf24',
-  minimal: '#4ade80',
-}
+// Hex color used to just be its own hardcoded map (critical=purple, unlike
+// everywhere else critical=red) — inconsistent with the sidebar's own
+// Yoğunluk Ölçeği legend and every marker's own color, and purple reading
+// as "most severe" isn't intuitive the way red does (user-reported,
+// 2026-07-30). Reuses getSeverityHex() (already the single source of truth
+// for markers/legend) instead of a second color table to keep in sync by
+// hand — also picks up colorblind-mode automatically as a side effect.
 const SEVERITY_OPACITY = { critical: 0.72, high: 0.58, moderate: 0.42, low: 0.28, minimal: 0.18 }
 const SEV_ORDER = ['minimal', 'low', 'moderate', 'high', 'critical']
 
@@ -941,23 +966,60 @@ const SEV_ORDER = ['minimal', 'low', 'moderate', 'high', 'critical']
 let selectedCountryBounds = null // LngLatBounds of selected country
 let countryHexRes = null // resolution of country grid features
 let countryHexFeatures = null // raw Feature[] from FILL_GRID (geometry only, for re-injection)
+// Captured once from the real map on first load (see the 'load' handler in
+// initMap) so clearCountrySelection() can fly back to the actual starting
+// view instead of a guessed/hardcoded zoom — whatever the base style's own
+// default center/zoom happens to be.
+let defaultCameraState = null
 
 // 0 = Açık (liberty), 1 = Koyu (dark), 2 = Uydu
 const mapStyleIndex = ref(0)
 const currentZoom = ref(3)
 
-// Tracks the WMS/exposure layer-panel-stack's real rendered width so
-// GeocodingSearch (a sibling component) can center itself in the actual free
-// map area instead of guessing a worst-case panel width — stays accurate
-// whether the panel is absent, narrow, or widened by a long dataset name.
-const layerPanelStack = ref(null)
-const layerPanelWidth = ref(0)
-let layerPanelResizeObserver = null
-
 // Collapses the exposure-layers panel down to a small layers-icon square
 // anchored at its own top-right corner — current full size is the max, it
 // never grows past that.
 const exposureLayersPanelCollapsed = ref(false)
+
+// Same collapse behavior as exposureLayersPanelCollapsed above, but for the
+// shelters/community-reports toggle panel on the left — collapses down to a
+// small pin-icon square anchored at its own top-left corner.
+const sheltersLayerPanelCollapsed = ref(false)
+
+// Briefly simulates a hover on the (now auto-collapsed) shelters/exposure
+// panels right after a double-click zoom lands, so their collapsed icons
+// don't just silently sit there unexplained — see zoomToCountry()'s
+// map.once('moveend', ...) below, which flips this true then back false
+// ~3s later. Rendered via <Teleport to="body"> at real getBoundingClientRect()
+// coordinates (sheltersHintAnchorEl/exposureHintAnchorEl, computed into
+// sheltersHintPos/exposureHintPos below) rather than positioned relative to
+// the collapsed panel itself — both panels sit inside ancestors with their
+// own overflow/scroll rules (needed for the panels' own collapse animation
+// and, for the right one, .layer-panel-stack's vertical scrolling), which
+// silently clipped an absolutely-positioned bubble poking out past their
+// box (live-testing finding: worked on the left, not on the right — same
+// bug, just one ancestor chain happened to avoid it). Teleporting to body
+// sidesteps every ancestor's CSS entirely.
+const showCollapsedPanelHints = ref(false)
+let collapsedPanelHintTimer = null
+const sheltersHintAnchorEl = ref(null)
+const exposureHintAnchorEl = ref(null)
+const sheltersHintPos = ref(null)
+const exposureHintPos = ref(null)
+
+watch(showCollapsedPanelHints, (visible) => {
+  if (!visible) return
+  nextTick(() => {
+    if (sheltersHintAnchorEl.value) {
+      const r = sheltersHintAnchorEl.value.getBoundingClientRect()
+      sheltersHintPos.value = { top: r.top + r.height / 2, left: r.right + 10 }
+    }
+    if (exposureHintAnchorEl.value) {
+      const r = exposureHintAnchorEl.value.getBoundingClientRect()
+      exposureHintPos.value = { top: r.top + r.height / 2, right: window.innerWidth - r.left + 10 }
+    }
+  })
+})
 
 // ── Country interaction state ────────────────────────────────────────────────
 let hoveredFeatureId = null
@@ -993,21 +1055,12 @@ const currentHexRes = computed(() => hexResForZoom(currentZoom.value))
 
 watch(currentHexRes, (newRes) => {
   if (!mapLoaded) return
-  // Clear cached grid for new resolution so worker recomputes
+  // Clear cached grid for new resolution so worker recomputes. This only
+  // affects the world-view hexbin grid (no country selected) — the selected
+  // country's own hex grid is intentionally zoom-independent, see
+  // refreshCountryHexGridFromSelection().
   hexGridCache.delete(newRes)
   updateHexbins()
-
-  // Refresh country hex grid at new resolution if a country is selected —
-  // but never override a manually-set resolution (spec 045 FR-005): a
-  // zoom-bucket crossing must not silently revert the user's own choice.
-  if (uiStore.manualHexResolution == null && selectedFeatureId && hexWorker) {
-    const f = _allCountryFeatures.find((cf) => cf.id === selectedFeatureId)
-    if (f) {
-      const gridRes = Math.min(newRes, 6)
-      countryHexRes = gridRes + 1
-      hexWorker.postMessage({ type: 'FILL_GRID', geometry: f.geometry, resolution: gridRes })
-    }
-  }
 })
 
 watch(
@@ -1015,7 +1068,7 @@ watch(
   (newZoom, oldZoom) => {
     // Only re-run marker update if crossing the threshold (8)
     if ((oldZoom < 8 && newZoom >= 8) || (oldZoom >= 8 && newZoom < 8)) {
-      updateMarkers()
+      scheduleUpdateMarkers()
     }
   },
 )
@@ -1087,7 +1140,7 @@ function applySignalToGrid() {
       ...f,
       properties: {
         ...f.properties,
-        color: SEVERITY_COLOR[sig.maxSeverity] || '#4ade80',
+        color: getSeverityHex(sig.maxSeverity),
         opacity: SEVERITY_OPACITY[sig.maxSeverity] || 0.18,
         eventCount: sig.count,
         maxSeverity: sig.maxSeverity,
@@ -1119,7 +1172,7 @@ function applySignalToCountryGrid(features) {
       ...f,
       properties: {
         ...f.properties,
-        color: SEVERITY_COLOR[sig.maxSeverity] || '#4ade80',
+        color: getSeverityHex(sig.maxSeverity),
         opacity: SEVERITY_OPACITY[sig.maxSeverity] || 0.04,
         eventCount: sig.count,
         maxSeverity: sig.maxSeverity,
@@ -1778,7 +1831,63 @@ function setFocusMode(active, featureGeoJSON = null) {
   }
 }
 
-function zoomToCountry(f) {
+// Computes a fit-bounds for a country's geometry, correctly handling
+// antimeridian-crossing landmasses (Russia's Chukotka Peninsula, Fiji):
+// naively extending a LngLatBounds with raw coordinates makes such a
+// country's bbox balloon to the full -180..180 width and its center to
+// lng 0 (points near +178° and -179° each look like an extreme in
+// isolation, live-testing finding for the Russia double-click zoom — it
+// flew out to a whole-world view instead of framing Russia). Unwrapping
+// each point relative to the running previous one keeps longitude
+// continuous across the jump; normalizing the final west/east back into
+// range then naturally produces MapLibre's own west>east "wraps through
+// the dateline" convention when a country genuinely spans more than half
+// the globe (Russia truly does — ~171° of longitude — so its fit will
+// still look zoomed-out, just correctly centered instead of centered on
+// nothing).
+function computeCountryBounds(geom) {
+  let refLng = null
+  let minLng = Infinity, maxLng = -Infinity, minLat = Infinity, maxLat = -Infinity
+  const processCoords = (coords) => {
+    if (typeof coords[0] === 'number') {
+      let [lng, lat] = coords
+      if (refLng !== null) {
+        while (lng - refLng > 180) lng -= 360
+        while (lng - refLng < -180) lng += 360
+      }
+      refLng = lng
+      if (lng < minLng) minLng = lng
+      if (lng > maxLng) maxLng = lng
+      if (lat < minLat) minLat = lat
+      if (lat > maxLat) maxLat = lat
+    } else {
+      coords.forEach(processCoords)
+    }
+  }
+  processCoords(geom.coordinates)
+  if (!isFinite(minLng)) return new maplibregl.LngLatBounds()
+  const normalize = (lng) => (((lng + 180) % 360) + 360) % 360 - 180
+  return new maplibregl.LngLatBounds([normalize(minLng), minLat], [normalize(maxLng), maxLat])
+}
+
+// The filter sidebar (left) and Etki Analizi/impact panel (right) sit as
+// overlays ON TOP of the map canvas rather than shrinking it, so a fixed
+// 100px padding badly undersells how much of the canvas is actually hidden
+// behind them (each can run 250-360px wide) — a wide country's east/west
+// edges end up tucked behind the panels instead of framed in the visible
+// gap between them (live-testing finding: Turkey/Russia's sides got cropped
+// while compact countries like Madagascar looked fine, since there's
+// nothing wide enough to reach the panels for those).
+function getVisibleMapPadding() {
+  const padding = { top: 100, bottom: 100, left: 100, right: 100 }
+  const sidebarWidth = document.querySelector('.sidebar')?.getBoundingClientRect().width
+  if (sidebarWidth) padding.left = Math.max(padding.left, sidebarWidth + 40)
+  const impactWidth = document.querySelector('.impact-panel')?.getBoundingClientRect().width
+  if (impactWidth) padding.right = Math.max(padding.right, impactWidth + 40)
+  return padding
+}
+
+async function zoomToCountry(f) {
   if (!map || !mapLoaded) return
   const fid = f.id
 
@@ -1787,35 +1896,60 @@ function zoomToCountry(f) {
   const geom = fullFeature.geometry
   if (!geom) return
 
-  const bounds = new maplibregl.LngLatBounds()
-  const processCoords = (coords) => {
-    if (typeof coords[0] === 'number') {
-      bounds.extend(coords)
-    } else {
-      coords.forEach(processCoords)
-    }
-  }
-  processCoords(geom.coordinates)
-
+  const bounds = computeCountryBounds(geom)
   if (bounds.isEmpty()) return
 
-  // Always fly to bounds
   const cameraOptions = map.cameraForBounds(bounds, {
-    padding: { top: 100, bottom: 100, left: 100, right: 100 },
+    padding: getVisibleMapPadding(),
     maxZoom: 6,
   })
+  if (!cameraOptions) return
 
-  if (cameraOptions) {
-    map.flyTo({
-      ...cameraOptions,
-      duration: 3500,
-      curve: 2.0,
-      speed: 0.5,
-      pitch: 15,
-      bearing: -5,
-      essential: true,
-    })
+  // Lets a country_admin override the raw bbox-fit with a curated zoom for
+  // countries where it looks poor regardless (e.g. Russia's true extent —
+  // even correctly framed — is still a near-global view) — the same
+  // default_zoom escape hatch applyCountryLockedCamera() already offers
+  // country-locked sessions (spec 044), now also available to this anon/
+  // global double-click navigation path.
+  const code =
+    fullFeature.source === 'custom-territories' ? (fid === 'XKX' ? 'xk' : null) : numericToAlpha2(fid)
+  let zoom = cameraOptions.zoom
+  if (code) {
+    const { data } = await supabase
+      .from('country_boundaries')
+      .select('default_zoom')
+      .eq('country_code', code)
+      .maybeSingle()
+    if (data?.default_zoom != null) zoom = data.default_zoom
   }
+
+  map.flyTo({
+    ...cameraOptions,
+    zoom,
+    duration: 3500,
+    curve: 2.0,
+    speed: 0.5,
+    // Flat top-down, not a tilted/rotated shot (live-testing finding,
+    // 2026-07-30): the old pitch:15/bearing:-5 tilt exposed the map's blank
+    // edge beyond the poles for high-latitude countries like Russia, and
+    // re-applied itself every time regardless of how the user had already
+    // rotated the camera — resetting to 0/0 is the one value that's never
+    // wrong here, since a flat Mercator view has no "outside the map" edge.
+    pitch: 0,
+    bearing: 0,
+    essential: true,
+  })
+
+  // Once the fly-to lands, briefly simulate a hover on the shelters/exposure
+  // panels (both auto-collapsed to icons on selection) so the user notices
+  // they're there instead of discovering them by accident.
+  map.once('moveend', () => {
+    clearTimeout(collapsedPanelHintTimer)
+    showCollapsedPanelHints.value = true
+    collapsedPanelHintTimer = setTimeout(() => {
+      showCollapsedPanelHints.value = false
+    }, 3000)
+  })
 }
 
 // spec 044 US1: for a country-locked session, fit the camera to that user's
@@ -1853,21 +1987,22 @@ async function applyCountryLockedCamera() {
   }
   disasterStore.loadCountryHistory(disasterStore.activeBbox)
 
+  // Antimeridian-aware bounds (see computeCountryBounds) purely for the
+  // camera fit/center — bounds.getCenter() above would put Russia's default-
+  // zoom center in the wrong hemisphere (naive bounds compute ~lng 0).
+  const cameraOptions = map.cameraForBounds(computeCountryBounds(geom), {
+    padding: getVisibleMapPadding(),
+    maxZoom: 6,
+  })
+  if (!cameraOptions) return
+
   const { data } = await supabase
     .from('country_boundaries')
     .select('default_zoom')
     .eq('country_code', code)
     .maybeSingle()
 
-  if (data?.default_zoom != null) {
-    map.flyTo({ center: bounds.getCenter(), zoom: data.default_zoom, essential: true })
-  } else {
-    const cameraOptions = map.cameraForBounds(bounds, {
-      padding: { top: 100, bottom: 100, left: 100, right: 100 },
-      maxZoom: 6,
-    })
-    if (cameraOptions) map.flyTo({ ...cameraOptions, essential: true })
-  }
+  map.flyTo({ ...cameraOptions, zoom: data?.default_zoom ?? cameraOptions.zoom, essential: true })
 }
 
 // Regenerates the selected country's hex grid (country-hex-grid source) via
@@ -1876,11 +2011,15 @@ async function applyCountryLockedCamera() {
 // grid must be regenerated whenever the user switches back to 'hexagon'
 // mode (durum/ısı ↔ petek), not only on the initial country selection.
 function refreshCountryHexGridFromSelection() {
-  if (!hexWorker || selectedFeatureId == null) return
+  if (selectedFeatureId == null) return
+  ensureHexWorker()
   const fullFeature = _allCountryFeatures.find((cf) => String(cf.id) === String(selectedFeatureId))
   const geom = fullFeature?.geometry
   if (!geom) return
-  const gridRes = uiStore.manualHexResolution ?? Math.min(currentHexRes.value, MAX_HEX_RES)
+  // Country hex grid resolution is intentionally NOT zoom-derived (unlike the
+  // world-view hexbin grid) — a selected country's petek size should stay
+  // put while panning/zooming, only ever changing via the manual slider.
+  const gridRes = uiStore.manualHexResolution ?? MIN_HEX_RES
   countryHexRes = gridRes + 1
   hexWorker.postMessage({ type: 'FILL_GRID', geometry: geom, resolution: gridRes })
 }
@@ -1951,6 +2090,8 @@ function selectCountry(f) {
   if (alreadySelected) return
 
   uiStore.mapMode = 'hexagon'
+  sheltersLayerPanelCollapsed.value = true
+  exposureLayersPanelCollapsed.value = true
 
   if (selectedFeatureId !== null) {
     map.setFeatureState(
@@ -2001,7 +2142,7 @@ function clearCountrySelection() {
   disasterStore.activeBbox = null
   countryHexRes = null
   countryHexFeatures = null
-  uiStore.mapMode = 'normal'
+  uiStore.mapMode = 'heatmap'
   if (!map || !mapLoaded) return
 
   map.getSource('country-hex-grid')?.setData({ type: 'FeatureCollection', features: [] })
@@ -2022,6 +2163,10 @@ function clearCountrySelection() {
 
   // Restore full heatmap
   updateHeatmap()
+
+  if (defaultCameraState) {
+    map.flyTo({ ...defaultCameraState, essential: true })
+  }
 
   router.push('/')
 }
@@ -2045,6 +2190,24 @@ function initMap() {
 
   map.on('error', (e) => {
     console.error('[MapLibre] Error:', e.error)
+  })
+
+  // "İki kart üst üste oluyor" (user-reported, 2026-07-30): every marker
+  // (disaster event, drill event, community report...) binds its own
+  // independent popup — MapLibre has no built-in awareness of one popup
+  // sitting behind another, so two nearby markers clicked in sequence just
+  // stack in DOM order with no way to bring the back one forward. Rather
+  // than auto-closing one when another opens (rejected — "belki ikisini
+  // aynı anda görmek istiyorum"), this is a lightweight playing-card-style
+  // bring-to-front: clicking anywhere on a popup raises it above its
+  // siblings, all of them stay open simultaneously.
+  map.getContainer().addEventListener('mousedown', (e) => {
+    const popupEl = e.target.closest('.maplibregl-popup')
+    if (!popupEl) return
+    popupZIndexCounter += 1
+    popupEl.style.zIndex = String(popupZIndexCounter)
+    popupEl.classList.add('popup-brought-to-front')
+    setTimeout(() => popupEl.classList.remove('popup-brought-to-front'), 200)
   })
 
   let _hexZoomTimer = null
@@ -2072,6 +2235,7 @@ function initMap() {
     // applyCountryLockedCamera's early return below), so without this the
     // readout would sit at currentZoom's ref() default forever.
     currentZoom.value = Math.round(map.getZoom() * 10) / 10
+    defaultCameraState = { center: map.getCenter(), zoom: map.getZoom() }
     addSourcesAndLayers()
     brightenDarkLabels()
     updateMarkers()
@@ -2181,8 +2345,26 @@ function setupMapInteractions() {
   })
 
   // Hex-fill click handling
+  let hexClickTimer = null
   map.on('click', 'hex-fill', (e) => {
     if (!e.features || !e.features.length) return
+    // Disambiguate from a double-click (used to zoom-to-fit the country
+    // underneath the hex grid): opening a popup right on the first click
+    // plants a DOM element under the cursor that can swallow the second
+    // click, making the zoom gesture flaky. Wait one tick — a second click
+    // within the window cancels the popup and lets dblclick zoom instead.
+    if (hexClickTimer) {
+      clearTimeout(hexClickTimer)
+      hexClickTimer = null
+      return
+    }
+    hexClickTimer = setTimeout(() => {
+      hexClickTimer = null
+      openHexPopup(e)
+    }, 250)
+  })
+
+  function openHexPopup(e) {
     const props = e.features[0].properties
     const h3Id = props.h3_id
     const count = props.eventCount || 1
@@ -2234,11 +2416,12 @@ function setupMapInteractions() {
       </div>
     `
 
-    new maplibregl.Popup({ className: 'hex-popup-container', offset: 10 })
+    const hexPopup = new maplibregl.Popup({ className: 'hex-popup-container', offset: 10 })
       .setLngLat(e.lngLat)
       .setHTML(popupHtml)
-      .addTo(map)
-  })
+    registerPopupCascade(hexPopup)
+    hexPopup.addTo(map)
+  }
 
   map.on('mouseenter', 'hex-fill', () => {
     map.getCanvas().style.cursor = 'default'
@@ -2269,7 +2452,7 @@ function setupMapInteractions() {
     const audioHtml = props.audio_path
       ? `<audio controls src="${supabase.storage.from('community-report-audio').getPublicUrl(props.audio_path).data.publicUrl}" aria-label="${t('communityReport.moderation.playAudio')}"></audio>`
       : ''
-    new maplibregl.Popup({ offset: 12, className: 'modern-popup-container' })
+    const communityReportPopup = new maplibregl.Popup({ offset: 12, className: 'modern-popup-container' })
       .setLngLat(e.features[0].geometry.coordinates)
       .setHTML(
         `
@@ -2284,7 +2467,8 @@ function setupMapInteractions() {
         </div>
       `,
       )
-      .addTo(map)
+    registerPopupCascade(communityReportPopup)
+    communityReportPopup.addTo(map)
   })
 
   map.on('mouseenter', 'community-reports-clusters', () => {
@@ -2409,6 +2593,7 @@ function updateShelterMarkers() {
         </div>
       `,
       )
+      registerPopupCascade(popup)
 
       const marker = new maplibregl.Marker({ element: el, anchor: 'center' })
         .setLngLat([shelter.lng, shelter.lat])
@@ -2496,6 +2681,7 @@ function updateDrillEventMarkers() {
       </div>
     `,
     )
+    registerPopupCascade(popup)
 
     const marker = new maplibregl.Marker({ element: el, anchor: 'center' })
       .setLngLat([ev.lng, ev.lat])
@@ -2608,6 +2794,26 @@ const markerHiddenTiersLabel = computed(() => {
   return tiers.map((tier) => t(`severity.${tier}`)).join(', ')
 })
 
+// Shared debounce for every updateMarkers() trigger (zoom-threshold cross,
+// mapMode toggle, disasterStore.allEvents change...) — user-reported,
+// 2026-07-30: clicking a marker's popup open, it would visibly reload/
+// re-fly-in 1-2 times right after. Root cause: several independent watchers
+// each called updateMarkers() directly, un-coordinated — e.g. selectCountry()
+// setting uiStore.mapMode='hexagon' (its own watcher fires immediately) landing
+// within the same ~400ms window as loadCountryHistory's fetch resolving
+// (the allEvents watcher, separately debounced) meant TWO full clear+rebuild
+// cycles back to back, each one destroying and recreating (then
+// re-opening, per the earlier popup-preservation fix) the same popup —
+// two re-open animations in quick succession read as "loading twice" /
+// "flying in from a weird spot". Routing every caller through one shared
+// timer means whichever call happens last is the only one that actually
+// runs.
+let _markerUpdateTimer = null
+function scheduleUpdateMarkers(delay = 150) {
+  clearTimeout(_markerUpdateTimer)
+  _markerUpdateTimer = setTimeout(updateMarkers, delay)
+}
+
 function updateMarkers() {
   if (!map || !mapLoaded) return
 
@@ -2615,6 +2821,22 @@ function updateMarkers() {
   if ((uiStore.showHeatmap || uiStore.showHexbins) && currentZoom.value < 8) {
     if (markerObjects.length > 0) clearMarkers()
     return
+  }
+
+  // Preserve a currently-open popup across this rebuild — live-testing
+  // finding, user-reported: clicking a marker opened its popup, then it
+  // silently closed itself under a second later. Root cause: this function
+  // re-runs (debounced 400ms) on every disasterStore.allEvents change — a
+  // realtime push, loadCountryHistory's own fetch, anything — and
+  // clearMarkers() below destroys every marker DOM node/popup instance
+  // from scratch each time, popup included, even mid-interaction.
+  let openEventId = null
+  for (const m of markerObjects) {
+    const p = m.getPopup()
+    if (p && p.isOpen()) {
+      openEventId = m.__eventId
+      break
+    }
   }
 
   clearMarkers()
@@ -2660,10 +2882,12 @@ function updateMarkers() {
     `,
     )
 
+    registerPopupCascade(popup)
     const marker = new maplibregl.Marker({ element: el, anchor: 'center' })
       .setLngLat([event.lng, event.lat])
       .setPopup(popup)
       .addTo(map)
+    marker.__eventId = event.id
 
     // Impact Analysis (spec 008): drive the split-view side panel independently
     // of the existing popup toggle behavior.
@@ -2672,6 +2896,7 @@ function updateMarkers() {
     })
 
     markerObjects.push(marker)
+    if (event.id != null && event.id === openEventId) marker.togglePopup()
   })
 }
 
@@ -2702,6 +2927,38 @@ function updateHeatmap() {
   map.getSource('disaster-heat').setData({ type: 'FeatureCollection', features })
 }
 
+// Lazily creates the hex worker — split out from updateHexbins() (spec: map
+// now defaults to 'heatmap' mode, not 'hexagon') so the worker isn't only
+// ever created the first time the world-view hexbin layer turns on. Without
+// this, selecting a country while already in heatmap/normal mode called
+// refreshCountryHexGridFromSelection() against a hexWorker that had never
+// been instantiated — its `if (!hexWorker) return` guard silently no-opped
+// and the country's own petek grid never rendered (live-testing finding).
+function ensureHexWorker() {
+  if (hexWorker) return
+  hexWorker = new HexWorker()
+  hexWorker.onmessage = ({ data }) => {
+    if (!map || !mapLoaded) return
+
+    if (data.type === 'FILL_GRID') {
+      // Country grid: apply signal colors then render
+      applySignalToCountryGrid(data.features)
+    } else if (data.type === 'FILL_VIEWPORT') {
+      // Cache static mesh for this resolution
+      const res = data.res ?? currentHexRes.value
+      hexGridCache.set(res, data.features)
+      map.getSource('hex-world-bg')?.setData({
+        type: 'FeatureCollection',
+        features: data.features,
+      })
+      // Inject signal onto the cached mesh
+      applySignalToGrid()
+    }
+  }
+  const landCells = Array.from(getLandCells())
+  hexWorker.postMessage({ type: 'INIT_LAND', landCells })
+}
+
 function updateHexbins() {
   if (!map || !mapLoaded) return
 
@@ -2716,31 +2973,7 @@ function updateHexbins() {
     return
   }
 
-  // Create worker if not yet initialized
-  if (!hexWorker) {
-    hexWorker = new HexWorker()
-    hexWorker.onmessage = ({ data }) => {
-      if (!map || !mapLoaded) return
-
-      if (data.type === 'FILL_GRID') {
-        // Country grid: apply signal colors then render
-        applySignalToCountryGrid(data.features)
-      } else if (data.type === 'FILL_VIEWPORT') {
-        // Cache static mesh for this resolution
-        const res = data.res ?? currentHexRes.value
-        hexGridCache.set(res, data.features)
-        map.getSource('hex-world-bg')?.setData({
-          type: 'FeatureCollection',
-          features: data.features,
-        })
-        // Inject signal onto the cached mesh
-        applySignalToGrid()
-      }
-    }
-    const landCells = Array.from(getLandCells())
-    hexWorker.postMessage({ type: 'INIT_LAND', landCells })
-  }
-
+  ensureHexWorker()
   updateViewportGrid()
 }
 
@@ -2864,7 +3097,7 @@ watch(
   () => {
     clearTimeout(_mapUpdateTimer)
     _mapUpdateTimer = setTimeout(() => {
-      updateMarkers()
+      scheduleUpdateMarkers(0) // shares the marker-rebuild timer with every other trigger
       updateHeatmap()
       // Signal injection: re-inject colors without recomputing geometry
       if (mapLoaded && uiStore.showHexbins) {
@@ -2882,7 +3115,7 @@ watch(
 watch(
   () => uiStore.mapMode,
   () => {
-    updateMarkers()
+    scheduleUpdateMarkers()
     updateHeatmap()
     updateHexbins()
     // When switching to heatmap on a focused country, filter immediately
@@ -2987,12 +3220,6 @@ onMounted(() => {
   // for super_admin) — no-op if none is active
   loadActiveDrillEvents()
   if (!hazardTypesStore.loaded) hazardTypesStore.fetchHazardTypes()
-  if (layerPanelStack.value) {
-    layerPanelResizeObserver = new ResizeObserver((entries) => {
-      layerPanelWidth.value = entries[0]?.contentRect.width ?? 0
-    })
-    layerPanelResizeObserver.observe(layerPanelStack.value)
-  }
   requestAnimationFrame(function tryInit() {
     if (!mapContainer.value) return
     const { offsetWidth, offsetHeight } = mapContainer.value
@@ -3006,7 +3233,7 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   window.removeEventListener('keydown', handleMapModeKey)
-  layerPanelResizeObserver?.disconnect()
+  clearTimeout(collapsedPanelHintTimer)
   clearMarkers()
   clearShelterMarkers()
   if (userMarkerObj) {
@@ -3025,7 +3252,6 @@ onBeforeUnmount(() => {
   <div
     class="map-view-wrapper"
     :class="{ 'impact-panel-collapsed': uiStore.impactPanelCollapsed }"
-    :style="{ '--layer-panel-total-width': `${layerPanelWidth}px` }"
   >
     <div ref="mapContainer" class="map-leaflet"></div>
     <div class="zoom-control-bar">
@@ -3074,19 +3300,19 @@ onBeforeUnmount(() => {
       <div class="legend-title">Şiddet</div>
       <div class="legend-severity-rows">
         <div class="sev-row">
-          <span class="sev-dot" style="background: #4ade80"></span><span>Minimal</span>
+          <span class="sev-dot" style="background: var(--color-minimal)"></span><span>Minimal</span>
         </div>
         <div class="sev-row">
-          <span class="sev-dot" style="background: #fbbf24"></span><span>Düşük</span>
+          <span class="sev-dot" style="background: var(--color-low)"></span><span>Düşük</span>
         </div>
         <div class="sev-row">
-          <span class="sev-dot" style="background: #f97316"></span><span>Orta</span>
+          <span class="sev-dot" style="background: var(--color-moderate)"></span><span>Orta</span>
         </div>
         <div class="sev-row">
-          <span class="sev-dot" style="background: #ef4444"></span><span>Yüksek</span>
+          <span class="sev-dot" style="background: var(--color-high)"></span><span>Yüksek</span>
         </div>
         <div class="sev-row">
-          <span class="sev-dot" style="background: #7c3aed"></span><span>Kritik</span>
+          <span class="sev-dot" style="background: var(--color-critical)"></span><span>Kritik</span>
         </div>
       </div>
       <p v-if="markerTruncation && markerTruncation.hiddenTiers.length > 0" class="marker-truncation-note">
@@ -3175,7 +3401,227 @@ onBeforeUnmount(() => {
     </Transition>
 
     <!-- Impact Analysis (spec 008): geocoding search + split-view side panel -->
-    <GeocodingSearch @location-selected="onLocationSelected" />
+    <!-- Top controls row (UX follow-up): shelters/reports, geocoding search,
+         and WMS/exposure layers used to be three independently absolute-
+         positioned boxes with a hand-tuned calc() trying to keep the search
+         bar centered between whatever the other two happened to be. A
+         three-column grid (1fr auto 1fr) makes that centering exact instead
+         of approximate — the search bar sits in the auto-sized middle
+         column, and the two 1fr side columns are always equal width by
+         definition, regardless of how wide the shelters panel or layer
+         stack currently are (collapsed vs. expanded). -->
+    <div class="top-controls-row" :class="{ 'legend-sidebar-collapsed': uiStore.sidebarCollapsed }">
+      <!-- Shelter map layer toggle (spec 027) — always visible, independent of WMS/WFS layers. -->
+      <div
+        class="shelters-layer-panel"
+        :class="{ 'shelters-layer-panel--collapsed': sheltersLayerPanelCollapsed }"
+      >
+        <button
+          v-if="sheltersLayerPanelCollapsed"
+          ref="sheltersHintAnchorEl"
+          type="button"
+          class="shelters-layer-collapse-btn shelters-layer-collapse-btn--collapsed"
+          :aria-label="t('shelters.map.panelExpand')"
+          :title="t('shelters.map.panelExpand')"
+          @click="sheltersLayerPanelCollapsed = false"
+        >
+          <svg class="shelters-layer-icon" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M12 2a7 7 0 0 0-7 7c0 5.25 7 13 7 13s7-7.75 7-13a7 7 0 0 0-7-7z" />
+            <circle cx="12" cy="9" r="2.6" fill="rgba(0,0,0,.35)" />
+          </svg>
+        </button>
+        <template v-else>
+          <button
+            type="button"
+            class="shelters-layer-collapse-btn"
+            :aria-label="t('shelters.map.panelCollapse')"
+            :title="t('shelters.map.panelCollapse')"
+            @click="sheltersLayerPanelCollapsed = true"
+          >
+            <svg class="shelters-layer-arrow" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M17 17 L7 7 M7 7 H15 M7 7 V15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+            </svg>
+          </button>
+          <h4 class="map-layers-title shelters-layer-title">{{ t('shelters.map.panelTitle') }}</h4>
+          <label class="map-layer-toggle">
+            <input type="checkbox" :checked="uiStore.showShelters" @change="uiStore.toggleShelters()" />
+            <span>{{ t('shelters.map.toggleLabel') }}</span>
+          </label>
+          <label class="map-layer-toggle">
+            <input
+              type="checkbox"
+              :checked="uiStore.showCommunityReports"
+              @change="uiStore.toggleCommunityReports()"
+            />
+            <span>{{ t('communityReport.map.toggleLabel') }}</span>
+          </label>
+        </template>
+      </div>
+
+      <GeocodingSearch @location-selected="onLocationSelected" />
+
+      <!-- Layer panel stack: WMS/WFS (spec 012) + Exposure layers (spec 042) share one
+           positioned column so neither overlaps the other when both are present. -->
+      <div class="layer-panel-stack">
+        <!-- OGC WMS/WFS Map Layers (spec 012): toggle + opacity, session-only state -->
+        <div v-if="mapLayersStore.activeMapLayers.length" class="map-layers-panel">
+          <h4 class="map-layers-title">{{ t('mapLayers.panelTitle') }}</h4>
+          <div v-for="layer in mapLayersStore.activeMapLayers" :key="layer.id" class="map-layer-row">
+            <label class="map-layer-toggle">
+              <input type="checkbox" :checked="isLayerVisible(layer.id)" @change="toggleMapLayer(layer)" />
+              <span>{{ layer.display_name }}</span>
+              <span class="map-layer-type">{{ layer.source_type.toUpperCase() }}</span>
+            </label>
+            <input
+              v-if="isLayerVisible(layer.id)"
+              type="range" min="0" max="1" step="0.05"
+              :value="getLayerOpacity(layer.id)"
+              @input="setMapLayerOpacity(layer, Number($event.target.value))"
+              class="map-layer-opacity"
+            />
+          </div>
+        </div>
+
+        <!-- Exposure layers (spec 042): roads/population/rivers/basins etc, generic
+             geometry-driven rendering + click-to-inspect. Toggle + opacity share the
+             same session-only state shape as the WMS/WFS panel above. -->
+        <div
+          v-if="exposureLayersStore.loaded"
+          class="map-layers-panel exposure-layers-panel"
+          :class="{ 'exposure-layers-panel--collapsed': exposureLayersPanelCollapsed }"
+        >
+          <button
+            v-if="exposureLayersPanelCollapsed"
+            ref="exposureHintAnchorEl"
+            type="button"
+            class="exposure-layers-collapse-btn exposure-layers-collapse-btn--collapsed"
+            :aria-label="t('exposureLayers.expand')"
+            :title="t('exposureLayers.expand')"
+            @click="exposureLayersPanelCollapsed = false"
+          >
+            <svg class="exposure-layers-icon" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M12 2 L2 7 L12 12 L22 7 Z" />
+              <path d="M2 12 L12 17 L22 12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" />
+              <path d="M2 17 L12 22 L22 17" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" />
+            </svg>
+          </button>
+          <template v-else>
+            <button
+              type="button"
+              class="exposure-layers-collapse-btn"
+              :aria-label="t('exposureLayers.collapse')"
+              :title="t('exposureLayers.collapse')"
+              @click="exposureLayersPanelCollapsed = true"
+            >
+              <svg class="exposure-layers-arrow" viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M7 17 L17 7 M17 7 H9 M17 7 V15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+              </svg>
+            </button>
+            <h4 class="map-layers-title">{{ t('exposureLayers.panelTitle') }}</h4>
+            <!-- Gated on selectedCountryName, not selectedCountryCode: a custom
+                 territory (e.g. KKTC) can be genuinely selected with no country
+                 code at all, and should read as "no layers for this place" —
+                 not as if nothing were selected yet. -->
+            <p v-if="!selectedCountryName" class="exposure-layers-empty">{{ t('exposureLayers.selectCountryPrompt') }}</p>
+            <p v-else-if="visibleExposureDatasets.length === 0" class="exposure-layers-empty">{{ t('exposureLayers.emptyState') }}</p>
+            <div v-for="dataset in visibleExposureDatasets" :key="dataset.id" class="map-layer-row exposure-layer-row">
+            <label class="map-layer-toggle">
+              <input type="checkbox" :checked="isLayerVisible(`exposure-dataset-${dataset.id}`)" @change="toggleExposureLayer(dataset)" />
+              <span class="exposure-layer-swatch" :style="{ background: colorForDataset(dataset) }"></span>
+              <span class="exposure-layer-name" :title="friendlyDatasetLabel(t, dataset)">{{ friendlyDatasetLabel(t, dataset) }}</span>
+              <span class="map-layer-type exposure-layer-count" v-if="dataset.feature_count">{{ t('exposureLayers.featureCount', { count: dataset.feature_count.toLocaleString() }) }}</span>
+            </label>
+            <input
+              v-if="isLayerVisible(`exposure-dataset-${dataset.id}`)"
+              type="range" min="0" max="1" step="0.05"
+              :value="getLayerOpacity(`exposure-dataset-${dataset.id}`)"
+              @input="setExposureLayerOpacity(dataset, Number($event.target.value))"
+              class="map-layer-opacity"
+              :style="{ accentColor: colorForDataset(dataset) }"
+            />
+            <!-- spec 046 US2: hexagon vs. province (ADM1) vs. district (ADM2)
+                 population view — only for population sources, and only once
+                 the layer itself is on (region aggregation reads its
+                 already-fetched hex data). -->
+            <div
+              v-if="isPopulationSource(dataset.source_name) && isLayerVisible(`exposure-dataset-${dataset.id}`)"
+              class="population-view-toggle"
+            >
+              <button
+                type="button"
+                class="population-view-btn"
+                :class="{ active: isRegionLevelActive(dataset, 'hexagon') }"
+                @click="toggleRegionLevel(dataset, 'hexagon')"
+              >{{ t('exposureLayers.regionView.hexagonOption') }}</button>
+              <button
+                type="button"
+                class="population-view-btn"
+                :class="{ active: isRegionLevelActive(dataset, 'province'), loading: regionViewLoadingFor(dataset, 'province') }"
+                :disabled="!isRegionViewAvailable(dataset, 'province') || regionViewLoadingFor(dataset, 'province')"
+                :title="isRegionViewAvailable(dataset, 'province') ? '' : t('exposureLayers.regionView.unavailableTooltip')"
+                @click="toggleRegionLevel(dataset, 'province')"
+              >{{ regionViewLoadingFor(dataset, 'province') ? t('exposureLayers.loading') : t('exposureLayers.regionView.provinceOption') }}</button>
+              <button
+                type="button"
+                class="population-view-btn"
+                :class="{ active: isRegionLevelActive(dataset, 'district'), loading: regionViewLoadingFor(dataset, 'district') }"
+                :disabled="!isRegionViewAvailable(dataset, 'district') || regionViewLoadingFor(dataset, 'district')"
+                :title="isRegionViewAvailable(dataset, 'district') ? '' : t('exposureLayers.regionView.unavailableTooltip')"
+                @click="toggleRegionLevel(dataset, 'district')"
+              >{{ regionViewLoadingFor(dataset, 'district') ? t('exposureLayers.loading') : t('exposureLayers.regionView.districtOption') }}</button>
+              <button
+                type="button"
+                class="population-view-btn"
+                :class="{ active: isRegionLevelActive(dataset, 'village'), loading: regionViewLoadingFor(dataset, 'village') }"
+                :disabled="!isRegionViewAvailable(dataset, 'village') || regionViewLoadingFor(dataset, 'village')"
+                :title="isRegionViewAvailable(dataset, 'village') ? '' : t('exposureLayers.regionView.unavailableTooltip')"
+                @click="toggleRegionLevel(dataset, 'village')"
+              >{{ regionViewLoadingFor(dataset, 'village') ? t('exposureLayers.loading') : t('exposureLayers.regionView.villageOption') }}</button>
+            </div>
+            <!-- spec 050 follow-up: category filter for critical infrastructure
+                 (schools/health/emergency) — e.g. hide schools for a
+                 night-time event, or after a category's buildings are known
+                 destroyed. Pure client-side filter, no new fetch. -->
+            <div
+              v-if="dataset.source_name === 'osm-buildings' && isLayerVisible(`exposure-dataset-${dataset.id}`)"
+              class="population-view-toggle"
+            >
+              <button
+                v-for="category in CRITICAL_INFRA_CATEGORIES"
+                :key="category"
+                type="button"
+                class="population-view-btn"
+                :class="{ active: isCriticalInfraCategoryActive(category) }"
+                @click="toggleCriticalInfraCategory(category)"
+              >{{ t('assetCategory.' + category, category) }}</button>
+            </div>
+          </div>
+          </template>
+        </div>
+      </div>
+    </div>
+
+    <!-- Collapsed shelters/exposure-layers panel hints (see
+         showCollapsedPanelHints's own comment) — teleported to <body> and
+         positioned at the anchor button's real getBoundingClientRect(),
+         independent of either panel's own overflow/scroll ancestors. -->
+    <Teleport to="body">
+      <Transition name="hover-label">
+        <span
+          v-if="sheltersLayerPanelCollapsed && showCollapsedPanelHints && sheltersHintPos"
+          class="collapsed-panel-hint"
+          :style="{ top: sheltersHintPos.top + 'px', left: sheltersHintPos.left + 'px' }"
+        >{{ t('shelters.map.panelExpand') }}</span>
+      </Transition>
+      <Transition name="hover-label">
+        <span
+          v-if="exposureLayersPanelCollapsed && showCollapsedPanelHints && exposureHintPos"
+          class="collapsed-panel-hint"
+          :style="{ top: exposureHintPos.top + 'px', right: exposureHintPos.right + 'px' }"
+        >{{ t('exposureLayers.expand') }}</span>
+      </Transition>
+    </Teleport>
+
     <div class="impact-panel-dock" :class="{ collapsed: uiStore.impactPanelCollapsed }">
       <!-- Persistent header — always here regardless of which face
            (Impact Analysis / Settings) is flipped up, so the collapse
@@ -3227,164 +3673,6 @@ onBeforeUnmount(() => {
         </div>
       </div>
     </div>
-
-    <!-- Layer panel stack: WMS/WFS (spec 012) + Exposure layers (spec 042) share one
-         positioned column so neither overlaps the other when both are present. -->
-    <div ref="layerPanelStack" class="layer-panel-stack">
-      <!-- OGC WMS/WFS Map Layers (spec 012): toggle + opacity, session-only state -->
-      <div v-if="mapLayersStore.activeMapLayers.length" class="map-layers-panel">
-        <h4 class="map-layers-title">{{ t('mapLayers.panelTitle') }}</h4>
-        <div v-for="layer in mapLayersStore.activeMapLayers" :key="layer.id" class="map-layer-row">
-          <label class="map-layer-toggle">
-            <input type="checkbox" :checked="isLayerVisible(layer.id)" @change="toggleMapLayer(layer)" />
-            <span>{{ layer.display_name }}</span>
-            <span class="map-layer-type">{{ layer.source_type.toUpperCase() }}</span>
-          </label>
-          <input
-            v-if="isLayerVisible(layer.id)"
-            type="range" min="0" max="1" step="0.05"
-            :value="getLayerOpacity(layer.id)"
-            @input="setMapLayerOpacity(layer, Number($event.target.value))"
-            class="map-layer-opacity"
-          />
-        </div>
-      </div>
-
-      <!-- Exposure layers (spec 042): roads/population/rivers/basins etc, generic
-           geometry-driven rendering + click-to-inspect. Toggle + opacity share the
-           same session-only state shape as the WMS/WFS panel above. -->
-      <div
-        v-if="exposureLayersStore.loaded"
-        class="map-layers-panel exposure-layers-panel"
-        :class="{ 'exposure-layers-panel--collapsed': exposureLayersPanelCollapsed }"
-      >
-        <button
-          v-if="exposureLayersPanelCollapsed"
-          type="button"
-          class="exposure-layers-collapse-btn exposure-layers-collapse-btn--collapsed"
-          :aria-label="t('exposureLayers.expand')"
-          :title="t('exposureLayers.expand')"
-          @click="exposureLayersPanelCollapsed = false"
-        >
-          <svg class="exposure-layers-icon" viewBox="0 0 24 24" aria-hidden="true">
-            <path d="M12 2 L2 7 L12 12 L22 7 Z" />
-            <path d="M2 12 L12 17 L22 12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" />
-            <path d="M2 17 L12 22 L22 17" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" />
-          </svg>
-        </button>
-        <template v-else>
-          <button
-            type="button"
-            class="exposure-layers-collapse-btn"
-            :aria-label="t('exposureLayers.collapse')"
-            :title="t('exposureLayers.collapse')"
-            @click="exposureLayersPanelCollapsed = true"
-          >
-            <svg class="exposure-layers-arrow" viewBox="0 0 24 24" aria-hidden="true">
-              <path d="M7 17 L17 7 M17 7 H9 M17 7 V15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
-            </svg>
-          </button>
-          <h4 class="map-layers-title">{{ t('exposureLayers.panelTitle') }}</h4>
-          <!-- Gated on selectedCountryName, not selectedCountryCode: a custom
-               territory (e.g. KKTC) can be genuinely selected with no country
-               code at all, and should read as "no layers for this place" —
-               not as if nothing were selected yet. -->
-          <p v-if="!selectedCountryName" class="exposure-layers-empty">{{ t('exposureLayers.selectCountryPrompt') }}</p>
-          <p v-else-if="visibleExposureDatasets.length === 0" class="exposure-layers-empty">{{ t('exposureLayers.emptyState') }}</p>
-          <div v-for="dataset in visibleExposureDatasets" :key="dataset.id" class="map-layer-row exposure-layer-row">
-          <label class="map-layer-toggle">
-            <input type="checkbox" :checked="isLayerVisible(`exposure-dataset-${dataset.id}`)" @change="toggleExposureLayer(dataset)" />
-            <span class="exposure-layer-swatch" :style="{ background: colorForDataset(dataset) }"></span>
-            <span class="exposure-layer-name" :title="friendlyDatasetLabel(t, dataset)">{{ friendlyDatasetLabel(t, dataset) }}</span>
-            <span class="map-layer-type exposure-layer-count" v-if="dataset.feature_count">{{ t('exposureLayers.featureCount', { count: dataset.feature_count.toLocaleString() }) }}</span>
-          </label>
-          <input
-            v-if="isLayerVisible(`exposure-dataset-${dataset.id}`)"
-            type="range" min="0" max="1" step="0.05"
-            :value="getLayerOpacity(`exposure-dataset-${dataset.id}`)"
-            @input="setExposureLayerOpacity(dataset, Number($event.target.value))"
-            class="map-layer-opacity"
-            :style="{ accentColor: colorForDataset(dataset) }"
-          />
-          <!-- spec 046 US2: hexagon vs. province (ADM1) vs. district (ADM2)
-               population view — only for population sources, and only once
-               the layer itself is on (region aggregation reads its
-               already-fetched hex data). -->
-          <div
-            v-if="isPopulationSource(dataset.source_name) && isLayerVisible(`exposure-dataset-${dataset.id}`)"
-            class="population-view-toggle"
-          >
-            <button
-              type="button"
-              class="population-view-btn"
-              :class="{ active: isRegionLevelActive(dataset, 'hexagon') }"
-              @click="toggleRegionLevel(dataset, 'hexagon')"
-            >{{ t('exposureLayers.regionView.hexagonOption') }}</button>
-            <button
-              type="button"
-              class="population-view-btn"
-              :class="{ active: isRegionLevelActive(dataset, 'province'), loading: regionViewLoadingFor(dataset, 'province') }"
-              :disabled="!isRegionViewAvailable(dataset, 'province') || regionViewLoadingFor(dataset, 'province')"
-              :title="isRegionViewAvailable(dataset, 'province') ? '' : t('exposureLayers.regionView.unavailableTooltip')"
-              @click="toggleRegionLevel(dataset, 'province')"
-            >{{ regionViewLoadingFor(dataset, 'province') ? t('exposureLayers.loading') : t('exposureLayers.regionView.provinceOption') }}</button>
-            <button
-              type="button"
-              class="population-view-btn"
-              :class="{ active: isRegionLevelActive(dataset, 'district'), loading: regionViewLoadingFor(dataset, 'district') }"
-              :disabled="!isRegionViewAvailable(dataset, 'district') || regionViewLoadingFor(dataset, 'district')"
-              :title="isRegionViewAvailable(dataset, 'district') ? '' : t('exposureLayers.regionView.unavailableTooltip')"
-              @click="toggleRegionLevel(dataset, 'district')"
-            >{{ regionViewLoadingFor(dataset, 'district') ? t('exposureLayers.loading') : t('exposureLayers.regionView.districtOption') }}</button>
-            <button
-              type="button"
-              class="population-view-btn"
-              :class="{ active: isRegionLevelActive(dataset, 'village'), loading: regionViewLoadingFor(dataset, 'village') }"
-              :disabled="!isRegionViewAvailable(dataset, 'village') || regionViewLoadingFor(dataset, 'village')"
-              :title="isRegionViewAvailable(dataset, 'village') ? '' : t('exposureLayers.regionView.unavailableTooltip')"
-              @click="toggleRegionLevel(dataset, 'village')"
-            >{{ regionViewLoadingFor(dataset, 'village') ? t('exposureLayers.loading') : t('exposureLayers.regionView.villageOption') }}</button>
-          </div>
-          <!-- spec 050 follow-up: category filter for critical infrastructure
-               (schools/health/emergency) — e.g. hide schools for a
-               night-time event, or after a category's buildings are known
-               destroyed. Pure client-side filter, no new fetch. -->
-          <div
-            v-if="dataset.source_name === 'osm-buildings' && isLayerVisible(`exposure-dataset-${dataset.id}`)"
-            class="population-view-toggle"
-          >
-            <button
-              v-for="category in CRITICAL_INFRA_CATEGORIES"
-              :key="category"
-              type="button"
-              class="population-view-btn"
-              :class="{ active: isCriticalInfraCategoryActive(category) }"
-              @click="toggleCriticalInfraCategory(category)"
-            >{{ t('assetCategory.' + category, category) }}</button>
-          </div>
-        </div>
-        </template>
-      </div>
-    </div>
-
-    <!-- Shelter map layer toggle (spec 027) — always visible, independent of WMS/WFS layers.
-         Slides clear of the sidebar the same way .map-legend does instead of
-         sitting underneath it (it used to be pinned at left:16px, directly
-         behind the sidebar whenever it was open). -->
-    <div class="shelters-layer-panel" :class="{ 'legend-sidebar-collapsed': uiStore.sidebarCollapsed }">
-      <label class="map-layer-toggle">
-        <input type="checkbox" :checked="uiStore.showShelters" @change="uiStore.toggleShelters()" />
-        <span>{{ t('shelters.map.toggleLabel') }}</span>
-      </label>
-      <label class="map-layer-toggle">
-        <input
-          type="checkbox"
-          :checked="uiStore.showCommunityReports"
-          @change="uiStore.toggleCommunityReports()"
-        />
-        <span>{{ t('communityReport.map.toggleLabel') }}</span>
-      </label>
-    </div>
   </div>
 </template>
 
@@ -3409,11 +3697,33 @@ onBeforeUnmount(() => {
   height: 100vh;
 }
 
-.layer-panel-stack {
+.top-controls-row {
+  /* Shelters/reports (left) + geocoding search (center) + WMS/exposure
+     layers (right), as one 3-column grid instead of three independently
+     absolute-positioned boxes. The two outer 1fr tracks are always equal
+     width, so the auto-sized middle column (the search bar) sits exactly
+     centered in the row regardless of how wide the two side panels
+     currently are — collapsed vs. expanded, sidebar open vs. closed. */
   position: absolute;
   top: 16px;
-  right: var(--map-control-offset);
-  z-index: 5;
+  left: calc(var(--sidebar-width, 280px) + 12px);
+  right: calc(var(--map-control-offset) + 12px);
+  z-index: 20;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: start;
+  gap: 12px;
+  transition: left 0.35s ease, right 0.2s ease;
+}
+
+.top-controls-row.legend-sidebar-collapsed {
+  left: calc(var(--sidebar-collapsed, 56px) + 12px);
+}
+
+.layer-panel-stack {
+  /* Right-hand column of .top-controls-row's 3-col grid — hugs the row's
+     right edge via justify-self, doesn't position itself independently. */
+  justify-self: end;
   display: flex;
   flex-direction: column;
   align-items: flex-end;
@@ -3425,7 +3735,7 @@ onBeforeUnmount(() => {
   background: rgba(15,17,23,.9);
   border: 1px solid rgba(255,255,255,.12);
   border-radius: 10px;
-  padding: 12px;
+  padding: 14px 16px 42px;
   min-width: 220px;
   max-width: 280px;
   color: #e2e8f0;
@@ -3490,13 +3800,13 @@ onBeforeUnmount(() => {
   height: 22px;
   fill: #4da3ff;
 }
-.map-layers-title { margin: 0 0 8px; font-size: .8rem; font-weight: 700; }
+.map-layers-title { margin: 0 0 10px; font-size: .8rem; font-weight: 700; }
 .exposure-layers-panel .map-layers-title { margin-right: 28px; }
 .map-layer-row { margin-bottom: 8px; }
 .map-layer-toggle { display: flex; align-items: center; gap: 6px; cursor: pointer; }
 .map-layer-type { margin-left: auto; font-size: .68rem; color: var(--color-text-muted,#94a3b8); }
 .map-layer-opacity { width: 100%; margin-top: 4px; }
-.exposure-layers-empty { margin: 0; font-size: .72rem; color: var(--color-text-muted,#94a3b8); font-style: italic; }
+.exposure-layers-empty { margin: 0; font-size: .72rem; line-height: 1.45; color: var(--color-text-muted,#94a3b8); font-style: italic; }
 .exposure-layer-row {
   padding: 6px 8px;
   border-radius: 8px;
@@ -3566,22 +3876,80 @@ onBeforeUnmount(() => {
 }
 
 .shelters-layer-panel {
-  position: absolute;
-  top: 16px;
-  left: calc(var(--sidebar-width, 280px) + 12px);
-  transition: left 0.35s ease;
-  z-index: 5;
+  /* Left-hand column of .top-controls-row's 3-col grid — hugs the row's
+     left edge via justify-self, doesn't position itself independently
+     (the row handles clearing the sidebar). Still position:relative so
+     .shelters-layer-collapse-btn (absolute) anchors to this box, not the
+     grid row. */
+  position: relative;
+  justify-self: start;
   background: rgba(15,17,23,.9);
   border: 1px solid rgba(255,255,255,.12);
   border-radius: 10px;
   padding: 10px 12px;
   color: #e2e8f0;
   font-size: .8rem;
+  min-width: 200px;
+  /* Same collapse mechanic as .exposure-layers-panel on the right — full
+     size is the ceiling, collapsing only ever shrinks toward the icon
+     square, anchored at this box's own top-left corner. */
+  transition: width 0.35s ease, min-width 0.35s ease, max-width 0.35s ease, height 0.35s ease, padding 0.35s ease;
+  overflow: hidden;
 }
 
-.shelters-layer-panel.legend-sidebar-collapsed {
-  left: calc(var(--sidebar-collapsed, 56px) + 12px);
+.shelters-layer-panel.shelters-layer-panel--collapsed {
+  width: 44px;
+  min-width: 44px;
+  max-width: 44px;
+  height: 44px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
+
+.shelters-layer-collapse-btn {
+  /* Same-row-as-title layout as .exposure-layers-collapse-btn, just mirrored
+     to the left edge since this panel sits on the left side of the screen. */
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: none;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 6px;
+  color: #e2e8f0;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s;
+}
+.shelters-layer-collapse-btn:hover {
+  background: rgba(255, 255, 255, 0.16);
+}
+.shelters-layer-collapse-btn--collapsed {
+  position: static;
+  width: 100%;
+  height: 100%;
+  border-radius: 10px;
+  background: transparent;
+}
+.shelters-layer-collapse-btn--collapsed:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+.shelters-layer-arrow {
+  width: 14px;
+  height: 14px;
+}
+.shelters-layer-icon {
+  width: 22px;
+  height: 22px;
+  fill: #e0453f;
+}
+.shelters-layer-title { margin-left: 28px; }
 
 .shelter-marker-dot {
   width: 26px;
@@ -3966,6 +4334,28 @@ onBeforeUnmount(() => {
   transform: translateY(-50%) translateX(4px);
 }
 
+/* ── Collapsed shelters/exposure-layers panel hint: simulates a hover for a
+   few seconds right after a double-click zoom (see zoomToCountry's
+   map.once('moveend', ...)), same look/motion as .country-hover-label.
+   Teleported to <body> (see the template) and positioned with real
+   getBoundingClientRect() coordinates via inline top/left|right — position
+   is therefore fixed, not relative to any ancestor. ── */
+.collapsed-panel-hint {
+  position: fixed;
+  transform: translateY(-50%);
+  background: rgba(20, 24, 33, 0.92);
+  color: #e8ecf0;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 5px 14px;
+  border-radius: 20px;
+  border: 1px solid rgba(74, 222, 128, 0.35);
+  pointer-events: none;
+  backdrop-filter: blur(6px);
+  white-space: nowrap;
+  z-index: 1200;
+}
+
 /* ── Selected country badge ── */
 .country-badge {
   position: absolute;
@@ -4220,10 +4610,6 @@ onBeforeUnmount(() => {
     bottom: calc(var(--impact-panel-mobile-height) + 238px);
   }
 
-  .layer-panel-stack {
-    right: 12px;
-  }
-
   .country-badge {
     bottom: calc(var(--impact-panel-mobile-height, 0px) + 16px);
   }
@@ -4233,16 +4619,47 @@ onBeforeUnmount(() => {
      right edge (or off narrow screens) for no reason. Pin near the left
      edge regardless of the (desktop-only) collapsed state. */
   .map-legend,
-  .map-legend.legend-sidebar-collapsed,
-  .shelters-layer-panel,
-  .shelters-layer-panel.legend-sidebar-collapsed {
+  .map-legend.legend-sidebar-collapsed {
     left: 12px;
+  }
+
+  /* The 3-column grid (shelters | search | exposure layers) has no room to
+     stay side-by-side on a phone-width screen — stack them into one column,
+     each full width, instead of squeezing three columns unreadably thin. */
+  .top-controls-row,
+  .top-controls-row.legend-sidebar-collapsed {
+    left: 12px;
+    right: 12px;
+    grid-template-columns: 1fr;
+  }
+
+  .shelters-layer-panel,
+  .layer-panel-stack {
+    justify-self: stretch;
   }
 }
 </style>
 
 <style>
 /* Modern MapLibre Popup overrides */
+/* Bring-to-front feedback (see initMap()'s mousedown listener) — a quick
+   shadow pulse so raising a popup above its siblings reads as a deliberate
+   "this one's now on top" motion, not just an instant z-index snap.
+   Deliberately filter-only, NOT transform: MapLibre itself sets this same
+   element's inline `transform` on every render to pin it to its geo-anchor
+   (including the popup's very first placement) — transitioning `transform`
+   here meant every popup open, and every marker-rebuild-triggered re-open,
+   animated smoothly from whatever transform value happened to be on the
+   element beforehand (often an off-screen one) to its real position,
+   reading as the popup "flying in from the left" and, when a rebuild fired
+   twice in quick succession, as if it arrived twice (live-testing finding,
+   2026-07-30). */
+.modern-popup-container {
+  transition: filter 0.15s ease;
+}
+.modern-popup-container.popup-brought-to-front {
+  filter: drop-shadow(0 10px 28px rgba(0, 0, 0, 0.55));
+}
 .modern-popup-container .maplibregl-popup-content {
   background: transparent !important;
   padding: 0 !important;
@@ -4259,25 +4676,35 @@ onBeforeUnmount(() => {
   position: relative;
 }
 
-.modern-popup-container .maplibregl-popup-close-button {
+/* Applies to every popup in the app (not scoped to .modern-popup-container)
+   so the close button looks and sits the same way everywhere — was styled
+   per-popup-type before, so e.g. hex-popup-container fell back to
+   MapLibre's plain default and looked inconsistent next to the others
+   (live-testing finding: "bütün bu levhalarda aynı pozisyonda aynı X'i
+   kullanalım, tutarlılık olması gerekiyor"). A plain circular glyph, inset
+   enough (12px) to clear the card's own border-radius instead of sitting
+   flush in the corner where the curve clips it. */
+.maplibregl-popup-close-button {
   color: #ffffff !important;
-  font-size: 16px;
-  top: 4px;
-  right: 4px;
-  width: 20px;
-  height: 20px;
-  border-radius: 4px;
+  font-size: 15px;
+  font-weight: 400;
+  line-height: 1;
+  top: 12px;
+  right: 12px;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(0, 0, 0, 0.4);
-  transition: all 0.2s;
+  background: rgba(255, 255, 255, 0.12);
+  transition: background 0.15s ease, color 0.15s ease;
   z-index: 100;
   border: none;
 }
 
-.modern-popup-container .maplibregl-popup-close-button:hover {
-  background: rgba(255, 255, 255, 0.2) !important;
+.maplibregl-popup-close-button:hover {
+  background: rgba(255, 255, 255, 0.24) !important;
   color: #ffffff !important;
 }
 
@@ -4345,7 +4772,7 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding-right: 24px; /* for close button */
+  padding-right: 34px; /* clears the close button (12px inset + 22px wide) */
 }
 
 .chip {
@@ -4450,9 +4877,13 @@ html[data-theme='light'] .disaster-popup-modern {
     0 8px 32px rgba(0, 0, 0, 0.15);
 }
 
-html[data-theme='light'] .modern-popup-container .maplibregl-popup-close-button {
+html[data-theme='light'] .maplibregl-popup-close-button {
   color: #111a2c !important;
-  background: rgba(0, 0, 0, 0.05);
+  background: rgba(0, 0, 0, 0.06);
+}
+html[data-theme='light'] .maplibregl-popup-close-button:hover {
+  background: rgba(0, 0, 0, 0.12) !important;
+  color: #111a2c !important;
 }
 
 html[data-theme='light'] .popup-title {

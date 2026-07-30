@@ -28,7 +28,8 @@
     "tsunami": "Tsunami",
     "cyclone": "Cyclone",
     "volcano": "Volcan",
-    "epidemic": "Épidémie"
+    "epidemic": "Épidémie",
+    "landslide": "Glissement de Terrain"
   },
   "severity": {
     "critical": "Critique",
@@ -419,6 +420,12 @@
       "scenarioNamePlaceholder": "Nom du scénario...",
       "saveScenario": "Enregistrer le Scénario",
       "savedScenarios": "Scénarios Enregistrés",
+      "editName": "Modifier le nom",
+      "delete": "Supprimer",
+      "save": "Enregistrer",
+      "cancel": "Annuler",
+      "confirmDeleteScenarioTitle": "Supprimer le scénario",
+      "confirmDeleteScenarioMessage": "Voulez-vous vraiment supprimer « {name} » ? Cette action est irréversible.",
       "dataUnavailable": "les données référencées ne sont plus disponibles",
       "completenessLabel": "Intégrité des Données",
       "completenessNoData": "aucune donnée",
@@ -916,10 +923,13 @@
       "rowCount": "{count} lignes"
     },
     "map": {
-      "toggleLabel": "Afficher/Masquer les Abris",
+      "toggleLabel": "Abris",
       "occupancy": "Occupation",
       "status": "Statut",
-      "linkedIncident": "Lié à un incident"
+      "linkedIncident": "Lié à un incident",
+      "panelTitle": "Couches Abris et Signalements",
+      "panelCollapse": "Réduire le panneau",
+      "panelExpand": "Développer le panneau des abris et signalements"
     }
   },
   "communityReport": {
@@ -963,7 +973,7 @@
       "rejectReasonPlaceholder": "Expliquez brièvement pourquoi ce signalement est rejeté..."
     },
     "map": {
-      "toggleLabel": "Afficher/Masquer les Signalements Communautaires",
+      "toggleLabel": "Signalements Communautaires",
       "popupHazardType": "Type",
       "popupDescription": "Description",
       "popupSubmittedAt": "Envoyé le",

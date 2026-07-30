@@ -11,6 +11,7 @@ import { rowsToCsv, rowsToJson, triggerDownload } from '@/lib/auditExport.js'
 import { loadRegionBoundaries } from '@/data/boundaries/index.js'
 import { findRegion } from '@/utils/pointInPolygon.js'
 import CascadingRiskPanel from '@/components/risk/CascadingRiskPanel.vue'
+import ConfirmDialog from '@/components/ConfirmDialog.vue'
 
 const props = defineProps({
   selectedEvent: { type: Object, default: null },
@@ -352,6 +353,53 @@ function loadScenario(scenario) {
   completeness.value = null
 }
 
+// Rename/delete (user-requested, 2026-07-30) — impact_scenarios' own RLS
+// policies are already `FOR ALL` for every role that can save a scenario
+// (super_admin/country_admin/org_admin), so no migration was needed to
+// allow UPDATE/DELETE here, just the UI for it.
+const renamingScenarioId = ref(null)
+const renamingScenarioName = ref('')
+
+function startRenameScenario(scenario) {
+  renamingScenarioId.value = scenario.id
+  renamingScenarioName.value = scenario.name
+}
+
+function cancelRenameScenario() {
+  renamingScenarioId.value = null
+  renamingScenarioName.value = ''
+}
+
+async function saveRenameScenario(scenario) {
+  const trimmed = renamingScenarioName.value.trim()
+  if (!trimmed || trimmed === scenario.name) {
+    cancelRenameScenario()
+    return
+  }
+  const { error } = await supabase.from('impact_scenarios').update({ name: trimmed }).eq('id', scenario.id)
+  if (!error) scenario.name = trimmed
+  cancelRenameScenario()
+}
+
+// Confirmed via ConfirmDialog.vue (the app-wide native-window.confirm()
+// replacement — see its own header comment) instead of a bare confirm().
+const scenarioPendingDelete = ref(null)
+
+function requestDeleteScenario(scenario) {
+  scenarioPendingDelete.value = scenario
+}
+
+async function confirmDeleteScenario() {
+  const scenario = scenarioPendingDelete.value
+  if (!scenario) return
+  const { error } = await supabase.from('impact_scenarios').delete().eq('id', scenario.id)
+  if (!error) {
+    scenarios.value = scenarios.value.filter((s) => s.id !== scenario.id)
+    if (loadedScenario.value?.id === scenario.id) loadedScenario.value = null
+  }
+  scenarioPendingDelete.value = null
+}
+
 function exportSummary(format) {
   if (!result.value || result.value === 'error' || !props.selectedEvent) return
   const row = {
@@ -554,11 +602,41 @@ onMounted(async () => {
 
         <div v-if="scenarios.length" class="impact-scenarios">
           <h5>{{ t('impact.panel.savedScenarios') }}</h5>
-          <div v-for="s in scenarios" :key="s.id" class="scenario-row" @click="loadScenario(s)">
-            <span>{{ s.name }}</span>
-            <span v-if="!s.exposure_datasets" class="scenario-missing">{{ t('impact.panel.dataUnavailable') }}</span>
+          <div v-for="s in scenarios" :key="s.id" class="scenario-row">
+            <template v-if="renamingScenarioId === s.id">
+              <input
+                v-model="renamingScenarioName"
+                class="scenario-rename-input"
+                @click.stop
+                @keyup.enter="saveRenameScenario(s)"
+                @keyup.esc="cancelRenameScenario"
+              />
+              <span class="scenario-actions">
+                <button class="btn-icon" type="button" @click.stop="saveRenameScenario(s)" :title="t('impact.panel.save')">✓</button>
+                <button class="btn-icon" type="button" @click.stop="cancelRenameScenario" :title="t('impact.panel.cancel')">✕</button>
+              </span>
+            </template>
+            <template v-else>
+              <span class="scenario-name" @click="loadScenario(s)">{{ s.name }}</span>
+              <span v-if="!s.exposure_datasets" class="scenario-missing">{{ t('impact.panel.dataUnavailable') }}</span>
+              <span class="scenario-actions">
+                <button class="btn-icon" type="button" @click.stop="startRenameScenario(s)" :title="t('impact.panel.editName')">✎</button>
+                <button class="btn-icon btn-icon-danger" type="button" @click.stop="requestDeleteScenario(s)" :title="t('impact.panel.delete')">🗑</button>
+              </span>
+            </template>
           </div>
         </div>
+
+        <ConfirmDialog
+          v-if="scenarioPendingDelete"
+          :title="t('impact.panel.confirmDeleteScenarioTitle')"
+          :message="t('impact.panel.confirmDeleteScenarioMessage', { name: scenarioPendingDelete.name })"
+          danger
+          :confirm-label="t('impact.panel.delete')"
+          :cancel-label="t('impact.panel.cancel')"
+          @confirm="confirmDeleteScenario"
+          @cancel="scenarioPendingDelete = null"
+        />
       </div>
     </template>
   </div>
@@ -635,11 +713,23 @@ onMounted(async () => {
 .btn-save { padding: 6px 12px; background: rgba(77,163,255,.2); border: 1px solid rgba(77,163,255,.4); border-radius: 8px; color: #4da3ff; font-size: .78rem; cursor: pointer; }
 .impact-scenarios h5 { margin: 0 0 8px; font-size: .8rem; }
 .scenario-row {
-  display: flex; justify-content: space-between; padding: 6px 8px; border-radius: 6px;
-  cursor: pointer; font-size: .78rem;
+  display: flex; align-items: center; gap: 6px; padding: 6px 8px; border-radius: 6px;
+  font-size: .78rem;
 }
 .scenario-row:hover { background: rgba(255,255,255,.06); }
+.scenario-name { flex: 1; cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .scenario-missing { color: #f97316; font-size: .7rem; }
+.scenario-actions { display: flex; gap: 2px; flex: 0 0 auto; }
+.scenario-rename-input {
+  flex: 1; background: #1e2330; border: 1px solid rgba(77,163,255,.4); border-radius: 6px;
+  padding: 3px 8px; color: #e2e8f0; font-size: .78rem;
+}
+.btn-icon {
+  background: transparent; border: none; color: var(--color-text-muted, #94a3b8);
+  cursor: pointer; font-size: .8rem; padding: 3px 6px; border-radius: 5px; line-height: 1;
+}
+.btn-icon:hover { background: rgba(255,255,255,.1); color: #e2e8f0; }
+.btn-icon-danger:hover { background: rgba(239,68,68,.15); color: #ef4444; }
 .impact-critical, .impact-breakdown { margin-bottom: 14px; }
 .impact-critical h5, .impact-breakdown h5 { margin: 0 0 8px; font-size: .8rem; }
 .impact-critical-list, .impact-breakdown-list { list-style: none; padding: 0; margin: 0; font-size: .78rem; display: flex; flex-direction: column; gap: 6px; }

@@ -266,6 +266,12 @@ export const useDisasterStore = defineStore('disaster', () => {
     const to = endDate.value ? new Date(endDate.value).getTime() : Infinity;
     const cutoff = Date.now() - selectedTimeRange.value * 60 * 60 * 1000;
     const useDateRange = startDate.value || endDate.value;
+    // Same bbox this computed's per-type counts were missing — matches
+    // allEvents' own filter so a selected country's per-hazard badge counts
+    // (e.g. "Deprem 7000") don't keep showing the GLOBAL total for the
+    // active date range once a country is selected (live-testing finding,
+    // user-reported).
+    const bbox = activeBbox.value;
 
     for (const [key, store] of Object.entries(storeMap.value)) {
       // 'disaster' is the generic multi-hazard-type bucket (landslide, etc. —
@@ -277,6 +283,11 @@ export const useDisasterStore = defineStore('disaster', () => {
       if (key === 'disaster') continue;
 
       counts[key] = store.value.filter(e => {
+        if (bbox) {
+          const lat = Number(e.lat);
+          const lng = Number(e.lng);
+          if (lat < bbox.minLat || lat > bbox.maxLat || lng < bbox.minLng || lng > bbox.maxLng) return false;
+        }
         const t = new Date(e.time).getTime();
         return useDateRange ? (t >= from && t <= to) : (t >= cutoff);
       }).length;

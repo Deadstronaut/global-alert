@@ -1914,6 +1914,19 @@ function selectCountry(f) {
 
   if (bounds.isEmpty()) return
   selectedCountryBounds = bounds
+  // Scopes disasterStore's own event count/list (sidebar badges, marker
+  // rendering, allEvents) to this country — previously only updateHeatmap()
+  // applied any country bounding-box filter, so a selected country's "7000
+  // depremler" badge/marker count was silently the GLOBAL total for the
+  // active date range, not this country's (live-testing finding, user-
+  // reported: "ülkeyi seçtiğimde sadece o ülkenin depremleri görünmesi
+  // gerekmiyor mu").
+  disasterStore.activeBbox = {
+    minLat: bounds.getSouth(),
+    maxLat: bounds.getNorth(),
+    minLng: bounds.getWest(),
+    maxLng: bounds.getEast(),
+  }
 
   // We do not flyTo here anymore. Single click only selects the country and shows hexes.
   // Double click handles the zoom/flyTo (in zoomToCountry).
@@ -1968,6 +1981,7 @@ function clearCountrySelection() {
   selectedCountryCode.value = null
   hideExposureLayersNotForCountry(null)
   selectedCountryBounds = null
+  disasterStore.activeBbox = null
   countryHexRes = null
   countryHexFeatures = null
   uiStore.mapMode = 'normal'

@@ -20,6 +20,7 @@
 
 import { getServiceClient } from './upsert.ts'
 import { geometryToWkt } from './geometryToWkt.ts'
+import { buildAdminBoundaryResolver } from './adminBoundaryLookup.ts'
 
 export interface ExposureFeatureInput {
   geometry: { type: string; coordinates: unknown }
@@ -76,12 +77,20 @@ export async function writeExposureDataset(
     throw new Error(datasetError?.message ?? 'Failed to create exposure dataset')
   }
 
+  // Resolves each feature's containing district (exposure_features.
+  // admin_boundary_code) for the Impact Analysis "İdari Sınıra Göre"
+  // breakdown — falls back to null (unclassified, same as before) for a
+  // country with no district set seeded yet, so this is never a hard
+  // requirement for an import to succeed.
+  const resolveAdminBoundary = await buildAdminBoundaryResolver(supabase, countryCode)
+
   const rows = features.map((feature) => ({
     dataset_id: dataset.id,
     geom: `SRID=4326;${geometryToWkt(feature.geometry)}`,
     metric_value: feature.metricValue,
     properties: feature.properties,
     asset_category: feature.assetCategory ?? null,
+    admin_boundary_code: resolveAdminBoundary(feature.geometry),
   }))
 
   for (let i = 0; i < rows.length; i += INSERT_CHUNK_SIZE) {

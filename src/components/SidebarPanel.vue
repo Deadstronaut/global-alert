@@ -246,17 +246,17 @@ function getSourceStatusClass(count, total = totalKnownSources.value) {
   return 'source-level-0'
 }
 
-// Widening this slider (e.g. to "20 yıl") used to only widen the CLIENT-SIDE
-// filter over whatever was already in memory/IndexedDB — it never asked
-// Supabase for the older data a wider range actually needs, unlike the
-// calendar range's applyDateRange()/clearCalendarRange() (both call
-// refreshAll()) right below. A long-running local dev session had enough
-// accumulated cache to mask this — a fresh browser (e.g. the deployed site,
-// live-tested 2026-07-30) reliably didn't: sliding to "20 yıl" showed a
-// smaller, wrong event set with real critical-magnitude events missing
-// entirely. Debounced (300ms) since 'input' fires continuously while
-// dragging across this slider's discrete steps.
-let timeSliderRefreshTimer = null
+// Deliberately never triggers a fetch (unlike applyDateRange/
+// clearCalendarRange below) — this slider is meant to be a pure client-side
+// filter over whatever's already loaded, same as the magnitude/depth
+// sliders, not a network trigger. That's only actually correct once a
+// country's FULL history is loaded up front on selection (see MapView.vue's
+// selectCountry -> disasterStore.loadCountryHistory()) instead of the old
+// windowed/incremental fetch this slider used to silently rely on being
+// re-run for — see loadCountryHistory's own comment for the full story
+// (live-tested 2026-07-30: widening this slider showed a smaller, wrong
+// event set with real critical-magnitude events missing entirely, because
+// nothing had ever asked the server for that older data).
 function handleTimeSliderInput(event) {
   const index = parseInt(event.target.value, 10)
   selectedTimeRangeIndex.value = index
@@ -273,9 +273,6 @@ function handleTimeSliderInput(event) {
   rangeEndDate.value = ''
   disasterStore.startDate = null
   disasterStore.endDate = null
-
-  clearTimeout(timeSliderRefreshTimer)
-  timeSliderRefreshTimer = setTimeout(() => disasterStore.refreshAll(), 300)
 }
 
 const selectedRangeLabel = computed(() => {

@@ -507,6 +507,52 @@ export const useDisasterStore = defineStore('disaster', () => {
     }
   }
 
+  // Loads a selected country's ENTIRE history once (not windowed by
+  // selectedTimeRange/startDate/endDate) so every filter — duration,
+  // magnitude, depth, severity — can stay a pure client-side re-filter over
+  // an already-complete dataset afterward, the same way magnitude/depth
+  // already work, instead of the duration slider silently depending on a
+  // fresh network fetch it never actually triggered (live-testing finding,
+  // user-reported: widening "SÜRE" to 20 yıl showed a smaller, wrong event
+  // set — e.g. a real M7.8 missing — because nothing had asked the server
+  // for that older data; a long-lived local dev cache had masked this).
+  // Scoped server-side via bbox (not just filtered client-side afterward)
+  // since real end users are always country-locked in practice — this is
+  // "load this one country's full history", not "load the whole world's".
+  // Re-selecting the same country (same bbox) is a no-op — already cached.
+  const _countryHistoryLoadedForBboxKey = ref(null);
+  async function loadCountryHistory(bbox) {
+    if (!bbox) return;
+    const bboxKey = JSON.stringify(bbox);
+    if (_countryHistoryLoadedForBboxKey.value === bboxKey) return;
+    _countryHistoryLoadedForBboxKey.value = bboxKey;
+
+    supabaseLoading.value = true;
+    try {
+      const events = await fetchRecentDisasters({
+        fromDate: new Date(0).toISOString(), // "from the beginning of records"
+        bbox,
+      });
+      if (events.length > 0) {
+        loadBatch(events);
+        const groups = {};
+        for (const e of events) {
+          if (!groups[e.type]) groups[e.type] = [];
+          groups[e.type].push(e);
+        }
+        for (const [type, typeEvents] of Object.entries(groups)) {
+          writeToCache(type, typeEvents);
+        }
+        console.log(`[Supabase] loadCountryHistory: ${events.length} event`);
+      }
+    } catch (err) {
+      console.warn('[Store] loadCountryHistory failed:', err.message);
+      _countryHistoryLoadedForBboxKey.value = null; // allow a retry on next selection
+    } finally {
+      supabaseLoading.value = false;
+    }
+  }
+
   function startRealtime() {
     if (_realtimeUnsub) return;
     _realtimeUnsub = subscribeRealtime((event) => {
@@ -633,7 +679,7 @@ export const useDisasterStore = defineStore('disaster', () => {
     toggleLayer, isLayerActive,
     toggleSeverity, isSeverityActive,
     toggleSource,
-    loadFromCache, loadFromSupabase,
+    loadFromCache, loadFromSupabase, loadCountryHistory,
     fetchAggregatedData,
     refreshAll: (force = true) => {
       loadFromSupabase(force);

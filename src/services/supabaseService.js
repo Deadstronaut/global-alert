@@ -90,7 +90,11 @@ function rowToEvent(row, type) {
 }
 
 /**
- * `options` can be { hours: 24 } or { fromDate: '...', toDate: '...' }
+ * `options` can be { hours: 24 } or { fromDate: '...', toDate: '...' },
+ * optionally plus `bbox: { minLat, maxLat, minLng, maxLng }` for a
+ * server-side geographic scope (used by loadCountryHistory() — see
+ * disaster.js — instead of pulling every country's events just to filter
+ * them client-side afterward).
  */
 export async function fetchRecentDisasters(options = {}) {
     const client = getClient();
@@ -98,15 +102,19 @@ export async function fetchRecentDisasters(options = {}) {
 
     let fromDate = options.fromDate;
     const toDate = options.toDate;
+    const bbox = options.bbox || null;
 
     if (!fromDate) {
         const hours = options.hours || 24;
         fromDate = new Date(Date.now() - hours * 60 * 60 * 1000).toISOString();
     }
 
-    // Uzun tarih aralıklarında (>30 gün) sadece önemli depremler (M5.5+) çek
-    const rangeHours = options.hours || 24;
-    const rangeDays = rangeHours / 24;
+    // Uzun tarih aralıklarında (>30 gün) sadece önemli depremler (M5.5+) çek.
+    // Gerçek aralığı (şimdi - fromDate) esas alır, sadece options.hours'a değil —
+    // önceden fromDate doğrudan verildiğinde (örn. loadCountryHistory'nin "tüm
+    // geçmiş" isteği) bu eşik hiç uygulanmıyordu (rangeHours varsayılan 24'e
+    // düşüyordu), sınırsız/çok büyük bir sorguya yol açabilirdi.
+    const rangeDays = (Date.now() - new Date(fromDate).getTime()) / (24 * 60 * 60 * 1000);
     const minMagnitudeForRange = rangeDays > 365 ? 5.5 : rangeDays > 30 ? 4.0 : null;
 
     const results = await Promise.allSettled(
@@ -118,6 +126,12 @@ export async function fetchRecentDisasters(options = {}) {
 
             if (toDate) {
                 query = query.lte('time', toDate);
+            }
+
+            if (bbox) {
+                query = query
+                    .gte('lat', bbox.minLat).lte('lat', bbox.maxLat)
+                    .gte('lng', bbox.minLng).lte('lng', bbox.maxLng);
             }
 
             // Depremler için uzun aralıkta magnitude filtresi uygula

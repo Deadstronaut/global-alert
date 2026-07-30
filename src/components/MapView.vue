@@ -1841,6 +1841,18 @@ async function applyCountryLockedCamera() {
   processCoords(geom.coordinates)
   if (bounds.isEmpty()) return
 
+  // A country-locked account never manually clicks its own country (it's
+  // already the only thing they can see) — selectCountry()'s activeBbox/
+  // loadCountryHistory wiring never fires for them without this, so their
+  // event badges/markers would silently stay unscoped (global) forever.
+  disasterStore.activeBbox = {
+    minLat: bounds.getSouth(),
+    maxLat: bounds.getNorth(),
+    minLng: bounds.getWest(),
+    maxLng: bounds.getEast(),
+  }
+  disasterStore.loadCountryHistory(disasterStore.activeBbox)
+
   const { data } = await supabase
     .from('country_boundaries')
     .select('default_zoom')
@@ -1927,6 +1939,11 @@ function selectCountry(f) {
     minLng: bounds.getWest(),
     maxLng: bounds.getEast(),
   }
+  // Loads this country's full event history once (server-side bbox-scoped,
+  // not windowed by the duration slider) so every filter afterward —
+  // including duration — is a pure client-side re-filter, never a fetch.
+  // See loadCountryHistory's own comment in disaster.js for the full story.
+  disasterStore.loadCountryHistory(disasterStore.activeBbox)
 
   // We do not flyTo here anymore. Single click only selects the country and shows hexes.
   // Double click handles the zoom/flyTo (in zoomToCountry).

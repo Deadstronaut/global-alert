@@ -32,6 +32,15 @@ const AMENITY_CATEGORY: Record<string, BuildingRecord['assetCategory']> = {
   townhall: 'critical_infrastructure_emergency',
 }
 
+// Maps the same critical_infrastructure_* taxonomy above to
+// BuildingRecord.sector's coarser categories — one lookup instead of two
+// parallel tag-to-category tables to keep in sync by hand.
+const SECTOR_FOR_CATEGORY: Record<BuildingRecord['assetCategory'], BuildingRecord['sector']> = {
+  critical_infrastructure_health: 'health',
+  critical_infrastructure_education: 'education',
+  critical_infrastructure_emergency: 'emergency',
+}
+
 interface OverpassNode {
   lat: number
   lon: number
@@ -90,6 +99,7 @@ export function mapOverpassResponseToBuildingRecords(
     if (!el.tags) continue
     const assetCategory = categoryFor(el.tags)
     if (!assetCategory) continue
+    const sector = SECTOR_FOR_CATEGORY[assetCategory]
     const facilityType = facilityTypeFor(el.tags)
 
     if (el.type === 'node') {
@@ -98,6 +108,7 @@ export function mapOverpassResponseToBuildingRecords(
         geometry: { type: 'Point', coordinates: [el.lon, el.lat] },
         countryCode,
         assetCategory,
+        sector,
         properties: { facilityType, name: el.tags.name, osmId: el.id, osmType: 'node' },
       })
       continue
@@ -118,6 +129,7 @@ export function mapOverpassResponseToBuildingRecords(
         geometry: { type: 'Polygon', coordinates: [ring] },
         countryCode,
         assetCategory,
+        sector,
         properties: { facilityType, name: el.tags.name, osmId: el.id, osmType: 'way' },
       })
     }

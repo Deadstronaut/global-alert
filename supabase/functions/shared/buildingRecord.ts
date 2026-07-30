@@ -16,5 +16,10 @@ export interface BuildingRecord {
   geometry: { type: 'Polygon' | 'Point'; coordinates: unknown }
   countryCode: string
   assetCategory: 'critical_infrastructure_health' | 'critical_infrastructure_education' | 'critical_infrastructure_emergency'
+  // Feeds exposure_features.sector (Impact Analysis "Sektöre Göre"
+  // breakdown, compute_sector_breakdown) — a coarser, human-facing grouping
+  // than assetCategory's own critical_infrastructure_* taxonomy (which
+  // powers a different feature, get_critical_infrastructure_features()).
+  sector: 'health' | 'education' | 'emergency'
   properties: { facilityType: string; name?: string; osmId: number; osmType: 'node' | 'way' }
 }

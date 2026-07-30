@@ -94,6 +94,7 @@ Deno.serve(async (req) => {
         metricValue: 1,
         properties: record.properties,
         assetCategory: record.assetCategory,
+        sector: record.sector,
       })),
     )
     countriesProcessed += 1

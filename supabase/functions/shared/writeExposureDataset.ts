@@ -31,6 +31,12 @@ export interface ExposureFeatureInput {
   // filtering via get_critical_infrastructure_features()). Omitted by every
   // caller before spec 044 (buildings); those rows get column default NULL.
   assetCategory?: string
+  // Optional — populates exposure_features.sector for the Impact Analysis
+  // "Sektöre Göre" breakdown (compute_sector_breakdown). Coarser and
+  // human-facing (e.g. 'health'/'education') vs assetCategory's own
+  // critical_infrastructure_* taxonomy — first populated by osm-buildings
+  // (2026-07-29); every other source's rows keep the column default NULL.
+  sector?: string
 }
 
 // Kontur's H3-hexagon datasets can exceed 400k features per country
@@ -90,6 +96,7 @@ export async function writeExposureDataset(
     metric_value: feature.metricValue,
     properties: feature.properties,
     asset_category: feature.assetCategory ?? null,
+    sector: feature.sector ?? null,
     admin_boundary_code: resolveAdminBoundary(feature.geometry),
   }))
 

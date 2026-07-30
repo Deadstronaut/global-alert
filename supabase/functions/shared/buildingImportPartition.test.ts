@@ -9,6 +9,7 @@ function record(overrides: Partial<BuildingRecord> = {}): BuildingRecord {
     geometry: { type: 'Point', coordinates: [27.1, 38.5] },
     countryCode: 'TR',
     assetCategory: 'critical_infrastructure_health',
+    sector: 'health',
     properties: { facilityType: 'hospital', osmId: 1, osmType: 'node' },
     ...overrides,
   }

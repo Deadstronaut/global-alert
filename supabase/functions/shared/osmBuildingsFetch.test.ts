@@ -91,6 +91,7 @@ Deno.test('mapOverpassResponseToBuildingRecords: maps a closed way to a Polygon 
   const hospital = records.find((r) => r.properties.osmId === 111)!
   assertEquals(hospital.geometry.type, 'Polygon')
   assertEquals(hospital.assetCategory, 'critical_infrastructure_health')
+  assertEquals(hospital.sector, 'health')
   assertEquals(hospital.properties.facilityType, 'hospital')
   assertEquals(hospital.properties.osmType, 'way')
   assertEquals(hospital.countryCode, 'TR')
@@ -102,6 +103,7 @@ Deno.test('mapOverpassResponseToBuildingRecords: maps a bare node to a Point edu
   assertEquals(school.geometry.type, 'Point')
   assertEquals(school.geometry.coordinates, [27.0, 38.4])
   assertEquals(school.assetCategory, 'critical_infrastructure_education')
+  assertEquals(school.sector, 'education')
   assertEquals(school.properties.osmType, 'node')
 })
 
@@ -109,6 +111,7 @@ Deno.test('mapOverpassResponseToBuildingRecords: office=government maps to emerg
   const records = mapOverpassResponseToBuildingRecords(FIXTURE_RESPONSE, 'TR')
   const gov = records.find((r) => r.properties.osmId === 333)!
   assertEquals(gov.assetCategory, 'critical_infrastructure_emergency')
+  assertEquals(gov.sector, 'emergency')
   assertEquals(gov.properties.facilityType, 'government_office')
 })
 

@@ -86,6 +86,9 @@ function rowToEvent(row, type) {
         extra: typeof row.extra === 'string'
             ? JSON.parse(row.extra || '{}')
             : (row.extra ?? {}),
+        contributingSources: typeof row.contributing_sources === 'string'
+            ? JSON.parse(row.contributing_sources || '[]')
+            : (row.contributing_sources ?? []),
     });
 }
 

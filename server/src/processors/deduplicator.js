@@ -31,17 +31,25 @@ export class Deduplicator {
   constructor() {
     // Map<id, event> - son görülen olaylar
     this.store = new Map();
-    // Temizleme: 1 günden eski kayıtları sil
-    setInterval(() => this.cleanup(), 60 * 60 * 1000);
+    // Temizleme: 1 günden eski kayıtları sil. unref(): server process zaten
+    // HTTP/WS bağlantılarıyla ayakta kalıyor, bu timer'ın kendisi process'i
+    // canlı tutmasına gerek yok — unref'siz haliyle `node --test` bu interval
+    // yüzünden asla çıkmıyordu (her test dosyası kendi Deduplicator'ını
+    // kurup asla temizlemiyor).
+    setInterval(() => this.cleanup(), 60 * 60 * 1000).unref();
   }
 
   /**
-   * Yeni bir olay duplicate mı?
-   * @returns {boolean} true = duplicate, atla
+   * Yeni bir olay daha önce görülen bir olayla eşleşiyor mu?
+   * @returns {object|null} eşleşen mevcut event (aynı fiziksel olay,
+   *   muhtemelen farklı kaynaktan) — yoksa null. Eskiden sadece boolean
+   *   dönüyordu; artık eşleşen kaydı döndürüyor ki çağıran taraf
+   *   mergeSource() ile kaynak bilgisini (source/magnitude/sourceUrl)
+   *   atmak yerine biriktirebilsin (spec: çoklu ajans rozetleri, 2026-08-03).
    */
-  isDuplicate(event) {
-    // Aynı ID → kesin duplicate
-    if (this.store.has(event.id)) return true;
+  findMatch(event) {
+    // Aynı ID → kesin duplicate (kendi kaydı zaten store'da)
+    if (this.store.has(event.id)) return this.store.get(event.id);
 
     const type = event.type;
     const radiusKm = RADIUS_KM[type] || 20;
@@ -64,17 +72,47 @@ export class Deduplicator {
         if (magDiff > 0.5) continue; // Farklı büyüklük = farklı olay
       }
 
-      return true; // Duplicate!
+      return existing; // Duplicate!
     }
 
-    return false;
+    return null;
   }
 
   /**
-   * Olayı kaydet (duplicate değilse çağrılır)
+   * Olayı kaydet (duplicate değilse çağrılır) — contributingSources'ı
+   * kendi tek kaynağıyla başlatır, mergeSource() sonradan başka
+   * ajanslar geldikçe bu diziye ekler.
    */
   add(event) {
+    if (!event.contributingSources) {
+      event.contributingSources = [
+        { source: event.source, magnitude: event.magnitude, sourceUrl: event.sourceUrl, receivedAt: event.receivedAt },
+      ];
+    }
     this.store.set(event.id, event);
+  }
+
+  /**
+   * Aynı fiziksel olayı bildiren ikinci (üçüncü, ...) bir kaynağın bilgisini
+   * mevcut kayda ekler — atmak yerine biriktirir. Aynı source adı zaten
+   * varsa tekrar eklemez (idempotent: bir kaynağın WS'i yeniden bağlanıp
+   * aynı olayı tekrar gönderirse rozet çiftlenmesin).
+   */
+  mergeSource(existing, incoming) {
+    if (!existing.contributingSources) {
+      existing.contributingSources = [
+        { source: existing.source, magnitude: existing.magnitude, sourceUrl: existing.sourceUrl, receivedAt: existing.receivedAt },
+      ];
+    }
+    const alreadyHasSource = existing.contributingSources.some((s) => s.source === incoming.source);
+    if (!alreadyHasSource) {
+      existing.contributingSources.push({
+        source: incoming.source,
+        magnitude: incoming.magnitude,
+        sourceUrl: incoming.sourceUrl,
+        receivedAt: incoming.receivedAt,
+      });
+    }
   }
 
   /**

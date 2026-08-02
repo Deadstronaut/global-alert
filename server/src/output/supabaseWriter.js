@@ -75,12 +75,25 @@ const CROSS_CHECK_RADIUS_KM = 25;
 const CROSS_CHECK_TIME_MS = 5 * 60_000;
 const CROSS_CHECK_MAG_TOLERANCE = 0.3;
 
+// Same match test as the filter below, pulled out so both the boolean
+// filter and the merge-on-match path share one definition of "same quake".
+function isSamePhysicalEarthquake(row, ex) {
+  if (ex.id === row.id) return false; // handled by upsert's own onConflict, not this filter
+  if (ex.magnitude != null && row.magnitude != null && Math.abs(row.magnitude - ex.magnitude) > CROSS_CHECK_MAG_TOLERANCE) return false;
+  const dLat = (row.lat - ex.lat) * 111;
+  const dLng = (row.lng - ex.lng) * 111;
+  const distKm = Math.sqrt(dLat * dLat + dLng * dLng);
+  if (distKm >= CROSS_CHECK_RADIUS_KM) return false;
+  const dtMs = Math.abs(new Date(row.time).getTime() - new Date(ex.time).getTime());
+  return dtMs < CROSS_CHECK_TIME_MS;
+}
+
 async function filterAgainstLiveEarthquakes(rows) {
   if (rows.length === 0) return rows;
   const sinceIso = new Date(Date.now() - CROSS_CHECK_TIME_MS).toISOString();
   const { data: recent, error } = await supabase
     .from('earthquake')
-    .select('id, lat, lng, time, magnitude')
+    .select('id, lat, lng, time, magnitude, source, contributing_sources')
     .gte('time', sinceIso);
   if (error) {
     console.warn(`[Supabase] Live earthquake dedup check failed, writing without it: ${error.message}`);
@@ -88,19 +101,60 @@ async function filterAgainstLiveEarthquakes(rows) {
   }
 
   const existing = recent || [];
-  return rows.filter((row) => {
-    const isDup = existing.some((ex) => {
-      if (ex.id === row.id) return false; // handled by upsert's own onConflict, not this filter
-      if (ex.magnitude != null && row.magnitude != null && Math.abs(row.magnitude - ex.magnitude) > CROSS_CHECK_MAG_TOLERANCE) return false;
-      const dLat = (row.lat - ex.lat) * 111;
-      const dLng = (row.lng - ex.lng) * 111;
-      const distKm = Math.sqrt(dLat * dLat + dLng * dLng);
-      if (distKm >= CROSS_CHECK_RADIUS_KM) return false;
-      const dtMs = Math.abs(new Date(row.time).getTime() - new Date(ex.time).getTime());
-      return dtMs < CROSS_CHECK_TIME_MS;
-    });
-    return !isDup;
-  });
+  const rowsToKeep = [];
+  for (const row of rows) {
+    const match = existing.find((ex) => isSamePhysicalEarthquake(row, ex));
+    if (!match) {
+      rowsToKeep.push(row);
+      continue;
+    }
+    // Cross-process duplicate: this row's own source (parsed back off of
+    // mapToRow's JSON.stringify) never made it into the in-memory
+    // Deduplicator (different process/restart) — merge it into the
+    // already-live row's contributing_sources instead of discarding it,
+    // same reasoning as deduplicator.js's mergeSource().
+    await mergeContributingSource(match, row);
+  }
+  return rowsToKeep;
+}
+
+async function mergeContributingSource(existingRow, incomingRow) {
+  let sources;
+  try {
+    sources = typeof existingRow.contributing_sources === 'string'
+      ? JSON.parse(existingRow.contributing_sources || '[]')
+      : (existingRow.contributing_sources || []);
+  } catch {
+    sources = [];
+  }
+  if (sources.length === 0) sources.push({ source: existingRow.source, magnitude: existingRow.magnitude });
+  if (sources.some((s) => s.source === incomingRow.source)) return; // already have this agency
+  sources.push({ source: incomingRow.source, magnitude: incomingRow.magnitude, sourceUrl: incomingRow.source_url, receivedAt: incomingRow.received_at });
+  const { error } = await supabase.from('earthquake').update({ contributing_sources: JSON.stringify(sources) }).eq('id', existingRow.id);
+  if (error) console.warn(`[Supabase] contributing_sources merge failed for ${existingRow.id}:`, error.message);
+}
+
+// Queued from handleEvent() when the in-memory Deduplicator itself (not
+// this file's cross-process backstop above) finds a same-process match —
+// e.g. EMSC and AFAD both reporting the same quake within the same
+// server run. Small, separate queue so a burst of merges never blocks
+// (or gets blocked by) the regular insert queue's flush.
+const sourceMergeQueue = [];
+let sourceMergeTimer = null;
+
+export function queueSourceMerge(id, contributingSources) {
+  if (!supabase) return;
+  sourceMergeQueue.push({ id, contributingSources });
+  if (!sourceMergeTimer) sourceMergeTimer = setTimeout(flushSourceMergeQueue, 2000);
+}
+
+async function flushSourceMergeQueue() {
+  sourceMergeTimer = null;
+  const batch = sourceMergeQueue.splice(0, sourceMergeQueue.length);
+  for (const { id, contributingSources } of batch) {
+    const { error } = await supabase.from('earthquake').update({ contributing_sources: JSON.stringify(contributingSources) }).eq('id', id);
+    if (error) console.warn(`[Supabase] contributing_sources update failed for ${id}:`, error.message);
+  }
 }
 
 async function flushQueue() {
@@ -179,5 +233,10 @@ function mapToRow(event) {
     country_code: event.countryCode ?? null,
     extra: JSON.stringify(event.extra || {}),
     received_at: event.receivedAt,
+    ...(event.type === 'earthquake' ? {
+      contributing_sources: JSON.stringify(
+        event.contributingSources ?? [{ source: event.source, magnitude: event.magnitude, sourceUrl: event.sourceUrl, receivedAt: event.receivedAt }],
+      ),
+    } : {}),
   };
 }

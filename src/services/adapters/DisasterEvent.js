@@ -46,7 +46,8 @@ export function createDisasterEvent({
     source = '',
     sourceUrl = '',
     raw = null,
-    extra = {}
+    extra = {},
+    contributingSources = []
 }) {
     return {
         id: String(id),
@@ -63,6 +64,7 @@ export function createDisasterEvent({
         sourceUrl,
         raw,
         extra,
+        contributingSources,
         // Computed helpers
         get color() {
             return getSeverityColor(this.severity);

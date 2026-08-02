@@ -46,6 +46,7 @@ import { colorForDataset, isPopulationSource, isGridMetricSource, populationFill
 import { circlePolygon, distanceKm } from '@/utils/circleGeometry.js'
 import { defaultBufferRadiusKm } from '@/lib/hazardBuffer.js'
 import { buildFeaturePopupHtml } from '@/utils/exposureFeaturePopup.js'
+import { disasterSourceBadges } from '@/utils/disasterSourceBadges.js'
 import { POPUP_CLOSE_BTN_HTML } from '@/utils/popupCloseButton.js'
 import { friendlyDatasetLabel } from '@/utils/exposureLayerLabel.js'
 import { formatPopulationLabel } from '@/utils/formatPopulationLabel.js'
@@ -2908,14 +2909,15 @@ function updateMarkers() {
         </div>
         <div class="popup-body">
           <h4 class="popup-title">${event.title}</h4>
-          ${event.description && event.description !== '-' ? `<p class="popup-desc">${event.description}</p>` : ''}
           <div class="popup-metrics">
             ${formatPopupDetails(event)}
           </div>
         </div>
         <div class="popup-footer">
           <span class="popup-date">${new Date(event.time).toLocaleString('tr-TR')}</span>
-          <span class="chip source-chip">${event.source || 'Bilinmiyor'}</span>
+          <div class="source-chip-group">
+            ${disasterSourceBadges(event).map((b) => `<span class="chip source-chip">${b.label}</span>`).join('') || '<span class="chip source-chip">Bilinmiyor</span>'}
+          </div>
         </div>
       </div>
     `,
@@ -4958,6 +4960,18 @@ onBeforeUnmount(() => {
   font-size: 11px;
   color: #8c97a8;
   font-weight: 500;
+}
+
+/* Wraps one badge per agency that independently reported the same event
+   (e.g. "AFAD M1.2 · EMSC M1.2 · Kandilli M1.2") — plain .chip.source-chip
+   styling per badge, just laid out to wrap instead of the single fixed
+   chip this footer used to hold. */
+.source-chip-group {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 4px;
+  max-width: 60%;
 }
 
 html[data-theme='light'] .disaster-popup-modern {

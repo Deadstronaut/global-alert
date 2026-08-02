@@ -11,6 +11,19 @@ import { colorForDataset } from './exposureLayerColor.js'
 import { friendlyDatasetLabel } from './exposureLayerLabel.js'
 import { POPUP_CLOSE_BTN_HTML } from './popupCloseButton.js'
 
+// Rounds a raw metric value (population count, rainfall mm, slope deg...) to
+// 2 decimals and inserts ',' thousands separators — fixed formatting, not
+// toLocaleString() (runtime-locale-dependent, so the exact same value can
+// render differently per user/environment and made this function's own
+// tests non-deterministic).
+function formatMetricNumber(value) {
+  const rounded = Math.round(value * 100) / 100
+  const [intPart, decPart] = String(Math.abs(rounded)).split('.')
+  const withSeparators = intPart.replace(/\B(?=(\d{3})+(?!\d))/g, ',')
+  const sign = rounded < 0 ? '-' : ''
+  return decPart ? `${sign}${withSeparators}.${decPart}` : `${sign}${withSeparators}`
+}
+
 function escapeHtml(value) {
   return String(value)
     .replace(/&/g, '&amp;')
@@ -144,7 +157,14 @@ export function buildFeaturePopupHtml(t, dataset, metricValue, properties, haloS
   // this source's map-label text (live-testing finding, 2026-07-31).
   if (!isOsmBuilding && metricValue !== null && metricValue !== undefined && Number.isFinite(metricValue)) {
     const metricLabel = dataset?.metric_property_name ? formatPropertyKey(dataset.metric_property_name) : 'Value'
-    metrics.push(`<span><b>${escapeHtml(metricLabel)}:</b> ${escapeHtml(metricValue)}</span>`)
+    // Raw metric_value came straight from a raster pixel sum/mean (population
+    // count, rainfall mm, slope deg...) and can carry a dozen meaningless
+    // float digits (e.g. "61.3960660119994") — round to 2 decimals and add
+    // thousands separators, matching the abbreviated formatting the same
+    // value already gets on the hexagon's own map label (live-testing
+    // finding, 2026-08-03).
+    const displayValue = formatMetricNumber(metricValue)
+    metrics.push(`<span><b>${escapeHtml(metricLabel)}:</b> ${escapeHtml(displayValue)}</span>`)
   }
   if (properties && typeof properties === 'object') {
     const facilityType = typeof properties.facilityType === 'string' ? properties.facilityType : null

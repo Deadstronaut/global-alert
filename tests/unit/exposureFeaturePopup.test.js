@@ -11,7 +11,7 @@ describe('buildFeaturePopupHtml', () => {
     const dataset = { name: 'OSM Roads (Turkey)', metric_property_name: 'length_m' }
     const html = buildFeaturePopupHtml(t, dataset, 1250.4, { highway: 'motorway', name: 'O-4', lanes: 4 })
     expect(html).toContain('OSM ROADS (TURKEY)') // header chip, uppercased like the disaster-popup type-chip
-    expect(html).toContain('1250.4')
+    expect(html).toContain('1,250.4') // metric value rounded/thousands-separated, not the raw float
     expect(html).toContain('motorway')
     expect(html).toContain('O-4')
     expect(html).toContain('4')
@@ -23,7 +23,14 @@ describe('buildFeaturePopupHtml', () => {
     expect(() => buildFeaturePopupHtml(t, dataset, 4200, null)).not.toThrow()
     expect(() => buildFeaturePopupHtml(t, dataset, 4200, undefined)).not.toThrow()
     const html = buildFeaturePopupHtml(t, dataset, 4200, null)
-    expect(html).toContain('4200')
+    expect(html).toContain('4,200')
+  })
+
+  it('rounds a long raw float metric value instead of showing every decimal', () => {
+    const dataset = { name: 'Population Zones', metric_property_name: 'population' }
+    const html = buildFeaturePopupHtml(t, dataset, 61.3960660119994, {})
+    expect(html).toContain('61.4')
+    expect(html).not.toContain('61.3960660119994')
   })
 
   it('renders arbitrary/unknown property keys generically, not dropped', () => {

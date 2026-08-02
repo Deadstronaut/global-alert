@@ -35,7 +35,7 @@ import { runPreflight }          from './processors/preflight.js';
 import { resolveCountryCode }    from './processors/geoCountry.js';
 
 // ── Çıktı ────────────────────────────────────────────────────────────────────
-import { initSupabase, queueWrite, writeEarlyWarning } from './output/supabaseWriter.js';
+import { initSupabase, queueWrite, queueSourceMerge, writeEarlyWarning } from './output/supabaseWriter.js';
 import { sourceHealth } from './output/healthTracker.js';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -51,7 +51,15 @@ await runPreflight();
 // Ana olay işleyicisi — tüm kaynaklar buraya gelir
 // ─────────────────────────────────────────────────────────────────────────────
 function handleEvent(event) {
-  if (deduplicator.isDuplicate(event)) return;
+  const existing = deduplicator.findMatch(event);
+  if (existing) {
+    // Aynı fiziksel olay, farklı ajanstan — atmak yerine kaynak listesine
+    // ekle (spec: çoklu ajans rozetleri, 2026-08-03). Sadece earthquake
+    // tablosunda contributing_sources kolonu var.
+    deduplicator.mergeSource(existing, event);
+    if (existing.type === 'earthquake') queueSourceMerge(existing.id, existing.contributingSources);
+    return;
+  }
   deduplicator.add(event);
 
   // Country-scoped map visibility (RLS) rely on this being set — resolved

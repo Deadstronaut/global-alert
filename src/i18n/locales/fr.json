@@ -797,7 +797,9 @@
       "villageOption": "Villages",
       "unavailableTooltip": "Aucune donnée de limites disponible pour ce pays à ce niveau",
       "populationLabel": "Population"
-    }
+    },
+    "facilityNoName": "Aucun nom enregistré",
+    "buildingCountLabel": "bâtiments dans cette zone"
   },
   "admin": {
     "drillResponseTime": "Temps de Réponse",
@@ -1058,5 +1060,17 @@
     "critical_infrastructure_health": "Établissement de Santé",
     "critical_infrastructure_education": "Établissement Éducatif",
     "critical_infrastructure_emergency": "Service d'Urgence"
+  },
+  "facilityType": {
+    "hospital": "Hôpital",
+    "clinic": "Clinique",
+    "school": "École",
+    "university": "Université",
+    "college": "Collège",
+    "fire_station": "Caserne de Pompiers",
+    "police": "Poste de Police",
+    "townhall": "Mairie",
+    "government_office": "Bureau Gouvernemental",
+    "unknown": "Inconnu"
   }
 }

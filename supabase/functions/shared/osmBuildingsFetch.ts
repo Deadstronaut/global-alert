@@ -82,6 +82,13 @@ function facilityTypeFor(tags: Record<string, string>): string {
   return tags.amenity ?? (tags.office === 'government' ? 'government_office' : 'unknown')
 }
 
+// OSM has two competing conventions for a phone number — plain `phone` and
+// the namespaced `contact:phone` — mappers use either inconsistently, so
+// this checks both rather than silently missing whichever one wasn't used.
+function phoneFor(tags: Record<string, string>): string | undefined {
+  return tags.phone ?? tags['contact:phone']
+}
+
 /**
  * Maps one Overpass response's elements into BuildingRecord[] for a given
  * country. Nodes with no tags, ways with incomplete/missing geometry, and
@@ -101,6 +108,7 @@ export function mapOverpassResponseToBuildingRecords(
     if (!assetCategory) continue
     const sector = SECTOR_FOR_CATEGORY[assetCategory]
     const facilityType = facilityTypeFor(el.tags)
+    const phone = phoneFor(el.tags)
 
     if (el.type === 'node') {
       if (typeof el.lat !== 'number' || typeof el.lon !== 'number') continue
@@ -109,7 +117,15 @@ export function mapOverpassResponseToBuildingRecords(
         countryCode,
         assetCategory,
         sector,
-        properties: { facilityType, name: el.tags.name, osmId: el.id, osmType: 'node' },
+        properties: {
+          facilityType,
+          name: el.tags.name,
+          osmId: el.id,
+          osmType: 'node',
+          capacity: el.tags.capacity,
+          beds: el.tags.beds,
+          phone,
+        },
       })
       continue
     }
@@ -130,7 +146,15 @@ export function mapOverpassResponseToBuildingRecords(
         countryCode,
         assetCategory,
         sector,
-        properties: { facilityType, name: el.tags.name, osmId: el.id, osmType: 'way' },
+        properties: {
+          facilityType,
+          name: el.tags.name,
+          osmId: el.id,
+          osmType: 'way',
+          capacity: el.tags.capacity,
+          beds: el.tags.beds,
+          phone,
+        },
       })
     }
     // relation: intentionally skipped (see function comment).

@@ -797,7 +797,9 @@
       "villageOption": "القرى",
       "unavailableTooltip": "لا تتوفر بيانات حدود لهذه الدولة عند هذا المستوى",
       "populationLabel": "السكان"
-    }
+    },
+    "facilityNoName": "لا يوجد اسم مسجل",
+    "buildingCountLabel": "مبنى في هذه المنطقة"
   },
   "admin": {
     "drillResponseTime": "وقت الاستجابة",
@@ -1058,5 +1060,17 @@
     "critical_infrastructure_health": "منشأة صحية",
     "critical_infrastructure_education": "مؤسسة تعليمية",
     "critical_infrastructure_emergency": "خدمة طوارئ"
+  },
+  "facilityType": {
+    "hospital": "مستشفى",
+    "clinic": "عيادة",
+    "school": "مدرسة",
+    "university": "جامعة",
+    "college": "كلية",
+    "fire_station": "محطة إطفاء",
+    "police": "مركز شرطة",
+    "townhall": "مبنى البلدية",
+    "government_office": "مكتب حكومي",
+    "unknown": "غير معروف"
   }
 }

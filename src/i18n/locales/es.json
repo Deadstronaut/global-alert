@@ -797,7 +797,9 @@
       "villageOption": "Aldeas",
       "unavailableTooltip": "No hay datos de límites disponibles para este país en este nivel",
       "populationLabel": "Población"
-    }
+    },
+    "facilityNoName": "Sin nombre registrado",
+    "buildingCountLabel": "edificios en esta zona"
   },
   "admin": {
     "drillResponseTime": "Tiempo de Respuesta",
@@ -1058,5 +1060,17 @@
     "critical_infrastructure_health": "Centro de Salud",
     "critical_infrastructure_education": "Centro Educativo",
     "critical_infrastructure_emergency": "Servicio de Emergencia"
+  },
+  "facilityType": {
+    "hospital": "Hospital",
+    "clinic": "Clínica",
+    "school": "Escuela",
+    "university": "Universidad",
+    "college": "Instituto",
+    "fire_station": "Estación de Bomberos",
+    "police": "Comisaría",
+    "townhall": "Ayuntamiento",
+    "government_office": "Oficina Gubernamental",
+    "unknown": "Desconocido"
   }
 }

@@ -445,6 +445,20 @@ export const useDisasterStore = defineStore('disaster', () => {
   watch([selectedTimeRange, startDate, endDate], ([tr, sd, ed]) => {
     saveDatePrefs({selectedTimeRange: tr, startDate: sd, endDate: ed});
 
+    // A country-locked session already has its ENTIRE history client-side
+    // (see loadCountryHistory) — re-fetching here is not just redundant,
+    // it's actively harmful: get_aggregated_disasters has no bbox param, so
+    // widening SÜRE to "10 Yıl"/"20 Yıl" while a country is selected sent an
+    // unscoped, global multi-year aggregation request that blew the DB's
+    // statement_timeout (live-testing finding, 2026-07-31 — 500 error
+    // "canceling statement due to statement timeout"). Every filter stays a
+    // pure client-side re-filter in this case, per loadCountryHistory's own
+    // header comment (the intent b432005 documented but this watch never
+    // actually honored).
+    const countryHistoryLoaded = activeBbox.value != null
+      && _countryHistoryLoadedForBboxKey.value === JSON.stringify(activeBbox.value);
+    if (countryHistoryLoaded) return;
+
     const days = getRangeDays();
 
     // Always reload individual events so allEvents reflects the new date range

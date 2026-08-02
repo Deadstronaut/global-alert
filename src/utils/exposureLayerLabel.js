@@ -43,8 +43,14 @@ const COUNTRY_LABEL_KEYS = {
 /**
  * @param {(key: string) => string} t - vue-i18n translate function
  * @param {{ name?: string, display_name?: string|null, source_name?: string|null, country_code?: string|null }} dataset
+ * @param {{ includeCountry?: boolean }} [opts] - includeCountry:false drops the
+ *   "(Country)" suffix — useful in contexts already scoped to one country
+ *   (e.g. a feature popup opened by clicking that country's own map), where
+ *   the suffix is redundant rather than disambiguating (spec 042 UX polish,
+ *   live-testing finding: "Bina Yoğunluğu (Türkiye)" in a popup that can
+ *   only ever be about Türkiye reads as clutter, not information).
  */
-export function friendlyDatasetLabel(t, dataset) {
+export function friendlyDatasetLabel(t, dataset, opts = {}) {
   if (!dataset) return ''
 
   if (dataset.display_name?.trim()) return dataset.display_name.trim()
@@ -55,6 +61,8 @@ export function friendlyDatasetLabel(t, dataset) {
   if (!sourceKey) return dataset.name ?? ''
 
   const sourceLabel = t(sourceKey)
+  if (opts.includeCountry === false) return sourceLabel
+
   const countryLabel = countryKey ? t(countryKey) : dataset.country_code?.toUpperCase()
   return countryLabel ? `${sourceLabel} (${countryLabel})` : sourceLabel
 }

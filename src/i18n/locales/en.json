@@ -891,7 +891,9 @@
       "unavailableTooltip": "No boundary data available for this country at this level",
       "populationLabel": "Population"
     },
-    "haloSeverityDisclaimer": "This is a rough distance-from-epicenter estimate — not a confirmed damage assessment."
+    "haloSeverityDisclaimer": "This is a rough distance-from-epicenter estimate — not a confirmed damage assessment.",
+    "facilityNoName": "No name on record",
+    "buildingCountLabel": "buildings in this area"
   },
   "admin": {
     "drillResponseTime": "Response Time",
@@ -1152,5 +1154,17 @@
     "critical_infrastructure_health": "Health Facility",
     "critical_infrastructure_education": "Education Facility",
     "critical_infrastructure_emergency": "Emergency Service"
+  },
+  "facilityType": {
+    "hospital": "Hospital",
+    "clinic": "Clinic",
+    "school": "School",
+    "university": "University",
+    "college": "College",
+    "fire_station": "Fire Station",
+    "police": "Police Station",
+    "townhall": "Town Hall",
+    "government_office": "Government Office",
+    "unknown": "Unknown"
   }
 }

@@ -797,7 +797,9 @@
       "villageOption": "Деревни",
       "unavailableTooltip": "Для этой страны нет данных о границах на этом уровне",
       "populationLabel": "Население"
-    }
+    },
+    "facilityNoName": "Название не указано",
+    "buildingCountLabel": "зданий в этом районе"
   },
   "admin": {
     "drillResponseTime": "Время Реакции",
@@ -1058,5 +1060,17 @@
     "critical_infrastructure_health": "Медицинское Учреждение",
     "critical_infrastructure_education": "Образовательное Учреждение",
     "critical_infrastructure_emergency": "Экстренная Служба"
+  },
+  "facilityType": {
+    "hospital": "Больница",
+    "clinic": "Клиника",
+    "school": "Школа",
+    "university": "Университет",
+    "college": "Колледж",
+    "fire_station": "Пожарная станция",
+    "police": "Полицейский участок",
+    "townhall": "Ратуша",
+    "government_office": "Государственное учреждение",
+    "unknown": "Неизвестно"
   }
 }

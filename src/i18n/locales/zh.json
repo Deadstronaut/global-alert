@@ -797,7 +797,9 @@
       "villageOption": "村庄",
       "unavailableTooltip": "该国家在此级别暂无边界数据",
       "populationLabel": "人口"
-    }
+    },
+    "facilityNoName": "无记录名称",
+    "buildingCountLabel": "该区域的建筑物数量"
   },
   "admin": {
     "drillResponseTime": "响应时间",
@@ -1058,5 +1060,17 @@
     "critical_infrastructure_health": "卫生设施",
     "critical_infrastructure_education": "教育机构",
     "critical_infrastructure_emergency": "应急服务"
+  },
+  "facilityType": {
+    "hospital": "医院",
+    "clinic": "诊所",
+    "school": "学校",
+    "university": "大学",
+    "college": "学院",
+    "fire_station": "消防站",
+    "police": "警察局",
+    "townhall": "市政厅",
+    "government_office": "政府办公室",
+    "unknown": "未知"
   }
 }

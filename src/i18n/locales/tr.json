@@ -891,7 +891,9 @@
       "unavailableTooltip": "Bu ülke için bu seviyede sınır verisi mevcut değil",
       "populationLabel": "Nüfus"
     },
-    "haloSeverityDisclaimer": "Bu, olay merkezine mesafeye dayalı kaba bir tahmindir — gerçek bir hasar değerlendirmesi değildir."
+    "haloSeverityDisclaimer": "Bu, olay merkezine mesafeye dayalı kaba bir tahmindir — gerçek bir hasar değerlendirmesi değildir.",
+    "facilityNoName": "İsim kayıtlı değil",
+    "buildingCountLabel": "bu bölgedeki bina sayısı"
   },
   "admin": {
     "drillResponseTime": "Tepki Süresi",
@@ -1152,5 +1154,17 @@
     "critical_infrastructure_health": "Sağlık Tesisi",
     "critical_infrastructure_education": "Eğitim Kurumu",
     "critical_infrastructure_emergency": "Acil Durum Hizmeti"
+  },
+  "facilityType": {
+    "hospital": "Hastane",
+    "clinic": "Klinik",
+    "school": "Okul",
+    "university": "Üniversite",
+    "college": "Yüksekokul",
+    "fire_station": "İtfaiye",
+    "police": "Polis Merkezi",
+    "townhall": "Belediye Binası",
+    "government_office": "Devlet Dairesi",
+    "unknown": "Bilinmiyor"
   }
 }

@@ -21,5 +21,16 @@ export interface BuildingRecord {
   // than assetCategory's own critical_infrastructure_* taxonomy (which
   // powers a different feature, get_critical_infrastructure_features()).
   sector: 'health' | 'education' | 'emergency'
-  properties: { facilityType: string; name?: string; osmId: number; osmType: 'node' | 'way' }
+  // capacity/beds/phone: OSM's own tags, present only when a mapper bothered
+  // to add them — coverage is spotty (most facilities have none of these),
+  // never treat their absence as "capacity is zero" or "no phone line".
+  properties: {
+    facilityType: string
+    name?: string
+    osmId: number
+    osmType: 'node' | 'way'
+    capacity?: string
+    beds?: string
+    phone?: string
+  }
 }

@@ -15,8 +15,20 @@ import landTopo from 'world-atlas/land-10m.json'
 import countriesTopo from 'world-atlas/countries-10m.json'
 import { CUSTOM_TERRITORIES } from '@/data/customTerritories.js'
 import { COUNTRY_NAMES } from '@/data/countryNames.js'
-import maplibregl from 'maplibre-gl'
+import * as maplibregl from 'maplibre-gl'
 import 'maplibre-gl/dist/maplibre-gl.css'
+import maplibreWorkerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?url'
+
+// maplibre-gl resolves its worker script relative to its own bundled
+// import.meta.url, which breaks under Vite (dev pre-bundling copies the main
+// file without its worker sibling; production bundling inlines it into a
+// chunk with no matching worker file at all) — either way the worker 404s
+// silently, and every vector/GeoJSON source (base map, hex grid, heatmap)
+// never renders while plain-fetch resources (style/sprite/markers) still
+// work, since the worker is what tile parsing runs in. Pointing it at the
+// `?url`-resolved asset (fingerprinted by Vite, always correct in both dev
+// and build) sidesteps the relative-URL lookup entirely.
+maplibregl.setWorkerUrl(maplibreWorkerUrl)
 import ImpactPanel from '@/components/impact/ImpactPanel.vue'
 import GeocodingSearch from '@/components/impact/GeocodingSearch.vue'
 import SettingsPanel from '@/components/SettingsPanel.vue'
@@ -34,6 +46,7 @@ import { colorForDataset, isPopulationSource, isGridMetricSource, populationFill
 import { circlePolygon, distanceKm } from '@/utils/circleGeometry.js'
 import { defaultBufferRadiusKm } from '@/lib/hazardBuffer.js'
 import { buildFeaturePopupHtml } from '@/utils/exposureFeaturePopup.js'
+import { POPUP_CLOSE_BTN_HTML } from '@/utils/popupCloseButton.js'
 import { friendlyDatasetLabel } from '@/utils/exposureLayerLabel.js'
 import { formatPopulationLabel } from '@/utils/formatPopulationLabel.js'
 import { loadRegionBoundaries } from '@/data/boundaries/index.js'
@@ -346,11 +359,17 @@ async function addExposureLayer(dataset) {
       if (!f) return
       const { __metricValue, __metricValueLabel, __haloSeverity, ...properties } = f.properties ?? {}
       if (exposurePopup) exposurePopup.remove()
-      exposurePopup = new maplibregl.Popup({ offset: 12, className: 'modern-popup-container' })
+      exposurePopup = new maplibregl.Popup({ offset: 12, className: 'modern-popup-container', maxWidth: '320px', closeButton: false })
         .setLngLat(e.lngLat)
         .setHTML(buildFeaturePopupHtml(t, dataset, __metricValue, properties, __haloSeverity))
-        .addTo(map)
+      // Must run before .addTo(map): MapLibre fires 'open' synchronously
+      // inside addTo() itself, so registering the listener after it (as
+      // this used to) missed that event entirely — the cascade offset
+      // never applied and, worse, the custom close button's click handler
+      // (also wired on 'open') never got attached, so the × visibly
+      // rendered but did nothing (live-testing finding, 2026-07-31).
       registerPopupCascade(exposurePopup)
+      exposurePopup.addTo(map)
     })
   }
 
@@ -503,6 +522,7 @@ function buildRegionPopupHtml(regionName, totalPopulation) {
   const accent = POPULATION_RAMP[POPULATION_RAMP.length - 1]
   return `
     <div class="disaster-popup-modern" style="--severity-color: ${accent}; --severity-rgba: rgba(203, 24, 29, 0.18);">
+      ${POPUP_CLOSE_BTN_HTML}
       <div class="popup-header">
         <span class="chip type-chip" style="background: ${accent}; color: #fff;">${regionName ?? ''}</span>
       </div>
@@ -592,11 +612,11 @@ async function enableRegionView(dataset, level) {
     const f = e.features?.[0]
     if (!f) return
     if (exposurePopup) exposurePopup.remove()
-    exposurePopup = new maplibregl.Popup({ offset: 12, className: 'modern-popup-container' })
+    exposurePopup = new maplibregl.Popup({ offset: 12, className: 'modern-popup-container', maxWidth: '320px', closeButton: false })
       .setLngLat(e.lngLat)
       .setHTML(buildRegionPopupHtml(f.properties?.provinceName, f.properties?.totalPopulation))
-      .addTo(map)
     registerPopupCascade(exposurePopup)
+    exposurePopup.addTo(map)
   })
 }
 
@@ -929,11 +949,13 @@ let popupZIndexCounter = 1000 // bring-to-front stacking order for open popups
 // position-tracking transform on the same element) so they fan out like a
 // spread hand of cards and every one stays reachable.
 let openPopups = []
+
 function registerPopupCascade(popup) {
   popup.on('open', () => {
     if (!openPopups.includes(popup)) openPopups.push(popup)
     const idx = openPopups.indexOf(popup)
     popup.setOffset([12 + idx * 22, 12 + idx * 22])
+    popup.getElement()?.querySelector('.popup-close-x')?.addEventListener('click', () => popup.remove())
   })
   popup.on('close', () => {
     openPopups = openPopups.filter((p) => p !== popup)
@@ -1055,12 +1077,24 @@ const currentHexRes = computed(() => hexResForZoom(currentZoom.value))
 
 watch(currentHexRes, (newRes) => {
   if (!mapLoaded) return
-  // Clear cached grid for new resolution so worker recomputes. This only
-  // affects the world-view hexbin grid (no country selected) — the selected
-  // country's own hex grid is intentionally zoom-independent, see
-  // refreshCountryHexGridFromSelection().
+  // Clear cached grid for new resolution so worker recomputes
   hexGridCache.delete(newRes)
   updateHexbins()
+
+  // Refresh country hex grid at new resolution if a country is selected —
+  // but never override a manually-set resolution (spec 045 FR-005): a
+  // zoom-bucket crossing must not silently revert the user's own choice.
+  // (Regressed 2026-07-30 "ui fix" commit, restored 2026-07-31 — user
+  // reported the selected country's hex grid no longer tracked zoom, so
+  // it visually drifted out of alignment while zooming in/out.)
+  if (uiStore.manualHexResolution == null && selectedFeatureId && hexWorker) {
+    const f = _allCountryFeatures.find((cf) => cf.id === selectedFeatureId)
+    if (f) {
+      const gridRes = Math.min(newRes, 6)
+      countryHexRes = gridRes + 1
+      hexWorker.postMessage({ type: 'FILL_GRID', geometry: f.geometry, resolution: gridRes })
+    }
+  }
 })
 
 watch(
@@ -2405,6 +2439,7 @@ function setupMapInteractions() {
 
     const popupHtml = `
       <div class="hex-popup" style="--severity-color: ${getSeverityHex(props.maxSeverity)}">
+        ${POPUP_CLOSE_BTN_HTML}
         <div class="hex-popup-header">
           <span class="hex-id">${h3Id}</span>
           <span class="hex-count">${count} Olay</span>
@@ -2416,7 +2451,7 @@ function setupMapInteractions() {
       </div>
     `
 
-    const hexPopup = new maplibregl.Popup({ className: 'hex-popup-container', offset: 10 })
+    const hexPopup = new maplibregl.Popup({ className: 'hex-popup-container', offset: 10, maxWidth: '320px', closeButton: false })
       .setLngLat(e.lngLat)
       .setHTML(popupHtml)
     registerPopupCascade(hexPopup)
@@ -2452,11 +2487,12 @@ function setupMapInteractions() {
     const audioHtml = props.audio_path
       ? `<audio controls src="${supabase.storage.from('community-report-audio').getPublicUrl(props.audio_path).data.publicUrl}" aria-label="${t('communityReport.moderation.playAudio')}"></audio>`
       : ''
-    const communityReportPopup = new maplibregl.Popup({ offset: 12, className: 'modern-popup-container' })
+    const communityReportPopup = new maplibregl.Popup({ offset: 12, className: 'modern-popup-container', maxWidth: '320px', closeButton: false })
       .setLngLat(e.features[0].geometry.coordinates)
       .setHTML(
         `
         <div class="community-report-popup-modern">
+          ${POPUP_CLOSE_BTN_HTML}
           <div class="popup-body">
             <h4 class="popup-title">${hazardDisplayNameForMap(props.hazard_type)}</h4>
             <p>${props.description}</p>
@@ -2579,9 +2615,10 @@ function updateShelterMarkers() {
         ? `<p class="shelter-popup-linked">${t('shelters.map.linkedIncident') || 'İlgili bir olaya bağlı'}</p>`
         : ''
 
-      const popup = new maplibregl.Popup({ offset: 12, className: 'modern-popup-container' }).setHTML(
+      const popup = new maplibregl.Popup({ offset: 12, className: 'modern-popup-container', maxWidth: '320px', closeButton: false }).setHTML(
         `
         <div class="shelter-popup-modern" style="--severity-color: ${color};">
+          ${POPUP_CLOSE_BTN_HTML}
           <div class="popup-body">
             <h4 class="popup-title">${shelter.name}</h4>
             <div class="popup-metrics">
@@ -2669,9 +2706,10 @@ function updateDrillEventMarkers() {
       </div>
     `
 
-    const popup = new maplibregl.Popup({ offset: 12, className: 'modern-popup-container' }).setHTML(
+    const popup = new maplibregl.Popup({ offset: 12, className: 'modern-popup-container', maxWidth: '320px', closeButton: false }).setHTML(
       `
       <div class="drill-event-popup-modern">
+        ${POPUP_CLOSE_BTN_HTML}
         <div class="popup-body">
           <div class="drill-event-badge">${t('drillInjection.map.badge')}</div>
           <h4 class="popup-title">${hazardDisplayNameForMap(ev.hazard_type)}</h4>
@@ -2861,9 +2899,10 @@ function updateMarkers() {
 
     const typeText = hazardDisplayNameForMap(event.type)
 
-    const popup = new maplibregl.Popup({ offset: 12, className: 'modern-popup-container' }).setHTML(
+    const popup = new maplibregl.Popup({ offset: 12, className: 'modern-popup-container', maxWidth: '320px', closeButton: false }).setHTML(
       `
       <div class="disaster-popup-modern" style="--severity-color: ${color}; --severity-rgba: ${rgbaColor};">
+        ${POPUP_CLOSE_BTN_HTML}
         <div class="popup-header">
           <span class="chip type-chip" style="background: ${color}; color: #000;">${typeText.toUpperCase()}</span>
         </div>
@@ -3714,6 +3753,20 @@ onBeforeUnmount(() => {
   align-items: start;
   gap: 12px;
   transition: left 0.35s ease, right 0.2s ease;
+  /* This row's own box is auto-height = its tallest child (the exposure
+     layers panel, 600px+ when expanded) — align-items:start only keeps each
+     CHILD sized to its own content, it does nothing for the row's own empty
+     space below the shorter children (the search bar). That empty space was
+     still a real, hit-testable part of this absolutely-positioned div, so it
+     silently ate every click meant for the map/popups underneath across the
+     row's full width (live-testing finding, 2026-08-03: close-button clicks
+     and zoom scroll landing here rather than the map). Click-through on the
+     row itself, opted back in per real child below, fixes it without
+     touching any of their own layout. */
+  pointer-events: none;
+}
+.top-controls-row > * {
+  pointer-events: auto;
 }
 
 .top-controls-row.legend-sidebar-collapsed {
@@ -4676,23 +4729,22 @@ onBeforeUnmount(() => {
   position: relative;
 }
 
-/* Applies to every popup in the app (not scoped to .modern-popup-container)
-   so the close button looks and sits the same way everywhere — was styled
-   per-popup-type before, so e.g. hex-popup-container fell back to
-   MapLibre's plain default and looked inconsistent next to the others
-   (live-testing finding: "bütün bu levhalarda aynı pozisyonda aynı X'i
-   kullanalım, tutarlılık olması gerekiyor"). A plain circular glyph, inset
-   enough (12px) to clear the card's own border-radius instead of sitting
-   flush in the corner where the curve clips it. */
-.maplibregl-popup-close-button {
-  color: #ffffff !important;
-  font-size: 15px;
-  font-weight: 400;
-  line-height: 1;
+/* Our own close button (see POPUP_CLOSE_BTN_HTML) — a child of each popup's
+   own card element, not MapLibre's built-in .maplibregl-popup-close-button.
+   Same look everywhere: a plain circular glyph, inset enough (12px) to
+   clear the card's own border-radius instead of sitting flush in the
+   corner where the curve clips it. */
+.popup-close-x {
+  position: absolute;
   top: 12px;
   right: 12px;
   width: 22px;
   height: 22px;
+  padding: 0;
+  color: #ffffff;
+  font-size: 15px;
+  font-weight: 400;
+  line-height: 1;
   border-radius: 50%;
   display: flex;
   align-items: center;
@@ -4701,11 +4753,12 @@ onBeforeUnmount(() => {
   transition: background 0.15s ease, color 0.15s ease;
   z-index: 100;
   border: none;
+  cursor: pointer;
 }
 
-.maplibregl-popup-close-button:hover {
-  background: rgba(255, 255, 255, 0.24) !important;
-  color: #ffffff !important;
+.popup-close-x:hover {
+  background: rgba(255, 255, 255, 0.24);
+  color: #ffffff;
 }
 
 .disaster-marker {
@@ -4788,6 +4841,31 @@ onBeforeUnmount(() => {
   font-weight: 800;
 }
 
+/* Bespoke building_footprints (density) popup card — see
+   exposureFeaturePopup.js's own header comment for why this one gets a
+   hand-built card instead of the fully generic one. */
+.facility-popup-icon {
+  font-size: 20px;
+  line-height: 1;
+}
+
+.density-popup-body {
+  align-items: center;
+  text-align: center;
+  padding: 4px 0;
+}
+
+.density-popup-count {
+  font-size: 32px;
+  font-weight: 800;
+  line-height: 1.1;
+}
+
+.density-popup-label {
+  font-size: 12px;
+  color: var(--color-text-muted, #94a3b8);
+}
+
 .severity-chip {
   background: rgba(255, 255, 255, 0.05);
   border: 1px solid transparent;
@@ -4806,6 +4884,19 @@ onBeforeUnmount(() => {
   display: flex;
   flex-direction: column;
   gap: 8px;
+}
+
+/* These three don't carry their own card background/border/padding like
+   .disaster-popup-modern does, but they still need position:relative so the
+   custom close button (a child of each) anchors to their own box, not
+   MapLibre's outer .maplibregl-popup-content (see POPUP_CLOSE_BTN_HTML's
+   own comment for why that ambiguity mattered). */
+.shelter-popup-modern,
+.drill-event-popup-modern,
+.community-report-popup-modern,
+.hex-popup {
+  position: relative;
+  padding-right: 30px;
 }
 
 .popup-title {
@@ -4877,13 +4968,13 @@ html[data-theme='light'] .disaster-popup-modern {
     0 8px 32px rgba(0, 0, 0, 0.15);
 }
 
-html[data-theme='light'] .maplibregl-popup-close-button {
-  color: #111a2c !important;
+html[data-theme='light'] .popup-close-x {
+  color: #111a2c;
   background: rgba(0, 0, 0, 0.06);
 }
-html[data-theme='light'] .maplibregl-popup-close-button:hover {
-  background: rgba(0, 0, 0, 0.12) !important;
-  color: #111a2c !important;
+html[data-theme='light'] .popup-close-x:hover {
+  background: rgba(0, 0, 0, 0.12);
+  color: #111a2c;
 }
 
 html[data-theme='light'] .popup-title {

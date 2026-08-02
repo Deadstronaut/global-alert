@@ -156,3 +156,63 @@ Deno.test('mapOverpassResponseToBuildingRecords: empty elements returns empty ar
   const records = mapOverpassResponseToBuildingRecords({ elements: [] }, 'MG')
   assertEquals(records.length, 0)
 })
+
+Deno.test('mapOverpassResponseToBuildingRecords: carries capacity/beds through when OSM has them', () => {
+  const response: { elements: FixtureElement[] } = {
+    elements: [
+      {
+        type: 'node',
+        id: 999,
+        lat: 38.5,
+        lon: 27.1,
+        tags: { amenity: 'hospital', name: 'Regional Hospital', beds: '120' },
+      },
+      {
+        type: 'node',
+        id: 1000,
+        lat: 38.5,
+        lon: 27.2,
+        tags: { amenity: 'school', name: 'Elementary School', capacity: '300' },
+      },
+    ],
+  }
+  const records = mapOverpassResponseToBuildingRecords(response, 'TR')
+  const hospital = records.find((r) => r.properties.osmId === 999)!
+  const school = records.find((r) => r.properties.osmId === 1000)!
+  assertEquals(hospital.properties.beds, '120')
+  assertEquals(school.properties.capacity, '300')
+})
+
+Deno.test('mapOverpassResponseToBuildingRecords: prefers plain phone, falls back to contact:phone', () => {
+  const response: { elements: FixtureElement[] } = {
+    elements: [
+      {
+        type: 'node',
+        id: 2001,
+        lat: 38.5,
+        lon: 27.1,
+        tags: { amenity: 'hospital', phone: '+90 212 000 00 00', 'contact:phone': '+90 212 111 11 11' },
+      },
+      {
+        type: 'node',
+        id: 2002,
+        lat: 38.5,
+        lon: 27.2,
+        tags: { amenity: 'school', 'contact:phone': '+90 212 222 22 22' },
+      },
+    ],
+  }
+  const records = mapOverpassResponseToBuildingRecords(response, 'TR')
+  const withPlainPhone = records.find((r) => r.properties.osmId === 2001)!
+  const withContactOnly = records.find((r) => r.properties.osmId === 2002)!
+  assertEquals(withPlainPhone.properties.phone, '+90 212 000 00 00')
+  assertEquals(withContactOnly.properties.phone, '+90 212 222 22 22')
+})
+
+Deno.test('mapOverpassResponseToBuildingRecords: capacity/beds/phone are undefined, not crashing, when OSM lacks them', () => {
+  const records = mapOverpassResponseToBuildingRecords(FIXTURE_RESPONSE, 'TR')
+  const hospital = records.find((r) => r.properties.osmId === 111)!
+  assertEquals(hospital.properties.capacity, undefined)
+  assertEquals(hospital.properties.phone, undefined)
+  assertEquals(hospital.properties.beds, undefined)
+})

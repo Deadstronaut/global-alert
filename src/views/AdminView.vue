@@ -27,6 +27,8 @@ import DispatchPanel from '@/components/admin/DispatchPanel.vue'
 import IntegrationsPanel from '@/components/admin/IntegrationsPanel.vue'
 import HazardTaxonomyPanel from '@/components/admin/HazardTaxonomyPanel.vue'
 import SopRepositoryPanel from '@/components/admin/SopRepositoryPanel.vue'
+import AiCapabilityTogglePanel from '@/components/admin/AiCapabilityTogglePanel.vue'
+import AiAnomalyFlagsPanel from '@/components/admin/AiAnomalyFlagsPanel.vue'
 import MapLayerRegistryPanel from '@/components/admin/MapLayerRegistryPanel.vue'
 import RetentionPolicyPanel from '@/components/admin/RetentionPolicyPanel.vue'
 import SecurityEventsPanel from '@/components/admin/SecurityEventsPanel.vue'
@@ -1047,6 +1049,7 @@ const ADMIN_TABS = [
   { id: 'risk', category: 'operations', icon: '🧭', labelKey: 'risk.tabLabel', visible: () => canAdmin.value },
   { id: 'hazardTaxonomy', category: 'config', icon: '🌋', labelKey: 'hazardTaxonomy.tabLabel', visible: () => hasCapability('hazard_taxonomy') },
   { id: 'sopRepository', category: 'config', icon: '📋', labelKey: 'incidentTracking.sopTabLabel', visible: () => hasCapability('sop_repository') },
+  { id: 'aiAssistance', category: 'config', icon: '🤖', labelKey: 'ai.panelTitle', visible: () => canAdmin.value },
   { id: 'integrations', category: 'config', icon: '🔌', labelKey: 'integrations.tabLabel', visible: () => canCreateUsers.value },
   { id: 'audit', category: 'audit', icon: '🛡️', labelKey: 'audit.tabLabel', visible: () => hasCapability('audit'), onClick: openAuditTab },
 ]
@@ -1845,6 +1848,13 @@ onUnmounted(() => {
     <!-- ── SOP Repository tab (spec 011, super_admin or spec 018 capability grant) ─── -->
     <div v-if="tab === 'sopRepository' && hasCapability('sop_repository')" class="tab-content">
       <SopRepositoryPanel />
+    </div>
+
+    <!-- ── Sandboxed AI Assistance tab (spec 051) ────────────────────────────────── -->
+    <div v-if="tab === 'aiAssistance' && canAdmin" class="tab-content">
+      <AiCapabilityTogglePanel />
+      <hr style="margin: 24px 0; border-color: rgba(255,255,255,.1);" />
+      <AiAnomalyFlagsPanel />
     </div>
 
     <!-- ── Map Layers tab (spec 012, super_admin or spec 018 capability grant) ──────── -->

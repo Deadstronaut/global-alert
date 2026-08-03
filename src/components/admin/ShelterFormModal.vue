@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n'
 import { useAuthStore } from '@/stores/auth.js'
 import { supabase } from '@/services/api/config.js'
 import countries from '@/configs/countries.json'
+import LocationPickerMap from '@/components/LocationPickerMap.vue'
 
 const props = defineProps({
   shelter: { type: Object, default: null }, // null = create mode
@@ -69,6 +70,11 @@ watch(
   { immediate: true },
 )
 
+function handleMapPick({ lat: pickedLat, lng: pickedLng }) {
+  lat.value = Math.round(pickedLat * 1e6) / 1e6
+  lng.value = Math.round(pickedLng * 1e6) / 1e6
+}
+
 function save() {
   error.value = null
   if (!name.value.trim()) { error.value = t('shelters.nameRequired'); return }
@@ -102,43 +108,50 @@ function save() {
 
 <template>
   <div class="modal-overlay" @click.self="emit('cancel')">
-    <div class="modal-card">
+    <div class="modal-card with-map">
       <h3>{{ shelter ? t('shelters.editTitle') : t('shelters.createTitle') }}</h3>
 
-      <div class="form-grid">
-        <label class="form-field span-2"><span>{{ t('shelters.name') }} *</span>
-          <input v-model="name" />
-        </label>
-        <label class="form-field"><span>{{ t('shelters.country') }} *</span>
-          <select v-if="auth.isSuperAdmin" v-model="countryCode">
-            <option value="">— seç —</option>
-            <option v-for="c in countryOptions" :key="c.code" :value="c.code">{{ c.name }} ({{ c.code }})</option>
-          </select>
-          <input v-else :value="countryCode.toUpperCase()" disabled />
-        </label>
-        <label class="form-field"><span>{{ t('shelters.status') }}</span>
-          <select v-model="status">
-            <option v-for="s in STATUSES" :key="s" :value="s">{{ t(`shelters.statusOptions.${s}`) }}</option>
-          </select>
-        </label>
-        <label class="form-field"><span>{{ t('shelters.lat') }}</span>
-          <input v-model="lat" type="number" step="any" />
-        </label>
-        <label class="form-field"><span>{{ t('shelters.lng') }}</span>
-          <input v-model="lng" type="number" step="any" />
-        </label>
-        <label class="form-field"><span>{{ t('shelters.capacityTotal') }} *</span>
-          <input v-model="capacityTotal" type="number" min="1" step="1" />
-        </label>
-        <label class="form-field"><span>{{ t('shelters.capacityOccupied') }}</span>
-          <input v-model="capacityOccupied" type="number" min="0" step="1" />
-        </label>
-        <label class="form-field span-2"><span>{{ t('shelters.linkedIncident') }}</span>
-          <select v-model="linkedIncidentId">
-            <option value="">{{ t('shelters.noLinkedIncident') }}</option>
-            <option v-for="inc in openIncidents" :key="inc.id" :value="inc.id">{{ inc.title }}</option>
-          </select>
-        </label>
+      <div class="modal-body">
+        <div class="form-grid">
+          <label class="form-field span-2"><span>{{ t('shelters.name') }} *</span>
+            <input v-model="name" />
+          </label>
+          <label class="form-field"><span>{{ t('shelters.country') }} *</span>
+            <select v-if="auth.isSuperAdmin" v-model="countryCode">
+              <option value="">— seç —</option>
+              <option v-for="c in countryOptions" :key="c.code" :value="c.code">{{ c.name }} ({{ c.code }})</option>
+            </select>
+            <input v-else :value="countryCode.toUpperCase()" disabled />
+          </label>
+          <label class="form-field"><span>{{ t('shelters.status') }}</span>
+            <select v-model="status">
+              <option v-for="s in STATUSES" :key="s" :value="s">{{ t(`shelters.statusOptions.${s}`) }}</option>
+            </select>
+          </label>
+          <label class="form-field"><span>{{ t('shelters.lat') }}</span>
+            <input v-model="lat" type="number" step="any" />
+          </label>
+          <label class="form-field"><span>{{ t('shelters.lng') }}</span>
+            <input v-model="lng" type="number" step="any" />
+          </label>
+          <label class="form-field"><span>{{ t('shelters.capacityTotal') }} *</span>
+            <input v-model="capacityTotal" type="number" min="1" step="1" />
+          </label>
+          <label class="form-field"><span>{{ t('shelters.capacityOccupied') }}</span>
+            <input v-model="capacityOccupied" type="number" min="0" step="1" />
+          </label>
+          <label class="form-field span-2"><span>{{ t('shelters.linkedIncident') }}</span>
+            <select v-model="linkedIncidentId">
+              <option value="">{{ t('shelters.noLinkedIncident') }}</option>
+              <option v-for="inc in openIncidents" :key="inc.id" :value="inc.id">{{ inc.title }}</option>
+            </select>
+          </label>
+        </div>
+
+        <div class="map-panel">
+          <span class="map-panel-label">{{ t('shelters.pickOnMap') }}</span>
+          <LocationPickerMap :lat="lat" :lng="lng" :country-code="countryCode" @pick="handleMapPick" />
+        </div>
       </div>
 
       <div v-if="error" class="form-error">{{ error }}</div>
@@ -154,9 +167,19 @@ function save() {
 <style scoped>
 .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.6); display: flex; align-items: center; justify-content: center; z-index: 1000; }
 .modal-card { background: #161b26; border: 1px solid rgba(255,255,255,.12); border-radius: 12px; padding: 22px; width: 520px; max-width: 92vw; max-height: 88vh; overflow-y: auto; }
+.modal-card.with-map { width: 920px; }
 .modal-card h3 { margin: 0 0 16px; color: #e2e8f0; }
+.modal-body { display: flex; gap: 20px; }
+.modal-body .form-grid { flex: 1 1 320px; min-width: 280px; align-content: start; }
+.map-panel { flex: 1 1 380px; display: flex; flex-direction: column; gap: 6px; }
+.map-panel-label { font-size: .78rem; color: var(--color-text-muted,#94a3b8); }
+.map-panel .location-picker-map { height: 320px; border: 1px solid rgba(255,255,255,.15); }
 .form-grid { display: grid; grid-template-columns: repeat(2,1fr); gap: 12px; }
 .span-2 { grid-column: span 2; }
+@media (max-width: 720px) {
+  .modal-card.with-map { width: 92vw; }
+  .modal-body { flex-direction: column; }
+}
 .form-field { display: flex; flex-direction: column; gap: 5px; font-size: .78rem; color: var(--color-text-muted,#94a3b8); }
 .form-field input, .form-field select {
   background: #1e2330; border: 1px solid rgba(255,255,255,.15); border-radius: 8px;

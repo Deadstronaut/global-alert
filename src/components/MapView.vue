@@ -1296,9 +1296,58 @@ const ESRI_SATELLITE_STYLE = {
 const isSatellite = computed(() => mapStyleIndex.value === 1)
 const terrain3DEnabled = ref(false)
 
+// Self-hosted vector tiles (docker-compose.yml's tile-builder/tileserver) —
+// replaces the public tiles.openfreemap.org dependency for countries we've
+// built local .mbtiles for, root cause of the 2026-08-02 "black map" live
+// incident (a free, third-party service outside our control). Only Koyu/
+// Açık are affected — satellite already uses its own ESRI raster source.
+// Countries without a local .mbtiles yet keep using the public API as
+// before; add them to this map once `docker compose run --rm tile-builder
+// --download --area=<name> --output=/data/<name>.mbtiles` has been run for
+// them (see docker-compose.yml's tile-builder service comment).
+const TILESERVER_URL = import.meta.env.VITE_TILESERVER_URL || null
+// One dark + one light style per self-hosted country (tiles/config.json),
+// keyed the same way MAP_STYLES' own index 0/2 slots are — matters because
+// brightenDarkLabels()/addSourcesAndLayers()'s dimOpacity both hardcode
+// "index 0 = dark basemap" (live-testing finding, 2026-08-03: a single
+// light-only self-hosted style under the Koyu slot made brightenDarkLabels
+// force every label white against a light background — unreadable, and the
+// heavy dark dim overlay meant for a real dark basemap made everything look
+// near-black on top). Two real styles keeps that assumption true instead of
+// needing special-casing throughout the rest of the file.
+const SELF_HOSTED_TILE_COUNTRIES = {
+  tr: { dark: 'turkey-dark', light: 'turkey-light' },
+  mg: { dark: 'madagascar-dark', light: 'madagascar-light' },
+}
+
+// VITE_TILESERVER_URL being *set* doesn't mean the container is actually
+// reachable — this dev machine's Docker stack, a teammate's machine
+// without it running, and (today) production all share the same build/env,
+// so a dumb "if configured, use it" would just trade one single point of
+// failure (the public API) for another (a local container nobody but this
+// machine can reach) — live-testing ask, 2026-08-03 ("lokalde alamazsa
+// canlı apiden alsın, hatasız olsun"). A single one-shot reachability probe
+// at startup (tileserver-gl's own /health) decides for the whole session;
+// selfHostedStyleUrl() falls back to the public API whenever it's false,
+// including "haven't heard back yet".
+const tileserverReachable = ref(false)
+if (TILESERVER_URL) {
+  fetch(`${TILESERVER_URL}/health`, { signal: AbortSignal.timeout(1500) })
+    .then((res) => { tileserverReachable.value = res.ok })
+    .catch(() => { tileserverReachable.value = false })
+}
+
+function selfHostedStyleUrl() {
+  if (!TILESERVER_URL || !tileserverReachable.value || isSatellite.value) return null
+  const pair = SELF_HOSTED_TILE_COUNTRIES[selectedCountryCode.value]
+  if (!pair) return null
+  const id = mapStyleIndex.value === 0 ? pair.dark : pair.light
+  return `${TILESERVER_URL}/styles/${id}/style.json`
+}
+
 function getBaseStyle() {
   const s = MAP_STYLES[mapStyleIndex.value]
-  return s.url ?? ESRI_SATELLITE_STYLE
+  return selfHostedStyleUrl() ?? s.url ?? ESRI_SATELLITE_STYLE
 }
 
 function zoomIn() {
@@ -2209,9 +2258,16 @@ function clearCountrySelection() {
 function initMap() {
   if (!mapContainer.value || map) return
 
+  const initialStyle = getBaseStyle()
+  // Keeps the selectedCountryCode watcher's "did the resolved style URL
+  // actually change" check accurate from the very first load (see that
+  // watcher's own comment) — satellite's inline style object has no URL to
+  // track, which is fine, selfHostedStyleUrl() already excludes satellite.
+  _appliedStyleUrl = typeof initialStyle === 'string' ? initialStyle : null
+
   map = new maplibregl.Map({
     container: mapContainer.value,
-    style: getBaseStyle(),
+    style: initialStyle,
     center: [30, 20],
     maxZoom: 20,
     attributionControl: false,
@@ -2359,18 +2415,19 @@ function setupMapInteractions() {
     }
   })
 
-  // ── Double-click on country → zoom to fit, empty area → zoom in ──
-  // spec 044 US2: a country-locked session must not be able to navigate to a
-  // different country's data — simply don't wire this handler up for that
-  // session (research.md §5), rather than registering it and guarding inside.
-  if (!auth.isCountryLocked) {
-    map.on('dblclick', interactionLayers, (e) => {
-      e.preventDefault()
-      if (e.features.length > 0) {
-        zoomToCountry(e.features[0])
-      }
-    })
-  }
+  // ── Double-click on a country: removed (2026-08-03) ──
+  // Used to call zoomToCountry() (camera flyTo, no selection) here, separate
+  // from single-click's selectCountry() (selection, no camera move) — two
+  // gestures with two different, inconsistent effects (live-testing
+  // complaint: double-click "worked" but never showed as selected).
+  // Combining them into one gesture (either click count) broke the map
+  // canvas itself (visibly detached from its container) — live-testing
+  // finding, 2026-08-03: same combination, single- or double-click, both
+  // regressed. Rather than ship either broken combination, double-click on
+  // a country now does nothing; single-click's own selectCountry() (below)
+  // is the only supported way to select — already working well on its own.
+  // zoomToCountry() itself is kept (still referenced by its own comments/
+  // history) but no longer wired to any input.
 
   map.on('dblclick', (e) => {
     const features = map.queryRenderedFeatures(e.point, { layers: interactionLayers })
@@ -2856,8 +2913,16 @@ function scheduleUpdateMarkers(delay = 150) {
 function updateMarkers() {
   if (!map || !mapLoaded) return
 
-  // In aggregated mode at low zoom: markers are hidden — only clear if some exist
-  if ((uiStore.showHeatmap || uiStore.showHexbins) && currentZoom.value < 8) {
+  // Durum/Petek/Isı all off (uiStore.mapMode === null, the map's true
+  // "nothing pressed" state) means nothing shows at all — individual
+  // markers used to fall back to visible here since they're Durum's own
+  // rendering, but that read as "Durum is still active" even though the
+  // button itself correctly wasn't lit (live-testing screenshot,
+  // 2026-08-03: "sol tarafta hiçbir şey basılı değil ama yine de durumun
+  // markaları duruyor"). In aggregated mode at low zoom, markers are
+  // likewise hidden in favor of the hex/heatmap overlay — only clear if
+  // some exist.
+  if (uiStore.mapMode == null || ((uiStore.showHeatmap || uiStore.showHexbins) && currentZoom.value < 8)) {
     if (markerObjects.length > 0) clearMarkers()
     return
   }
@@ -3045,14 +3110,83 @@ function updateUserMarker() {
   }
 }
 
+// A self-hosted country's .mbtiles only covers that country's own bounding
+// box (e.g. Turkey's tile-builder extract: lng 25.5–44.9, lat 35.7–43.1) —
+// swapping the base style to it outright meant everything outside that
+// box requested tiles that simply don't exist there, rendering solid black
+// (live-testing finding, 2026-08-03: neighboring countries/sea went black
+// the moment Turkey's self-hosted style became active). Both styles use the
+// same OpenMapTiles vector schema (self-hosted is Planetiler-built,
+// specifically OpenMapTiles-schema-compatible), so instead of swapping,
+// this layers the self-hosted country's own 'openmaptiles' layers on top of
+// the public style's — self-hosted renders wherever it actually has tiles
+// (higher zoom/detail, no third-party dependency), and the public layers
+// underneath keep showing through everywhere else in the same viewport, no
+// area-detection logic needed: an out-of-bounds vector tile request just
+// comes back empty.
+function buildHybridStyle(publicStyle, selfHostedStyle) {
+  const selfHostedSource = selfHostedStyle.sources?.openmaptiles
+  if (!selfHostedSource) return publicStyle // unexpected shape — don't guess, just use the public style as-is
+
+  const hybridSourceId = 'openmaptiles-selfhosted'
+  const selfHostedLayers = (selfHostedStyle.layers ?? [])
+    .filter((layer) => layer.source === 'openmaptiles') // background/other sources, if any, stay public-only
+    .map((layer) => ({ ...layer, id: `${layer.id}-selfhosted`, source: hybridSourceId }))
+
+  return {
+    ...publicStyle,
+    sources: { ...publicStyle.sources, [hybridSourceId]: selfHostedSource },
+    // Appended after the public layers so self-hosted detail draws on top
+    // of (not underneath) the public basemap it's overlaying.
+    layers: [...publicStyle.layers, ...selfHostedLayers],
+  }
+}
+
 async function resolveStyle() {
   const s = MAP_STYLES[mapStyleIndex.value]
   if (!s.url) return ESRI_SATELLITE_STYLE
-  if (styleCache[s.url]) return styleCache[s.url]
-  const res = await fetch(s.url)
-  const json = await res.json()
-  styleCache[s.url] = json
-  return json
+  const selfHostedUrl = selfHostedStyleUrl()
+  const url = selfHostedUrl ?? s.url
+  if (styleCache[url]) {
+    _appliedStyleUrl = url
+    return styleCache[url]
+  }
+  try {
+    if (selfHostedUrl) {
+      const [selfHostedRes, publicRes] = await Promise.all([fetch(selfHostedUrl), fetch(s.url)])
+      if (!selfHostedRes.ok) throw new Error(`self-hosted style fetch ${selfHostedRes.status}`)
+      if (!publicRes.ok) throw new Error(`public style fetch ${publicRes.status}`)
+      const [selfHostedJson, publicJson] = await Promise.all([selfHostedRes.json(), publicRes.json()])
+      styleCache[s.url] = publicJson // reused as-is if a later switch drops back to public-only
+      const hybrid = buildHybridStyle(publicJson, selfHostedJson)
+      styleCache[url] = hybrid
+      _appliedStyleUrl = url
+      return hybrid
+    }
+    const res = await fetch(url)
+    if (!res.ok) throw new Error(`style fetch ${res.status}`)
+    const json = await res.json()
+    styleCache[url] = json
+    _appliedStyleUrl = url
+    return json
+  } catch (e) {
+    // The startup /health probe said reachable, but the container went
+    // away mid-session (or a race let this slip through before the probe
+    // resolved) — same "never let a bad self-hosted URL blank the map"
+    // guarantee as the reachability gate itself, just for this later case.
+    if (!selfHostedUrl) throw e
+    console.warn('[MapView] Self-hosted tile style unreachable, falling back to public API:', e)
+    tileserverReachable.value = false
+    if (styleCache[s.url]) {
+      _appliedStyleUrl = s.url
+      return styleCache[s.url]
+    }
+    const res = await fetch(s.url)
+    const json = await res.json()
+    styleCache[s.url] = json
+    _appliedStyleUrl = s.url
+    return json
+  }
 }
 
 async function applyBaseStyle() {
@@ -3131,6 +3265,27 @@ watch(
     if (region && map) flyToRegion(region.lat, region.lng, region.zoom)
   },
 )
+
+// Reloads the base style when selecting/deselecting a country flips
+// selfHostedStyleUrl()'s answer (e.g. entering/leaving Turkey or
+// Madagascar) — compares against the URL actually resolved for the style
+// already applied, not just selectedCountryCode itself, so switching
+// between two non-self-hosted countries doesn't trigger a pointless full
+// style reload (addSourcesAndLayers() etc. all re-run on every reload).
+let _appliedStyleUrl = null
+// Also watches tileserverReachable: the startup /health probe (see its own
+// declaration) is async and usually still pending when a locked account's
+// initial style loads, so a country that turns out to be self-hosted needs
+// a second chance to upgrade once the probe actually answers — not just on
+// the next country selection.
+watch([selectedCountryCode, tileserverReachable], () => {
+  if (!map || !mapLoaded) return
+  const s = MAP_STYLES[mapStyleIndex.value]
+  const nextUrl = selfHostedStyleUrl() ?? s.url
+  if (nextUrl === _appliedStyleUrl) return
+  _appliedStyleUrl = nextUrl
+  applyBaseStyle()
+})
 
 let _mapUpdateTimer = null
 watch(
@@ -3233,9 +3388,12 @@ const MODES = ['normal', 'hexagon', 'heatmap']
 function handleMapModeKey(e) {
   // Ignore when user is typing in an input/textarea
   if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return
-  if (e.key === '1') uiStore.mapMode = 'normal'
-  else if (e.key === '2') uiStore.mapMode = 'hexagon'
-  else if (e.key === '3') uiStore.mapMode = 'heatmap'
+  // Same toggle-off-if-already-active behavior as the Durum/Petek/Isı
+  // buttons themselves (1/2/3 are documented as their keyboard equivalents
+  // in the buttons' own tooltips) — 2026-08-03 feedback.
+  if (e.key === '1') uiStore.toggleMapMode('normal')
+  else if (e.key === '2') uiStore.toggleMapMode('hexagon')
+  else if (e.key === '3') uiStore.toggleMapMode('heatmap')
   else if (e.key === 'Tab') {
     e.preventDefault()
     const idx = MODES.indexOf(uiStore.mapMode)

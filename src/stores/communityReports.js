@@ -51,16 +51,21 @@ export const useCommunityReportsStore = defineStore('communityReports', () => {
     return moderationQueue.value;
   }
 
-  async function approveReport(id, { assignedOrgId = null } = {}) {
+  async function approveReport(id, { assignedOrgId = null, hazardType = null } = {}) {
     const auth = useAuthStore();
+    const update = {
+      status: 'approved',
+      assigned_org_id: assignedOrgId,
+      moderated_by: auth.session?.id ?? null,
+      moderated_at: new Date().toISOString(),
+    };
+    // Spec 051 US2b — moderator's final category choice (which may or may
+    // not match an AI suggestion) always wins; hazard_type is only touched
+    // if the caller explicitly passes an override.
+    if (hazardType) update.hazard_type = hazardType;
     const { data, error: err } = await supabase
       .from('community_reports')
-      .update({
-        status: 'approved',
-        assigned_org_id: assignedOrgId,
-        moderated_by: auth.session?.id ?? null,
-        moderated_at: new Date().toISOString(),
-      })
+      .update(update)
       .eq('id', id)
       .select()
       .single();

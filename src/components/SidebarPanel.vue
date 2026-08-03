@@ -534,11 +534,14 @@ const selectedRangeLabel = computed(() => {
         🎯
       </button>
 
-      <!-- Map Mode Options (Collapsed) -->
+      <!-- Map Mode Options (Collapsed) — radio-style, but pressing the
+           already-active one again turns it off (uiStore.toggleMapMode),
+           landing back on "none selected" instead of re-picking itself.
+           2026-08-03 feedback. -->
       <button
         class="btn-icon collapsed-action"
         :class="{ active: uiStore.mapMode === 'normal' }"
-        @click="uiStore.mapMode = 'normal'"
+        @click="uiStore.toggleMapMode('normal')"
         :title="t('sidebar.modeNormal')"
       >
         📍
@@ -546,7 +549,7 @@ const selectedRangeLabel = computed(() => {
       <button
         class="btn-icon collapsed-action"
         :class="{ active: uiStore.mapMode === 'hexagon' }"
-        @click="uiStore.mapMode = 'hexagon'"
+        @click="uiStore.toggleMapMode('hexagon')"
         :title="t('sidebar.modeHexagon')"
       >
         ⬡
@@ -554,7 +557,7 @@ const selectedRangeLabel = computed(() => {
       <button
         class="btn-icon collapsed-action"
         :class="{ active: uiStore.mapMode === 'heatmap' }"
-        @click="uiStore.mapMode = 'heatmap'"
+        @click="uiStore.toggleMapMode('heatmap')"
         :title="t('sidebar.modeHeatmap')"
       >
         🔥
@@ -752,7 +755,7 @@ const selectedRangeLabel = computed(() => {
               <button
                 class="mode-btn"
                 :class="{ active: uiStore.mapMode === 'normal' }"
-                @click="uiStore.mapMode = 'normal'"
+                @click="uiStore.toggleMapMode('normal')"
                 :title="`${t('sidebar.modeNormal')} (1)`"
               >
                 📍 {{ t('sidebar.modeNormal') }}
@@ -760,7 +763,7 @@ const selectedRangeLabel = computed(() => {
               <button
                 class="mode-btn"
                 :class="{ active: uiStore.mapMode === 'hexagon' }"
-                @click="uiStore.mapMode = 'hexagon'"
+                @click="uiStore.toggleMapMode('hexagon')"
                 :title="`${t('sidebar.modeHexagon')} (2)`"
               >
                 ⬡ {{ t('sidebar.modeHexagon') }}
@@ -768,7 +771,7 @@ const selectedRangeLabel = computed(() => {
               <button
                 class="mode-btn"
                 :class="{ active: uiStore.mapMode === 'heatmap' }"
-                @click="uiStore.mapMode = 'heatmap'"
+                @click="uiStore.toggleMapMode('heatmap')"
                 :title="`${t('sidebar.modeHeatmap')} (3)`"
               >
                 🔥 {{ t('sidebar.modeHeatmap') }}

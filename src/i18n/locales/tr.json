@@ -277,7 +277,8 @@
     },
     "exerciseOnly": "SADECE TATBİKAT — bu uyarı bir tatbikat simülasyonudur, gerçek değildir",
     "exportXml": "XML Dışa Aktar",
-    "exportJson": "JSON Dışa Aktar"
+    "exportJson": "JSON Dışa Aktar",
+    "aiTranslateAction": "AI ile çevir"
   },
   "audit": {
     "tabLabel": "Denetim",
@@ -818,7 +819,9 @@
     "sopAllCategories": "— tüm kategoriler —",
     "sopVersionHistory": "geçmiş sürümler",
     "sopVersionHistoryTitle": "\"{title}\" — Geçmiş Sürümler",
-    "sopNoVersionHistory": "Henüz geçmiş sürüm yok."
+    "sopNoVersionHistory": "Henüz geçmiş sürüm yok.",
+    "aiSummarizeAction": "AI ile özetle",
+    "aiTranslateAction": "AI ile çevir"
   },
   "mapLayers": {
     "tabLabel": "Harita Katmanları",
@@ -976,6 +979,7 @@
     "district": "İlçe",
     "lat": "Enlem",
     "lng": "Boylam",
+    "pickOnMap": "Haritadan konum seçmek için tıklayın",
     "capacity": "Kapasite (dolu/toplam)",
     "capacityTotal": "Toplam Kapasite",
     "capacityOccupied": "Mevcut Doluluk",
@@ -1038,6 +1042,7 @@
       "lat": "Enlem",
       "lng": "Boylam",
       "useMyLocation": "Konumumu kullan",
+      "pickOnMap": "Haritadan konum seçmek için tıklayın",
       "photo": "Fotoğraf (isteğe bağlı)",
       "photoHint": "JPEG/PNG/WebP, en fazla 5MB",
       "audio": "Sesli not (isteğe bağlı)",
@@ -1066,7 +1071,8 @@
       "assignOrgNone": "— atama yok —",
       "submittedAt": "Gönderim zamanı",
       "viewPhoto": "Fotoğrafı görüntüle",
-      "playAudio": "Sesli notu dinle"
+      "playAudio": "Sesli notu dinle",
+      "hazardType": "Afet türü"
     },
     "map": {
       "toggleLabel": "Vatandaş Bildirimleri",
@@ -1166,5 +1172,31 @@
     "townhall": "Belediye Binası",
     "government_office": "Devlet Dairesi",
     "unknown": "Bilinmiyor"
+  },
+  "ai": {
+    "suggestedLabel": "AI önerisi",
+    "reviewRequired": "İnceleme gerekli",
+    "approve": "Onayla",
+    "reject": "Reddet",
+    "dismiss": "Kapat",
+    "unavailable": "AI yardımı şu anda kullanılamıyor — manuel olarak devam edebilirsiniz.",
+    "capabilityDisabled": "AI yardımı bu ülke için devre dışı.",
+    "panelTitle": "AI Yardımı",
+    "panelHint": "Her sandbox AI yeteneğini ülke başına açıp kapatın. Hiçbir AI çıktısı, insan incelemesi olmadan hiçbir etkiye sahip değildir.",
+    "countryCode": "Ülke kodu",
+    "enterCountryCode": "AI ayarlarını yönetmek için 2 harfli bir ülke kodu girin.",
+    "enabled": "Açık",
+    "disabled": "Kapalı",
+    "capabilityLabel": {
+      "translate": "Çeviri önerileri (uyarılar/SOP'lar)",
+      "summarize": "Özetleme önerileri (SOP'lar/olaylar)",
+      "classify_photo": "Fotoğraf ön-sınıflandırma (vatandaş bildirimleri)",
+      "anomaly_flag": "Anomali bayrakları (hazard verisi)"
+    },
+    "anomalyFlagsTitle": "Anomali Bayrakları",
+    "anomalyFlagsHint": "Son geçmişten belirgin şekilde sapan hazard veri noktaları için pasif bayraklar. Bir bayrağı kapatmak hiçbir risk skorunu, alert'i veya dispatch'i değiştirmez.",
+    "anomalyFlagsEmpty": "Şu anda anomali bayrağı yok.",
+    "anomalyBaselineMean": "temel ortalama",
+    "loading": "Yükleniyor..."
   }
 }

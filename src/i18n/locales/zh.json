@@ -268,7 +268,8 @@
     },
     "exerciseOnly": "仅演习 — 此警报为演习模拟，非真实警报",
     "exportXml": "导出 XML",
-    "exportJson": "导出 JSON"
+    "exportJson": "导出 JSON",
+    "aiTranslateAction": "使用 AI 翻译"
   },
   "audit": {
     "tabLabel": "审计",
@@ -727,7 +728,9 @@
     "sopNoVersionHistory": "尚无历史版本。",
     "sopTitlePlaceholder": "例如：地震响应程序",
     "sopBodyContentPlaceholder": "分步操作说明……",
-    "sopCategoryPlaceholder": "例如：响应、疏散"
+    "sopCategoryPlaceholder": "例如：响应、疏散",
+    "aiSummarizeAction": "使用 AI 总结",
+    "aiTranslateAction": "使用 AI 翻译"
   },
   "mapLayers": {
     "tabLabel": "地图图层",
@@ -882,6 +885,7 @@
     "district": "地区",
     "lat": "纬度",
     "lng": "经度",
+    "pickOnMap": "点击地图选择位置",
     "capacity": "容量（已占用/总计）",
     "capacityTotal": "总容量",
     "capacityOccupied": "当前占用人数",
@@ -944,6 +948,7 @@
       "lat": "纬度",
       "lng": "经度",
       "useMyLocation": "使用我的位置",
+      "pickOnMap": "点击地图选择位置",
       "photo": "照片（可选）",
       "photoHint": "JPEG/PNG/WebP，最大5MB",
       "audio": "语音留言（可选）",
@@ -972,7 +977,8 @@
       "submittedAt": "提交时间",
       "viewPhoto": "查看照片",
       "playAudio": "播放语音留言",
-      "rejectReasonPlaceholder": "简要说明拒绝此报告的原因……"
+      "rejectReasonPlaceholder": "简要说明拒绝此报告的原因……",
+      "hazardType": "灾害类型"
     },
     "map": {
       "toggleLabel": "民众报告",
@@ -1072,5 +1078,31 @@
     "townhall": "市政厅",
     "government_office": "政府办公室",
     "unknown": "未知"
+  },
+  "ai": {
+    "suggestedLabel": "AI 建议",
+    "reviewRequired": "需要审核",
+    "approve": "批准",
+    "reject": "拒绝",
+    "dismiss": "忽略",
+    "unavailable": "AI 辅助当前不可用 — 您可以手动继续。",
+    "capabilityDisabled": "该国家/地区已禁用 AI 辅助。",
+    "panelTitle": "AI 辅助",
+    "panelHint": "按国家/地区启用或禁用每个沙盒化的 AI 功能。任何 AI 输出在未经人工审核前均不会产生任何影响。",
+    "countryCode": "国家代码",
+    "enterCountryCode": "输入两位字母的国家代码以管理其 AI 设置。",
+    "enabled": "已启用",
+    "disabled": "已禁用",
+    "capabilityLabel": {
+      "translate": "翻译建议(警报/SOP)",
+      "summarize": "摘要建议(SOP/事件)",
+      "classify_photo": "照片预分类(社区报告)",
+      "anomaly_flag": "异常标记(灾害数据)"
+    },
+    "anomalyFlagsTitle": "异常标记",
+    "anomalyFlagsHint": "针对与近期历史明显偏离的灾害数据点的被动标记。忽略标记不会更改任何风险评分、警报或调度。",
+    "anomalyFlagsEmpty": "目前没有异常标记。",
+    "anomalyBaselineMean": "基线平均值",
+    "loading": "加载中..."
   }
 }

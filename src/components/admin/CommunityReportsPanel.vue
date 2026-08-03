@@ -1,17 +1,68 @@
 <script setup>
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useCommunityReportsStore } from '@/stores/communityReports.js'
 import { useCommunityReportsStreamStore } from '@/stores/communityReportsStream.js'
 import { useHazardTypesStore } from '@/stores/hazardTypes.js'
 import { useAuthStore } from '@/stores/auth.js'
+import { useAiAssistanceStore } from '@/stores/aiAssistance.js'
 import { supabase } from '@/services/api/config.js'
+import AiSuggestionBadge from '@/components/ai/AiSuggestionBadge.vue'
 
 const { t } = useI18n()
 const store = useCommunityReportsStore()
 const stream = useCommunityReportsStreamStore()
 const hazardTypesStore = useHazardTypesStore()
 const auth = useAuthStore()
+const aiAssistance = useAiAssistanceStore()
+
+// Spec 051 US2b — pending photo-classification suggestions, keyed by
+// community_reports.id. Never applied to report.hazard_type automatically;
+// only hazardTypeOverride (which the moderator's own Approve click reads)
+// changes when the moderator explicitly accepts a suggestion.
+const photoSuggestionByReport = ref({})
+const hazardTypeOverride = ref({})
+
+async function loadPhotoSuggestions(reportIds) {
+  if (!reportIds.length) return
+  const { data } = await supabase
+    .from('ai_suggestions')
+    .select('id, source_id, ai_output')
+    .eq('capability', 'classify_photo')
+    .eq('status', 'pending')
+    .in('source_id', reportIds)
+  for (const row of data || []) {
+    photoSuggestionByReport.value[row.source_id] = { id: row.id, ai_output: row.ai_output }
+  }
+}
+
+watch(
+  () => store.moderationQueue.map((r) => r.id),
+  (ids) => {
+    for (const report of store.moderationQueue) {
+      if (!(report.id in hazardTypeOverride.value)) hazardTypeOverride.value[report.id] = report.hazard_type
+    }
+    loadPhotoSuggestions(ids)
+  },
+)
+
+async function acceptPhotoSuggestion(reportId) {
+  const suggestion = photoSuggestionByReport.value[reportId]
+  if (!suggestion) return
+  hazardTypeOverride.value[reportId] = suggestion.ai_output.suggested_hazard_type
+  await aiAssistance.resolveSuggestion(suggestion.id, {
+    status: 'approved',
+    finalOutput: suggestion.ai_output,
+  })
+  delete photoSuggestionByReport.value[reportId]
+}
+
+async function rejectPhotoSuggestion(reportId) {
+  const suggestion = photoSuggestionByReport.value[reportId]
+  if (!suggestion) return
+  await aiAssistance.resolveSuggestion(suggestion.id, { status: 'rejected' })
+  delete photoSuggestionByReport.value[reportId]
+}
 
 const rejectingId = ref(null)
 const rejectReason = ref('')
@@ -110,6 +161,7 @@ async function approve(report) {
   await loadOrganizationsFor(report.country_code)
   const result = await store.approveReport(report.id, {
     assignedOrgId: assignedOrgByReport.value[report.id] || null,
+    hazardType: hazardTypeOverride.value[report.id] || null,
   })
   if (!result.success) rejectError.value = result.error
 }
@@ -163,9 +215,32 @@ async function confirmReject(id) {
         <div v-if="report.audio_path">
           <audio controls :src="audioUrl(report.audio_path)" :aria-label="t('communityReport.moderation.playAudio')"></audio>
         </div>
+
+        <AiSuggestionBadge
+          v-if="photoSuggestionByReport[report.id]"
+          :suggestion="photoSuggestionByReport[report.id]"
+          @approve="acceptPhotoSuggestion(report.id)"
+          @reject="rejectPhotoSuggestion(report.id)"
+        >
+          <template #default>
+            <p class="ai-preview">
+              {{ hazardDisplayName(photoSuggestionByReport[report.id].ai_output.suggested_hazard_type) }}
+              ({{ Math.round((photoSuggestionByReport[report.id].ai_output.confidence || 0) * 100) }}%)
+            </p>
+          </template>
+        </AiSuggestionBadge>
       </div>
 
       <div class="report-actions">
+        <label class="form-field">
+          <span>{{ t('communityReport.moderation.hazardType') }}</span>
+          <select v-model="hazardTypeOverride[report.id]">
+            <option v-for="h in hazardTypesStore.activeHazardTypes" :key="h.code" :value="h.code">
+              {{ h.display_name }}
+            </option>
+          </select>
+        </label>
+
         <label class="form-field">
           <span>{{ t('communityReport.moderation.assignOrg') }}</span>
           <select
@@ -257,4 +332,5 @@ async function confirmReject(id) {
 .stream-status { font-size: 0.7rem; margin-left: 8px; }
 .stream-connected { color: #1e7e34; }
 .stream-disconnected { color: #94a3b8; }
+.ai-preview { font-size: .82rem; margin: 0; }
 </style>

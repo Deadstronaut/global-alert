@@ -268,7 +268,8 @@
     },
     "exerciseOnly": "SOLO EJERCICIO — esta alerta es una simulación de simulacro, no es real",
     "exportXml": "Exportar XML",
-    "exportJson": "Exportar JSON"
+    "exportJson": "Exportar JSON",
+    "aiTranslateAction": "Traducir con IA"
   },
   "audit": {
     "tabLabel": "Auditoría",
@@ -727,7 +728,9 @@
     "sopNoVersionHistory": "Aún no hay versiones anteriores.",
     "sopTitlePlaceholder": "ej. Procedimiento de Respuesta a Terremotos",
     "sopBodyContentPlaceholder": "Texto del procedimiento paso a paso...",
-    "sopCategoryPlaceholder": "ej. Respuesta, Evacuación"
+    "sopCategoryPlaceholder": "ej. Respuesta, Evacuación",
+    "aiSummarizeAction": "Resumir con IA",
+    "aiTranslateAction": "Traducir con IA"
   },
   "mapLayers": {
     "tabLabel": "Capas de Mapa",
@@ -882,6 +885,7 @@
     "district": "Distrito",
     "lat": "Latitud",
     "lng": "Longitud",
+    "pickOnMap": "Haz clic en el mapa para elegir una ubicación",
     "capacity": "Capacidad (ocupada/total)",
     "capacityTotal": "Capacidad Total",
     "capacityOccupied": "Ocupación Actual",
@@ -944,6 +948,7 @@
       "lat": "Latitud",
       "lng": "Longitud",
       "useMyLocation": "Usar mi ubicación",
+      "pickOnMap": "Haz clic en el mapa para elegir una ubicación",
       "photo": "Foto (opcional)",
       "photoHint": "JPEG/PNG/WebP, hasta 5MB",
       "audio": "Nota de voz (opcional)",
@@ -972,7 +977,8 @@
       "submittedAt": "Enviado el",
       "viewPhoto": "Ver foto",
       "playAudio": "Reproducir nota de voz",
-      "rejectReasonPlaceholder": "Explica brevemente por qué se rechaza este informe..."
+      "rejectReasonPlaceholder": "Explica brevemente por qué se rechaza este informe...",
+      "hazardType": "Tipo de peligro"
     },
     "map": {
       "toggleLabel": "Reportes Comunitarios",
@@ -1072,5 +1078,31 @@
     "townhall": "Ayuntamiento",
     "government_office": "Oficina Gubernamental",
     "unknown": "Desconocido"
+  },
+  "ai": {
+    "suggestedLabel": "Sugerido por IA",
+    "reviewRequired": "Revisión requerida",
+    "approve": "Aprobar",
+    "reject": "Rechazar",
+    "dismiss": "Descartar",
+    "unavailable": "La asistencia de IA no está disponible en este momento — puede continuar manualmente.",
+    "capabilityDisabled": "La asistencia de IA está deshabilitada para este país.",
+    "panelTitle": "Asistencia de IA",
+    "panelHint": "Active o desactive cada capacidad de IA aislada por país. Ninguna salida de IA tiene efecto sin revisión humana.",
+    "countryCode": "Código de país",
+    "enterCountryCode": "Introduzca un código de país de 2 letras para gestionar su configuración de IA.",
+    "enabled": "Activado",
+    "disabled": "Desactivado",
+    "capabilityLabel": {
+      "translate": "Sugerencias de traducción (alertas/SOP)",
+      "summarize": "Sugerencias de resumen (SOP/incidentes)",
+      "classify_photo": "Preclasificación de fotos (informes comunitarios)",
+      "anomaly_flag": "Alertas de anomalías (datos de riesgo)"
+    },
+    "anomalyFlagsTitle": "Alertas de anomalías",
+    "anomalyFlagsHint": "Alertas pasivas sobre puntos de datos de riesgo que se desvían marcadamente del historial reciente. Descartar una alerta no cambia ninguna puntuación de riesgo, alerta o despacho.",
+    "anomalyFlagsEmpty": "No hay alertas de anomalías en este momento.",
+    "anomalyBaselineMean": "media de referencia",
+    "loading": "Cargando..."
   }
 }

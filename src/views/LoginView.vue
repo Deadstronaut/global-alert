@@ -8,6 +8,7 @@ import { supabase } from '@/services/api/config.js'
 const { t } = useI18n()
 const auth = useAuthStore()
 const router = useRouter()
+const showMaintenanceNotice = ref(true)
 const email = ref('')
 const password = ref('')
 const loading = ref(false)
@@ -98,6 +99,21 @@ async function handleRecoveryCodeVerify() {
 
 <template>
   <div class="login-page">
+    <div v-if="showMaintenanceNotice" class="maintenance-overlay">
+      <div class="maintenance-dialog">
+        <div class="maintenance-icon">🛠️</div>
+        <h2 class="maintenance-title">Sistem Bakımda</h2>
+        <p class="maintenance-text">
+          Sistemimiz üzerinde köklü güncellemeler ve bakım çalışmaları yürütülmektedir.
+          Bu süreç kapsamında sistem zaman zaman yanıt vermeyebilir veya hatalı sonuçlar
+          görüntüleyebilir. Anlayışınız için teşekkür ederiz.
+        </p>
+        <button type="button" class="maintenance-btn" @click="showMaintenanceNotice = false">
+          Anladım
+        </button>
+      </div>
+    </div>
+
     <div class="login-bg-grid" />
 
     <div class="login-card">
@@ -201,6 +217,70 @@ async function handleRecoveryCodeVerify() {
 </template>
 
 <style scoped>
+.maintenance-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(4, 8, 16, 0.72);
+  backdrop-filter: blur(6px);
+  padding: 20px;
+}
+
+.maintenance-dialog {
+  width: 100%;
+  max-width: 400px;
+  background: rgba(12, 19, 36, 0.96);
+  border: 1px solid rgba(255, 193, 74, 0.3);
+  border-radius: 16px;
+  box-shadow:
+    0 0 0 1px rgba(255, 193, 74, 0.08),
+    0 24px 64px rgba(0, 0, 0, 0.6);
+  padding: 28px 26px 24px;
+  text-align: center;
+}
+
+.maintenance-icon {
+  font-size: 2rem;
+  margin-bottom: 10px;
+}
+
+.maintenance-title {
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: #f4f7ff;
+  margin: 0 0 12px;
+  letter-spacing: 0.02em;
+}
+
+.maintenance-text {
+  font-size: 0.82rem;
+  line-height: 1.6;
+  color: #a8b2c9;
+  margin: 0 0 20px;
+}
+
+.maintenance-btn {
+  width: 100%;
+  padding: 12px;
+  border: none;
+  border-radius: 8px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: #1a1206;
+  background: linear-gradient(135deg, #ffb020, #ffd24a);
+  cursor: pointer;
+  transition: opacity 0.2s, transform 0.15s;
+}
+
+.maintenance-btn:hover {
+  opacity: 0.9;
+  transform: translateY(-1px);
+}
+
 .login-page {
   width: 100%;
   height: 100%;

@@ -13,6 +13,8 @@ import { buildEvidencePackageManifest, buildEvidenceSummaryLines } from '@/lib/e
 import { rowsToCsv } from '@/lib/auditExport.js'
 import JSZip from 'jszip'
 import { jsPDF } from 'jspdf'
+import { useAiAssistanceStore } from '@/stores/aiAssistance.js'
+import AiSuggestionBadge from '@/components/ai/AiSuggestionBadge.vue'
 
 const router = useRouter()
 const { t } = useI18n()
@@ -21,6 +23,7 @@ const auth = useAuthStore()
 const disaster = useDisasterStore()
 const hazardTypesStore = useHazardTypesStore()
 const drillInjectedEventsStore = useDrillInjectedEventsStore()
+const aiAssistance = useAiAssistanceStore()
 
 const drafts = ref([])
 const loading = ref(false)
@@ -356,9 +359,73 @@ async function downloadEvidencePackage(draft) {
   }
 }
 
+// Spec 051 US1 — AI ile çevir. Yalnızca zaten kaydedilmiş (id'si olan) bir
+// cap_drafts satırı için anlamlıdır; canRequestAiAssistance() (Edge
+// Function tarafında) org_admin'e izin vermediği için burada da aynı rolü
+// (super_admin/country_admin) tutarlı biçimde kontrol ediyoruz.
+const canUseAiTranslate = computed(() => auth.isSuperAdmin || auth.session?.role === 'country_admin')
+const translateEnabled = ref(false)
+const translateTargetLocale = ref('en')
+const translateSuggestionByDraft = ref({})
+const translateBusyByDraft = ref({})
+const translateUnavailableByDraft = ref({})
+
+async function loadAiTranslateCapability() {
+  if (!canUseAiTranslate.value || !auth.countryCode) return
+  const caps = await aiAssistance.fetchCapabilities(auth.countryCode)
+  translateEnabled.value = caps.translate === true
+}
+
+async function requestDraftTranslation(draft) {
+  if (!draft?.id || !auth.countryCode) return
+  translateBusyByDraft.value = { ...translateBusyByDraft.value, [draft.id]: true }
+  translateUnavailableByDraft.value = { ...translateUnavailableByDraft.value, [draft.id]: false }
+  const result = await aiAssistance.requestTranslation(
+    'cap_drafts',
+    draft.id,
+    draft.description || '',
+    draft.lang || 'en',
+    translateTargetLocale.value,
+    auth.countryCode,
+  )
+  translateBusyByDraft.value = { ...translateBusyByDraft.value, [draft.id]: false }
+  if (!result.success) {
+    translateUnavailableByDraft.value = { ...translateUnavailableByDraft.value, [draft.id]: true }
+    return
+  }
+  translateSuggestionByDraft.value = {
+    ...translateSuggestionByDraft.value,
+    [draft.id]: { id: result.suggestionId, ai_output: result.aiOutput },
+  }
+}
+
+// Approving here only resolves the ai_suggestions row (audit trail,
+// FR-004/FR-005) — it deliberately does NOT overwrite cap_drafts.description,
+// since that is the CAP-authoring system of record and any change to it
+// must go through the existing four-eyes/state-machine-guarded update path,
+// not a side-channel AI approval.
+async function approveDraftTranslation(draftId) {
+  const suggestion = translateSuggestionByDraft.value[draftId]
+  if (!suggestion) return
+  await aiAssistance.resolveSuggestion(suggestion.id, { status: 'approved', finalOutput: suggestion.ai_output })
+  const next = { ...translateSuggestionByDraft.value }
+  delete next[draftId]
+  translateSuggestionByDraft.value = next
+}
+
+async function rejectDraftTranslation(draftId) {
+  const suggestion = translateSuggestionByDraft.value[draftId]
+  if (!suggestion) return
+  await aiAssistance.resolveSuggestion(suggestion.id, { status: 'rejected' })
+  const next = { ...translateSuggestionByDraft.value }
+  delete next[draftId]
+  translateSuggestionByDraft.value = next
+}
+
 onMounted(() => {
   loadDrafts()
   loadActiveDrillEventsForPicker()
+  loadAiTranslateCapability()
 })
 </script>
 
@@ -509,6 +576,39 @@ onMounted(() => {
         </div>
         <h4 class="draft-title">{{ draft.title }}</h4>
         <p v-if="draft.description" class="draft-desc">{{ draft.description }}</p>
+
+        <div v-if="canUseAiTranslate && translateEnabled && draft.description" class="draft-ai-translate">
+          <div class="draft-ai-translate__row">
+            <select v-model="translateTargetLocale">
+              <option value="en">EN</option>
+              <option value="tr">TR</option>
+              <option value="es">ES</option>
+              <option value="fr">FR</option>
+              <option value="ru">RU</option>
+              <option value="ar">AR</option>
+              <option value="zh">ZH</option>
+            </select>
+            <button
+              type="button"
+              class="btn-ai"
+              :disabled="translateBusyByDraft[draft.id]"
+              @click="requestDraftTranslation(draft)"
+            >
+              {{ t('cap.aiTranslateAction') }}
+            </button>
+          </div>
+          <AiSuggestionBadge
+            v-if="translateSuggestionByDraft[draft.id]"
+            :suggestion="translateSuggestionByDraft[draft.id]"
+            @approve="approveDraftTranslation(draft.id)"
+            @reject="rejectDraftTranslation(draft.id)"
+          >
+            <template #default>
+              <p class="draft-ai-translate__preview">{{ translateSuggestionByDraft[draft.id].ai_output.translated_text }}</p>
+            </template>
+          </AiSuggestionBadge>
+          <p v-if="translateUnavailableByDraft[draft.id]" class="draft-ai-translate__unavailable">{{ t('ai.unavailable') }}</p>
+        </div>
         <div v-if="draft.area_desc" class="draft-area">📍 {{ draft.area_desc }}</div>
         <div v-if="draft.region_code" class="draft-region">🎯 {{ t('cap.form.regionCode') }}: {{ draft.region_code }}</div>
         <div class="draft-validity">
@@ -772,6 +872,13 @@ onMounted(() => {
 
 .draft-title { font-size: 1rem; font-weight: 700; margin: 0 0 6px; }
 .draft-desc  { font-size: .82rem; color: var(--color-text-muted, #94a3b8); margin: 0 0 6px; line-height: 1.5; }
+.draft-ai-translate { display: flex; flex-direction: column; gap: 6px; margin: 0 0 8px; }
+.draft-ai-translate__row { display: flex; gap: 6px; align-items: center; }
+.draft-ai-translate__row select { background: #1e2330; border: 1px solid rgba(255,255,255,.15); border-radius: 6px; color: #e2e8f0; padding: 4px 6px; font-size: .78rem; }
+.draft-ai-translate .btn-ai { padding: 5px 12px; background: rgba(138,125,250,.15); border: 1px solid rgba(138,125,250,.4); border-radius: 8px; color: #a99bfa; cursor: pointer; font-size: .75rem; }
+.draft-ai-translate .btn-ai:disabled { opacity: .5; cursor: not-allowed; }
+.draft-ai-translate__preview { font-size: .8rem; color: #e2e8f0; margin: 0; white-space: pre-wrap; }
+.draft-ai-translate__unavailable { font-size: .75rem; color: #f59e0b; margin: 0; }
 .draft-area  { font-size: .78rem; color: #60a5fa; margin-bottom: 4px; }
 .draft-validity { font-size: .72rem; color: var(--color-text-muted, #94a3b8); font-family: monospace; }
 .draft-readonly { font-size: .72rem; color: #fbbf24; margin-top: 6px; }

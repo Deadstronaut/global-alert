@@ -277,7 +277,8 @@
     },
     "exerciseOnly": "EXERCISE ONLY — this alert is a drill simulation, not real",
     "exportXml": "Export XML",
-    "exportJson": "Export JSON"
+    "exportJson": "Export JSON",
+    "aiTranslateAction": "Translate with AI"
   },
   "audit": {
     "tabLabel": "Audit",
@@ -818,7 +819,9 @@
     "sopAllCategories": "— all categories —",
     "sopVersionHistory": "version history",
     "sopVersionHistoryTitle": "\"{title}\" — Version History",
-    "sopNoVersionHistory": "No previous versions yet."
+    "sopNoVersionHistory": "No previous versions yet.",
+    "aiSummarizeAction": "Summarize with AI",
+    "aiTranslateAction": "Translate with AI"
   },
   "mapLayers": {
     "tabLabel": "Map Layers",
@@ -976,6 +979,7 @@
     "district": "District",
     "lat": "Latitude",
     "lng": "Longitude",
+    "pickOnMap": "Click on the map to pick a location",
     "capacity": "Capacity (occupied/total)",
     "capacityTotal": "Total Capacity",
     "capacityOccupied": "Current Occupancy",
@@ -1038,6 +1042,7 @@
       "lat": "Latitude",
       "lng": "Longitude",
       "useMyLocation": "Use my location",
+      "pickOnMap": "Click on the map to pick a location",
       "photo": "Photo (optional)",
       "photoHint": "JPEG/PNG/WebP, up to 5MB",
       "audio": "Voice note (optional)",
@@ -1066,7 +1071,8 @@
       "assignOrgNone": "— no assignment —",
       "submittedAt": "Submitted at",
       "viewPhoto": "View photo",
-      "playAudio": "Play voice note"
+      "playAudio": "Play voice note",
+      "hazardType": "Hazard type"
     },
     "map": {
       "toggleLabel": "Community Reports",
@@ -1166,5 +1172,31 @@
     "townhall": "Town Hall",
     "government_office": "Government Office",
     "unknown": "Unknown"
+  },
+  "ai": {
+    "suggestedLabel": "AI-suggested",
+    "reviewRequired": "Review required",
+    "approve": "Approve",
+    "reject": "Reject",
+    "dismiss": "Dismiss",
+    "unavailable": "AI assistance is unavailable right now — you can continue manually.",
+    "capabilityDisabled": "AI assistance is disabled for this country.",
+    "panelTitle": "AI Assistance",
+    "panelHint": "Enable or disable each sandboxed AI capability per country. All AI output requires human review before it has any effect.",
+    "countryCode": "Country code",
+    "enterCountryCode": "Enter a 2-letter country code to manage its AI settings.",
+    "enabled": "Enabled",
+    "disabled": "Disabled",
+    "capabilityLabel": {
+      "translate": "Translation suggestions (alerts/SOPs)",
+      "summarize": "Summarization suggestions (SOPs/incidents)",
+      "classify_photo": "Photo pre-classification (community reports)",
+      "anomaly_flag": "Anomaly flags (hazard data)"
+    },
+    "anomalyFlagsTitle": "Anomaly Flags",
+    "anomalyFlagsHint": "Passive flags on hazard data points that deviate sharply from recent history. Dismissing a flag does not change any risk score, alert, or dispatch.",
+    "anomalyFlagsEmpty": "No anomaly flags right now.",
+    "anomalyBaselineMean": "baseline mean",
+    "loading": "Loading..."
   }
 }

@@ -462,6 +462,45 @@ services:
     networks:
       - mhews
 
+  # ── Vector tile builder: per-country .mbtiles via Planetiler (manual) ───────
+  # Generates self-hosted OpenMapTiles-schema vector tiles from OSM data, so
+  # the map stops depending on the free public tiles.openfreemap.org (out of
+  # our control — root cause of the 2026-08-02 "black map" live incident,
+  # see MapView.vue's MAP_STYLES/getBaseStyle()). One-shot per country, run
+  # manually whenever adding a country or refreshing its tiles — output
+  # lands in ./tiles, which `tileserver` below auto-serves:
+  #   docker compose run --rm tile-builder --download --area=turkey --output=/data/turkey.mbtiles
+  #   docker compose run --rm tile-builder --download --area=madagascar --output=/data/madagascar.mbtiles
+  # ~0.5x the input .osm.pbf size in free RAM and ~5-10x in free disk is
+  # Planetiler's own guidance — fine for single-country extracts (Turkey's
+  # is a few hundred MB compressed, Madagascar's a fraction of that).
+  tile-builder:
+    image: ghcr.io/onthegomap/planetiler:latest
+    container_name: mhews-tile-builder
+    environment:
+      - JAVA_TOOL_OPTIONS=-Xmx4g
+    volumes:
+      - ./tiles:/data
+    networks:
+      - mhews
+
+  # ── Self-hosted vector tile server (always-on) ───────────────────────────────
+  # Serves whatever .mbtiles tile-builder has produced in ./tiles — no
+  # config.json needed, tileserver-gl auto-configures from any .mbtiles it
+  # finds there. A country with no local .mbtiles yet just isn't listed
+  # here; MapView.vue falls back to the public API for those until their
+  # tiles are built.
+  tileserver:
+    image: maptiler/tileserver-gl:latest
+    container_name: mhews-tileserver
+    restart: unless-stopped
+    ports:
+      - "8081:8080"
+    volumes:
+      - ./tiles:/data
+    networks:
+      - mhews
+
   # ── Vue Frontend (static build) ────────────────────────────────────────────
   frontend:
     image: nginx:alpine

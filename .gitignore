@@ -58,3 +58,11 @@ __screenshots__/
 # database\ on this dev machine) — commit manifest.example.json instead.
 /raster-importer/manifest.json
 /raster-importer/_no_rasters/
+
+# Self-hosted vector tiles (tile-builder/tileserver, docker-compose.yml) —
+# .mbtiles are hundreds of MB per country, regenerable from OSM via
+# `docker compose run --rm tile-builder --download --area=<name> --output=/data/<name>.mbtiles`,
+# never meant to be committed.
+/tiles/
+
+.vercel

@@ -109,9 +109,27 @@ export const useUIStore = defineStore('ui', () => {
 
         setTimeout(() => {
             viewMode.value = 'map';
-            mapMode.value = 'heatmap';
+            // Was 'heatmap' — 2D map used to always open with the heatmap
+            // overlay already on, which the user found visually harsh
+            // (2026-08-03 feedback). null = the true "off" state: none of
+            // Durum/Petek/Isı pressed. Distinct from 'normal', which is
+            // Durum's own *selected* state — the first cut of this fix
+            // wrongly reused 'normal' as both "off" and "Durum active",
+            // so Durum showed as pressed on open and toggling it off just
+            // re-landed on itself instead of truly clearing (2026-08-03
+            // follow-up correction).
+            mapMode.value = null;
             transitionState.value = 'complete';
         }, 800);
+    }
+
+    // Durum(📍)/Petek(⬡)/Isı buttons (SidebarPanel.vue) are radio-style —
+    // picking a different mode switches to it — except pressing the
+    // already-active one again turns it off instead of re-selecting it,
+    // landing back on null (see transitionToMap's comment on null vs
+    // 'normal'). 2026-08-03 feedback.
+    function toggleMapMode(mode) {
+        mapMode.value = mapMode.value === mode ? null : mode;
     }
 
     function transitionToGlobe() {
@@ -176,6 +194,7 @@ export const useUIStore = defineStore('ui', () => {
         safeMode,
         colorblindMode,
         mapMode,
+        toggleMapMode,
         showHeatmap,
         showHexbins,
         manualHexResolution,

@@ -3,6 +3,7 @@ import { ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useHazardTypesStore } from '@/stores/hazardTypes.js'
 import { useCommunityReportsStore } from '@/stores/communityReports.js'
+import LocationPickerMap from '@/components/LocationPickerMap.vue'
 
 const { t } = useI18n()
 const hazardTypesStore = useHazardTypesStore()
@@ -31,6 +32,11 @@ onMounted(() => {
 })
 
 const hazardTypeOptions = computed(() => hazardTypesStore.activeHazardTypes)
+
+function handleMapPick({ lat: pickedLat, lng: pickedLng }) {
+  lat.value = Math.round(pickedLat * 1e6) / 1e6
+  lng.value = Math.round(pickedLng * 1e6) / 1e6
+}
 
 function useMyLocation() {
   if (!navigator.geolocation) return
@@ -172,6 +178,11 @@ async function handleSubmit() {
         </button>
       </div>
 
+      <div class="map-panel">
+        <span class="map-panel-label">{{ t('communityReport.form.pickOnMap') }}</span>
+        <LocationPickerMap :lat="lat" :lng="lng" @pick="handleMapPick" />
+      </div>
+
       <div class="form-grid">
         <label class="form-field">
           <span>{{ t('communityReport.form.photo') }}</span>
@@ -266,6 +277,10 @@ async function handleSubmit() {
   transition: background 0.15s;
 }
 .btn-location:hover { background: rgba(77, 163, 255, 0.24); }
+
+.map-panel { display: flex; flex-direction: column; gap: 6px; margin-bottom: 14px; }
+.map-panel-label { font-size: 0.82rem; color: var(--color-text-muted, #94a3b8); }
+.map-panel :deep(.location-picker-map) { height: 260px; border: 1px solid rgba(148, 163, 184, 0.18); }
 
 .form-actions {
   display: flex;

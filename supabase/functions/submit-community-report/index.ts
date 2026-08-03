@@ -124,6 +124,26 @@ Deno.serve(async (req) => {
     return json({ error: insertError?.message ?? 'Failed to submit report' }, 500)
   }
 
+  // Spec 051 (research.md Decision 3) — fire-and-forget AI photo
+  // pre-classification. Never awaited into the response and any failure is
+  // swallowed: the citizen's submission must never be slowed down or failed
+  // by this. ai-classify-photo itself checks whether the capability is
+  // enabled for this report's country and no-ops if there is no photo.
+  if (photoPath) {
+    const triggerClassification = fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/ai-classify-photo`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ source_table: 'community_reports', source_id: data.id }),
+    }).catch(() => {})
+
+    // deno-lint-ignore no-explicit-any
+    const runtime = (globalThis as any).EdgeRuntime
+    if (runtime?.waitUntil) runtime.waitUntil(triggerClassification)
+  }
+
   return json({ id: data.id, status: data.status })
 })
 

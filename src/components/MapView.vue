@@ -2275,6 +2275,21 @@ function initMap() {
     preserveDrawingBuffer: true, // PNG download için gerekli
   })
 
+  // Blank/black map, no console error, all network requests 200 — live-
+  // testing finding, production only, 2026-08-03: classic symptom of
+  // MapLibre sizing its canvas against the container's layout box at the
+  // instant of construction, before CSS has actually finished applying
+  // (production serves styles as a separately-loaded, hashed chunk — the
+  // container can still be 0×0 or mid-transition when `new Map()` reads
+  // its size). Once that first canvas size is wrong, tiles/data loading
+  // fine no longer helps — nothing ever tells MapLibre to recompute it.
+  // A ResizeObserver on the same container is the standard fix: any size
+  // change (including the container settling into its final CSS-driven
+  // size a tick after mount) triggers a real map.resize().
+  const containerResizeObserver = new ResizeObserver(() => map?.resize())
+  containerResizeObserver.observe(mapContainer.value)
+  onBeforeUnmount(() => containerResizeObserver.disconnect())
+
   // Custom vertical zoom bar (template below) replaces the default
   // NavigationControl — [+] / [x N] / [−] stacked to the left of the
   // download/satellite-thumbnail column.

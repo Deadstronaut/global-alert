@@ -66,13 +66,18 @@ Deno.serve(async (req) => {
   const permission = canRequestAiAssistance(source_table, profile, country_code)
   if (!permission.ok) return json({ ok: false, reason: 'unauthorized' }, 403)
 
-  const { data: config } = await admin
-    .from('ai_capability_config')
-    .select('enabled')
-    .eq('country_code', country_code)
-    .eq('capability', 'translate')
-    .maybeSingle()
-  if (!config?.enabled) return json({ ok: false, reason: 'capability_disabled' })
+  // super_admin rule: always available, regardless of any country's toggle
+  // state — every other role still requires the per-country config to be
+  // explicitly enabled (FR-001).
+  if (profile.role !== 'super_admin') {
+    const { data: config } = await admin
+      .from('ai_capability_config')
+      .select('enabled')
+      .eq('country_code', country_code)
+      .eq('capability', 'translate')
+      .maybeSingle()
+    if (!config?.enabled) return json({ ok: false, reason: 'capability_disabled' })
+  }
 
   const result = await translateText(source_text, source_locale, target_locale)
   if (!result.ok || !result.data) {

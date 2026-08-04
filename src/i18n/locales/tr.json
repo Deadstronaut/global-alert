@@ -137,8 +137,8 @@
     "activeEarthquakes": "Aktif Deprem",
     "activeWildfires": "Aktif Yangın",
     "activeFloods": "Aktif Sel",
-    "activeDroughts": "Kuraklık Bölgesi",
-    "activeFoodSecurity": "Gıda Güvenliği Alarmı",
+    "activeDroughts": "Aktif Kuraklık",
+    "activeFoodSecurity": "Aktif Gıda Güvenliği",
     "totalEvents": "Toplam Olay",
     "sourcesOnline": "Çevrimiçi Kaynak"
   },
@@ -1225,5 +1225,22 @@
     "anomalyFlagsEmpty": "Şu anda anomali bayrağı yok.",
     "anomalyBaselineMean": "temel ortalama",
     "loading": "Yükleniyor..."
+  },
+  "aiAssistant": {
+    "openLabel": "AI Asistanı",
+    "title": "AI Asistanı",
+    "noTasksHere": "Bu sayfada yapılabilecek bir AI görevi yok.",
+    "taskTranslateDraft": "Bir uyarı taslağını çevir",
+    "taskSummarizeIncident": "Bir olayı özetle",
+    "back": "Geri",
+    "noItems": "Şu an üzerinde çalışılacak bir şey yok.",
+    "greeting": "Merhaba, ben Deadstro! Bu sayfada şunlarda yardımcı olabilirim:",
+    "askLocale": "Hangi dile çevireyim?",
+    "askItem": "Hangisi üzerinde çalışayım?",
+    "approvedFollowUp": "Onaylandı ve kaydedildi. Başka bir şey var mı?",
+    "rejectedFollowUp": "Reddedildi, hiçbir şey kaydedilmedi. Başka bir şey var mı?",
+    "greetingChatOnly": "Merhaba, ben Deadstro! Bu sayfada hazır bir görev yok ama aşağıdan benimle sohbet edebilirsin.",
+    "typePlaceholder": "Bir mesaj yaz...",
+    "send": "Gönder"
   }
 }

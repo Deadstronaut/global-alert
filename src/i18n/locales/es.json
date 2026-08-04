@@ -1131,5 +1131,22 @@
     "anomalyFlagsEmpty": "No hay alertas de anomalías en este momento.",
     "anomalyBaselineMean": "media de referencia",
     "loading": "Cargando..."
+  },
+  "aiAssistant": {
+    "openLabel": "Asistente de IA",
+    "title": "Asistente de IA",
+    "noTasksHere": "No hay tareas de IA disponibles en esta página.",
+    "taskTranslateDraft": "Traducir un borrador de alerta",
+    "taskSummarizeIncident": "Resumir un incidente",
+    "back": "Atrás",
+    "noItems": "No hay nada disponible en este momento.",
+    "greeting": "¡Hola, soy Deadstro! Esto es lo que puedo hacer en esta página:",
+    "askLocale": "¿A qué idioma debo traducir?",
+    "askItem": "¿Con cuál debo trabajar?",
+    "approvedFollowUp": "Aprobado y registrado. ¿Algo más?",
+    "rejectedFollowUp": "Rechazado, no se guardó nada. ¿Algo más?",
+    "greetingChatOnly": "¡Hola, soy Deadstro! No hay una tarea guiada en esta página, pero puedes chatear conmigo abajo.",
+    "typePlaceholder": "Escribe un mensaje...",
+    "send": "Enviar"
   }
 }

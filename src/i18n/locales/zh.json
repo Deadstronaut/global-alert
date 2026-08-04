@@ -1131,5 +1131,22 @@
     "anomalyFlagsEmpty": "目前没有异常标记。",
     "anomalyBaselineMean": "基线平均值",
     "loading": "加载中..."
+  },
+  "aiAssistant": {
+    "openLabel": "AI 助手",
+    "title": "AI 助手",
+    "noTasksHere": "此页面没有可用的 AI 任务。",
+    "taskTranslateDraft": "翻译警报草稿",
+    "taskSummarizeIncident": "总结事件",
+    "back": "返回",
+    "noItems": "目前没有可处理的内容。",
+    "greeting": "你好,我是 Deadstro!我可以在此页面上帮你处理以下事项:",
+    "askLocale": "应该翻译成哪种语言?",
+    "askItem": "应该处理哪一项?",
+    "approvedFollowUp": "已批准并记录。还需要其他帮助吗?",
+    "rejectedFollowUp": "已拒绝,未保存任何内容。还需要其他帮助吗?",
+    "greetingChatOnly": "你好,我是 Deadstro!此页面没有可用的引导任务,但你可以在下方与我聊天。",
+    "typePlaceholder": "输入消息...",
+    "send": "发送"
   }
 }

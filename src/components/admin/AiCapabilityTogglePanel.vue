@@ -15,11 +15,22 @@ const aiAssistance = useAiAssistanceStore()
 
 const CAPABILITIES = ['translate', 'summarize', 'classify_photo', 'anomaly_flag']
 
-const targetCountryCode = ref(auth.isSuperAdmin ? '' : auth.countryCode || '')
+// super_admin accounts commonly have no fixed country_code of their own, so
+// there is nothing to default to from the account itself — restore whatever
+// country was last configured here instead (AiAssistantWidget.vue reads the
+// same key so the floating chat button uses the same country context a
+// super_admin just enabled, rather than silently finding nothing enabled).
+const targetCountryCode = ref(
+  auth.isSuperAdmin ? localStorage.getItem('aiAssistantCountryCode') || '' : auth.countryCode || '',
+)
 const loading = ref(false)
 const saving = ref(null) // capability currently being saved, or null
 
 const normalizedCountryCode = computed(() => (targetCountryCode.value || '').trim().toLowerCase())
+
+watch(normalizedCountryCode, (code) => {
+  if (code) localStorage.setItem('aiAssistantCountryCode', code)
+})
 
 async function loadCapabilities() {
   if (!normalizedCountryCode.value) return

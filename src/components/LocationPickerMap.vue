@@ -49,6 +49,20 @@ function countryCenterPoint() {
   return c ? [c.centerLng, c.centerLat] : [30, 20]
 }
 
+// Same fit-to-country-bbox behavior MapView.vue's selectCountry()/
+// zoomToCountry() give the main 2D map — user-reported, 2026-08-05: picking
+// a country here (the superadmin-only country <select>) used to only pan
+// (see WORLD_ZOOM's comment on why the map never auto-zoomed), which read
+// as broken next to the main map's own "select a country → fly to it"
+// behavior. Only fires on an actual dropdown change (see the countryCode
+// watch below — no {immediate:true}), so a shelter opened already-in-edit
+// or an admin's own fixed country still respects the wide open-at-1x default.
+function countryBoundsFor(code) {
+  const c = countries[code?.toLowerCase()]
+  if (!c?.bbox) return null
+  return new maplibregl.LngLatBounds([c.bbox.minLng, c.bbox.minLat], [c.bbox.maxLng, c.bbox.maxLat])
+}
+
 function hasValidCoords() {
   return Number.isFinite(Number(props.lat)) && Number.isFinite(Number(props.lng))
 }
@@ -110,13 +124,18 @@ watch(
   },
 )
 
-// Switching country (create mode, no coords yet) pans to that country's
-// center — zoom is deliberately left untouched (see WORLD_ZOOM comment).
+// Picking a different country (create mode, no coords chosen yet) flies to
+// that country's bounds, same as the main map's own country selection.
 watch(
   () => props.countryCode,
   () => {
     if (!map || hasValidCoords()) return
-    map.easeTo({ center: countryCenterPoint(), duration: 300 })
+    const bounds = countryBoundsFor(props.countryCode)
+    if (bounds) {
+      map.fitBounds(bounds, { padding: 30, duration: 600, maxZoom: 10 })
+    } else {
+      map.easeTo({ center: countryCenterPoint(), duration: 300 })
+    }
   },
 )
 </script>

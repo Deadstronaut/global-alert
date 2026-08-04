@@ -10,9 +10,9 @@
 // convention, so callers can implement fail-open behavior (FR-008) without
 // try/catch at every call site.
 //
-// This module is ONLY used by ai-translate, ai-summarize, and
-// ai-classify-photo. ai-anomaly-check does NOT use it — that capability is
-// deliberately pure statistics (research.md Decision 2), not an AI call.
+// Used by ai-translate, ai-summarize, ai-classify-photo, and ai-chat.
+// ai-anomaly-check does NOT use it — that capability is deliberately pure
+// statistics (research.md Decision 2), not an AI call.
 
 const DEFAULT_TIMEOUT_MS = 10_000
 
@@ -113,6 +113,33 @@ export async function summarizeText(text: string): Promise<AiProviderResult<stri
       },
       { role: 'user', content: text },
     ],
+    textModel,
+  )
+}
+
+const CHAT_SYSTEM_PROMPT =
+  'You are a helpful assistant embedded in a multi-hazard early warning platform used by ' +
+  'disaster-response operators. Answer questions and hold a conversation concisely and helpfully. ' +
+  'You have no access to any tool, database, or system action — you cannot look anything up, change ' +
+  'any record, send any alert, or take any action; you can only reply with text. If asked to do ' +
+  'something that requires taking an action, explain that you can only talk, not act, and suggest ' +
+  'the operator use the appropriate screen in the app instead.'
+
+export interface ChatTurn {
+  role: 'user' | 'assistant'
+  content: string
+}
+
+// Free-form conversational reply — used by ai-chat. Unlike translate/
+// summarize/classify_photo, a chat reply is never written to any entity and
+// never requires approval (FR-004 only applies to suggestions that could
+// become persisted content); it is purely informational, which is why it
+// carries no source_table/source_id and is not logged as an ai_suggestions
+// row (research.md addendum — see ai-chat/index.ts header comment).
+export async function chatReply(history: ChatTurn[]): Promise<AiProviderResult<string>> {
+  const { textModel } = providerConfig()
+  return chatCompletion(
+    [{ role: 'system', content: CHAT_SYSTEM_PROMPT }, ...history],
     textModel,
   )
 }

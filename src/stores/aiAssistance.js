@@ -104,6 +104,24 @@ export const useAiAssistanceStore = defineStore('aiAssistance', () => {
   }
 
   // ─────────────────────────────────────────
+  // Serbest sohbet (spec 051 eki) — herhangi bir kayda bağlı değil, hiçbir
+  // şeyi değiştirmiyor, bu yüzden ai_suggestions'a hiç yazılmıyor ve
+  // onay/red gerekmiyor (FR-004 zaten "kalıcı etkisi olan" önerilere
+  // uygulanıyor, sohbetin kalıcı etkisi yok).
+  // ─────────────────────────────────────────
+  async function sendChatMessage(history, countryCode) {
+    error.value = null;
+    const { data, error: err } = await supabase.functions.invoke('ai-chat', {
+      body: { messages: history, country_code: countryCode },
+    });
+    if (err || data?.ok === false) {
+      error.value = err?.message ?? data?.reason ?? 'provider_unavailable';
+      return { success: false, unavailable: true, reason: error.value };
+    }
+    return { success: true, reply: data.reply };
+  }
+
+  // ─────────────────────────────────────────
   // Ortak: bir öneriyi onayla/düzenleyerek onayla/reddet (FR-004/FR-005)
   // ─────────────────────────────────────────
   async function resolveSuggestion(suggestionId, { status, finalOutput = null } = {}) {
@@ -135,6 +153,7 @@ export const useAiAssistanceStore = defineStore('aiAssistance', () => {
     setCapabilityEnabled,
     requestTranslation,
     requestSummary,
+    sendChatMessage,
     resolveSuggestion,
   };
 });

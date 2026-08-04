@@ -1131,5 +1131,22 @@
     "anomalyFlagsEmpty": "Aucun signalement d'anomalie pour le moment.",
     "anomalyBaselineMean": "moyenne de référence",
     "loading": "Chargement..."
+  },
+  "aiAssistant": {
+    "openLabel": "Assistant IA",
+    "title": "Assistant IA",
+    "noTasksHere": "Aucune tâche IA disponible sur cette page.",
+    "taskTranslateDraft": "Traduire un brouillon d'alerte",
+    "taskSummarizeIncident": "Résumer un incident",
+    "back": "Retour",
+    "noItems": "Rien de disponible pour le moment.",
+    "greeting": "Bonjour, je suis Deadstro ! Voici ce que je peux faire sur cette page :",
+    "askLocale": "Vers quelle langue dois-je traduire ?",
+    "askItem": "Sur lequel dois-je travailler ?",
+    "approvedFollowUp": "Approuvé et enregistré. Autre chose ?",
+    "rejectedFollowUp": "Rejeté, rien n'a été enregistré. Autre chose ?",
+    "greetingChatOnly": "Bonjour, je suis Deadstro ! Aucune tâche guidée n'est disponible sur cette page, mais vous pouvez discuter avec moi ci-dessous.",
+    "typePlaceholder": "Écrivez un message...",
+    "send": "Envoyer"
   }
 }

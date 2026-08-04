@@ -44,6 +44,7 @@ Deno.serve(async (req) => {
   const isServiceRoleCall = authHeader === `Bearer ${serviceKey}`
 
   let requestedBy: string | null = null
+  let callerIsSuperAdmin = false
   if (!isServiceRoleCall) {
     const { data: callerAuth, error: callerAuthError } = await admin.auth.getUser(authHeader.replace('Bearer ', ''))
     if (callerAuthError || !callerAuth.user) return json({ error: 'Invalid session' }, 401)
@@ -51,6 +52,7 @@ Deno.serve(async (req) => {
     if (!profile || !['country_admin', 'super_admin'].includes(profile.role)) {
       return json({ ok: false, reason: 'unauthorized' }, 403)
     }
+    callerIsSuperAdmin = profile.role === 'super_admin'
     requestedBy = callerAuth.user.id
   }
 
@@ -78,13 +80,18 @@ Deno.serve(async (req) => {
     return json({ ok: false, reason: 'nothing_to_classify' })
   }
 
-  const { data: config } = await admin
-    .from('ai_capability_config')
-    .select('enabled')
-    .eq('country_code', report.country_code)
-    .eq('capability', 'classify_photo')
-    .maybeSingle()
-  if (!config?.enabled) return json({ ok: false, reason: 'capability_disabled' })
+  // super_admin rule: a manual re-trigger by super_admin is always allowed
+  // regardless of the toggle state; the automatic (service-role) trigger
+  // and any other role still require the per-country config (FR-001).
+  if (!callerIsSuperAdmin) {
+    const { data: config } = await admin
+      .from('ai_capability_config')
+      .select('enabled')
+      .eq('country_code', report.country_code)
+      .eq('capability', 'classify_photo')
+      .maybeSingle()
+    if (!config?.enabled) return json({ ok: false, reason: 'capability_disabled' })
+  }
 
   const { data: hazardTypes } = await admin.from('hazard_types').select('code').eq('is_active', true)
   const hazardTypeOptions = (hazardTypes ?? []).map((h) => h.code)

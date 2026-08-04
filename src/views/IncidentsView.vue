@@ -8,8 +8,6 @@ import { useSopDocumentsStore } from '@/stores/sopDocuments.js'
 import { useCommunityReportsStore } from '@/stores/communityReports.js'
 import { supabase } from '@/services/api/config.js'
 import { nextStatuses, requiresAAR } from '@/utils/incidentStateMachine.js'
-import { useAiAssistanceStore } from '@/stores/aiAssistance.js'
-import AiSuggestionBadge from '@/components/ai/AiSuggestionBadge.vue'
 import { Button } from '@/components/ui/button'
 
 const router = useRouter()
@@ -22,66 +20,8 @@ const auth = useAuthStore()
 const hazardTypesStore = useHazardTypesStore()
 const sopDocumentsStore = useSopDocumentsStore()
 const communityReportsStore = useCommunityReportsStore()
-const aiAssistance = useAiAssistanceStore()
 const incidents = ref([])
 const loading = ref(false)
-
-// Spec 051 US2a — AI ile özetle, cap_drafts translate ile aynı desen
-// (CapView.vue). incidents' RLS zaten super_admin/country_admin'e yazma
-// izni veriyor (spec 011), o yüzden aynı rol kontrolü burada da uygulanır.
-const canUseAiSummarize = computed(() => auth.isSuperAdmin || auth.session?.role === 'country_admin')
-const summarizeEnabled = ref(false)
-const summarySuggestionByIncident = ref({})
-const summarizeBusyByIncident = ref({})
-const summarizeUnavailableByIncident = ref({})
-
-async function loadAiSummarizeCapability() {
-  if (!canUseAiSummarize.value || !auth.countryCode) return
-  const caps = await aiAssistance.fetchCapabilities(auth.countryCode)
-  summarizeEnabled.value = caps.summarize === true
-}
-
-async function requestIncidentSummary(incident) {
-  if (!incident?.id || !auth.countryCode) return
-  summarizeBusyByIncident.value = { ...summarizeBusyByIncident.value, [incident.id]: true }
-  summarizeUnavailableByIncident.value = { ...summarizeUnavailableByIncident.value, [incident.id]: false }
-  const result = await aiAssistance.requestSummary(
-    'incidents',
-    incident.id,
-    incident.description || '',
-    auth.countryCode,
-  )
-  summarizeBusyByIncident.value = { ...summarizeBusyByIncident.value, [incident.id]: false }
-  if (!result.success) {
-    summarizeUnavailableByIncident.value = { ...summarizeUnavailableByIncident.value, [incident.id]: true }
-    return
-  }
-  summarySuggestionByIncident.value = {
-    ...summarySuggestionByIncident.value,
-    [incident.id]: { id: result.suggestionId, ai_output: result.aiOutput },
-  }
-}
-
-// As with CapView's translation approval, this only resolves the
-// ai_suggestions row — incidents.description remains the system of record,
-// unmodified by an AI summary approval (FR-006).
-async function approveIncidentSummary(incidentId) {
-  const suggestion = summarySuggestionByIncident.value[incidentId]
-  if (!suggestion) return
-  await aiAssistance.resolveSuggestion(suggestion.id, { status: 'approved', finalOutput: suggestion.ai_output })
-  const next = { ...summarySuggestionByIncident.value }
-  delete next[incidentId]
-  summarySuggestionByIncident.value = next
-}
-
-async function rejectIncidentSummary(incidentId) {
-  const suggestion = summarySuggestionByIncident.value[incidentId]
-  if (!suggestion) return
-  await aiAssistance.resolveSuggestion(suggestion.id, { status: 'rejected' })
-  const next = { ...summarySuggestionByIncident.value }
-  delete next[incidentId]
-  summarySuggestionByIncident.value = next
-}
 const showForm = ref(false)
 const submitting = ref(false)
 const error = ref(null)
@@ -259,10 +199,7 @@ function linkedSops(incident) {
   return sopDocumentsStore.sopsForHazardType(incident.hazard_type)
 }
 
-onMounted(() => {
-  loadIncidents()
-  loadAiSummarizeCapability()
-})
+onMounted(loadIncidents)
 </script>
 
 <template>
@@ -339,30 +276,6 @@ onMounted(() => {
 
         <h4 class="inc-title">{{ inc.title }}</h4>
         <p v-if="inc.description" class="inc-desc">{{ inc.description }}</p>
-
-        <div v-if="canUseAiSummarize && summarizeEnabled && inc.description" class="inc-ai-summarize">
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            class="btn-ai"
-            :disabled="summarizeBusyByIncident[inc.id]"
-            @click="requestIncidentSummary(inc)"
-          >
-            {{ t('incidentTracking.aiSummarizeAction') }}
-          </Button>
-          <AiSuggestionBadge
-            v-if="summarySuggestionByIncident[inc.id]"
-            :suggestion="summarySuggestionByIncident[inc.id]"
-            @approve="approveIncidentSummary(inc.id)"
-            @reject="rejectIncidentSummary(inc.id)"
-          >
-            <template #default>
-              <p class="inc-ai-summarize__preview">{{ summarySuggestionByIncident[inc.id].ai_output.summary_text }}</p>
-            </template>
-          </AiSuggestionBadge>
-          <p v-if="summarizeUnavailableByIncident[inc.id]" class="inc-ai-summarize__unavailable">{{ t('ai.unavailable') }}</p>
-        </div>
         <div v-if="inc.area_desc" class="inc-area">📍 {{ inc.area_desc }}</div>
         <div v-if="inc.response_plan" class="inc-plan">📋 {{ inc.response_plan }}</div>
         <div v-if="inc.post_event_notes" class="inc-aar">
@@ -517,10 +430,6 @@ onMounted(() => {
 .inc-date   { font-size: .72rem; color: var(--color-text-muted,#94a3b8); margin-left: auto; }
 .inc-title  { font-size: 1rem; font-weight: 700; margin: 0 0 6px; }
 .inc-desc   { font-size: .82rem; color: var(--color-text-muted,#94a3b8); margin: 0 0 6px; line-height: 1.5; }
-.inc-ai-summarize { display: flex; flex-direction: column; gap: 6px; margin: 0 0 8px; }
-.inc-ai-summarize .btn-ai { align-self: flex-start; }
-.inc-ai-summarize__preview { font-size: .8rem; color: #e2e8f0; margin: 0; white-space: pre-wrap; }
-.inc-ai-summarize__unavailable { font-size: .75rem; color: #f59e0b; margin: 0; }
 .inc-area, .inc-plan { font-size: .78rem; color: #60a5fa; margin-bottom: 4px; }
 .inc-aar {
   font-size: .78rem; color: var(--color-text-muted,#94a3b8);

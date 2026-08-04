@@ -1,5 +1,5 @@
 <script setup>
-import { ref, shallowRef, computed, onMounted, onBeforeUnmount, watch, nextTick } from 'vue'
+import { ref, reactive, shallowRef, computed, onMounted, onBeforeUnmount, watch, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { useDisasterStore } from '@/stores/disaster.js'
 import { useUIStore, MIN_HEX_RES } from '@/stores/ui.js'
@@ -44,7 +44,7 @@ import { useAuthStore } from '@/stores/auth.js'
 import { supabase } from '@/services/api/config.js'
 import { getShelterMarkerColor, getShelterMarkerIcon } from '@/services/shelterMarkerStyle.js'
 import { useExposureLayersStore } from '@/stores/exposureLayers.js'
-import { colorForDataset, isPopulationSource, isGridMetricSource, populationFillExpression, gridMetricFillExpression, rampForGridMetric, POPULATION_RAMP, HALO_SEVERITY_RAMP } from '@/utils/exposureLayerColor.js'
+import { colorForDataset, isPopulationSource, isGridMetricSource, populationFillExpression, gridMetricFillExpression, rampForGridMetric, populationLegendStops, gridMetricLegendStops, POPULATION_RAMP, HALO_SEVERITY_RAMP } from '@/utils/exposureLayerColor.js'
 import { circlePolygon, distanceKm } from '@/utils/circleGeometry.js'
 import { defaultBufferRadiusKm } from '@/lib/hazardBuffer.js'
 import { buildFeaturePopupHtml } from '@/utils/exposureFeaturePopup.js'
@@ -93,6 +93,18 @@ const DEFAULT_LAYER_OPACITY = 0.7
 // dataset's load starting/cancelling never invalidates another's.
 const loadingExposureLayer = ref(null)
 const exposureLayerLoadTokens = new Map() // datasetId -> token
+
+// Legend data for currently-rendered gridded (choropleth) exposure layers —
+// keyed by dataset.id so multiple layers toggled on at once each get their
+// own legend card. Populated in addExposureLayer, cleared in
+// removeExposureLayerRendering — user-reported 2026-08-05: selecting a
+// gridded layer (e.g. rainfall/CHIRPS) changed the map's colors with no
+// on-screen explanation of what value each color represents, while the
+// unrelated event-severity legend kept showing regardless of the selected
+// layer. reactive (not ref) so Map.set/delete are tracked without needing to
+// replace the whole Map on every change.
+const exposureLegends = reactive(new Map()) // datasetId -> { id, label, isPopulation, stops }
+const activeExposureLegends = computed(() => Array.from(exposureLegends.values()))
 
 function cancelExposureLayerLoading() {
   const dataset = loadingExposureLayer.value
@@ -302,6 +314,25 @@ async function addExposureLayer(dataset) {
   // a thin, low-opacity outline instead.
   const isGridded = isPopulation || isGridMetric
   const fillColor = isPopulation ? populationFillExpression(geojson) : isGridMetric ? gridMetricFillExpression(geojson, rampForGridMetric(dataset.source_name)) : color
+
+  // Legend: same quantile breakpoints as the fill expression above, just
+  // shaped for display — see gridMetricLegendStops's header for why this
+  // can't just reuse fillColor's MapLibre expression directly.
+  if (isGridded) {
+    const stops = isPopulation ? populationLegendStops(geojson) : gridMetricLegendStops(geojson, rampForGridMetric(dataset.source_name))
+    if (stops) {
+      const labelFor = isPopulation ? formatPopulationLabel : formatMetricValueLabel
+      exposureLegends.set(dataset.id, {
+        id: dataset.id,
+        // includeCountry: false — this app currently only ever shows one
+        // country's map at a time, so "(Türkiye)" here is redundant context
+        // clutter, not disambiguation (user-reported 2026-08-05; same
+        // reasoning coarseResolutionNote's caller already applies elsewhere).
+        label: friendlyDatasetLabel(t, dataset, { includeCountry: false }),
+        stops: stops.map((s) => ({ color: s.color, from: labelFor(s.from), to: labelFor(s.to) })),
+      })
+    }
+  }
   map.addSource(sourceId, { type: 'geojson', data: geojson })
   map.addLayer({ id: `${sourceId}-fill`, type: 'fill', source: sourceId, filter: ['==', ['geometry-type'], 'Polygon'], paint: { 'fill-color': fillColor, 'fill-opacity': opacity * (isGridded ? 0.75 : 0.4) } })
   map.addLayer({ id: `${sourceId}-line`, type: 'line', source: sourceId, filter: ['in', ['geometry-type'], ['literal', ['LineString', 'Polygon']]], paint: { 'line-color': isGridded ? '#7f0000' : color, 'line-opacity': opacity * (isGridded ? 0.3 : 1), 'line-width': isGridded ? 0.5 : 2 } })
@@ -387,6 +418,7 @@ async function addExposureLayer(dataset) {
 
 function removeExposureLayerRendering(dataset) {
   if (!map) return
+  exposureLegends.delete(dataset.id)
   const sourceId = exposureSourceId(dataset)
   for (const suffix of [...EXPOSURE_SUB_LAYER_SUFFIXES, '-labels']) {
     if (map.getLayer(sourceId + suffix)) map.removeLayer(sourceId + suffix)
@@ -938,6 +970,17 @@ const mapContainer = ref(null)
 let map = null
 let mapLoaded = false
 let styleLoadVersion = 0
+// MapLibre never learns about a container resize on its own — it keeps
+// rendering at whatever pixel size it was last told about. Nothing in this
+// file called map.resize() after the initial mount, so any layout change to
+// mapContainer's actual box (not just floating panels drawn on top of it,
+// which don't affect this) left the WebGL canvas's own framebuffer stale
+// relative to its now-different CSS box: a live-testing regression,
+// 2026-08-03 (selectCountry()'s flyTo landing while some layout shift was
+// mid-flight visibly detached the canvas from its container, most of the
+// viewport gone black). One observer for the container's whole lifetime,
+// disconnected on unmount.
+let mapResizeObserver = null
 let markerObjects = []
 let popupZIndexCounter = 1000 // bring-to-front stacking order for open popups
 
@@ -996,6 +1039,13 @@ let countryHexFeatures = null // raw Feature[] from FILL_GRID (geometry only, fo
 // view instead of a guessed/hardcoded zoom — whatever the base style's own
 // default center/zoom happens to be.
 let defaultCameraState = null
+// Whatever Durum/Petek/Isı mode was active right before selectCountry()
+// forces 'hexagon' on — restored by clearCountrySelection() so pressing the
+// country badge's ✕ goes back to what the user actually had (including
+// 'off'/null), instead of clearCountrySelection() hardcoding 'heatmap'
+// regardless (user-reported, 2026-08-04: leaving a country selection always
+// left Isı on even if it had been off before selecting).
+let mapModeBeforeCountrySelection = null
 
 // 0 = Açık (liberty), 1 = Koyu (dark), 2 = Uydu
 const mapStyleIndex = ref(0)
@@ -2178,11 +2228,16 @@ function selectCountry(f) {
   // See loadCountryHistory's own comment in disaster.js for the full story.
   disasterStore.loadCountryHistory(disasterStore.activeBbox)
 
-  // We do not flyTo here anymore. Single click only selects the country and shows hexes.
-  // Double click handles the zoom/flyTo (in zoomToCountry).
-  // Visual state only needs updating when selecting a different country
+  // Visual state (dim/hex-grid/sidebar) only needs updating when selecting
+  // a genuinely different country — re-clicking the one already selected is
+  // a no-op past this point (including no repeat flyTo below).
   if (alreadySelected) return
 
+  // Only capture on the very first selection (nothing selected yet) —
+  // re-selecting a different country while one is already focused must not
+  // overwrite this with 'hexagon' (its own forced value), which would lose
+  // the actual pre-selection mode for good.
+  if (selectedCountryCode.value == null) mapModeBeforeCountrySelection = uiStore.mapMode
   uiStore.mapMode = 'hexagon'
   sheltersLayerPanelCollapsed.value = true
   exposureLayersPanelCollapsed.value = true
@@ -2226,6 +2281,16 @@ function selectCountry(f) {
   })
 
   setFocusMode(true, fullFeature)
+
+  // Zoom-to-fit used to be double-click-only, kept deliberately separate
+  // from selection (see zoomToCountry's own history/comments) — combining
+  // them here previously broke the map canvas (see mapResizeObserver's
+  // comment for the actual cause: nothing ever told MapLibre the container
+  // had resized out from under it). With that fixed, single click now both
+  // selects AND fits the camera to the country, framed in the visible gap
+  // between the left/right panels (getVisibleMapPadding()) — one gesture,
+  // no separate double-click step (live-testing ask, 2026-08-03).
+  zoomToCountry(f)
 }
 
 function clearCountrySelection() {
@@ -2236,7 +2301,8 @@ function clearCountrySelection() {
   disasterStore.activeBbox = null
   countryHexRes = null
   countryHexFeatures = null
-  uiStore.mapMode = 'heatmap'
+  uiStore.mapMode = mapModeBeforeCountrySelection
+  mapModeBeforeCountrySelection = null
   if (!map || !mapLoaded) return
 
   map.getSource('country-hex-grid')?.setData({ type: 'FeatureCollection', features: [] })
@@ -2255,7 +2321,9 @@ function clearCountrySelection() {
   })
   setFocusMode(false)
 
-  // Restore full heatmap
+  // Refreshes the (now country-unscoped) heatmap/marker data even when the
+  // restored mapMode isn't 'heatmap' — harmless no-op in that case, but
+  // needed when it is (e.g. user had Isı on before ever selecting a country).
   updateHeatmap()
 
   if (defaultCameraState) {
@@ -2284,6 +2352,13 @@ function initMap() {
     doubleClickZoom: false, // Disable default so we can handle it for zoom-to-fit
     preserveDrawingBuffer: true, // PNG download için gerekli
   })
+
+  // See mapResizeObserver's own declaration for why this exists. ResizeObserver
+  // (not a window 'resize' listener) so a layout-only change — sidebar
+  // collapse, panel toggle, anything that resizes mapContainer without the
+  // browser window itself changing size — is caught too.
+  mapResizeObserver = new ResizeObserver(() => map?.resize())
+  mapResizeObserver.observe(mapContainer.value)
 
   // Blank/black map, no console error, all network requests 200 — live-
   // testing finding, production only, 2026-08-03: classic symptom of
@@ -3464,6 +3539,8 @@ onBeforeUnmount(() => {
     userMarkerObj.remove()
     userMarkerObj = null
   }
+  mapResizeObserver?.disconnect()
+  mapResizeObserver = null
   if (map) {
     map.remove()
     map = null
@@ -3500,51 +3577,63 @@ onBeforeUnmount(() => {
       @cancel="showTerrainWarning = false"
     />
 
-    <!-- Heatmap legend -->
-    <div
-      v-if="uiStore.showHeatmap"
-      class="map-legend"
-      :class="{ 'legend-sidebar-collapsed': uiStore.sidebarCollapsed }"
-    >
-      <div class="legend-title">Yoğunluk</div>
-      <div class="legend-gradient heat-gradient"></div>
-      <div class="legend-labels">
-        <span>Düşük</span>
-        <span>Yüksek</span>
+    <!-- All bottom-left-anchored legends live in one flex group so they lay
+         out side-by-side (wide screens) or stack (narrow, see the
+         .map-legend-group media query) instead of overlapping — user-
+         reported 2026-08-05: toggling a gridded exposure layer (e.g.
+         rainfall) changed the map's colors with no legend explaining them,
+         while the event-severity legend below stayed on unrelated to it. -->
+    <div class="map-legend-group" :class="{ 'legend-sidebar-collapsed': uiStore.sidebarCollapsed }">
+      <!-- Heatmap legend -->
+      <div v-if="uiStore.showHeatmap" class="map-legend">
+        <div class="legend-title">Yoğunluk</div>
+        <div class="legend-gradient heat-gradient"></div>
+        <div class="legend-labels">
+          <span>Düşük</span>
+          <span>Yüksek</span>
+        </div>
       </div>
-    </div>
 
-    <!-- Hexbin / marker severity legend — slides clear of the sidebar (like
-         the heatmap legend above) instead of disappearing while it's open. -->
-    <div
-      v-else-if="uiStore.showHexbins || (!uiStore.showHeatmap && !uiStore.showHexbins)"
-      class="map-legend"
-      :class="{ 'legend-sidebar-collapsed': uiStore.sidebarCollapsed }"
-    >
-      <div class="legend-title">Şiddet</div>
-      <div class="legend-severity-rows">
-        <div class="sev-row">
-          <span class="sev-dot" style="background: var(--color-minimal)"></span><span>Minimal</span>
+      <!-- Hexbin / marker severity legend -->
+      <div v-else-if="uiStore.showHexbins || (!uiStore.showHeatmap && !uiStore.showHexbins)" class="map-legend">
+        <div class="legend-title">Şiddet</div>
+        <div class="legend-severity-rows">
+          <div class="sev-row">
+            <span class="sev-dot" style="background: var(--color-minimal)"></span><span>Minimal</span>
+          </div>
+          <div class="sev-row">
+            <span class="sev-dot" style="background: var(--color-low)"></span><span>Düşük</span>
+          </div>
+          <div class="sev-row">
+            <span class="sev-dot" style="background: var(--color-moderate)"></span><span>Orta</span>
+          </div>
+          <div class="sev-row">
+            <span class="sev-dot" style="background: var(--color-high)"></span><span>Yüksek</span>
+          </div>
+          <div class="sev-row">
+            <span class="sev-dot" style="background: var(--color-critical)"></span><span>Kritik</span>
+          </div>
         </div>
-        <div class="sev-row">
-          <span class="sev-dot" style="background: var(--color-low)"></span><span>Düşük</span>
-        </div>
-        <div class="sev-row">
-          <span class="sev-dot" style="background: var(--color-moderate)"></span><span>Orta</span>
-        </div>
-        <div class="sev-row">
-          <span class="sev-dot" style="background: var(--color-high)"></span><span>Yüksek</span>
-        </div>
-        <div class="sev-row">
-          <span class="sev-dot" style="background: var(--color-critical)"></span><span>Kritik</span>
+        <p v-if="markerTruncation && markerTruncation.hiddenTiers.length > 0" class="marker-truncation-note">
+          {{ t('map.markerTruncationTiered', { shown: markerTruncation.shown, total: markerTruncation.total, tiers: markerHiddenTiersLabel }) }}
+        </p>
+        <p v-else-if="markerTruncation" class="marker-truncation-note">
+          {{ t('map.markerTruncation', { shown: markerTruncation.shown, total: markerTruncation.total }) }}
+        </p>
+      </div>
+
+      <!-- Gridded exposure layer legends (population, rainfall/CHIRPS, drought,
+           river discharge, etc.) — one card per active layer, each showing
+           the actual value range behind every color band on the map. -->
+      <div v-for="legend in activeExposureLegends" :key="legend.id" class="map-legend exposure-legend">
+        <div class="legend-title">{{ legend.label }}</div>
+        <div class="exposure-legend-rows">
+          <div v-for="(stop, i) in legend.stops" :key="i" class="exposure-legend-row">
+            <span class="exposure-legend-swatch" :style="{ background: stop.color }"></span>
+            <span class="exposure-legend-range">{{ stop.from }}–{{ stop.to }}</span>
+          </div>
         </div>
       </div>
-      <p v-if="markerTruncation && markerTruncation.hiddenTiers.length > 0" class="marker-truncation-note">
-        {{ t('map.markerTruncationTiered', { shown: markerTruncation.shown, total: markerTruncation.total, tiers: markerHiddenTiersLabel }) }}
-      </p>
-      <p v-else-if="markerTruncation" class="marker-truncation-note">
-        {{ t('map.markerTruncation', { shown: markerTruncation.shown, total: markerTruncation.total }) }}
-      </p>
     </div>
 
     <!-- Live pitch/detail tuning (spec-less follow-up, 2026-07-28): only
@@ -4475,12 +4564,37 @@ onBeforeUnmount(() => {
 }
 
 /* ── Map Legend ── */
-.map-legend {
+/* Positions the whole legend stack; individual .map-legend cards below are
+   plain flex children (no position of their own) so they line up side-by-
+   side here on wide screens, wrapping to stack above on narrow ones (see
+   this class's media-query override further down). The heatmap/severity
+   card is always first in the DOM and stays put at the left edge (user
+   preference, 2026-08-05: it's the one legend that's always present, so it
+   anchors the group); any exposure-layer legend added on top of it appears
+   to its RIGHT, in DOM/toggle order. align-items: stretch keeps every card
+   the same height (top AND bottom edges level) instead of only matching
+   bottoms — was flex-end, which let a taller exposure legend hang above a
+   shorter severity card with mismatched tops. */
+.map-legend-group {
   position: fixed;
-  bottom: 32px;
+  bottom: 38px;
   left: calc(var(--sidebar-width, 280px) + 12px);
   transition: left 0.35s ease;
   z-index: 10;
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: stretch;
+  gap: 10px;
+  max-width: calc(100vw - var(--sidebar-width, 280px) - 24px);
+}
+
+.map-legend-group.legend-sidebar-collapsed {
+  left: calc(var(--sidebar-collapsed, 56px) + 12px);
+  max-width: calc(100vw - var(--sidebar-collapsed, 56px) - 24px);
+}
+
+.map-legend {
   background: rgba(20, 24, 33, 0.82);
   backdrop-filter: blur(6px);
   border: 1px solid rgba(255, 255, 255, 0.12);
@@ -4488,10 +4602,6 @@ onBeforeUnmount(() => {
   padding: 8px 10px;
   min-width: 110px;
   pointer-events: none;
-}
-
-.map-legend.legend-sidebar-collapsed {
-  left: calc(var(--sidebar-collapsed, 56px) + 12px);
 }
 
 .marker-truncation-note {
@@ -4550,6 +4660,37 @@ onBeforeUnmount(() => {
   height: 9px;
   border-radius: 50%;
   flex-shrink: 0;
+}
+
+.exposure-legend {
+  max-width: 190px;
+}
+
+.exposure-legend-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.exposure-legend-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.68rem;
+  color: rgba(255, 255, 255, 0.8);
+  white-space: nowrap;
+}
+
+.exposure-legend-swatch {
+  width: 14px;
+  height: 9px;
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+
+.exposure-legend-range {
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 /* ── Country hover label: follows the cursor, offset to its right ── */
@@ -4864,10 +5005,17 @@ onBeforeUnmount(() => {
   /* The sidebar is a bottom sheet here, not a left rail — --sidebar-width
      doesn't apply, so the calc()-based offset would push these toward the
      right edge (or off narrow screens) for no reason. Pin near the left
-     edge regardless of the (desktop-only) collapsed state. */
-  .map-legend,
-  .map-legend.legend-sidebar-collapsed {
+     edge regardless of the (desktop-only) collapsed state. Also switch from
+     the desktop row-reverse (legends side-by-side to the right) to a
+     column-reverse stack (legends ABOVE each other) — a phone-width screen
+     has no spare width for a second card next to the severity legend, but
+     there's headroom above it. */
+  .map-legend-group,
+  .map-legend-group.legend-sidebar-collapsed {
     left: 12px;
+    max-width: calc(100vw - 24px);
+    flex-direction: column-reverse;
+    align-items: flex-start;
   }
 
   /* The 3-column grid (shelters | search | exposure layers) has no room to

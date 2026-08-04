@@ -30,3 +30,27 @@ export function deduplicateEvents(events: Event[], distanceKm: number, windowMin
   }
   return result
 }
+
+/**
+ * Country + date-range dedup for hazards where lat/lng distance between
+ * sources is meaningless (e.g. flood: GloFAS reports a river-gauge point,
+ * ReliefWeb reports a country centroid — those can be hundreds of km apart
+ * for the exact same real-world flood). Two events are the same event only
+ * if BOTH carry a resolved `extra.countryCode` and it matches; events without
+ * one (a country lookup miss) never match anything — a possible duplicate
+ * left in place beats two unrelated events silently merged on no shared key.
+ */
+export function deduplicateByCountryDate(events: Event[], toleranceDays = 3): Event[] {
+  const result: Event[] = []
+  for (const ev of events) {
+    const evCountry = (ev.extra as Record<string, unknown> | undefined)?.countryCode as string | undefined
+    const isDup = !!evCountry && result.some((ex) => {
+      const exCountry = (ex.extra as Record<string, unknown> | undefined)?.countryCode as string | undefined
+      if (!exCountry || exCountry !== evCountry) return false
+      const dtMs = Math.abs(new Date(ev.time).getTime() - new Date(ex.time).getTime())
+      return dtMs < toleranceDays * 86_400_000
+    })
+    if (!isDup) result.push(ev)
+  }
+  return result
+}

@@ -130,6 +130,46 @@ function quantile(sortedValues, q) {
   return next !== undefined ? sortedValues[base] + rest * (next - sortedValues[base]) : sortedValues[base]
 }
 
+// Shared by gridMetricFillExpression (the MapLibre paint expression) and
+// gridMetricLegendStops (the on-screen legend) — both need the EXACT same
+// breakpoints, otherwise the legend would describe boundaries the map isn't
+// actually using.
+function computeQuantileBreakpoints(geojson, steps) {
+  const values = (geojson?.features ?? [])
+    .map((f) => f.properties?.__metricValue)
+    .filter((v) => typeof v === 'number' && Number.isFinite(v))
+    .sort((a, b) => a - b)
+
+  if (values.length === 0) return { min: null, max: null, breakpoints: [] }
+
+  const min = values[0]
+  const max = values[values.length - 1]
+  if (min === max) return { min, max, breakpoints: [] }
+
+  // Breakpoints are quantiles of the DISTINCT values, not the raw
+  // (duplicate-heavy) array. Some sources (e.g. soil moisture anomaly) have
+  // a dominant repeated value across most cells — quantile-by-count then
+  // puts most/all breakpoints inside that one repeated value, so after
+  // de-duplication below almost everything collapses into 1-2 buckets and
+  // the map reads as a flat, near-uniform color with only a couple of
+  // outlier cells visible. Ranking by distinct value instead spreads the
+  // breakpoints across the actual variety present, regardless of how many
+  // cells happen to share the majority value.
+  const uniqueValues = [...new Set(values)]
+  const rawBreaks = []
+  for (let i = 1; i < steps; i++) rawBreaks.push(quantile(uniqueValues, i / steps))
+
+  // Low-density duplicate quantiles are common (many cells share the same
+  // ordinary value) — MapLibre's `step` stops must be strictly ascending, so
+  // collapse duplicates instead of erroring. A heavily-duplicated dataset
+  // just ends up with fewer effective buckets.
+  const breakpoints = []
+  for (const b of rawBreaks) {
+    if (breakpoints.length === 0 || b > breakpoints[breakpoints.length - 1]) breakpoints.push(b)
+  }
+  return { min, max, breakpoints }
+}
+
 /**
  * Builds a MapLibre data-driven fill-color expression that buckets each
  * feature's fill by its __metricValue using quantile breakpoints — each
@@ -144,46 +184,39 @@ function quantile(sortedValues, q) {
  * @param {string[]} ramp
  */
 export function gridMetricFillExpression(geojson, ramp) {
-  const values = (geojson?.features ?? [])
-    .map((f) => f.properties?.__metricValue)
-    .filter((v) => typeof v === 'number' && Number.isFinite(v))
-    .sort((a, b) => a - b)
-
-  if (values.length === 0) return ramp[Math.floor(ramp.length / 2)]
-
-  const min = values[0]
-  const max = values[values.length - 1]
-  if (min === max) return ramp[Math.floor(ramp.length / 2)]
-
-  // Breakpoints are quantiles of the DISTINCT values, not the raw
-  // (duplicate-heavy) array. Some sources (e.g. soil moisture anomaly) have
-  // a dominant repeated value across most cells — quantile-by-count then
-  // puts most/all breakpoints inside that one repeated value, so after
-  // de-duplication below almost everything collapses into 1-2 buckets and
-  // the map reads as a flat, near-uniform color with only a couple of
-  // outlier cells visible. Ranking by distinct value instead spreads the
-  // breakpoints across the actual variety present, regardless of how many
-  // cells happen to share the majority value.
-  const uniqueValues = [...new Set(values)]
-  const steps = ramp.length
-  const rawBreaks = []
-  for (let i = 1; i < steps; i++) rawBreaks.push(quantile(uniqueValues, i / steps))
-
-  // Low-density duplicate quantiles are common (many cells share the same
-  // ordinary value) — MapLibre's `step` stops must be strictly ascending, so
-  // collapse duplicates instead of erroring. A heavily-duplicated dataset
-  // just ends up with fewer effective buckets.
-  const breakpoints = []
-  for (const b of rawBreaks) {
-    if (breakpoints.length === 0 || b > breakpoints[breakpoints.length - 1]) breakpoints.push(b)
-  }
+  const { min, breakpoints } = computeQuantileBreakpoints(geojson, ramp.length)
+  if (min === null) return ramp[Math.floor(ramp.length / 2)]
+  if (breakpoints.length === 0) return ramp[Math.floor(ramp.length / 2)]
 
   const expression = ['step', ['coalesce', ['get', '__metricValue'], min], ramp[0]]
   breakpoints.forEach((bp, i) => expression.push(bp, ramp[i + 1]))
   return expression
 }
 
+/**
+ * The legend counterpart to gridMetricFillExpression — same breakpoints, but
+ * shaped as {color, from, to} bands for on-screen display instead of a
+ * MapLibre expression. Returns null when there's no usable spread (empty
+ * data, or every cell sharing one identical value) — a legend with a single
+ * flat swatch and no range would be actively misleading (spec: user-reported
+ * 2026-08-05, map colors for a selected exposure layer had no explanation of
+ * what value each color represented).
+ * @param {GeoJSON.FeatureCollection} geojson
+ * @param {string[]} ramp
+ */
+export function gridMetricLegendStops(geojson, ramp) {
+  const { min, max, breakpoints } = computeQuantileBreakpoints(geojson, ramp.length)
+  if (min === null || breakpoints.length === 0) return null
+  const edges = [min, ...breakpoints, max]
+  return ramp.map((color, i) => ({ color, from: edges[i], to: edges[i + 1] }))
+}
+
 /** @param {GeoJSON.FeatureCollection} geojson */
 export function populationFillExpression(geojson) {
   return gridMetricFillExpression(geojson, POPULATION_RAMP)
+}
+
+/** @param {GeoJSON.FeatureCollection} geojson */
+export function populationLegendStops(geojson) {
+  return gridMetricLegendStops(geojson, POPULATION_RAMP)
 }

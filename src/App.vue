@@ -7,12 +7,17 @@
 
   <!-- Main App -->
   <RouterView v-if="!isLoading" />
+
+  <!-- Spec 051 (revised) — single global AI assistant entry point, replaces
+       the per-page "AI ile çevir/özetle" buttons. -->
+  <AiAssistantWidget v-if="!isLoading" />
 </template>
 
 <script setup>
 import { computed, onMounted } from 'vue'
 import { RouterView } from 'vue-router'
 import LoadingScreen from '@/components/LoadingScreen.vue'
+import AiAssistantWidget from '@/components/ai/AiAssistantWidget.vue'
 import { useDisasterStore } from '@/stores/disaster.js'
 import { useHazardTypesStore } from '@/stores/hazardTypes.js'
 import { useSopDocumentsStore } from '@/stores/sopDocuments.js'

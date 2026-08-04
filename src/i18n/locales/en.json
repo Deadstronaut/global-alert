@@ -1225,5 +1225,22 @@
     "anomalyFlagsEmpty": "No anomaly flags right now.",
     "anomalyBaselineMean": "baseline mean",
     "loading": "Loading..."
+  },
+  "aiAssistant": {
+    "openLabel": "AI Assistant",
+    "title": "AI Assistant",
+    "noTasksHere": "No AI tasks available on this page.",
+    "taskTranslateDraft": "Translate an alert draft",
+    "taskSummarizeIncident": "Summarize an incident",
+    "back": "Back",
+    "noItems": "Nothing available to work on right now.",
+    "greeting": "Hi, I'm Deadstro! Here's what I can help with on this page:",
+    "askLocale": "Which language should I translate into?",
+    "askItem": "Which one should I work on?",
+    "approvedFollowUp": "Approved and logged. Anything else?",
+    "rejectedFollowUp": "Rejected, nothing was saved. Anything else?",
+    "greetingChatOnly": "Hi, I'm Deadstro! No guided task is available on this page, but you can chat with me below.",
+    "typePlaceholder": "Type a message...",
+    "send": "Send"
   }
 }

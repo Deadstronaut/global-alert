@@ -42,3 +42,20 @@ export function resolveCountryCode(lat: number, lng: number): string | null {
   }
   return best?.code ?? null
 }
+
+// Reverse lookup for sources that report a country display name instead of
+// coordinates precise enough to bbox-match (e.g. ReliefWeb's country.name) —
+// lets those sources be compared against resolveCountryCode()'s output on the
+// same key (lowercase ISO2) instead of a display-name string. Exact match
+// only, case-insensitive; a miss (localized/alternate spelling) returns null
+// rather than guessing, same fail-closed stance as resolveCountryCode().
+const NAME_TO_CODE: Record<string, string> = Object.fromEntries(
+  Object.entries(countries as Record<string, { nameEn?: string }>)
+    .filter(([, c]) => c.nameEn)
+    .map(([code, c]) => [c.nameEn!.toLowerCase(), code]),
+)
+
+export function resolveCountryCodeByName(name: string | null | undefined): string | null {
+  if (!name) return null
+  return NAME_TO_CODE[name.toLowerCase()] ?? null
+}

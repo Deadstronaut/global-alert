@@ -10,7 +10,8 @@ import { validatePayload } from '../shared/validatePayload.ts'
 import { recordFetchOutcome, resolveSourceId, logRejectedPayload, isSourceActive } from '../shared/sourceHealth.ts'
 import { fetchGdacsFeatures, toGdacsNormalized } from '../shared/gdacsFetch.ts'
 import { gdacsSplit } from '../shared/gdacsSplit.ts'
-import { deduplicateEvents } from '../shared/dedup.ts'
+import { deduplicateByCountryDate } from '../shared/dedup.ts'
+import { resolveCountryCode, resolveCountryCodeByName } from '../shared/geoCountry.ts'
 
 async function fetchGloFAS(sourceId: string | null) {
   const url = 'https://www.globalfloods.eu/glofas-forecasting/glofas-api/?format=json&alertlevel=1'
@@ -32,7 +33,10 @@ async function fetchGloFAS(sourceId: string | null) {
       title: `Flood Alert — ${p.river_name ?? p.basin ?? 'Unknown Basin'}`,
       description: `Alert Level: ${p.alert_level ?? 'N/A'} | Discharge: ${p.discharge ?? 'N/A'} m³/s`,
       time: p.time ?? p.date, source: 'GloFAS/Copernicus', sourceUrl: 'https://www.globalfloods.eu/',
-      extra: { alertLevel: p.alert_level, discharge: p.discharge, basin: p.basin },
+      // countryCode: GloFAS gives a river-gauge point, not a country — bbox-match
+      // it against countries.json so it can be compared with ReliefWeb's country
+      // report on the same key (see deduplicateByCountryDate in shared/dedup.ts).
+      extra: { alertLevel: p.alert_level, discharge: p.discharge, basin: p.basin, countryCode: resolveCountryCode(raw.lat, raw.lng) },
     }))
   }
   return out
@@ -60,7 +64,12 @@ async function fetchReliefWeb(sourceId: string | null) {
       description: `${country.name ?? 'Unknown'} | Status: ${f.status ?? 'N/A'}`,
       time: f.date?.created, source: 'ReliefWeb',
       sourceUrl: f.url_alias ?? `https://reliefweb.int/node/${r.id}`,
-      extra: { country: country.name, status: f.status },
+      // countryCode: ReliefWeb gives a display name (country.name), not a code —
+      // resolve it to the same lowercase-ISO2 key resolveCountryCode() produces
+      // for GloFAS, via countries.json's nameEn. A miss (localized/alternate
+      // spelling) leaves countryCode null — this record simply won't dedup
+      // against anything, same fail-closed stance as the GloFAS side.
+      extra: { country: country.name, countryCode: resolveCountryCodeByName(country.name), status: f.status },
     }))
   }
   return out
@@ -74,6 +83,8 @@ async function fetchGDACS(sourceId: string | null) {
   const split = gdacsSplit(features)
   return toGdacsNormalized('flood', split.flood, sourceId)
 }
+
+const FLOOD_SOURCE_PRIORITY = ['ReliefWeb', 'GloFAS/Copernicus']
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
@@ -119,13 +130,17 @@ Deno.serve(async (req) => {
     // })(),
   ])
 
-  // Dedup pass kept even with GDACS removed — GloFAS/ReliefWeb can still
-  // overlap on the same real-world flood event.
-  const events = deduplicateEvents(all, 20) // 20km threshold per TECHNICAL.md §3
+  // Country + date-range dedup, not distance — GloFAS reports a river-gauge
+  // point, ReliefWeb a country centroid, so the two can legitimately be
+  // hundreds of km apart for the exact same flood. ReliefWeb sorted first so
+  // it's the record kept on a match (treated as the more authoritative,
+  // human-curated report vs. GloFAS's raw model output).
+  all.sort((a, b) => FLOOD_SOURCE_PRIORITY.indexOf(a.source) - FLOOD_SOURCE_PRIORITY.indexOf(b.source))
+  const events = deduplicateByCountryDate(all)
 
   const { inserted, errors: dbErrors } = await upsertEvents(events)
   return new Response(JSON.stringify({
-    meta: { status: dbErrors.length === 0 ? 'ok' : 'partial', fetched: events.length, inserted, fetchErrors, dbErrors },
+    meta: { status: dbErrors.length === 0 ? 'ok' : 'partial', fetched: all.length, deduplicated: events.length, inserted, fetchErrors, dbErrors },
     data: events,
   }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 })
 })

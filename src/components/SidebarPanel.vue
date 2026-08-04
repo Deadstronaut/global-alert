@@ -824,7 +824,7 @@ const selectedRangeLabel = computed(() => {
                rather than a control that pops in and out — live-review feedback
                from spec 045). No longer split across separate widgets. -->
           <div class="hex-panel">
-            <ToggleGroup type="single" variant="outline" :model-value="uiStore.mapMode ?? ''" class="map-mode-selector-embedded">
+            <ToggleGroup type="single" variant="outline" :model-value="uiStore.mapMode ?? ''" class="map-mode-selector-embedded w-full">
               <ToggleGroupItem
                 value="normal"
                 class="mode-btn"
@@ -1567,12 +1567,14 @@ const selectedRangeLabel = computed(() => {
 }
 
 /* Reka's own [data-state] attribute is the source of truth for "pressed"
-   now (driven by the ToggleGroup's :model-value) — kept as the same custom
-   accent color as before instead of falling back to shadcn's generic,
-   duller --accent token. */
+   now (driven by the ToggleGroup's :model-value). Solid fill (same blue as
+   the "Panel" button / "Aktif" filter toggle) instead of a translucent
+   tint — a tint on top of the already-dark sidebar background read as
+   barely-there, "solid + white text" is unmistakable at a glance. */
 .mode-btn[data-state='on'] {
-  background: rgba(99, 179, 237, 0.2);
-  color: #63b3ed;
+  background: #4aa3ff;
+  color: #ffffff;
+  font-weight: 700;
 }
 
 html[data-theme='light'] .mode-btn {
@@ -1584,8 +1586,9 @@ html[data-theme='light'] .mode-btn:hover {
 }
 
 html[data-theme='light'] .mode-btn[data-state='on'] {
-  background: rgba(49, 130, 206, 0.12);
-  color: #3182ce;
+  background: #216dff;
+  color: #ffffff;
+  font-weight: 700;
 }
 
 /* spec 045: petek — full-width standalone panel + resolution slider */

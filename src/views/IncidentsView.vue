@@ -10,9 +10,13 @@ import { supabase } from '@/services/api/config.js'
 import { nextStatuses, requiresAAR } from '@/utils/incidentStateMachine.js'
 import { useAiAssistanceStore } from '@/stores/aiAssistance.js'
 import AiSuggestionBadge from '@/components/ai/AiSuggestionBadge.vue'
+import { Button } from '@/components/ui/button'
 
 const router = useRouter()
 const { t } = useI18n()
+
+// See CapView.vue's `embedded` prop comment — same Dashboard-inline pattern.
+const props = defineProps({ embedded: { type: Boolean, default: false } })
 
 const auth = useAuthStore()
 const hazardTypesStore = useHazardTypesStore()
@@ -262,16 +266,16 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="incidents-page">
+  <div class="incidents-page" :class="{ embedded }">
     <div class="page-header">
       <div>
-        <button class="btn-back" @click="router.push('/')">← Harita</button>
+        <Button v-if="!embedded" variant="ghost" size="sm" class="btn-back" @click="router.push('/')">← Harita</Button>
         <h1 class="page-title">🚨 Olay Takip</h1>
         <span class="page-subtitle">Incident Report &amp; Lifecycle Tracking</span>
       </div>
-      <button v-if="canCreate" class="btn-new" @click="showForm = !showForm">
+      <Button v-if="canCreate" @click="showForm = !showForm">
         {{ showForm ? '✕ Kapat' : '+ Yeni Olay' }}
-      </button>
+      </Button>
     </div>
 
     <!-- Create form -->
@@ -310,9 +314,9 @@ onMounted(() => {
         </div>
         <div class="form-actions">
           <p v-if="error" class="form-error">{{ error }}</p>
-          <button class="btn-submit" @click="submitIncident" :disabled="submitting || !form.title.trim()">
+          <Button @click="submitIncident" :disabled="submitting || !form.title.trim()">
             {{ submitting ? 'Kaydediliyor...' : '💾 Olay Oluştur' }}
-          </button>
+          </Button>
         </div>
       </div>
     </Transition>
@@ -337,14 +341,16 @@ onMounted(() => {
         <p v-if="inc.description" class="inc-desc">{{ inc.description }}</p>
 
         <div v-if="canUseAiSummarize && summarizeEnabled && inc.description" class="inc-ai-summarize">
-          <button
+          <Button
             type="button"
+            variant="outline"
+            size="sm"
             class="btn-ai"
             :disabled="summarizeBusyByIncident[inc.id]"
             @click="requestIncidentSummary(inc)"
           >
             {{ t('incidentTracking.aiSummarizeAction') }}
-          </button>
+          </Button>
           <AiSuggestionBadge
             v-if="summarySuggestionByIncident[inc.id]"
             :suggestion="summarySuggestionByIncident[inc.id]"
@@ -368,9 +374,9 @@ onMounted(() => {
           </a>
         </div>
 
-        <button class="btn-timeline" @click="toggleTimeline(inc)">
+        <Button variant="outline" size="sm" class="btn-timeline" @click="toggleTimeline(inc)">
           🕐 {{ t('incidentTracking.timeline.button') }}
-        </button>
+        </Button>
         <div v-if="timelineOpenId === inc.id" class="inc-timeline">
           <p v-if="timelineError" class="form-error">{{ timelineError }}</p>
           <ul v-else-if="timelineEntries[inc.id]?.length">
@@ -382,9 +388,9 @@ onMounted(() => {
           <p v-else class="tab-loading">{{ t('incidentTracking.timeline.loading') }}</p>
         </div>
 
-        <button class="btn-timeline" @click="toggleLinkedReports(inc)">
+        <Button variant="outline" size="sm" class="btn-timeline" @click="toggleLinkedReports(inc)">
           📢 {{ t('communityReport.incidentLink.sectionTitle') }}
-        </button>
+        </Button>
         <div v-if="linkedReportsOpenId === inc.id" class="inc-timeline">
           <ul v-if="linkedReportsCache[inc.id]?.length">
             <li v-for="report in linkedReportsCache[inc.id]" :key="report.id">
@@ -411,22 +417,24 @@ onMounted(() => {
             <textarea v-model="aarNotes" rows="3" :placeholder="t('incidentTracking.aarPromptPlaceholder')" />
           </label>
           <div class="aar-actions">
-            <button class="btn-transition" @click="cancelAAR">{{ t('incidentTracking.cancel') }}</button>
-            <button class="btn-submit" :disabled="!aarNotes.trim()" @click="confirmAAR(inc)">
+            <Button variant="outline" size="sm" @click="cancelAAR">{{ t('incidentTracking.cancel') }}</Button>
+            <Button size="sm" :disabled="!aarNotes.trim()" @click="confirmAAR(inc)">
               {{ t('incidentTracking.confirmClose') }}
-            </button>
+            </Button>
           </div>
         </div>
         <div v-else-if="canCreate && nextStatuses(inc.status).length" class="inc-actions">
-          <button
+          <Button
             v-for="next in nextStatuses(inc.status)"
             :key="next"
+            variant="outline"
+            size="sm"
             class="btn-transition"
             :style="{ borderColor: STATUS_COLORS[next] }"
             @click="requestTransition(inc, next)"
           >
             → {{ STATUS_LABELS[next] }}
-          </button>
+          </Button>
         </div>
       </div>
     </div>
@@ -445,26 +453,21 @@ onMounted(() => {
   padding: 24px;
   font-family: var(--font-sans, 'Inter', sans-serif);
 }
+.incidents-page.embedded {
+  height: 100%;
+  padding: 0;
+  background: transparent;
+}
 .page-header {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
   margin-bottom: 24px;
 }
-.btn-back { background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.12); border-radius: 8px; color: var(--color-text-muted,#94a3b8); padding: 6px 14px; font-size: .8rem; cursor: pointer; transition: background .15s; margin-bottom: 8px; }
-.btn-back:hover { background: rgba(255,255,255,.12); color: var(--color-text-primary,#e2e8f0); }
+.btn-back { margin-bottom: 8px; }
 .page-title   { font-size: 1.6rem; font-weight: 800; margin: 0; }
 .page-subtitle{ font-size: .75rem; color: var(--color-text-muted,#94a3b8); text-transform: uppercase; letter-spacing: .1em; }
 
-.btn-new {
-  padding: 8px 18px;
-  background: rgba(77,163,255,.18);
-  border: 1px solid rgba(77,163,255,.4);
-  border-radius: 8px; color: #4da3ff;
-  font-weight: 600; cursor: pointer; font-size: .85rem;
-  transition: background .15s;
-}
-.btn-new:hover { background: rgba(77,163,255,.28); }
 
 .form-card {
   background: rgba(255,255,255,.04);
@@ -487,13 +490,6 @@ onMounted(() => {
 }
 .form-actions { display: flex; align-items: center; gap: 12px; margin-top: 16px; }
 .form-error  { color: #ef4444; font-size: .8rem; flex: 1; }
-.btn-submit  {
-  padding: 9px 22px; background: rgba(34,197,94,.2);
-  border: 1px solid rgba(34,197,94,.4); border-radius: 8px;
-  color: #22c55e; font-weight: 600; cursor: pointer; font-size: .85rem; transition: background .15s;
-}
-.btn-submit:disabled { opacity: .45; cursor: not-allowed; }
-.btn-submit:not(:disabled):hover { background: rgba(34,197,94,.3); }
 
 .page-loading, .page-empty { text-align: center; padding: 48px; color: var(--color-text-muted,#94a3b8); font-size: .9rem; }
 .page-error  {
@@ -522,8 +518,7 @@ onMounted(() => {
 .inc-title  { font-size: 1rem; font-weight: 700; margin: 0 0 6px; }
 .inc-desc   { font-size: .82rem; color: var(--color-text-muted,#94a3b8); margin: 0 0 6px; line-height: 1.5; }
 .inc-ai-summarize { display: flex; flex-direction: column; gap: 6px; margin: 0 0 8px; }
-.inc-ai-summarize .btn-ai { align-self: flex-start; padding: 5px 12px; background: rgba(138,125,250,.15); border: 1px solid rgba(138,125,250,.4); border-radius: 8px; color: #a99bfa; cursor: pointer; font-size: .75rem; }
-.inc-ai-summarize .btn-ai:disabled { opacity: .5; cursor: not-allowed; }
+.inc-ai-summarize .btn-ai { align-self: flex-start; }
 .inc-ai-summarize__preview { font-size: .8rem; color: #e2e8f0; margin: 0; white-space: pre-wrap; }
 .inc-ai-summarize__unavailable { font-size: .75rem; color: #f59e0b; margin: 0; }
 .inc-area, .inc-plan { font-size: .78rem; color: #60a5fa; margin-bottom: 4px; }
@@ -531,12 +526,7 @@ onMounted(() => {
   font-size: .78rem; color: var(--color-text-muted,#94a3b8);
   background: rgba(255,255,255,.03); border-radius: 6px; padding: 8px 10px; margin: 6px 0;
 }
-.btn-timeline {
-  background: none; border: 1px solid rgba(255,255,255,.15); border-radius: 6px;
-  color: var(--color-text-muted,#94a3b8); font-size: .72rem; padding: 4px 10px;
-  cursor: pointer; margin: 6px 0;
-}
-.btn-timeline:hover { background: rgba(255,255,255,.06); }
+.btn-timeline { margin: 6px 0; }
 .inc-timeline {
   background: rgba(255,255,255,.03); border-radius: 8px; padding: 8px 10px; margin-bottom: 8px;
 }
@@ -560,12 +550,9 @@ onMounted(() => {
 }
 .aar-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 8px; }
 .inc-actions  { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
-.btn-transition {
-  padding: 5px 12px; background: transparent; border: 1px solid;
-  border-radius: 6px; font-size: .75rem; font-weight: 600; cursor: pointer;
-  color: var(--color-text-secondary,#cbd5e1); transition: background .15s;
-}
-.btn-transition:hover { background: rgba(255,255,255,.06); }
+/* border-color is set inline per-status (STATUS_COLORS); this just makes
+   sure the shadcn outline variant's own border color doesn't win. */
+.btn-transition { border-width: 1px; color: var(--color-text-secondary,#cbd5e1); }
 
 .slide-down-enter-active, .slide-down-leave-active { transition: max-height .3s ease, opacity .25s ease; max-height: 700px; overflow: hidden; }
 .slide-down-enter-from, .slide-down-leave-to { max-height: 0; opacity: 0; }

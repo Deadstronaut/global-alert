@@ -33,6 +33,8 @@ import ImpactPanel from '@/components/impact/ImpactPanel.vue'
 import GeocodingSearch from '@/components/impact/GeocodingSearch.vue'
 import SettingsPanel from '@/components/SettingsPanel.vue'
 import PanelCollapseToggle from '@/components/PanelCollapseToggle.vue'
+import { Button } from '@/components/ui/button'
+import { Checkbox } from '@/components/ui/checkbox'
 import { useMapLayersStore } from '@/stores/mapLayers.js'
 import { useSheltersStore, occupancyPercentage } from '@/stores/shelters.js'
 import { useCommunityReportsStore } from '@/stores/communityReports.js'
@@ -1030,15 +1032,23 @@ const exposureHintAnchorEl = ref(null)
 const sheltersHintPos = ref(null)
 const exposureHintPos = ref(null)
 
+// sheltersHintAnchorEl/exposureHintAnchorEl can resolve to either a plain
+// DOM element (native tag) or a Vue component's public instance (shadcn's
+// <Button>, which doesn't call defineExpose but still gets a default `$el`
+// pointing at its rendered root) — this normalizes both to a real element.
+function anchorElement(ref) {
+  return ref?.$el ?? ref
+}
+
 watch(showCollapsedPanelHints, (visible) => {
   if (!visible) return
   nextTick(() => {
     if (sheltersHintAnchorEl.value) {
-      const r = sheltersHintAnchorEl.value.getBoundingClientRect()
+      const r = anchorElement(sheltersHintAnchorEl.value).getBoundingClientRect()
       sheltersHintPos.value = { top: r.top + r.height / 2, left: r.right + 10 }
     }
     if (exposureHintAnchorEl.value) {
-      const r = exposureHintAnchorEl.value.getBoundingClientRect()
+      const r = anchorElement(exposureHintAnchorEl.value).getBoundingClientRect()
       exposureHintPos.value = { top: r.top + r.height / 2, right: window.innerWidth - r.left + 10 }
     }
   })
@@ -3630,10 +3640,12 @@ onBeforeUnmount(() => {
         class="shelters-layer-panel"
         :class="{ 'shelters-layer-panel--collapsed': sheltersLayerPanelCollapsed }"
       >
-        <button
+        <Button
           v-if="sheltersLayerPanelCollapsed"
           ref="sheltersHintAnchorEl"
           type="button"
+          variant="ghost"
+          size="icon"
           class="shelters-layer-collapse-btn shelters-layer-collapse-btn--collapsed"
           :aria-label="t('shelters.map.panelExpand')"
           :title="t('shelters.map.panelExpand')"
@@ -3643,10 +3655,12 @@ onBeforeUnmount(() => {
             <path d="M12 2a7 7 0 0 0-7 7c0 5.25 7 13 7 13s7-7.75 7-13a7 7 0 0 0-7-7z" />
             <circle cx="12" cy="9" r="2.6" fill="rgba(0,0,0,.35)" />
           </svg>
-        </button>
+        </Button>
         <template v-else>
-          <button
+          <Button
             type="button"
+            variant="ghost"
+            size="icon"
             class="shelters-layer-collapse-btn"
             :aria-label="t('shelters.map.panelCollapse')"
             :title="t('shelters.map.panelCollapse')"
@@ -3655,17 +3669,16 @@ onBeforeUnmount(() => {
             <svg class="shelters-layer-arrow" viewBox="0 0 24 24" aria-hidden="true">
               <path d="M17 17 L7 7 M7 7 H15 M7 7 V15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
             </svg>
-          </button>
+          </Button>
           <h4 class="map-layers-title shelters-layer-title">{{ t('shelters.map.panelTitle') }}</h4>
           <label class="map-layer-toggle">
-            <input type="checkbox" :checked="uiStore.showShelters" @change="uiStore.toggleShelters()" />
+            <Checkbox :model-value="uiStore.showShelters" @update:model-value="uiStore.toggleShelters()" />
             <span>{{ t('shelters.map.toggleLabel') }}</span>
           </label>
           <label class="map-layer-toggle">
-            <input
-              type="checkbox"
-              :checked="uiStore.showCommunityReports"
-              @change="uiStore.toggleCommunityReports()"
+            <Checkbox
+              :model-value="uiStore.showCommunityReports"
+              @update:model-value="uiStore.toggleCommunityReports()"
             />
             <span>{{ t('communityReport.map.toggleLabel') }}</span>
           </label>
@@ -3682,7 +3695,7 @@ onBeforeUnmount(() => {
           <h4 class="map-layers-title">{{ t('mapLayers.panelTitle') }}</h4>
           <div v-for="layer in mapLayersStore.activeMapLayers" :key="layer.id" class="map-layer-row">
             <label class="map-layer-toggle">
-              <input type="checkbox" :checked="isLayerVisible(layer.id)" @change="toggleMapLayer(layer)" />
+              <Checkbox :model-value="isLayerVisible(layer.id)" @update:model-value="toggleMapLayer(layer)" />
               <span>{{ layer.display_name }}</span>
               <span class="map-layer-type">{{ layer.source_type.toUpperCase() }}</span>
             </label>
@@ -3704,10 +3717,12 @@ onBeforeUnmount(() => {
           class="map-layers-panel exposure-layers-panel"
           :class="{ 'exposure-layers-panel--collapsed': exposureLayersPanelCollapsed }"
         >
-          <button
+          <Button
             v-if="exposureLayersPanelCollapsed"
             ref="exposureHintAnchorEl"
             type="button"
+            variant="ghost"
+            size="icon"
             class="exposure-layers-collapse-btn exposure-layers-collapse-btn--collapsed"
             :aria-label="t('exposureLayers.expand')"
             :title="t('exposureLayers.expand')"
@@ -3718,10 +3733,12 @@ onBeforeUnmount(() => {
               <path d="M2 12 L12 17 L22 12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" />
               <path d="M2 17 L12 22 L22 17" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" />
             </svg>
-          </button>
+          </Button>
           <template v-else>
-            <button
+            <Button
               type="button"
+              variant="ghost"
+              size="icon"
               class="exposure-layers-collapse-btn"
               :aria-label="t('exposureLayers.collapse')"
               :title="t('exposureLayers.collapse')"
@@ -3730,7 +3747,7 @@ onBeforeUnmount(() => {
               <svg class="exposure-layers-arrow" viewBox="0 0 24 24" aria-hidden="true">
                 <path d="M7 17 L17 7 M17 7 H9 M17 7 V15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
               </svg>
-            </button>
+            </Button>
             <h4 class="map-layers-title">{{ t('exposureLayers.panelTitle') }}</h4>
             <!-- Gated on selectedCountryName, not selectedCountryCode: a custom
                  territory (e.g. KKTC) can be genuinely selected with no country
@@ -3740,7 +3757,7 @@ onBeforeUnmount(() => {
             <p v-else-if="visibleExposureDatasets.length === 0" class="exposure-layers-empty">{{ t('exposureLayers.emptyState') }}</p>
             <div v-for="dataset in visibleExposureDatasets" :key="dataset.id" class="map-layer-row exposure-layer-row">
             <label class="map-layer-toggle">
-              <input type="checkbox" :checked="isLayerVisible(`exposure-dataset-${dataset.id}`)" @change="toggleExposureLayer(dataset)" />
+              <Checkbox :model-value="isLayerVisible(`exposure-dataset-${dataset.id}`)" @update:model-value="toggleExposureLayer(dataset)" />
               <span class="exposure-layer-swatch" :style="{ background: colorForDataset(dataset) }"></span>
               <span class="exposure-layer-name" :title="friendlyDatasetLabel(t, dataset)">{{ friendlyDatasetLabel(t, dataset) }}</span>
               <span class="map-layer-type exposure-layer-count" v-if="dataset.feature_count">{{ t('exposureLayers.featureCount', { count: dataset.feature_count.toLocaleString() }) }}</span>
@@ -3846,14 +3863,16 @@ onBeforeUnmount(() => {
         <span class="dock-header-title">
           {{ uiStore.settingsPanelOpen ? `⚙️ ${t('settings.title')}` : '📊 Etki Analizi' }}
         </span>
-        <button
+        <Button
           v-if="uiStore.settingsPanelOpen"
           type="button"
-          class="btn-icon btn-ghost dock-header-close"
+          variant="ghost"
+          size="icon"
+          class="dock-header-close"
           @click="uiStore.toggleSettings()"
         >
           ✕
-        </button>
+        </Button>
         <div class="panel-collapse-toggle-slot">
           <PanelCollapseToggle
             mirrored

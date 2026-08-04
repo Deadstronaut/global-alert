@@ -4,6 +4,7 @@ import { useAuthStore } from '@/stores/auth.js'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { supabase } from '@/services/api/config.js'
+import { Button } from '@/components/ui/button'
 
 const { t } = useI18n()
 const auth = useAuthStore()
@@ -182,9 +183,9 @@ async function handleRecoveryCodeVerify() {
             <span v-if="!loading">{{ t('mfaChallenge.verify') }}</span>
             <span v-else class="btn-spinner" />
           </button>
-          <button type="button" class="login-link" @click="useRecoveryCode = true; error = null">
+          <Button type="button" variant="link" size="sm" class="login-link" @click="useRecoveryCode = true; error = null">
             {{ t('mfaChallenge.useRecoveryCode') }}
-          </button>
+          </Button>
         </form>
 
         <form v-else class="login-form" @submit.prevent="handleRecoveryCodeVerify">
@@ -201,9 +202,9 @@ async function handleRecoveryCodeVerify() {
             <span v-if="!loading">{{ t('mfaChallenge.verify') }}</span>
             <span v-else class="btn-spinner" />
           </button>
-          <button type="button" class="login-link" @click="useRecoveryCode = false; error = null">
+          <Button type="button" variant="link" size="sm" class="login-link" @click="useRecoveryCode = false; error = null">
             {{ t('mfaChallenge.backToCode') }}
-          </button>
+          </Button>
         </form>
       </div>
 
@@ -448,13 +449,8 @@ async function handleRecoveryCodeVerify() {
 }
 
 .login-link {
-  background: none;
-  border: none;
-  color: #8c97b3;
-  font-size: 0.75rem;
-  text-decoration: underline;
-  cursor: pointer;
   margin-top: 4px;
+  color: #8c97b3;
 }
 
 .login-btn {

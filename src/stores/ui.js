@@ -39,6 +39,9 @@ export const useUIStore = defineStore('ui', () => {
     // Panels
     const alertPanelOpen = ref(false);
     const settingsPanelOpen = ref(false);
+    // Placeholder dashboard dialog (2026-08-03) — empty centered modal for
+    // now, content to be filled in later.
+    const dashboardPanelOpen = ref(false);
     const emergencyPopupOpen = ref(false);
     const activeEmergency = ref(null);
 
@@ -172,6 +175,10 @@ export const useUIStore = defineStore('ui', () => {
         if (settingsPanelOpen.value) impactPanelCollapsed.value = false;
     }
 
+    function toggleDashboardPanel() {
+        dashboardPanelOpen.value = !dashboardPanelOpen.value;
+    }
+
     function setCountryConfig(config) {
         activeCountryConfig.value = config;
     }
@@ -187,6 +194,8 @@ export const useUIStore = defineStore('ui', () => {
         toggleImpactPanel,
         alertPanelOpen,
         settingsPanelOpen,
+        dashboardPanelOpen,
+        toggleDashboardPanel,
         emergencyPopupOpen,
         activeEmergency,
         darkMode,

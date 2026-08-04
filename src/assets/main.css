@@ -1,3 +1,11 @@
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+@import 'tailwindcss';
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
 :root {
   --color-bg: #070b14;
   --color-bg-soft: #0f1628;
@@ -26,10 +34,59 @@
   --z-stats: 90;
   --z-sidebar: 92;
   --z-alerts: 94;
+  /* shadcn-vue floating layers (Popover/Calendar, Select, Tooltip, etc.) —
+     Tailwind's default z-50 loses to --z-sidebar (92)/--z-alerts (94), so
+     any popover anchored inside the sidebar/dock renders visually behind
+     it despite being teleported to <body> (z-index is paint-order, not DOM
+     nesting). Above every other app layer, below only the loading screen. */
+  --z-popover: 950;
   --z-loading: 999;
   --sidebar-width: 280px;
   --sidebar-collapsed: 56px;
   --space-xs: 4px;
+  /* shadcn-vue tokens aliased to the app's own palette above instead of
+     the CLI's default oklch grayscale — this is what keeps every shadcn
+     component in sync with the existing dark/light/high-contrast switch
+     (data-theme attribute) without a separate .dark class block, since
+     --color-* already flips per theme via the [data-theme='...'] rules
+     further down this file. */
+  --radius: 0.625rem;
+  --background: var(--color-bg);
+  --foreground: var(--color-text-primary);
+  --card: var(--color-panel);
+  --card-foreground: var(--color-text-primary);
+  /* Deliberately NOT --color-panel (62% alpha, fine for a card sitting in
+     normal page flow) — a popover/dropdown floats ON TOP of arbitrary other
+     UI, so it needs to be fully opaque or whatever's underneath bleeds
+     through and both become unreadable (live-tested: calendar day numbers
+     over sidebar labels). --color-bg-soft is the closest opaque tone. */
+  --popover: var(--color-bg-soft);
+  --popover-foreground: var(--color-text-primary);
+  --primary: var(--color-accent);
+  --primary-foreground: var(--color-bg);
+  --secondary: var(--color-bg-soft);
+  --secondary-foreground: var(--color-text-primary);
+  --muted: var(--color-bg-soft);
+  --muted-foreground: var(--color-text-muted);
+  --accent: var(--color-bg-soft);
+  --accent-foreground: var(--color-text-primary);
+  --destructive: var(--color-critical);
+  --border: var(--glass-border);
+  --input: var(--glass-border);
+  --ring: var(--color-accent);
+  --chart-1: var(--color-earthquake);
+  --chart-2: var(--color-flood);
+  --chart-3: var(--color-wildfire);
+  --chart-4: var(--color-accent);
+  --chart-5: var(--color-drought);
+  --sidebar: var(--color-panel);
+  --sidebar-foreground: var(--color-text-primary);
+  --sidebar-primary: var(--color-accent);
+  --sidebar-primary-foreground: var(--color-bg);
+  --sidebar-accent: var(--color-bg-soft);
+  --sidebar-accent-foreground: var(--color-text-primary);
+  --sidebar-border: var(--glass-border);
+  --sidebar-ring: var(--color-accent);
 }
 
 /* Global scrollbar — thin, theme-accented, consistent across every
@@ -317,4 +374,74 @@ html[data-theme='light'] .btn-icon:hover {
 
 .btn-icon {
   border-radius: 10px;
+}
+
+@theme inline {
+  --font-heading: var(--font-sans);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --color-foreground: var(--foreground);
+  --color-background: var(--background);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+}
+
+/* shadcn-vue floating layers always teleport to <body>, but their default
+   Tailwind z-50 still loses the paint-order fight against this app's own
+   z-index tokens (sidebar/dock/alerts all sit above 50) — see --z-popover
+   above. Targeting every Reka UI *-content data-slot here means new
+   floating components (Select, DropdownMenu, Tooltip, HoverCard, Dialog...)
+   get this fixed automatically the moment they're added, without having to
+   remember to patch each CLI-generated file by hand. */
+[data-slot='popover-content'],
+[data-slot='select-content'],
+[data-slot='dropdown-menu-content'],
+[data-slot='tooltip-content'],
+[data-slot='hover-card-content'],
+[data-slot='dialog-overlay'],
+[data-slot='dialog-content'],
+[data-slot='alert-dialog-overlay'],
+[data-slot='alert-dialog-content'],
+[data-slot='combobox-content'],
+[data-slot='context-menu-content'],
+[data-slot='menubar-content'] {
+  z-index: var(--z-popover);
 }

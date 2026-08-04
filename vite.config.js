@@ -4,6 +4,7 @@ import { resolve } from 'node:path'
 
 import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
+import tailwindcss from '@tailwindcss/vite'
 
 // maplibre-gl's worker script (maplibre-gl-worker-*.mjs, bundled/hashed by
 // Vite normally via the app's own `?url` import) loads a sibling chunk,
@@ -35,6 +36,7 @@ function copyMaplibreSharedChunk() {
 export default defineConfig({
   plugins: [
     vue(),
+    tailwindcss(),
     copyMaplibreSharedChunk(),
   ],
   resolve: {

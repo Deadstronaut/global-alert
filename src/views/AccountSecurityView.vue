@@ -2,6 +2,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useAuthStore } from '@/stores/auth.js'
+import { Button } from '@/components/ui/button'
 
 const { t } = useI18n()
 const auth = useAuthStore()
@@ -107,9 +108,9 @@ onMounted(loadFactors)
       <ul class="recovery-codes-list">
         <li v-for="code in recoveryCodes" :key="code">{{ code }}</li>
       </ul>
-      <button class="btn-primary" @click="recoveryCodes = null">
+      <Button @click="recoveryCodes = null">
         {{ t('accountSecurity.recoveryCodesSaved') }}
-      </button>
+      </Button>
     </div>
 
     <div v-else-if="loading" class="account-security-loading">{{ t('app.loading') }}</div>
@@ -124,9 +125,9 @@ onMounted(loadFactors)
 
       <div v-if="activeFactor" class="active-factor-card">
         <p>{{ t('accountSecurity.factorActive') }}</p>
-        <button class="btn-secondary" @click="removeFactor(activeFactor.id)">
+        <Button variant="destructive" @click="removeFactor(activeFactor.id)">
           {{ t('accountSecurity.removeFactor') }}
-        </button>
+        </Button>
       </div>
 
       <div v-else-if="enrollStep === 'awaiting-code'" class="enroll-card">
@@ -138,14 +139,14 @@ onMounted(loadFactors)
           :placeholder="t('accountSecurity.codePlaceholder')"
           maxlength="6"
         />
-        <button class="btn-primary" :disabled="enrolling || !enrollCode" @click="confirmEnroll">
+        <Button :disabled="enrolling || !enrollCode" @click="confirmEnroll">
           {{ t('accountSecurity.confirm') }}
-        </button>
+        </Button>
       </div>
 
-      <button v-else class="btn-primary" :disabled="enrolling" @click="startEnroll">
+      <Button v-else :disabled="enrolling" @click="startEnroll">
         {{ t('accountSecurity.startEnroll') }}
-      </button>
+      </Button>
     </div>
   </div>
 </template>

@@ -4,6 +4,7 @@ import { useRouter } from 'vue-router'
 import { useUIStore } from '@/stores/ui.js'
 import { useI18n } from 'vue-i18n'
 import { useAuthStore } from '@/stores/auth.js'
+import { Button } from '@/components/ui/button'
 
 defineProps({
   // MapView.vue's dock has its own persistent header (with the title +
@@ -11,6 +12,12 @@ defineProps({
   // this panel's own header would be redundant there. The standalone
   // globe-view usage (HomeView.vue) has no such dock, so it keeps this.
   hideHeader: { type: Boolean, default: false },
+  // Rendered inline inside the Dashboard's own sidebar (AppSidebar.vue) as
+  // a collapsible "Ayarlar" group — Quick Access and Account are already
+  // covered there (the Sayfalar nav group and the sidebar footer's account
+  // dropdown respectively), so this hides those two sections to avoid
+  // showing the same links/logout button twice.
+  embedded: { type: Boolean, default: false },
 })
 
 const { t, locale } = useI18n()
@@ -45,65 +52,65 @@ function navigateTo(path) {
        embeds it as one face of impact-panel-dock's flip card (both faces
        always mounted, CSS rotateY handles visibility); the globe view (no
        dock to flip with) wraps it in its own transition + v-if instead. -->
-  <div class="settings-panel">
+  <div class="settings-panel" :class="{ embedded }">
     <div v-if="!hideHeader" class="settings-header">
       <h3>⚙️ {{ t('settings.title') }}</h3>
-      <button class="btn-icon btn-ghost" @click="uiStore.toggleSettings()">✕</button>
+      <Button variant="ghost" size="icon" @click="uiStore.toggleSettings()">✕</Button>
     </div>
 
       <!-- Language -->
       <div class="settings-section">
         <h4 class="settings-section-title">{{ t('settings.language') }}</h4>
         <div class="language-buttons">
-          <button
-            class="btn btn-ghost lang-btn"
-            :class="{ 'btn-primary': locale === 'en' }"
+          <Button
+            :variant="locale === 'en' ? 'default' : 'ghost'"
+            class="lang-btn"
             @click="changeLanguage('en')"
           >
             EN
-          </button>
-          <button
-            class="btn btn-ghost lang-btn"
-            :class="{ 'btn-primary': locale === 'es' }"
+          </Button>
+          <Button
+            :variant="locale === 'es' ? 'default' : 'ghost'"
+            class="lang-btn"
             @click="changeLanguage('es')"
           >
             ES
-          </button>
-          <button
-            class="btn btn-ghost lang-btn"
-            :class="{ 'btn-primary': locale === 'fr' }"
+          </Button>
+          <Button
+            :variant="locale === 'fr' ? 'default' : 'ghost'"
+            class="lang-btn"
             @click="changeLanguage('fr')"
           >
             FR
-          </button>
-          <button
-            class="btn btn-ghost lang-btn"
-            :class="{ 'btn-primary': locale === 'ru' }"
+          </Button>
+          <Button
+            :variant="locale === 'ru' ? 'default' : 'ghost'"
+            class="lang-btn"
             @click="changeLanguage('ru')"
           >
             RU
-          </button>
-          <button
-            class="btn btn-ghost lang-btn"
-            :class="{ 'btn-primary': locale === 'ar' }"
+          </Button>
+          <Button
+            :variant="locale === 'ar' ? 'default' : 'ghost'"
+            class="lang-btn"
             @click="changeLanguage('ar')"
           >
             AR
-          </button>
-          <button
-            class="btn btn-ghost lang-btn"
-            :class="{ 'btn-primary': locale === 'zh' }"
+          </Button>
+          <Button
+            :variant="locale === 'zh' ? 'default' : 'ghost'"
+            class="lang-btn"
             @click="changeLanguage('zh')"
           >
             ZH
-          </button>
-          <button
-            class="btn btn-ghost lang-btn"
-            :class="{ 'btn-primary': locale === 'tr' }"
+          </Button>
+          <Button
+            :variant="locale === 'tr' ? 'default' : 'ghost'"
+            class="lang-btn"
             @click="changeLanguage('tr')"
           >
             TR
-          </button>
+          </Button>
         </div>
       </div>
 
@@ -139,29 +146,31 @@ function navigateTo(path) {
       </div>
 
       <!-- Quick Access -->
-      <div class="settings-section">
+      <div v-if="!embedded" class="settings-section">
         <h4 class="settings-section-title">{{ t('settings.quickAccess') }}</h4>
         <div class="quick-access-list">
-          <button class="quick-access-link" @click="navigateTo('/alerts/cap')">
+          <Button variant="ghost" class="quick-access-link" @click="navigateTo('/alerts/cap')">
             <span>⚠️ {{ t('settings.capAlerts') }}</span>
             <span class="quick-access-arrow">›</span>
-          </button>
-          <button class="quick-access-link" @click="navigateTo('/alerts/incidents')">
+          </Button>
+          <Button variant="ghost" class="quick-access-link" @click="navigateTo('/alerts/incidents')">
             <span>🚨 {{ t('settings.incidentTracking') }}</span>
             <span class="quick-access-arrow">›</span>
-          </button>
-          <button class="quick-access-link" @click="navigateTo('/shelters')">
+          </Button>
+          <Button variant="ghost" class="quick-access-link" @click="navigateTo('/shelters')">
             <span>🏠 {{ t('settings.shelters') }}</span>
             <span class="quick-access-arrow">›</span>
-          </button>
-          <button class="quick-access-link" @click="navigateTo('/hazards')">
+          </Button>
+          <Button variant="ghost" class="quick-access-link" @click="navigateTo('/hazards')">
             <span>🌋 {{ t('settings.hazardEncyclopedia') }}</span>
             <span class="quick-access-arrow">›</span>
-          </button>
-          <button class="quick-access-link" @click="navigateTo('/report')">
+          </Button>
+          <Button variant="ghost" class="quick-access-link" @click="navigateTo('/report')">
             <span>📢 {{ t('communityReport.form.title') }}</span>
             <span class="quick-access-arrow">›</span>
-          </button>
+          </Button>
+          <!-- Admin entry intentionally left as the legacy element — Settings
+               migration excludes anything admin-related per project owner. -->
           <button
             v-if="canAccessAdmin"
             class="quick-access-link"
@@ -174,12 +183,12 @@ function navigateTo(path) {
       </div>
 
     <!-- Account -->
-    <div class="settings-section" v-if="authStore.isLoggedIn">
+    <div class="settings-section" v-if="!embedded && authStore.isLoggedIn">
       <h4 class="settings-section-title">{{ t('settings.account') }}</h4>
       <p class="settings-desc">{{ t('settings.loggedInAs', { email: authStore.session?.email }) }}</p>
-      <button class="btn btn-danger logout-btn" @click="handleLogout">
+      <Button variant="destructive" class="logout-btn" @click="handleLogout">
         ⎋ {{ t('settings.logout') }}
-      </button>
+      </Button>
     </div>
   </div>
 </template>
@@ -198,6 +207,13 @@ function navigateTo(path) {
   flex-direction: column;
   padding: 16px;
   gap: var(--space-md);
+}
+
+.settings-panel.embedded {
+  height: auto;
+  overflow-y: visible;
+  background: transparent;
+  padding: 4px var(--space-md) var(--space-sm);
 }
 
 .settings-header {
@@ -354,13 +370,5 @@ function navigateTo(path) {
 .logout-btn {
   width: 100%;
   justify-content: center;
-  color: #ef4444;
-  border: 1px solid rgba(239, 68, 68, 0.4);
-  background: rgba(239, 68, 68, 0.08);
-}
-
-.logout-btn:hover {
-  background: rgba(239, 68, 68, 0.18);
-  border-color: rgba(239, 68, 68, 0.6);
 }
 </style>

@@ -8,11 +8,38 @@
     "refreshAll": "刷新所有数据",
     "returnToGlobe": "返回地球仪",
     "settings": "设置",
+    "dashboard": "仪表盘",
     "close": "关闭",
     "error": "错误",
     "retry": "重试",
     "noData": "未找到数据",
     "offline": "离线 - 显示缓存数据"
+  },
+  "dashboard": {
+    "navGroupTitle": "页面",
+    "navCap": "CAP 警报",
+    "navIncidents": "事件跟踪",
+    "navShelters": "避难所",
+    "navHazards": "灾害百科",
+    "navReport": "社区报告",
+    "overviewTitle": "概览",
+    "earthquakes24hTitle": "过去24小时地震",
+    "earthquakes24hForCountry": "在{country}",
+    "earthquakes24hGlobal": "全球范围",
+    "noPermission": "您没有权限查看此部分。",
+    "charts": {
+      "hourlyTitle": "每小时分布",
+      "severityTitle": "严重程度分布",
+      "magnitudeTitle": "震级分布",
+      "depthTitle": "深度分布",
+      "sourceTitle": "来源分布",
+      "avgMagnitudeTitle": "平均震级",
+      "trendTitle": "7天趋势",
+      "trendSubtitle": "过去7天，每日地震数量",
+      "last24h": "过去24小时",
+      "earthquakes": "地震",
+      "unknownSource": "未知"
+    }
   },
   "common": {
     "loadingEllipsis": "加载中...",

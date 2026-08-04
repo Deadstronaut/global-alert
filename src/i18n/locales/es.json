@@ -8,11 +8,38 @@
     "refreshAll": "Actualizar todos los datos",
     "returnToGlobe": "Volver al globo",
     "settings": "Ajustes",
+    "dashboard": "Panel",
     "close": "Cerrar",
     "error": "Error",
     "retry": "Reintentar",
     "noData": "No se encontraron datos",
     "offline": "Sin conexión - Mostrando datos en caché"
+  },
+  "dashboard": {
+    "navGroupTitle": "Páginas",
+    "navCap": "Alertas CAP",
+    "navIncidents": "Seguimiento de Incidentes",
+    "navShelters": "Refugios",
+    "navHazards": "Enciclopedia de Peligros",
+    "navReport": "Reporte Comunitario",
+    "overviewTitle": "Resumen",
+    "earthquakes24hTitle": "Terremotos (Últimas 24h)",
+    "earthquakes24hForCountry": "en {country}",
+    "earthquakes24hGlobal": "en todo el mundo",
+    "noPermission": "No tienes permiso para ver esta sección.",
+    "charts": {
+      "hourlyTitle": "Distribución por Hora",
+      "severityTitle": "Distribución por Severidad",
+      "magnitudeTitle": "Distribución por Magnitud",
+      "depthTitle": "Distribución por Profundidad",
+      "sourceTitle": "Distribución por Fuente",
+      "avgMagnitudeTitle": "Magnitud Promedio",
+      "trendTitle": "Tendencia de 7 Días",
+      "trendSubtitle": "Últimos 7 días, número diario de terremotos",
+      "last24h": "Últimas 24 horas",
+      "earthquakes": "terremotos",
+      "unknownSource": "Desconocido"
+    }
   },
   "common": {
     "loadingEllipsis": "Cargando...",

@@ -8,11 +8,38 @@
     "refreshAll": "Tüm Verileri Güncelle",
     "returnToGlobe": "Küreye Dön",
     "settings": "Ayarlar",
+    "dashboard": "Panel",
     "close": "Kapat",
     "error": "Hata",
     "retry": "Tekrar Dene",
     "noData": "Veri bulunamadı",
     "offline": "Çevrimdışı - Önbellek verileri gösteriliyor"
+  },
+  "dashboard": {
+    "navGroupTitle": "Sayfalar",
+    "navCap": "CAP Uyarıları",
+    "navIncidents": "Olay Takibi",
+    "navShelters": "Barınaklar",
+    "navHazards": "Tehlike Ansiklopedisi",
+    "navReport": "Vatandaş Bildirimi",
+    "overviewTitle": "Genel Bakış",
+    "earthquakes24hTitle": "Son 24 Saatte Deprem",
+    "earthquakes24hForCountry": "{country} içinde",
+    "earthquakes24hGlobal": "dünya genelinde",
+    "noPermission": "Bu bölümü görüntüleme yetkiniz yok.",
+    "charts": {
+      "hourlyTitle": "Saatlik Dağılım",
+      "severityTitle": "Şiddet Dağılımı",
+      "magnitudeTitle": "Büyüklük Dağılımı",
+      "depthTitle": "Derinlik Dağılımı",
+      "sourceTitle": "Kaynak Dağılımı",
+      "avgMagnitudeTitle": "Ortalama Büyüklük",
+      "trendTitle": "7 Günlük Trend",
+      "trendSubtitle": "Son 7 gün, günlük deprem sayısı",
+      "last24h": "Son 24 saat",
+      "earthquakes": "deprem",
+      "unknownSource": "Bilinmeyen"
+    }
   },
   "common": {
     "loadingEllipsis": "Yükleniyor...",

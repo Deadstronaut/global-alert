@@ -5,6 +5,8 @@ import { supabase } from '@/services/api/config.js'
 import countries from '@/configs/countries.json'
 import { COUNTRY_NAMES } from '@/data/countryNames.js'
 import { loadRegionBoundaries } from '@/data/boundaries/index.js'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
 
 const { t } = useI18n()
 const emit = defineEmits(['location-selected'])
@@ -328,7 +330,7 @@ function clearQuery() {
   <div class="geocoding-search">
     <div class="geocoding-row">
       <div class="geocoding-input-wrap">
-        <input
+        <Input
           v-model="query"
           class="geocoding-input"
           :placeholder="t('impact.geocoding.placeholder')"
@@ -340,15 +342,17 @@ function clearQuery() {
           @focus="onFocus"
           @blur="onBlur"
         />
-        <button
+        <Button
           v-if="query"
           type="button"
+          variant="ghost"
+          size="icon"
           class="geocoding-clear"
           :aria-label="t('impact.geocoding.clear')"
           @mousedown.prevent="clearQuery"
         >
           ✕
-        </button>
+        </Button>
         <ul v-if="open && suggestions.length" class="geocoding-suggestions" role="listbox">
           <li
             v-for="(item, index) in suggestions"
@@ -364,9 +368,9 @@ function clearQuery() {
           </li>
         </ul>
       </div>
-      <button class="geocoding-btn" :disabled="searching" @click="fetchSuggestions(query)">
+      <Button class="geocoding-btn" :disabled="searching" @click="fetchSuggestions(query)">
         {{ searching ? t('impact.geocoding.searching') : t('impact.geocoding.search') }}
-      </button>
+      </Button>
     </div>
     <p class="geocoding-help">{{ t('impact.geocoding.help') }}</p>
     <p v-if="noResults" class="geocoding-notice">{{ t('impact.geocoding.noResults') }}</p>
@@ -394,7 +398,7 @@ function clearQuery() {
 }
 .geocoding-clear {
   position: absolute; right: 8px; top: 50%; transform: translateY(-50%);
-  border: none; background: none; color: #94a3b8; cursor: pointer;
+  width: auto; height: auto; color: #94a3b8;
   font-size: .8rem; line-height: 1; padding: 4px;
 }
 .geocoding-clear:hover { color: #e2e8f0; }

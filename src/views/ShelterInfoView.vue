@@ -2,16 +2,20 @@
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import SheltersPanel from '@/components/admin/SheltersPanel.vue'
+import { Button } from '@/components/ui/button'
 
 const router = useRouter()
 const { t } = useI18n()
+
+// See CapView.vue's `embedded` prop comment — same Dashboard-inline pattern.
+const props = defineProps({ embedded: { type: Boolean, default: false } })
 </script>
 
 <template>
-  <div class="shelter-info-page">
+  <div class="shelter-info-page" :class="{ embedded }">
     <div class="page-header">
       <div>
-        <button class="btn-back" @click="router.push('/')">← Harita</button>
+        <Button v-if="!embedded" variant="ghost" size="sm" class="btn-back" @click="router.push('/')">← Harita</Button>
         <h1 class="page-title">🏠 {{ t('shelters.tabLabel') }}</h1>
       </div>
     </div>
@@ -34,7 +38,12 @@ const { t } = useI18n()
   padding: 24px;
   font-family: var(--font-sans, 'Inter', sans-serif);
 }
+.shelter-info-page.embedded {
+  height: 100%;
+  padding: 0;
+  background: transparent;
+}
 .page-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 18px; }
-.btn-back { background: none; border: none; color: var(--color-text-muted,#94a3b8); cursor: pointer; font-size: .85rem; padding: 0 0 8px; }
+.btn-back { padding: 0 0 8px; height: auto; }
 .page-title { margin: 0; color: #e2e8f0; font-size: 1.4rem; }
 </style>

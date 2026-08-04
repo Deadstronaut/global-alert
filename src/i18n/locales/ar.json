@@ -8,11 +8,38 @@
     "refreshAll": "تحديث جميع البيانات",
     "returnToGlobe": "العودة إلى الكرة الأرضية",
     "settings": "الإعدادات",
+    "dashboard": "لوحة التحكم",
     "close": "إغلاق",
     "error": "خطأ",
     "retry": "إعادة المحاولة",
     "noData": "لم يتم العثور على بيانات",
     "offline": "غير متصل - عرض البيانات المخزنة مؤقتًا"
+  },
+  "dashboard": {
+    "navGroupTitle": "الصفحات",
+    "navCap": "تنبيهات CAP",
+    "navIncidents": "تتبع الحوادث",
+    "navShelters": "الملاجئ",
+    "navHazards": "موسوعة المخاطر",
+    "navReport": "بلاغ مجتمعي",
+    "overviewTitle": "نظرة عامة",
+    "earthquakes24hTitle": "الزلازل (آخر 24 ساعة)",
+    "earthquakes24hForCountry": "في {country}",
+    "earthquakes24hGlobal": "حول العالم",
+    "noPermission": "ليس لديك إذن لعرض هذا القسم.",
+    "charts": {
+      "hourlyTitle": "التوزيع بالساعة",
+      "severityTitle": "التوزيع حسب الشدة",
+      "magnitudeTitle": "التوزيع حسب القوة",
+      "depthTitle": "التوزيع حسب العمق",
+      "sourceTitle": "التوزيع حسب المصدر",
+      "avgMagnitudeTitle": "متوسط القوة",
+      "trendTitle": "اتجاه 7 أيام",
+      "trendSubtitle": "آخر 7 أيام، عدد الزلازل اليومي",
+      "last24h": "آخر 24 ساعة",
+      "earthquakes": "زلازل",
+      "unknownSource": "غير معروف"
+    }
   },
   "common": {
     "loadingEllipsis": "جاري التحميل...",

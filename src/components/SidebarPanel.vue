@@ -8,6 +8,13 @@ import { useAuthStore } from '@/stores/auth.js'
 import { useSourcesStore } from '@/stores/sources.js'
 import { useI18n } from 'vue-i18n'
 import PanelCollapseToggle from '@/components/PanelCollapseToggle.vue'
+import { Button } from '@/components/ui/button'
+import { Slider } from '@/components/ui/slider'
+import { Switch } from '@/components/ui/switch'
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import { Calendar } from '@/components/ui/calendar'
+import { parseDate } from '@internationalized/date'
 
 const { t } = useI18n()
 const router = useRouter()
@@ -166,6 +173,26 @@ const today = new Date().toISOString().slice(0, 10)
 const rangeStartDate = ref(today)
 const rangeEndDate = ref('')
 
+// Bridges rangeStartDate/rangeEndDate (plain 'YYYY-MM-DD' strings — the
+// format the rest of this component's date logic, disasterStore, and the
+// native <input type="date"> this replaced all already speak) to the
+// @internationalized/date CalendarDate objects the shadcn Calendar
+// component needs, so callers below keep working with strings.
+const rangeStartCalendarDate = computed({
+  get: () => parseDate(rangeStartDate.value || today),
+  set: (v) => { rangeStartDate.value = v ? v.toString() : '' },
+})
+const rangeEndCalendarDate = computed({
+  get: () => (rangeEndDate.value ? parseDate(rangeEndDate.value) : undefined),
+  set: (v) => { rangeEndDate.value = v ? v.toString() : '' },
+})
+// Closed explicitly on date pick (see @update:model-value below) — Reka's
+// Calendar doesn't close its own Popover on select by itself, and without
+// prevent-deselect on Calendar, clicking the already-picked day would
+// toggle it back off instead of just leaving it selected.
+const startDatePopoverOpen = ref(false)
+const endDatePopoverOpen = ref(false)
+
 // Live-testing finding (real bug): the duration slider and the calendar
 // date range used to both write to disasterStore.startDate/endDate through
 // independent watchers that could race — moving the slider to "20 Yıl"
@@ -257,8 +284,7 @@ function getSourceStatusClass(count, total = totalKnownSources.value) {
 // (live-tested 2026-07-30: widening this slider showed a smaller, wrong
 // event set with real critical-magnitude events missing entirely, because
 // nothing had ever asked the server for that older data).
-function handleTimeSliderInput(event) {
-  const index = parseInt(event.target.value, 10)
+function handleTimeSliderInput(index) {
   selectedTimeRangeIndex.value = index
   const rangeLabel = timeRanges[index]
 
@@ -312,6 +338,20 @@ const selectedRangeLabel = computed(() => {
       </div>
     </div>
 
+    <!-- Dashboard entry point, right under the brand header so it reads as
+         the sidebar's primary nav action rather than something buried at
+         the bottom — it now holds Yönetim/Sayfalar/Ayarlar all in one
+         place, so it earns top billing. Outside .sidebar-scroll (like the
+         header) so it stays put while the filters below scroll. -->
+    <div v-if="!isCollapsed" class="sidebar-panel-entry">
+      <Button
+        class="sidebar-action-btn"
+        @click="uiStore.toggleDashboardPanel()"
+      >
+        📊 {{ t('app.dashboard') }}
+      </Button>
+    </div>
+
     <div class="sidebar-scroll">
     <!-- Country Context Banner -->
     <div v-if="activeCountryConfig && !isCollapsed" class="country-banner">
@@ -320,7 +360,7 @@ const selectedRangeLabel = computed(() => {
         <span class="country-banner-name">{{ activeCountryConfig.nameEn }}</span>
         <span class="country-banner-label">{{ t('sidebar.countryFilterActive') }}</span>
       </div>
-      <button class="country-banner-clear" @click="router.push('/')" :title="t('sidebar.backToGlobal')">✕</button>
+      <Button variant="ghost" size="icon" class="country-banner-clear" @click="router.push('/')" :title="t('sidebar.backToGlobal')">✕</Button>
     </div>
 
     <!-- Disaster Accordion -->
@@ -333,22 +373,24 @@ const selectedRangeLabel = computed(() => {
       <Transition name="section-accordion">
         <div v-if="openSections.disasterFilters">
           <div class="hazard-filter-toolbar" role="group" aria-label="Afet tipi görünümü">
-            <button
+            <Button
               type="button"
+              size="sm"
+              :variant="disasterTypeView === 'active' ? 'default' : 'outline'"
               class="hazard-filter-tab"
-              :class="{ active: disasterTypeView === 'active' }"
               @click="disasterTypeView = 'active'"
             >
               {{ t('sidebar.viewActive') }}
-            </button>
-            <button
+            </Button>
+            <Button
               type="button"
+              size="sm"
+              :variant="disasterTypeView === 'all' ? 'default' : 'outline'"
               class="hazard-filter-tab"
-              :class="{ active: disasterTypeView === 'all' }"
               @click="disasterTypeView = 'all'"
             >
               {{ t('sidebar.viewAll') }}
-            </button>
+            </Button>
           </div>
 
           <div class="disaster-accordion compact-hazard-list">
@@ -392,12 +434,11 @@ const selectedRangeLabel = computed(() => {
                 >
                   {{ disasterStore.totalCount[dtype.key] ?? 0 }}
                 </span>
-                <input
-                  type="checkbox"
+                <Switch
                   class="layer-toggle-checkbox"
-                  :checked="disasterStore.isLayerActive(dtype.key)"
+                  :model-value="disasterStore.isLayerActive(dtype.key)"
                   @click.stop
-                  @change="disasterStore.toggleLayer(dtype.key)"
+                  @update:model-value="disasterStore.toggleLayer(dtype.key)"
                   :title="
                     disasterStore.isLayerActive(dtype.key) ? t('sidebar.hideLayer') : t('sidebar.showLayer')
                   "
@@ -446,57 +487,69 @@ const selectedRangeLabel = computed(() => {
     <!-- Collapsed icons only -->
     <div class="sidebar-icons-only" v-if="isCollapsed">
       <!-- 1) Afet filtreleri -->
-      <button
+      <Button
         v-for="dtype in disasterTypes"
         :key="dtype.key"
+        variant="ghost"
+        size="icon"
         class="btn-icon"
         :class="[dtype.cssClass, { active: disasterStore.isLayerActive(dtype.key) }]"
         @click="disasterStore.toggleLayer(dtype.key)"
         :title="t(`disasters.${dtype.key}`)"
       >
         {{ dtype.icon }}
-      </button>
+      </Button>
 
       <div class="collapsed-divider"></div>
 
       <!-- 2) Yoğunluk ölçeği -->
-      <button
+      <Button
+        variant="ghost"
+        size="icon"
         class="btn-icon collapsed-action severity-mini critical"
         :class="{ inactive: !disasterStore.isSeverityActive('critical') }"
         @click="disasterStore.toggleSeverity('critical')"
         :title="t('severity.critical')"
       >
         ●
-      </button>
-      <button
+      </Button>
+      <Button
+        variant="ghost"
+        size="icon"
         class="btn-icon collapsed-action severity-mini high"
         :class="{ inactive: !disasterStore.isSeverityActive('high') }"
         @click="disasterStore.toggleSeverity('high')"
         :title="t('severity.high')"
       >
         ●
-      </button>
-      <button
+      </Button>
+      <Button
+        variant="ghost"
+        size="icon"
         class="btn-icon collapsed-action severity-mini moderate"
         :class="{ inactive: !disasterStore.isSeverityActive('moderate') }"
         @click="disasterStore.toggleSeverity('moderate')"
         :title="t('severity.moderate')"
       >
         ●
-      </button>
-      <button
+      </Button>
+      <Button
+        variant="ghost"
+        size="icon"
         class="btn-icon collapsed-action severity-mini low"
         :class="{ inactive: !disasterStore.isSeverityActive('low') }"
         @click="disasterStore.toggleSeverity('low')"
         :title="t('severity.low')"
       >
         ●
-      </button>
+      </Button>
 
       <div class="collapsed-divider"></div>
 
       <!-- 3) Zaman aralığı -->
-      <button
+      <Button
+        variant="ghost"
+        size="icon"
         class="btn-icon collapsed-action time-mini active"
         @click="uiStore.toggleSidebar()"
         :title="selectedTimeRange"
@@ -509,69 +562,71 @@ const selectedRangeLabel = computed(() => {
             .replace(' Ay', 'a')
             .replace(' Yıl', 'y')
         }}
-      </button>
-      <button class="btn-icon collapsed-action calendar-mini" :title="t('sidebar.calendar')">📅</button>
+      </Button>
+      <Button variant="ghost" size="icon" class="btn-icon collapsed-action calendar-mini" :title="t('sidebar.calendar')">📅</Button>
 
       <div class="collapsed-divider"></div>
 
       <!-- 4) 2D/3D -->
-      <button
+      <Button
+        variant="ghost"
+        size="icon"
         class="btn-icon collapsed-action"
         :title="isGlobeMode ? t('sidebar.view2D') : t('sidebar.view3D')"
         @click="isGlobeMode ? uiStore.transitionToMap(20, 30, 3) : uiStore.transitionToGlobe()"
       >
         {{ isGlobeMode ? '🗺️' : '🌐' }}
-      </button>
+      </Button>
 
       <div class="collapsed-divider"></div>
 
       <!-- 5) Kalan seçenekler -->
-      <button
+      <Button
+        variant="ghost"
+        size="icon"
         class="btn-icon collapsed-action"
         @click="handleLocate"
         :title="t('sidebar.myLocation')"
       >
         🎯
-      </button>
+      </Button>
 
       <!-- Map Mode Options (Collapsed) — radio-style, but pressing the
            already-active one again turns it off (uiStore.toggleMapMode),
            landing back on "none selected" instead of re-picking itself.
            2026-08-03 feedback. -->
-      <button
+      <Button
+        variant="ghost"
+        size="icon"
         class="btn-icon collapsed-action"
         :class="{ active: uiStore.mapMode === 'normal' }"
         @click="uiStore.toggleMapMode('normal')"
         :title="t('sidebar.modeNormal')"
       >
         📍
-      </button>
-      <button
+      </Button>
+      <Button
+        variant="ghost"
+        size="icon"
         class="btn-icon collapsed-action"
         :class="{ active: uiStore.mapMode === 'hexagon' }"
         @click="uiStore.toggleMapMode('hexagon')"
         :title="t('sidebar.modeHexagon')"
       >
         ⬡
-      </button>
-      <button
+      </Button>
+      <Button
+        variant="ghost"
+        size="icon"
         class="btn-icon collapsed-action"
         :class="{ active: uiStore.mapMode === 'heatmap' }"
         @click="uiStore.toggleMapMode('heatmap')"
         :title="t('sidebar.modeHeatmap')"
       >
         🔥
-      </button>
+      </Button>
 
       <div class="collapsed-divider"></div>
-
-      <button
-        class="btn-icon collapsed-action"
-        @click="uiStore.toggleSettings()"
-        :title="t('app.settings')"
-      >
-        ⚙️
-      </button>
 
       <div
         class="collapsed-sources"
@@ -619,13 +674,12 @@ const selectedRangeLabel = computed(() => {
                 disasterStore.minMagnitude > 0 ? `M${disasterStore.minMagnitude}+` : '0+'
               }}</span>
             </div>
-            <input
-              type="range"
-              min="0"
-              max="9"
-              step="0.5"
-              :value="disasterStore.minMagnitude"
-              @input="disasterStore.minMagnitude = Number($event.target.value)"
+            <Slider
+              :min="0"
+              :max="9"
+              :step="0.5"
+              :model-value="[disasterStore.minMagnitude]"
+              @update:model-value="(v) => (disasterStore.minMagnitude = v[0])"
               class="filter-range"
             />
             <div class="filter-ends"><span>0</span><span>9</span></div>
@@ -638,16 +692,12 @@ const selectedRangeLabel = computed(() => {
                 disasterStore.maxDepth === null ? t('sidebar.depthAll') : `≤${disasterStore.maxDepth} km`
               }}</span>
             </div>
-            <input
-              type="range"
-              min="0"
-              max="700"
-              step="25"
-              :value="disasterStore.maxDepth === null ? 700 : disasterStore.maxDepth"
-              @input="
-                disasterStore.maxDepth =
-                  Number($event.target.value) >= 700 ? null : Number($event.target.value)
-              "
+            <Slider
+              :min="0"
+              :max="700"
+              :step="25"
+              :model-value="[disasterStore.maxDepth === null ? 700 : disasterStore.maxDepth]"
+              @update:model-value="(v) => (disasterStore.maxDepth = v[0] >= 700 ? null : v[0])"
               class="filter-range"
             />
             <div class="filter-ends"><span>0 km</span><span>25+ km</span></div>
@@ -658,13 +708,13 @@ const selectedRangeLabel = computed(() => {
               <span>{{ t('sidebar.duration') }}</span>
               <span class="filter-val accent">{{ selectedTimeRange }}</span>
             </div>
-            <input
-              type="range"
+            <Slider
               :min="0"
               :max="timeRanges.length - 1"
-              :value="selectedTimeRangeIndex"
+              :step="1"
+              :model-value="[selectedTimeRangeIndex]"
               :disabled="dateFilterMode === 'calendar'"
-              @input="handleTimeSliderInput"
+              @update:model-value="(v) => handleTimeSliderInput(v[0])"
               class="filter-range"
             />
             <div class="filter-ends">
@@ -686,25 +736,48 @@ const selectedRangeLabel = computed(() => {
             <div class="date-filters">
               <label class="date-label">
                 <span>{{ t('sidebar.dateRangeStart') }}</span>
-                <input type="date" class="date-input" v-model="rangeStartDate" />
+                <Popover v-model:open="startDatePopoverOpen">
+                  <PopoverTrigger as-child>
+                    <Button variant="outline" class="date-input">{{ rangeStartDate || t('sidebar.dateRangeStart') }}</Button>
+                  </PopoverTrigger>
+                  <PopoverContent class="w-auto p-0">
+                    <Calendar
+                      :model-value="rangeStartCalendarDate"
+                      prevent-deselect
+                      @update:model-value="(v) => { rangeStartCalendarDate = v; startDatePopoverOpen = false }"
+                    />
+                  </PopoverContent>
+                </Popover>
               </label>
               <label class="date-label">
                 <span>{{ t('sidebar.dateRangeEnd') }}</span>
-                <input type="date" class="date-input" v-model="rangeEndDate" :min="rangeStartDate" />
+                <Popover v-model:open="endDatePopoverOpen">
+                  <PopoverTrigger as-child>
+                    <Button variant="outline" class="date-input">{{ rangeEndDate || t('sidebar.dateRangeEnd') }}</Button>
+                  </PopoverTrigger>
+                  <PopoverContent class="w-auto p-0">
+                    <Calendar
+                      :model-value="rangeEndCalendarDate"
+                      :min-value="rangeStartCalendarDate"
+                      prevent-deselect
+                      @update:model-value="(v) => { rangeEndCalendarDate = v; endDatePopoverOpen = false }"
+                    />
+                  </PopoverContent>
+                </Popover>
               </label>
               <span class="date-hint">{{ t('sidebar.dateRangeHint') }}</span>
               <div class="date-filter-actions">
-                <button type="button" class="btn-date-apply" @click="applyDateRange">
+                <Button variant="outline" class="btn-date-apply" @click="applyDateRange">
                   {{ t('sidebar.dateRangeApply') }}
-                </button>
-                <button
+                </Button>
+                <Button
                   v-if="dateFilterMode === 'calendar'"
-                  type="button"
+                  variant="ghost"
                   class="btn-date-clear"
                   @click="clearCalendarRange"
                 >
                   {{ t('sidebar.dateRangeClear') }}
-                </button>
+                </Button>
               </div>
             </div>
           </div>
@@ -751,41 +824,40 @@ const selectedRangeLabel = computed(() => {
                rather than a control that pops in and out — live-review feedback
                from spec 045). No longer split across separate widgets. -->
           <div class="hex-panel">
-            <div class="map-mode-selector-embedded">
-              <button
+            <ToggleGroup type="single" variant="outline" :model-value="uiStore.mapMode ?? ''" class="map-mode-selector-embedded">
+              <ToggleGroupItem
+                value="normal"
                 class="mode-btn"
-                :class="{ active: uiStore.mapMode === 'normal' }"
                 @click="uiStore.toggleMapMode('normal')"
                 :title="`${t('sidebar.modeNormal')} (1)`"
               >
                 📍 {{ t('sidebar.modeNormal') }}
-              </button>
-              <button
+              </ToggleGroupItem>
+              <ToggleGroupItem
+                value="hexagon"
                 class="mode-btn"
-                :class="{ active: uiStore.mapMode === 'hexagon' }"
                 @click="uiStore.toggleMapMode('hexagon')"
                 :title="`${t('sidebar.modeHexagon')} (2)`"
               >
                 ⬡ {{ t('sidebar.modeHexagon') }}
-              </button>
-              <button
+              </ToggleGroupItem>
+              <ToggleGroupItem
+                value="heatmap"
                 class="mode-btn"
-                :class="{ active: uiStore.mapMode === 'heatmap' }"
                 @click="uiStore.toggleMapMode('heatmap')"
                 :title="`${t('sidebar.modeHeatmap')} (3)`"
               >
                 🔥 {{ t('sidebar.modeHeatmap') }}
-              </button>
-            </div>
+              </ToggleGroupItem>
+            </ToggleGroup>
             <div class="hex-resolution-control">
-              <input
-                type="range"
+              <Slider
                 :min="MIN_HEX_RES"
                 :max="MAX_HEX_RES"
-                step="1"
-                :value="uiStore.manualHexResolution ?? MIN_HEX_RES"
+                :step="1"
+                :model-value="[uiStore.manualHexResolution ?? MIN_HEX_RES]"
                 :disabled="uiStore.mapMode !== 'hexagon'"
-                @input="uiStore.setManualHexResolution(Number($event.target.value))"
+                @update:model-value="(v) => uiStore.setManualHexResolution(v[0])"
                 class="hex-resolution-slider"
                 :title="t('sidebar.hexResolution.label')"
                 :aria-label="t('sidebar.hexResolution.label')"
@@ -806,7 +878,7 @@ const selectedRangeLabel = computed(() => {
       </button>
       <Transition name="section-accordion">
         <div v-if="openSections.location" class="location-content">
-          <button class="btn btn-primary sidebar-action-btn" @click="handleLocate">
+          <Button class="sidebar-action-btn" @click="handleLocate">
             🎯
             {{
               geoStore.isTracking
@@ -815,31 +887,31 @@ const selectedRangeLabel = computed(() => {
                   ? t('sidebar.locationDetected')
                   : t('sidebar.myLocation')
             }}
-          </button>
+          </Button>
 
           <div class="filter-row">
             <div class="filter-label">
               <span>{{ t('settings.alertRadius') }}</span>
               <span class="filter-val accent">{{ geoStore.alertRadius }} km</span>
             </div>
-            <input
-              type="range"
-              min="10"
-              max="500"
-              step="10"
-              :value="geoStore.alertRadius"
-              @input="geoStore.setAlertRadius(Number($event.target.value))"
+            <Slider
+              :min="10"
+              :max="500"
+              :step="10"
+              :model-value="[geoStore.alertRadius]"
+              @update:model-value="(v) => geoStore.setAlertRadius(v[0])"
               class="filter-range"
             />
           </div>
 
-          <button
+          <Button
             v-if="hasMyRegion"
-            :class="['btn', 'btn-ghost', 'sidebar-action-btn', { active: disasterStore.showOnlyMyRegion }]"
+            :variant="disasterStore.showOnlyMyRegion ? 'default' : 'outline'"
+            class="sidebar-action-btn"
             @click="disasterStore.showOnlyMyRegion = !disasterStore.showOnlyMyRegion"
           >
             📍 {{ disasterStore.showOnlyMyRegion ? t('sidebar.wholeCountry') : t('sidebar.onlyMyRegion') }}
-          </button>
+          </Button>
         </div>
       </Transition>
     </div>
@@ -869,18 +941,11 @@ const selectedRangeLabel = computed(() => {
       </div>
     </div>
 
-    <button
-      v-if="!isCollapsed"
-      class="btn btn-ghost sidebar-action-btn sidebar-settings-bottom"
-      @click="uiStore.toggleSettings()"
-    >
-      ⚙️ {{ t('app.settings') }}
-    </button>
-
     <!-- Logout -->
-    <button
+    <Button
       v-if="authStore.isLoggedIn"
-      class="btn sidebar-logout-btn"
+      variant="destructive"
+      class="sidebar-logout-btn"
       :class="{ 'sidebar-logout-btn-collapsed': isCollapsed }"
       @click="handleLogout"
       :title="t('settings.logout')"
@@ -916,6 +981,11 @@ const selectedRangeLabel = computed(() => {
 /* Kept overflow off .sidebar itself (no clipping box) so the collapse
    toggle — a child of .sidebar-header below, positioned past its edge —
    isn't clipped. The scrollable body lives in here instead. */
+.sidebar-panel-entry {
+  flex-shrink: 0;
+  padding: var(--space-sm) var(--space-md) 0;
+}
+
 .sidebar-scroll {
   flex: 1;
   min-height: 0;
@@ -999,15 +1069,12 @@ const selectedRangeLabel = computed(() => {
 }
 
 .country-banner-clear {
-  background: none;
-  border: none;
-  color: var(--color-text-muted);
-  cursor: pointer;
+  width: auto;
+  height: auto;
   font-size: 0.75rem;
   padding: 2px 4px;
   border-radius: 4px;
   flex-shrink: 0;
-  transition: color 0.15s;
 }
 
 .country-banner-clear:hover {
@@ -1284,8 +1351,6 @@ const selectedRangeLabel = computed(() => {
 
 .filter-range {
   width: 100%;
-  accent-color: var(--color-accent);
-  cursor: pointer;
 }
 
 .filter-ends {
@@ -1350,13 +1415,10 @@ const selectedRangeLabel = computed(() => {
 }
 
 .date-input {
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid var(--glass-border);
-  color: var(--color-text-primary);
-  border-radius: 8px;
-  padding: 8px;
-  font-size: 0.78rem;
   width: 100%;
+  justify-content: flex-start;
+  font-size: 0.78rem;
+  font-weight: 400;
 }
 
 .date-hint {
@@ -1385,24 +1447,11 @@ const selectedRangeLabel = computed(() => {
 
 .btn-date-apply {
   flex: 1;
-  padding: 7px 10px;
-  background: rgba(77, 163, 255, 0.2);
-  border: 1px solid rgba(77, 163, 255, 0.4);
-  border-radius: 8px;
-  color: #4da3ff;
-  font-weight: 600;
   font-size: 0.75rem;
-  cursor: pointer;
 }
 
 .btn-date-clear {
-  padding: 7px 10px;
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid var(--glass-border);
-  border-radius: 8px;
-  color: var(--color-text-muted);
   font-size: 0.75rem;
-  cursor: pointer;
 }
 
 .sidebar-icons-only {
@@ -1501,7 +1550,6 @@ const selectedRangeLabel = computed(() => {
 }
 
 .map-mode-selector-embedded {
-  display: flex;
   width: 100%;
 }
 
@@ -1510,42 +1558,32 @@ const selectedRangeLabel = computed(() => {
   padding: 7px 4px;
   font-size: 0.72rem;
   font-weight: 600;
-  background: transparent;
-  border: none;
-  border-right: 1px solid rgba(255, 255, 255, 0.1);
   color: rgba(255, 255, 255, 0.5);
-  cursor: pointer;
-  transition:
-    background 0.15s,
-    color 0.15s;
   white-space: nowrap;
 }
 
-.mode-btn:last-child {
-  border-right: none;
-}
-
 .mode-btn:hover {
-  background: rgba(255, 255, 255, 0.08);
   color: rgba(255, 255, 255, 0.85);
 }
 
-.mode-btn.active {
+/* Reka's own [data-state] attribute is the source of truth for "pressed"
+   now (driven by the ToggleGroup's :model-value) — kept as the same custom
+   accent color as before instead of falling back to shadcn's generic,
+   duller --accent token. */
+.mode-btn[data-state='on'] {
   background: rgba(99, 179, 237, 0.2);
   color: #63b3ed;
 }
 
 html[data-theme='light'] .mode-btn {
   color: rgba(0, 0, 0, 0.45);
-  border-right-color: rgba(0, 0, 0, 0.08);
 }
 
 html[data-theme='light'] .mode-btn:hover {
-  background: rgba(0, 0, 0, 0.05);
   color: rgba(0, 0, 0, 0.8);
 }
 
-html[data-theme='light'] .mode-btn.active {
+html[data-theme='light'] .mode-btn[data-state='on'] {
   background: rgba(49, 130, 206, 0.12);
   color: #3182ce;
 }
@@ -1580,12 +1618,6 @@ html[data-theme='light'] .hex-resolution-control {
 
 .hex-resolution-slider {
   flex: 1;
-  accent-color: #63b3ed;
-}
-
-.hex-resolution-slider:disabled {
-  opacity: 0.35;
-  cursor: not-allowed;
 }
 
 .hex-resolution-value {
@@ -1870,28 +1902,12 @@ html[data-theme='light'] .footer-sources {
   }
 }
 
+/* Color/background/border now come from the shadcn Button's "destructive"
+   variant (aliased to --color-critical); only layout remains here. */
 .sidebar-logout-btn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
   width: 100%;
   margin-top: var(--space-sm);
-  padding: 10px;
-  font-size: 0.8rem;
-  font-weight: 600;
-  color: #ef4444;
-  background: rgba(239, 68, 68, 0.08);
-  border: 1px solid rgba(239, 68, 68, 0.35);
-  border-radius: var(--radius-sm, 8px);
-  cursor: pointer;
-  transition: all 0.2s ease;
   flex-shrink: 0;
-}
-
-.sidebar-logout-btn:hover {
-  background: rgba(239, 68, 68, 0.18);
-  border-color: rgba(239, 68, 68, 0.6);
 }
 
 .sidebar-logout-btn-collapsed {
@@ -2011,23 +2027,8 @@ html[data-theme='light'] .footer-sources {
 
 .hazard-filter-tab {
   min-height: 30px;
-  border: 1px solid var(--glass-border);
-  border-radius: 8px;
-  background: rgba(255, 255, 255, 0.04);
-  color: var(--color-text-secondary);
   font-size: 0.72rem;
   font-weight: 700;
-  cursor: pointer;
-  transition:
-    background 0.18s ease,
-    border-color 0.18s ease,
-    color 0.18s ease;
-}
-
-.hazard-filter-tab.active {
-  background: rgba(77, 163, 255, 0.16);
-  border-color: rgba(77, 163, 255, 0.56);
-  color: var(--color-text-primary);
 }
 
 .accordion-item {
@@ -2204,39 +2205,8 @@ html[data-theme='light'] .footer-sources {
 }
 
 .layer-toggle-checkbox {
-  appearance: none;
-  width: 36px;
-  height: 20px;
-  background: rgba(255, 255, 255, 0.2);
-  border-radius: 10px;
-  position: relative;
-  cursor: pointer;
-  outline: none;
   margin-left: auto;
   flex-shrink: 0;
-  transition: all 0.3s ease;
-}
-
-.layer-toggle-checkbox::after {
-  content: '';
-  position: absolute;
-  top: 2px;
-  left: 2px;
-  width: 16px;
-  height: 16px;
-  background: white;
-  border-radius: 50%;
-  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
-}
-
-.layer-toggle-checkbox:checked {
-  background: var(--color-info, #4da3ff);
-  box-shadow: 0 0 6px rgba(77, 163, 255, 0.6);
-}
-
-.layer-toggle-checkbox:checked::after {
-  transform: translateX(16px);
 }
 
 .accordion-loading {

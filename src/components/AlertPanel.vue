@@ -3,6 +3,7 @@ import { computed } from 'vue'
 import { useGeolocationStore } from '@/stores/geolocation.js'
 import { useUIStore } from '@/stores/ui.js'
 import { useI18n } from 'vue-i18n'
+import { Button } from '@/components/ui/button'
 
 const { t } = useI18n()
 const geoStore = useGeolocationStore()
@@ -29,7 +30,7 @@ function getSeverityLabel(severity) {
     <div v-if="uiStore.alertPanelOpen" class="alert-panel glass-panel">
       <div class="alert-header">
         <h3 class="alert-title">⚠️ {{ t('alerts.title') }}</h3>
-        <button class="btn-icon btn-ghost" @click="uiStore.toggleAlertPanel()">✕</button>
+        <Button variant="ghost" size="icon" @click="uiStore.toggleAlertPanel()">✕</Button>
       </div>
 
       <div class="alert-list" v-if="threats.length > 0">

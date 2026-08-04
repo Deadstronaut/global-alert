@@ -8,11 +8,38 @@
     "refreshAll": "Обновить все данные",
     "returnToGlobe": "Вернуться к глобусу",
     "settings": "Настройки",
+    "dashboard": "Панель",
     "close": "Закрыть",
     "error": "Ошибка",
     "retry": "Повторить",
     "noData": "Данные не найдены",
     "offline": "Вне сети — показ кэшированных данных"
+  },
+  "dashboard": {
+    "navGroupTitle": "Страницы",
+    "navCap": "Оповещения CAP",
+    "navIncidents": "Отслеживание Инцидентов",
+    "navShelters": "Убежища",
+    "navHazards": "Энциклопедия Опасностей",
+    "navReport": "Сообщение от Граждан",
+    "overviewTitle": "Обзор",
+    "earthquakes24hTitle": "Землетрясения (за 24 часа)",
+    "earthquakes24hForCountry": "в {country}",
+    "earthquakes24hGlobal": "по всему миру",
+    "noPermission": "У вас нет прав для просмотра этого раздела.",
+    "charts": {
+      "hourlyTitle": "Почасовое Распределение",
+      "severityTitle": "Распределение по Тяжести",
+      "magnitudeTitle": "Распределение по Магнитуде",
+      "depthTitle": "Распределение по Глубине",
+      "sourceTitle": "Распределение по Источнику",
+      "avgMagnitudeTitle": "Средняя Магнитуда",
+      "trendTitle": "Тренд за 7 Дней",
+      "trendSubtitle": "Последние 7 дней, ежедневное число землетрясений",
+      "last24h": "Последние 24 часа",
+      "earthquakes": "землетрясений",
+      "unknownSource": "Неизвестно"
+    }
   },
   "common": {
     "loadingEllipsis": "Загрузка...",

@@ -15,6 +15,7 @@
  * (DeletionJustificationModal.vue) with the actual logic living in the view.
  */
 import { ref, watch } from 'vue'
+import { Button } from '@/components/ui/button'
 
 const props = defineProps({
   title: { type: String, required: true },
@@ -64,14 +65,14 @@ function confirm() {
       </label>
       <p v-if="error" class="dialog-error">{{ error }}</p>
       <div class="modal-actions">
-        <button class="btn-cancel" :disabled="submitting" @click="emit('cancel')">{{ cancelLabel }}</button>
-        <button
-          :class="danger ? 'btn-danger' : 'btn-confirm'"
+        <Button variant="outline" :disabled="submitting" @click="emit('cancel')">{{ cancelLabel }}</Button>
+        <Button
+          :variant="danger ? 'destructive' : 'default'"
           :disabled="submitting || (requirePassword && !password)"
           @click="confirm"
         >
           {{ submitting ? '...' : confirmLabel }}
-        </button>
+        </Button>
       </div>
     </div>
   </div>
@@ -114,36 +115,4 @@ function confirm() {
   margin: 10px 0 0;
 }
 .modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 18px; }
-.btn-cancel {
-  padding: 9px 18px;
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  border-radius: 8px;
-  color: #cbd5e1;
-  cursor: pointer;
-  font-size: 0.85rem;
-}
-.btn-cancel:disabled { opacity: 0.5; cursor: not-allowed; }
-.btn-confirm {
-  padding: 9px 18px;
-  background: rgba(77, 163, 255, 0.15);
-  border: 1px solid rgba(77, 163, 255, 0.4);
-  border-radius: 8px;
-  color: #7cb8ff;
-  font-weight: 600;
-  cursor: pointer;
-  font-size: 0.85rem;
-}
-.btn-confirm:disabled { opacity: 0.5; cursor: not-allowed; }
-.btn-danger {
-  padding: 9px 18px;
-  background: rgba(239, 68, 68, 0.15);
-  border: 1px solid rgba(239, 68, 68, 0.4);
-  border-radius: 8px;
-  color: #ef4444;
-  font-weight: 600;
-  cursor: pointer;
-  font-size: 0.85rem;
-}
-.btn-danger:disabled { opacity: 0.5; cursor: not-allowed; }
 </style>

@@ -1,6 +1,7 @@
 <script setup>
 import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { Button } from '@/components/ui/button'
 
 // Generic, capability-agnostic display for a single ai_suggestions row
 // (spec 051). Never applies its own output anywhere — only ever emits the
@@ -39,17 +40,17 @@ function dismiss() {
     <slot :suggestion="suggestion" :editedText="editedText" :setEditedText="(v) => (editedText = v)" />
 
     <div v-if="editable" class="ai-suggestion-badge__actions">
-      <button type="button" class="ai-suggestion-badge__approve" @click="approve">
+      <Button type="button" size="sm" @click="approve">
         {{ t('ai.approve') }}
-      </button>
-      <button type="button" class="ai-suggestion-badge__reject" @click="reject">
+      </Button>
+      <Button type="button" size="sm" variant="outline" @click="reject">
         {{ t('ai.reject') }}
-      </button>
+      </Button>
     </div>
     <div v-else class="ai-suggestion-badge__actions">
-      <button type="button" class="ai-suggestion-badge__dismiss" @click="dismiss">
+      <Button type="button" size="sm" variant="ghost" @click="dismiss">
         {{ t('ai.dismiss') }}
-      </button>
+      </Button>
     </div>
   </div>
 </template>

@@ -7,6 +7,7 @@ import StarfieldBackground from '@/components/StarfieldBackground.vue'
 import SidebarPanel from '@/components/SidebarPanel.vue'
 import AlertPanel from '@/components/AlertPanel.vue'
 import SettingsPanel from '@/components/SettingsPanel.vue'
+import DashboardPlaceholder from '@/components/DashboardPlaceholder.vue'
 import { useDisasterStore } from '@/stores/disaster.js'
 import { useUIStore } from '@/stores/ui.js'
 import { useGeolocationStore } from '@/stores/geolocation.js'
@@ -116,6 +117,8 @@ watch(
         <SettingsPanel />
       </div>
     </Transition>
+
+    <DashboardPlaceholder />
 
     <EmergencyPopup />
 

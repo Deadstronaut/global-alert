@@ -15,9 +15,16 @@ import JSZip from 'jszip'
 import { jsPDF } from 'jspdf'
 import { useAiAssistanceStore } from '@/stores/aiAssistance.js'
 import AiSuggestionBadge from '@/components/ai/AiSuggestionBadge.vue'
+import { Button } from '@/components/ui/button'
 
 const router = useRouter()
 const { t } = useI18n()
+
+// Rendered inline inside the Dashboard (DashboardPlaceholder.vue) as well as
+// at its own /alerts/cap route — embedded mode hides the page's own "back to
+// map" button (redundant with the Dashboard's own close control) and lets
+// its height fit the dialog instead of the full viewport.
+const props = defineProps({ embedded: { type: Boolean, default: false } })
 
 const auth = useAuthStore()
 const disaster = useDisasterStore()
@@ -430,16 +437,16 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="cap-page">
+  <div class="cap-page" :class="{ embedded }">
     <div class="cap-header">
       <div class="cap-title-row">
-        <button class="btn-back" @click="router.push('/')">{{ t('cap.backToMap') }}</button>
+        <Button v-if="!embedded" variant="ghost" size="sm" class="btn-back" @click="router.push('/')">{{ t('cap.backToMap') }}</Button>
         <h1 class="cap-title">⚠️ {{ t('cap.title') }}</h1>
         <span class="cap-subtitle">{{ t('cap.subtitle') }}</span>
       </div>
-      <button v-if="canCreate" class="btn-new" @click="showForm = !showForm">
+      <Button v-if="canCreate" @click="showForm = !showForm">
         {{ showForm ? t('cap.close') : t('cap.newAlert') }}
-      </button>
+      </Button>
     </div>
 
     <!-- Event picker + create form -->
@@ -448,16 +455,18 @@ onMounted(() => {
         <div v-if="detectedEvents.length" class="event-picker">
           <h4 class="event-picker-heading">{{ t('cap.pickEvent.heading') }}</h4>
           <div class="event-list">
-            <button
+            <Button
               v-for="ev in detectedEvents.slice(0, 8)"
               :key="ev.id"
+              variant="outline"
+              size="sm"
               class="event-chip"
               @click="startFromEvent(ev)"
             >
               {{ ev.type }} · {{ ev.severity }} · {{ ev.title || ev.id }}
-            </button>
+            </Button>
           </div>
-          <button class="btn-blank" @click="startBlankDraft">{{ t('cap.pickEvent.orBlank') }}</button>
+          <Button variant="outline" size="sm" class="btn-blank" @click="startBlankDraft">{{ t('cap.pickEvent.orBlank') }}</Button>
         </div>
 
         <h3 class="form-title">{{ t('cap.form.title') }}</h3>
@@ -526,9 +535,9 @@ onMounted(() => {
         </div>
         <div class="form-actions">
           <p v-if="error" class="form-error">{{ error }}</p>
-          <button class="btn-submit" @click="submitDraft" :disabled="submitting || !form.title.trim()">
+          <Button class="btn-submit" @click="submitDraft" :disabled="submitting || !form.title.trim()">
             {{ submitting ? t('cap.form.submitting') : t('cap.form.submit') }}
-          </button>
+          </Button>
         </div>
       </div>
     </Transition>
@@ -539,16 +548,16 @@ onMounted(() => {
         <h4>{{ reasonPrompt.targetStatus === 'rejected' ? t('cap.reasonPrompt.rejectTitle') : t('cap.reasonPrompt.cancelTitle') }}</h4>
         <textarea v-model="reasonPrompt.reason" rows="3" :placeholder="t('cap.reasonPrompt.placeholder')" />
         <div class="reason-modal-actions">
-          <button class="btn-back" @click="reasonPrompt = null">{{ t('cap.reasonPrompt.cancelButton') }}</button>
-          <button class="btn-submit" @click="confirmReasonPrompt">{{ t('cap.reasonPrompt.confirm') }}</button>
+          <Button variant="outline" size="sm" @click="reasonPrompt = null">{{ t('cap.reasonPrompt.cancelButton') }}</Button>
+          <Button size="sm" @click="confirmReasonPrompt">{{ t('cap.reasonPrompt.confirm') }}</Button>
         </div>
       </div>
     </div>
 
     <!-- Tabs -->
     <div class="cap-tabs">
-      <button :class="['tab-btn', { active: activeTab === 'active' }]" @click="activeTab = 'active'">{{ t('cap.history.activeTab') }}</button>
-      <button :class="['tab-btn', { active: activeTab === 'history' }]" @click="activeTab = 'history'">{{ t('cap.history.historyTab') }}</button>
+      <Button size="sm" :variant="activeTab === 'active' ? 'default' : 'outline'" class="tab-btn" @click="activeTab = 'active'">{{ t('cap.history.activeTab') }}</Button>
+      <Button size="sm" :variant="activeTab === 'history' ? 'default' : 'outline'" class="tab-btn" @click="activeTab = 'history'">{{ t('cap.history.historyTab') }}</Button>
     </div>
 
     <!-- Error -->
@@ -588,14 +597,16 @@ onMounted(() => {
               <option value="ar">AR</option>
               <option value="zh">ZH</option>
             </select>
-            <button
+            <Button
               type="button"
+              variant="outline"
+              size="sm"
               class="btn-ai"
               :disabled="translateBusyByDraft[draft.id]"
               @click="requestDraftTranslation(draft)"
             >
               {{ t('cap.aiTranslateAction') }}
-            </button>
+            </Button>
           </div>
           <AiSuggestionBadge
             v-if="translateSuggestionByDraft[draft.id]"
@@ -616,38 +627,42 @@ onMounted(() => {
         </div>
         <div v-if="draft.status === 'broadcast'" class="draft-readonly">🔒 {{ t('cap.readOnly') }}</div>
         <div v-if="draft.status === 'broadcast' && canCreate" class="draft-create-incident">
-          <button
-            class="btn-transition"
+          <Button
+            variant="outline"
+            size="sm"
             :disabled="creatingIncidentFor === draft.id"
             @click="createIncidentFromDraft(draft)"
           >
             🚨 {{ t('incidentTracking.createIncidentFromAlert') }}
-          </button>
+          </Button>
         </div>
         <div v-if="draft.broadcast_at" class="draft-cap-export">
-          <button class="btn-transition" @click="exportCapXml(draft)">📄 {{ t('cap.exportXml') }}</button>
-          <button class="btn-transition" @click="exportCapJson(draft)">🗂️ {{ t('cap.exportJson') }}</button>
-          <button
-            class="btn-transition"
+          <Button variant="outline" size="sm" @click="exportCapXml(draft)">📄 {{ t('cap.exportXml') }}</Button>
+          <Button variant="outline" size="sm" @click="exportCapJson(draft)">🗂️ {{ t('cap.exportJson') }}</Button>
+          <Button
+            variant="outline"
+            size="sm"
             :disabled="buildingEvidenceFor === draft.id"
             @click="downloadEvidencePackage(draft)"
           >
             📦 {{ buildingEvidenceFor === draft.id ? t('audit.evidence.building') : t('audit.evidence.download') }}
-          </button>
+          </Button>
         </div>
         <div v-if="draft.rejection_reason" class="draft-reason">{{ t('cap.history.rejectionReason') }}: {{ draft.rejection_reason }}</div>
         <div v-if="draft.cancellation_reason" class="draft-reason">{{ t('cap.history.cancellationReason') }}: {{ draft.cancellation_reason }}</div>
 
         <div v-if="canCreate && allowedTransitionsFor(draft).length" class="draft-actions">
-          <button
+          <Button
             v-for="next in allowedTransitionsFor(draft)"
             :key="next"
+            variant="outline"
+            size="sm"
             class="btn-transition"
             :style="{ borderColor: STATUS_COLORS[next] }"
             @click="next === 'draft' ? reviseDraft(draft) : requestTransition(draft, next)"
           >
             → {{ actionLabel(next) }}
-          </button>
+          </Button>
         </div>
       </div>
     </div>
@@ -669,6 +684,12 @@ onMounted(() => {
   font-family: var(--font-sans, 'Inter', sans-serif);
 }
 
+.cap-page.embedded {
+  height: 100%;
+  padding: 0;
+  background: transparent;
+}
+
 .cap-header {
   display: flex;
   align-items: flex-start;
@@ -677,33 +698,9 @@ onMounted(() => {
 }
 
 .cap-title-row { display: flex; flex-direction: column; gap: 4px; }
-.btn-back {
-  background: rgba(255,255,255,.06);
-  border: 1px solid rgba(255,255,255,.12);
-  border-radius: 8px;
-  color: var(--color-text-muted, #94a3b8);
-  padding: 6px 14px;
-  font-size: .8rem;
-  cursor: pointer;
-  transition: background .15s;
-  width: fit-content;
-}
-.btn-back:hover { background: rgba(255,255,255,.12); color: var(--color-text-primary, #e2e8f0); }
+.btn-back { width: fit-content; }
 .cap-title { font-size: 1.6rem; font-weight: 800; margin: 0; }
 .cap-subtitle { font-size: 0.75rem; color: var(--color-text-muted, #94a3b8); text-transform: uppercase; letter-spacing: .1em; }
-
-.btn-new {
-  padding: 8px 18px;
-  background: rgba(77,163,255,.18);
-  border: 1px solid rgba(77,163,255,.4);
-  border-radius: 8px;
-  color: #4da3ff;
-  font-weight: 600;
-  cursor: pointer;
-  font-size: .85rem;
-  transition: background .15s;
-}
-.btn-new:hover { background: rgba(77,163,255,.28); }
 
 .cap-form-card {
   background: rgba(255,255,255,.04);
@@ -715,25 +712,7 @@ onMounted(() => {
 .event-picker { margin-bottom: 16px; padding-bottom: 16px; border-bottom: 1px dashed rgba(255,255,255,.12); }
 .event-picker-heading { font-size: .85rem; font-weight: 700; margin: 0 0 8px; }
 .event-list { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
-.event-chip {
-  padding: 6px 12px;
-  background: rgba(77,163,255,.12);
-  border: 1px solid rgba(77,163,255,.3);
-  border-radius: 999px;
-  color: #4da3ff;
-  font-size: .75rem;
-  cursor: pointer;
-}
-.event-chip:hover { background: rgba(77,163,255,.22); }
-.btn-blank {
-  background: transparent;
-  border: 1px solid rgba(255,255,255,.2);
-  border-radius: 8px;
-  color: var(--color-text-muted, #94a3b8);
-  padding: 5px 12px;
-  font-size: .75rem;
-  cursor: pointer;
-}
+.event-chip { border-radius: 999px; }
 .form-title { font-size: 1rem; font-weight: 700; margin: 0 0 16px; }
 .form-grid {
   display: grid;
@@ -776,19 +755,6 @@ onMounted(() => {
 
 .form-actions { display: flex; align-items: center; gap: 12px; margin-top: 16px; }
 .form-error { color: #ef4444; font-size: .8rem; flex: 1; }
-.btn-submit {
-  padding: 9px 22px;
-  background: rgba(34,197,94,.2);
-  border: 1px solid rgba(34,197,94,.4);
-  border-radius: 8px;
-  color: #22c55e;
-  font-weight: 600;
-  cursor: pointer;
-  font-size: .85rem;
-  transition: background .15s;
-}
-.btn-submit:disabled { opacity: .45; cursor: not-allowed; }
-.btn-submit:not(:disabled):hover { background: rgba(34,197,94,.3); }
 
 .reason-modal-backdrop {
   position: fixed; inset: 0; background: rgba(0,0,0,.5);
@@ -806,11 +772,7 @@ onMounted(() => {
 .reason-modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 14px; }
 
 .cap-tabs { display: flex; gap: 8px; margin-bottom: 16px; }
-.tab-btn {
-  padding: 6px 16px; background: transparent; border: 1px solid rgba(255,255,255,.15);
-  border-radius: 999px; color: var(--color-text-muted, #94a3b8); font-size: .8rem; cursor: pointer;
-}
-.tab-btn.active { background: rgba(77,163,255,.18); border-color: rgba(77,163,255,.4); color: #4da3ff; }
+.tab-btn { border-radius: 999px; }
 
 .cap-loading, .cap-empty {
   text-align: center;
@@ -875,8 +837,6 @@ onMounted(() => {
 .draft-ai-translate { display: flex; flex-direction: column; gap: 6px; margin: 0 0 8px; }
 .draft-ai-translate__row { display: flex; gap: 6px; align-items: center; }
 .draft-ai-translate__row select { background: #1e2330; border: 1px solid rgba(255,255,255,.15); border-radius: 6px; color: #e2e8f0; padding: 4px 6px; font-size: .78rem; }
-.draft-ai-translate .btn-ai { padding: 5px 12px; background: rgba(138,125,250,.15); border: 1px solid rgba(138,125,250,.4); border-radius: 8px; color: #a99bfa; cursor: pointer; font-size: .75rem; }
-.draft-ai-translate .btn-ai:disabled { opacity: .5; cursor: not-allowed; }
 .draft-ai-translate__preview { font-size: .8rem; color: #e2e8f0; margin: 0; white-space: pre-wrap; }
 .draft-ai-translate__unavailable { font-size: .75rem; color: #f59e0b; margin: 0; }
 .draft-area  { font-size: .78rem; color: #60a5fa; margin-bottom: 4px; }
@@ -892,18 +852,9 @@ onMounted(() => {
 .draft-reason { font-size: .78rem; color: #f87171; margin-top: 6px; font-style: italic; }
 
 .draft-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
-.btn-transition {
-  padding: 5px 12px;
-  background: transparent;
-  border: 1px solid;
-  border-radius: 6px;
-  font-size: .75rem;
-  font-weight: 600;
-  cursor: pointer;
-  color: var(--color-text-secondary, #cbd5e1);
-  transition: background .15s;
-}
-.btn-transition:hover { background: rgba(255,255,255,.06); }
+/* border-color is set inline per-status (STATUS_COLORS); this just makes
+   sure the shadcn outline variant's own border color doesn't win. */
+.btn-transition { border-width: 1px; color: var(--color-text-secondary, #cbd5e1); }
 
 .slide-down-enter-active, .slide-down-leave-active {
   transition: max-height .3s ease, opacity .25s ease;

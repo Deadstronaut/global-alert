@@ -12,6 +12,7 @@ import { loadRegionBoundaries } from '@/data/boundaries/index.js'
 import { findRegion } from '@/utils/pointInPolygon.js'
 import CascadingRiskPanel from '@/components/risk/CascadingRiskPanel.vue'
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
+import { Button } from '@/components/ui/button'
 
 const props = defineProps({
   selectedEvent: { type: Object, default: null },
@@ -540,15 +541,15 @@ onMounted(async () => {
             :value="magnitudeOverride ?? selectedEvent.magnitude ?? magnitudeSliderConfig.min"
             @input="applyMagnitudeOverride($event.target.value)"
           />
-          <button v-if="magnitudeOverride !== null" type="button" class="impact-magnitude-reset" @click="clearMagnitudeOverride">{{ t('impact.panel.magnitudeReset') }}</button>
+          <Button v-if="magnitudeOverride !== null" type="button" variant="link" size="sm" class="impact-magnitude-reset" @click="clearMagnitudeOverride">{{ t('impact.panel.magnitudeReset') }}</Button>
         </label>
         <label class="impact-field">
           <span>{{ t('impact.panel.radiusOverride') }} ({{ t('impact.panel.defaultRadius', { km: defaultBufferRadiusKm(selectedEvent) }) }})</span>
           <input type="number" v-model="radiusOverride" :placeholder="String(defaultBufferRadiusKm(selectedEvent))" @input="magnitudeOverride = null" />
         </label>
-        <button class="btn-analyze" :disabled="!selectedDatasetId || analyzing" @click="runAnalysis">
+        <Button class="btn-analyze" :disabled="!selectedDatasetId || analyzing" @click="runAnalysis">
           {{ analyzing ? t('impact.panel.analyzing') : t('impact.panel.runAnalysis') }}
-        </button>
+        </Button>
 
         <div v-if="result === 'error'" class="impact-notice impact-notice-error">{{ t('impact.panel.error') }}</div>
         <div v-else-if="result && result.feature_count === 0" class="impact-notice">{{ t('impact.panel.noOverlap') }}</div>
@@ -561,9 +562,9 @@ onMounted(async () => {
             <strong v-else>{{ t('impact.panel.completenessNoData') }}</strong>
           </div>
           <div class="impact-export-row">
-            <button class="btn-export" @click="exportSummary('csv')">{{ t('impact.panel.exportCsv') }}</button>
-            <button class="btn-export" @click="exportSummary('json')">{{ t('impact.panel.exportJson') }}</button>
-            <button class="btn-export" @click="exportGeoJson">{{ t('impact.panel.exportGeoJson') }}</button>
+            <Button variant="secondary" size="sm" @click="exportSummary('csv')">{{ t('impact.panel.exportCsv') }}</Button>
+            <Button variant="secondary" size="sm" @click="exportSummary('json')">{{ t('impact.panel.exportJson') }}</Button>
+            <Button variant="secondary" size="sm" @click="exportGeoJson">{{ t('impact.panel.exportGeoJson') }}</Button>
           </div>
         </div>
 
@@ -582,8 +583,8 @@ onMounted(async () => {
         <div v-if="result && result !== 'error'" class="impact-breakdown">
           <h5>{{ t('impact.panel.breakdownTitle') }}</h5>
           <div class="impact-breakdown-toggle">
-            <button :class="{ active: breakdownType === 'sector' }" @click="switchBreakdownType('sector')">{{ t('impact.panel.breakdownBySector') }}</button>
-            <button :class="{ active: breakdownType === 'boundary' }" @click="switchBreakdownType('boundary')">{{ t('impact.panel.breakdownByBoundary') }}</button>
+            <Button size="sm" :variant="breakdownType === 'sector' ? 'default' : 'outline'" @click="switchBreakdownType('sector')">{{ t('impact.panel.breakdownBySector') }}</Button>
+            <Button size="sm" :variant="breakdownType === 'boundary' ? 'default' : 'outline'" @click="switchBreakdownType('boundary')">{{ t('impact.panel.breakdownByBoundary') }}</Button>
           </div>
           <div v-if="breakdown === 'error'" class="impact-notice impact-notice-error">{{ t('impact.panel.error') }}</div>
           <div v-else-if="!breakdown || !breakdown.length" class="impact-notice">{{ t('impact.panel.breakdownEmpty') }}</div>
@@ -597,7 +598,7 @@ onMounted(async () => {
 
         <div v-if="result && result !== 'error'" class="impact-save">
           <input v-model="scenarioName" :placeholder="t('impact.panel.scenarioNamePlaceholder')" />
-          <button class="btn-save" @click="saveScenario">{{ t('impact.panel.saveScenario') }}</button>
+          <Button size="sm" @click="saveScenario">{{ t('impact.panel.saveScenario') }}</Button>
         </div>
 
         <div v-if="scenarios.length" class="impact-scenarios">
@@ -612,16 +613,16 @@ onMounted(async () => {
                 @keyup.esc="cancelRenameScenario"
               />
               <span class="scenario-actions">
-                <button class="btn-icon" type="button" @click.stop="saveRenameScenario(s)" :title="t('impact.panel.save')">✓</button>
-                <button class="btn-icon" type="button" @click.stop="cancelRenameScenario" :title="t('impact.panel.cancel')">✕</button>
+                <Button variant="ghost" size="icon" class="btn-icon" type="button" @click.stop="saveRenameScenario(s)" :title="t('impact.panel.save')">✓</Button>
+                <Button variant="ghost" size="icon" class="btn-icon" type="button" @click.stop="cancelRenameScenario" :title="t('impact.panel.cancel')">✕</Button>
               </span>
             </template>
             <template v-else>
               <span class="scenario-name" @click="loadScenario(s)">{{ s.name }}</span>
               <span v-if="!s.exposure_datasets" class="scenario-missing">{{ t('impact.panel.dataUnavailable') }}</span>
               <span class="scenario-actions">
-                <button class="btn-icon" type="button" @click.stop="startRenameScenario(s)" :title="t('impact.panel.editName')">✎</button>
-                <button class="btn-icon btn-icon-danger" type="button" @click.stop="requestDeleteScenario(s)" :title="t('impact.panel.delete')">🗑</button>
+                <Button variant="ghost" size="icon" class="btn-icon" type="button" @click.stop="startRenameScenario(s)" :title="t('impact.panel.editName')">✎</Button>
+                <Button variant="ghost" size="icon" class="btn-icon btn-icon-danger" type="button" @click.stop="requestDeleteScenario(s)" :title="t('impact.panel.delete')">🗑</Button>
               </span>
             </template>
           </div>
@@ -674,15 +675,8 @@ onMounted(async () => {
   padding: 6px 10px; color: #e2e8f0; font-size: .82rem;
 }
 .impact-field input[type="range"] { background: none; border: none; padding: 0; accent-color: #ef4444; }
-.impact-magnitude-reset {
-  align-self: flex-start; background: none; border: none; padding: 0; margin-top: 2px;
-  color: #4da3ff; font-size: .7rem; cursor: pointer; text-decoration: underline;
-}
-.btn-analyze {
-  width: 100%; padding: 8px; background: rgba(77,163,255,.2); border: 1px solid rgba(77,163,255,.4);
-  border-radius: 8px; color: #4da3ff; font-weight: 600; cursor: pointer; margin-bottom: 10px;
-}
-.btn-analyze:disabled { opacity: .5; cursor: not-allowed; }
+.impact-magnitude-reset { align-self: flex-start; margin-top: 2px; }
+.btn-analyze { width: 100%; margin-bottom: 10px; }
 .impact-cascade-section { margin-bottom: 14px; }
 .impact-auto-summary { margin-bottom: 14px; }
 .impact-auto-summary h4 { margin: 0 0 8px; font-size: .85rem; }
@@ -704,13 +698,8 @@ onMounted(async () => {
 .impact-result-label { font-size: .72rem; color: var(--color-text-muted, #94a3b8); }
 .impact-completeness { font-size: .72rem; color: var(--color-text-muted, #94a3b8); margin-top: 6px; }
 .impact-export-row { display: flex; gap: 6px; justify-content: center; margin-top: 8px; flex-wrap: wrap; }
-.btn-export {
-  padding: 4px 10px; background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.15);
-  border-radius: 6px; color: #e2e8f0; font-size: .72rem; cursor: pointer;
-}
 .impact-save { display: flex; gap: 6px; margin-bottom: 14px; }
 .impact-save input { flex: 1; background: #1e2330; border: 1px solid rgba(255,255,255,.15); border-radius: 8px; padding: 6px 10px; color: #e2e8f0; font-size: .8rem; }
-.btn-save { padding: 6px 12px; background: rgba(77,163,255,.2); border: 1px solid rgba(77,163,255,.4); border-radius: 8px; color: #4da3ff; font-size: .78rem; cursor: pointer; }
 .impact-scenarios h5 { margin: 0 0 8px; font-size: .8rem; }
 .scenario-row {
   display: flex; align-items: center; gap: 6px; padding: 6px 8px; border-radius: 6px;
@@ -724,12 +713,7 @@ onMounted(async () => {
   flex: 1; background: #1e2330; border: 1px solid rgba(77,163,255,.4); border-radius: 6px;
   padding: 3px 8px; color: #e2e8f0; font-size: .78rem;
 }
-.btn-icon {
-  background: transparent; border: none; color: var(--color-text-muted, #94a3b8);
-  cursor: pointer; font-size: .8rem; padding: 3px 6px; border-radius: 5px; line-height: 1;
-}
-.btn-icon:hover { background: rgba(255,255,255,.1); color: #e2e8f0; }
-.btn-icon-danger:hover { background: rgba(239,68,68,.15); color: #ef4444; }
+.btn-icon-danger:hover { color: var(--color-critical); }
 .impact-critical, .impact-breakdown { margin-bottom: 14px; }
 .impact-critical h5, .impact-breakdown h5 { margin: 0 0 8px; font-size: .8rem; }
 .impact-critical-list, .impact-breakdown-list { list-style: none; padding: 0; margin: 0; font-size: .78rem; display: flex; flex-direction: column; gap: 6px; }

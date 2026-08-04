@@ -8,11 +8,38 @@
     "refreshAll": "Refresh All Data",
     "returnToGlobe": "Return to Globe",
     "settings": "Settings",
+    "dashboard": "Dashboard",
     "close": "Close",
     "error": "Error",
     "retry": "Retry",
     "noData": "No data found",
     "offline": "Offline - Showing cached data"
+  },
+  "dashboard": {
+    "navGroupTitle": "Pages",
+    "navCap": "CAP Alerts",
+    "navIncidents": "Incident Tracking",
+    "navShelters": "Shelters",
+    "navHazards": "Hazard Encyclopedia",
+    "navReport": "Community Report",
+    "overviewTitle": "Overview",
+    "earthquakes24hTitle": "Earthquakes (Last 24h)",
+    "earthquakes24hForCountry": "in {country}",
+    "earthquakes24hGlobal": "worldwide",
+    "noPermission": "You don't have permission to view this section.",
+    "charts": {
+      "hourlyTitle": "Hourly Breakdown",
+      "severityTitle": "Severity Breakdown",
+      "magnitudeTitle": "Magnitude Breakdown",
+      "depthTitle": "Depth Breakdown",
+      "sourceTitle": "Source Breakdown",
+      "avgMagnitudeTitle": "Average Magnitude",
+      "trendTitle": "7-Day Trend",
+      "trendSubtitle": "Last 7 days, daily earthquake count",
+      "last24h": "Last 24 hours",
+      "earthquakes": "earthquakes",
+      "unknownSource": "Unknown"
+    }
   },
   "common": {
     "loadingEllipsis": "Loading...",

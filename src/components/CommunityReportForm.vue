@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n'
 import { useHazardTypesStore } from '@/stores/hazardTypes.js'
 import { useCommunityReportsStore } from '@/stores/communityReports.js'
 import LocationPickerMap from '@/components/LocationPickerMap.vue'
+import { Button } from '@/components/ui/button'
 
 const { t } = useI18n()
 const hazardTypesStore = useHazardTypesStore()
@@ -173,9 +174,9 @@ async function handleSubmit() {
           <span>{{ t('communityReport.form.lng') }}</span>
           <input v-model="lng" type="number" step="any" />
         </label>
-        <button type="button" class="btn-location" @click="useMyLocation">
+        <Button type="button" variant="outline" class="btn-location" @click="useMyLocation">
           📍 {{ t('communityReport.form.useMyLocation') }}
-        </button>
+        </Button>
       </div>
 
       <div class="map-panel">
@@ -200,9 +201,9 @@ async function handleSubmit() {
 
       <div class="form-actions">
         <p v-if="errorMessage" class="form-error">{{ errorMessage }}</p>
-        <button type="submit" class="btn-submit" :disabled="submitting">
+        <Button type="submit" class="btn-submit" :disabled="submitting">
           {{ submitting ? t('communityReport.form.submitting') : t('communityReport.form.submit') }}
-        </button>
+        </Button>
       </div>
     </form>
   </div>
@@ -266,17 +267,7 @@ async function handleSubmit() {
 
 .btn-location {
   height: fit-content;
-  padding: 8px 14px;
-  background: rgba(77, 163, 255, 0.14);
-  border: 1px solid rgba(77, 163, 255, 0.35);
-  border-radius: 8px;
-  color: #4da3ff;
-  font-size: 0.82rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: background 0.15s;
 }
-.btn-location:hover { background: rgba(77, 163, 255, 0.24); }
 
 .map-panel { display: flex; flex-direction: column; gap: 6px; margin-bottom: 14px; }
 .map-panel-label { font-size: 0.82rem; color: var(--color-text-muted, #94a3b8); }
@@ -290,19 +281,6 @@ async function handleSubmit() {
 }
 .form-error { color: #ef4444; font-size: 0.82rem; flex: 1; }
 
-.btn-submit {
-  padding: 9px 20px;
-  background: rgba(34, 197, 94, 0.2);
-  border: 1px solid rgba(34, 197, 94, 0.4);
-  border-radius: 8px;
-  color: #22c55e;
-  font-weight: 600;
-  cursor: pointer;
-  font-size: 0.88rem;
-  transition: background 0.15s;
-}
-.btn-submit:disabled { opacity: 0.45; cursor: not-allowed; }
-.btn-submit:not(:disabled):hover { background: rgba(34, 197, 94, 0.3); }
 
 .success-message {
   background: rgba(34, 197, 94, 0.12);

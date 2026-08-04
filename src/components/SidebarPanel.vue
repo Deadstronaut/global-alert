@@ -1576,7 +1576,7 @@ const selectedRangeLabel = computed(() => {
 
 :global(.mode-btn[data-state='on']) {
   background: #4aa3ff !important;
-  color: #ffffff !important;
+  color: #0f1628 !important;
   font-weight: 700;
 }
 

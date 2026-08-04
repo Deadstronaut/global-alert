@@ -1553,7 +1553,15 @@ const selectedRangeLabel = computed(() => {
   width: 100%;
 }
 
-.mode-btn {
+/* :global() on every rule here — reka-ui's ToggleGroupItem renders its
+   root button several component layers deep (Toggle -> reka-ui Primitive),
+   and Vue's scoped-style attribute never lands on that final DOM node
+   (confirmed live via devtools: no data-v-* attribute on the rendered
+   button). Plain scoped selectors below silently never matched it, so
+   Toggle's own `data-[state=on]:bg-accent` utility (near-black
+   --color-bg-soft) was the only rule actually applying — not a stale
+   deploy, a real selector-scoping bug. */
+:global(.mode-btn) {
   flex: 1;
   padding: 7px 4px;
   font-size: 0.72rem;
@@ -1562,32 +1570,27 @@ const selectedRangeLabel = computed(() => {
   white-space: nowrap;
 }
 
-.mode-btn:hover {
+:global(.mode-btn:hover) {
   color: rgba(255, 255, 255, 0.85);
 }
 
-/* Reka's own [data-state] attribute is the source of truth for "pressed"
-   now (driven by the ToggleGroup's :model-value). Solid fill (same blue as
-   the "Panel" button / "Aktif" filter toggle) instead of a translucent
-   tint — a tint on top of the already-dark sidebar background read as
-   barely-there, "solid + white text" is unmistakable at a glance. */
-.mode-btn[data-state='on'] {
-  background: #4aa3ff;
-  color: #ffffff;
+:global(.mode-btn[data-state='on']) {
+  background: #4aa3ff !important;
+  color: #ffffff !important;
   font-weight: 700;
 }
 
-html[data-theme='light'] .mode-btn {
+:global(html[data-theme='light'] .mode-btn) {
   color: rgba(0, 0, 0, 0.45);
 }
 
-html[data-theme='light'] .mode-btn:hover {
+:global(html[data-theme='light'] .mode-btn:hover) {
   color: rgba(0, 0, 0, 0.8);
 }
 
-html[data-theme='light'] .mode-btn[data-state='on'] {
-  background: #216dff;
-  color: #ffffff;
+:global(html[data-theme='light'] .mode-btn[data-state='on']) {
+  background: #216dff !important;
+  color: #ffffff !important;
   font-weight: 700;
 }
 

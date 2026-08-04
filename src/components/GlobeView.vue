@@ -74,6 +74,17 @@ async function initGlobe() {
     .labelColor(() => 'rgba(255, 255, 255, 0.75)')
     .labelResolution(2)
     .labelsData([])
+    // Hex bin layer (Isı/Petek toggle) tuning: three-globe defaults to one
+    // separate Mesh per hexagon (hexBinMerge=false) plus a 1000ms tween on
+    // every hex whenever hexBinPointsData() is called again — with a
+    // world's worth of hex bins, repeatedly toggling Isı/Petek stacks up
+    // overlapping per-hex tweens across hundreds of meshes each time,
+    // which is what actually caused the reported "gets unbearably janky
+    // after switching a few times in a row". Merging into a single mesh
+    // (three-globe's own recommendation for this exact case) and shortening
+    // the tween both cut per-toggle cost and stop it from compounding.
+    .hexBinMerge(true)
+    .hexTransitionDuration(300)
     // Click handler
     .onPointClick((point) => {
       if (point) {
@@ -222,11 +233,23 @@ function handleResize() {
   }
 }
 
+// Same shared-debounce fix as MapView.vue's scheduleUpdateMarkers() —
+// clicking Isı/Petek repeatedly fired updateGlobeData() once per click,
+// each one rebuilding the hex bin layer from scratch; back-to-back calls
+// piled up faster than the globe could finish the previous rebuild.
+// Routing every caller through one shared timer means only the last state
+// within a short window actually triggers a rebuild.
+let _globeUpdateTimer = null
+function scheduleUpdateGlobeData(delay = 150) {
+  clearTimeout(_globeUpdateTimer)
+  _globeUpdateTimer = setTimeout(updateGlobeData, delay)
+}
+
 // Watch for data changes
 watch(
   () => disasterStore.allEvents,
   () => {
-    updateGlobeData()
+    scheduleUpdateGlobeData()
   },
   { deep: true },
 )
@@ -235,7 +258,7 @@ watch(
 watch(
   () => geoStore.userCoords,
   () => {
-    updateGlobeData()
+    scheduleUpdateGlobeData()
   },
   { deep: true },
 )
@@ -244,7 +267,7 @@ watch(
 watch(
   () => [uiStore.showHeatmap, uiStore.showHexbins],
   () => {
-    updateGlobeData()
+    scheduleUpdateGlobeData()
   },
 )
 
@@ -268,6 +291,7 @@ onMounted(async () => {
 
 onBeforeUnmount(() => {
   window.removeEventListener('resize', handleResize)
+  clearTimeout(_globeUpdateTimer)
   if (animationId) cancelAnimationFrame(animationId)
   if (globeInstance) {
     if (typeof globeInstance._destructor === 'function') {

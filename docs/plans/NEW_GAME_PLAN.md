@@ -28,6 +28,8 @@ Bu doküman, çok günlük bir mimari inceleme/geliştirme sürecinde alınan t�
 - **GDO SPI** (kuraklık şiddeti) — kalıcı olarak bloke, çünkü kaynağın kendi API'si bozuk/tutarsız veri döndürüyor (bizim kodumuzun sorunu değil, dış veri kalitesi sorunu).
 - **Supabase Edge Function deploy'u** — platform tarafında bir bug yüzünden `geotiff` kullanan fonksiyonlar genel olarak yeniden deploy edilemiyor; bu, pratikte önemli değil çünkü o işlerin hepsi zaten Docker'a taşındı, sadece "yedek" olarak duran Edge Function kopyaları etkileniyor.
 - **OSM yol/bina verisi** — Overpass API'nin kendi ücretsiz kullanım limitine takıldığı için şu an 3 ülkeden sadece 1'i tam, haftalık otomatik tekrar denemeyle zamanla tamamlanacak (bizim kodumuzun sorunu değil).
+- **Yedeklemeler** (veritabanı/raster verisi) — henüz kurulmadı, ele alınacak (2026-08-04 itibarıyla açık).
+- **Yapay zeka API anahtarı** — muhtemelen UNDP'den rica edilecek, onların kendi "bulut" (cloud) sistemi üzerinden sağlanması bekleniyor. Henüz talep edilmedi (2026-08-04 itibarıyla açık) — `ai.panelTitle` altındaki AI Assistance panelinin (özetleme, anomali tespiti vb.) canlıda gerçek bir sağlayıcıya bağlanabilmesi buna bağlı.
 
 ---
 
@@ -536,3 +538,28 @@ Kullanıcı fark etti: "Yağış (CHIRPS)" gerçek H3 altıgen gösterirken, GDO
 **Canlıda bulunan gerçek bir sürpriz:** İlk çalıştırmada sayılar eski (kare) değerlerle birebir aynı çıktı (örn. TR fAPAR 11.626) — bu şüpheli görünüp araştırıldı: **Docker, kod değişikliklerimi build'e almamış, önceki oturumdan kalma eski imajı sessizce yeniden kullanmıştı** (`docker compose run` var olan bir imaj varsa Dockerfile/kaynak değişikliğini otomatik algılamıyor). `docker compose build --no-cache` ile zorla yeniden build edilince gerçek altıgen agregasyonu devreye girdi — sayılar gerçekten değişti (örn. TR fAPAR 11.626 → 2847, daha büyük altıgenler daha az pikseli birleştirdiği için beklenen bir düşüş) ve veritabanından çekilen örnek bir kayıt gerçek 6 köşeli bir altıgen olduğu doğrulandı (`h3Cell` alanı dahil).
 
 **Canlı doğrulandı:** GDO Soil Moisture/fAPAR ve GloFAS'ın üçü de (TR/MG/MY) yeniden çalıştırıldı, gerçek altıgen geometri + doğru `metric_value`/`h3Cell` veritabanından doğrudan sorguyla teyit edildi. GHSL (44.418, değişmedi) ve CHIRPS (43.940, değişmedi) zorla yeniden build edilip tekrar çalıştırılarak `'count'`/mevcut `'mean'` modlarında sıfır regresyon olduğu kanıtlandı. Haritada görsel doğrulama, Playwright'ın ülke-seçim etkileşimindeki kararsızlık yüzünden tamamlanamadı — ama frontend'in renklendirme/render mantığı geometri şekline hiç bakmadığı için (aynı GeoJSON Polygon şekli, aynı `exposure_features` yolu, GHSL/CHIRPS'te zaten çalışan aynı kod) ekstra risk taşımıyor.
+
+---
+
+## 12. Dashboard'un shadcn-vue'ye Taşınması — Yönetim Paneli + Sayfalar + Ayarlar Tek Panelde, Canlı Grafikler (2026-08-03 → 2026-08-04) — ✅ TAMAMLANDI
+
+Ayrı bir oturumda (bu belgenin yukarısındaki veri kaynağı işinden bağımsız), sol üstteki "📊 Panel" butonuyla açılan Dashboard, eskiden sadece birkaç hızlı link içeren bir taslaktı — artık uygulamanın **tek giriş noktası**: eski `/admin` sayfasının 19 sekmesinin tamamı, "Sayfalar" (CAP/Olay Takibi/Barınaklar/Ansiklopedi/Vatandaş Bildirimi) ve eski sağdaki "⚙️ Ayarlar" paneli hepsi buraya taşındı, sayfa değişmeden (`/` URL'i hiç değişmiyor) sol menüden açılıp kapanıyor.
+
+**Yapılan (özet, detaylar git log'da commit `9a8bf3d`'de):**
+- `AdminView.vue`'nin geri kalan 5 büyük sekmesi (Kullanıcılar, Organizasyonlar, Tatbikat, Veri Kaynakları, Denetim/Audit) `components/admin/*Panel.vue` olarak ayrı bileşenlere çıkarıldı — hem eski `/admin?tab=X` direkt linki hem de yeni Dashboard içi görünüm aynı bileşeni kullanıyor, ikisi arasında davranış farkı yok (regresyon yok, Playwright ile ikisi de ayrı ayrı test edildi).
+- 5 "Sayfa" (CAP/Olay Takibi/Barınaklar/Ansiklopedi/Vatandaş Bildirimi) artık Dashboard içinde `embedded` prop'uyla render ediliyor (kendi "Haritaya Dön" butonları gizleniyor, yükseklik dialog'a göre ayarlanıyor) — eskiden ayrı sayfaya gidiyordu.
+- Sağdaki eski "⚙️ Ayarlar" paneli (dil/tema/erişilebilirlik) tamamen kaldırıldı, `SettingsPanel.vue` `embedded` prop'uyla Dashboard sol menüsünde aç/kapa (collapsible) bir grup olarak yaşıyor.
+- Sidebar'a hesap footer'ı eklendi (avatar, e-posta, rol, "Hesap Güvenliği"/"Çıkış Yap" dropdown'ı).
+- **Bulunan gerçek bir bug:** shadcn-vue'nin masaüstü Sidebar'ı `position: fixed` + `height: 100svh` kullanıyor — gerçek tam sayfa bir uygulama kabuğu varsayıyor, bizim durumumuzda (yüzen bir modal/dialog içinde) alt kısımdaki hesap footer'ı dialog'un kesilen sınırının dışında kalıp görünmez oluyordu. Düzeltme: dialog'a `position: relative`, Sidebar'a `absolute h-full` override.
+- **Dashboard'un genel bakış ekranı** artık tek bir sayı kartı yerine 6 küçük canlı grafik (saatlik/şiddet/büyüklük/derinlik/kaynak dağılımı + ortalama büyüklük trendi) + altta geniş bir 7 günlük trend grafiği gösteriyor — hepsi zaten haritayı besleyen `disasterStore.earthquakes`'ten, yeni bir sorgu yok. `npx shadcn-vue add chart` + `@unovis/vue`/`@unovis/ts` kuruldu; kurulan `ChartContainer.vue` şablonunda eksik `toRefs`/`useId`/`provideChartContext` import'ları bulunup düzeltildi (registry, bu projede olmayan bir auto-import eklentisi varsayıyordu).
+
+**Commit edildi ve `origin/main`'e push edildi** (`9a8bf3d`). **Canlıda henüz doğrulanmadı** — kullanıcı ilk kontrolde yeni arayüzü göremedi, kısa bir gecikme/tarayıcı cache'i sonrası (ekstra bir müdahale gerekmeden) düzeldi.
+
+**Bulunan, çözülmemiş bir ayrı durum:** `C:\Users\Deadstro\global-alert` (bu "spec kit" klasöründen farklı, çok daha eski bir git clone — son commit `af55cf7`, commit edilmemiş değişiklikleri de var) hâlâ diskte duruyor. Canlı deploy'un kaynağı bu mu, yoksa artık kullanılmayan bir kalıntı mı netleşmedi — kafa karışıklığına yol açabilir, ileride netleştirilmeli.
+
+### Sıradaki (henüz yapılmadı, 2026-08-04 itibarıyla açık)
+
+- **Yedeklemeler** (DB + raster verisi) — ele alınacak.
+- **Yapay zeka API anahtarı** — muhtemelen UNDP'den rica edilecek, onların "bulut" sistemi üzerinden sağlanması planlanıyor. AI Assistance panelinin (özetleme/anomali tespiti) canlıda gerçek bir sağlayıcıya bağlanabilmesi buna bağlı.
+- Dashboard'daki yeni grafiklerin kaynakları/hangi sayıların gösterileceği "sonra değiştirilecek" olarak bırakıldı (kullanıcının kendi ifadesi) — kesin sonuç değil, ilk versiyon.
+- `C:\Users\Deadstro\global-alert` klasörünün durumu netleştirilmeli (yukarıya bakın).

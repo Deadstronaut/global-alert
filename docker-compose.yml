@@ -435,6 +435,22 @@ services:
     networks:
       - mhews
 
+  # Overlay: WBT (spec 054 follow-up, 2026-08-06) — GFS has no wet-bulb
+  # field of its own, so this fetches Temp+RH together and derives it via
+  # Stull's approximation (overlay_texture.py's _stull_wet_bulb_c).
+  wbt-importer-scheduled:
+    build:
+      context: ./wind-importer
+      dockerfile: Dockerfile
+    image: mhews-wind-importer:latest
+    container_name: mhews-wbt-importer-scheduled
+    restart: unless-stopped
+    command: ["--overlay-type=wet_bulb_temp"]
+    env_file:
+      - ./server/.env
+    networks:
+      - mhews
+
   # ── GDO Soil Moisture + fAPAR Anomaly importer (manual, run-to-completion) ──
   # WCS GeoTIFF (no Python/NetCDF needed, see gdoAnomalyFetch.ts) ->
   # exposure_datasets, for both GDO anomaly sources in one run.

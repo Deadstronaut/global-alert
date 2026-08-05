@@ -155,6 +155,24 @@ def fetch_latest_pwat_grib2(timeout_s: int = 60) -> tuple[bytes, dt.datetime]:
     )
 
 
+def fetch_latest_wet_bulb_inputs_grib2(timeout_s: int = 60) -> tuple[bytes, dt.datetime]:
+    """
+    Returns (grib2_bytes, issued_at) — GFS 2m temperature AND relative
+    humidity in one request (both var_TMP and var_RH set), Overlay: WBT.
+    Wet bulb temperature isn't a GFS output field itself (unlike Temp/RH/
+    MSLP/CAPE/... above) — it has to be computed from Temp+RH client-side
+    of this fetch (overlay_texture.py's grib2_wet_bulb_to_overlay_texture,
+    Stull's 2011 approximation). Fetching both fields in a single GRIB2
+    response, rather than two separate fetch_latest_*_grib2() calls,
+    guarantees they're the exact same GFS cycle — two independent fetches
+    could straddle a cycle rollover and silently compute WBT from
+    mismatched Temp/RH data.
+    """
+    return _fetch_latest_field(
+        {"var_TMP": "on", "var_RH": "on", "lev_2_m_above_ground": "on"}, "wet_bulb_temp inputs", timeout_s,
+    )
+
+
 def fetch_latest_cwat_grib2(timeout_s: int = 60) -> tuple[bytes, dt.datetime]:
     """Returns (grib2_bytes, issued_at) — GFS total column cloud water (CWAT, kg/m^2), Overlay: TCW."""
     return _fetch_latest_field(

@@ -167,6 +167,17 @@ PRECIP_3HR_RAMP = [
 ]
 PRECIP_3HR_DOMAIN_MM = (0.0, 50.0)
 
+WBT_RAMP = [
+    (0xe4, 0xec, 0xff), (0xe0, 0xea, 0xfe), (0xd5, 0xe1, 0xfd), (0xcc, 0xda, 0xfb),
+    (0xc3, 0xd3, 0xf7), (0xb8, 0xc9, 0xf3), (0xac, 0xbe, 0xeb), (0x58, 0x72, 0xab),
+    (0x39, 0x50, 0x8b), (0x3d, 0x34, 0x6f), (0xcf, 0x31, 0x58), (0xff, 0xff, 0xff),
+]
+# 35°C wet bulb is the widely-cited threshold beyond which the human body
+# can no longer cool itself by sweating — capping the domain there (with a
+# little headroom) keeps that threshold meaningfully visible in the color
+# scale instead of buried mid-ramp the way a wider domain would bury it.
+WBT_DOMAIN_C = (-20.0, 38.0)
+
 
 def colorize_linear(values: np.ndarray, ramp: list[tuple[int, int, int]], lo: float, hi: float) -> np.ndarray:
     """Linear interpolation across `ramp`'s stops over the fixed [lo, hi]
@@ -387,3 +398,65 @@ def grib2_precip_3hr_to_overlay_texture(grib2_bytes: bytes) -> OverlayTexture:
     since they're identical).
     """
     return grib2_scalar_to_overlay_texture(grib2_bytes, "APCP03", PRECIP_3HR_RAMP, PRECIP_3HR_DOMAIN_MM)
+
+
+def _stull_wet_bulb_c(temp_c: np.ndarray, rh_pct: np.ndarray) -> np.ndarray:
+    """
+    Stull (2011)'s empirical wet-bulb temperature approximation — accurate
+    to within ~1°C across -20..50°C / 5..99% RH per the original paper,
+    which is more than sufficient for a color overlay (not a precision
+    meteorological calculation). Used because GFS has no WBT field of its
+    own (unlike every other Overlay field in this module, which reads a
+    real GFS band directly) — Temp and RH do, so this is the standard way
+    to derive it rather than running a full psychrometric solver.
+    """
+    return (
+        temp_c * np.arctan(0.151977 * np.sqrt(rh_pct + 8.313659))
+        + np.arctan(temp_c + rh_pct)
+        - np.arctan(rh_pct - 1.676331)
+        + 0.00391838 * rh_pct**1.5 * np.arctan(0.023101 * rh_pct)
+        - 4.686035
+    )
+
+
+def grib2_wet_bulb_to_overlay_texture(grib2_bytes: bytes) -> OverlayTexture:
+    """
+    GFS 2m Temp (already Celsius, live-verified 2026-08-05) + RH (%) ->
+    Stull's wet-bulb approximation -> the Overlay: WBT field. Both bands
+    come from one fetch_latest_wet_bulb_inputs_grib2() request (see its
+    own docstring for why: guarantees the same GFS cycle for both inputs).
+    """
+    source_path = "/vsimem/wbt_overlay_source.grib2"
+    gdal.FileFromMemBuffer(source_path, grib2_bytes)
+    try:
+        dataset = gdal.Open(source_path)
+        if dataset is None:
+            raise RuntimeError("GDAL could not open the fetched GFS Temp+RH GRIB2 data")
+
+        temp_band = _band_by_grib_element(dataset, "TMP")
+        rh_band = _band_by_grib_element(dataset, "RH")
+        temp_c = resample_band_to_grid(temp_band, dataset)
+        rh_pct = resample_band_to_grid(rh_band, dataset)
+        wbt_c = _stull_wet_bulb_c(temp_c, rh_pct)
+
+        value_min = float(np.nanmin(wbt_c))
+        value_max = float(np.nanmax(wbt_c))
+        rgba = colorize_linear(wbt_c, WBT_RAMP, *WBT_DOMAIN_C)
+
+        gt = dataset.GetGeoTransform()
+        width, height = dataset.RasterXSize, dataset.RasterYSize
+        west, north = gt[0], gt[3]
+        east = west + width * gt[1]
+        south = north + height * gt[5]
+        rgba = warp_equirect_rgba_to_web_mercator(rgba, south, north)
+
+        buffer = io.BytesIO()
+        Image.fromarray(rgba, mode="RGBA").save(buffer, format="PNG")
+
+        return OverlayTexture(
+            png_bytes=buffer.getvalue(),
+            value_min=value_min, value_max=value_max,
+            bounds=(west, -WEB_MERCATOR_MAX_LAT, east, WEB_MERCATOR_MAX_LAT),
+        )
+    finally:
+        gdal.Unlink(source_path)

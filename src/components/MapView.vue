@@ -2980,6 +2980,7 @@ const overlayLayerIds = {
   total_precipitable_water: 'overlay-total-precipitable-water',
   total_cloud_water: 'overlay-total-cloud-water',
   precip_3hr: 'overlay-precip-3hr',
+  wet_bulb_temp: 'overlay-wet-bulb-temp',
 }
 
 async function setOverlayLayerEnabled(overlayType, enabled) {
@@ -3018,7 +3019,7 @@ const OVERLAY_KIND = {
   wind: 'speed', ocean_current: 'speed', wave: 'speed',
   air_quality_pm25: 'overlay', temperature: 'overlay', relative_humidity: 'overlay',
   mean_sea_level_pressure: 'overlay', cape: 'overlay', total_precipitable_water: 'overlay',
-  total_cloud_water: 'overlay', precip_3hr: 'overlay',
+  total_cloud_water: 'overlay', precip_3hr: 'overlay', wet_bulb_temp: 'overlay',
 }
 function applyOverlayKey(key, enabled) {
   const kind = OVERLAY_KIND[key]

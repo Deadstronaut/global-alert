@@ -36,6 +36,7 @@ from fetch_gfs import (
     fetch_latest_pwat_grib2,
     fetch_latest_relative_humidity_grib2,
     fetch_latest_temperature_grib2,
+    fetch_latest_wet_bulb_inputs_grib2,
     fetch_latest_wind_grib2,
 )
 from fetch_overlay_cams import fetch_latest_pm25_netcdf
@@ -52,6 +53,7 @@ from overlay_texture import (
     grib2_pwat_to_overlay_texture,
     grib2_relative_humidity_to_overlay_texture,
     grib2_temperature_to_overlay_texture,
+    grib2_wet_bulb_to_overlay_texture,
     netcdf_pm25_to_overlay_texture,
 )
 from wave_vector import wave_grib2_to_flow_texture
@@ -68,6 +70,7 @@ GFS_OVERLAY_FIELDS = {
     "total_precipitable_water": (fetch_latest_pwat_grib2, grib2_pwat_to_overlay_texture),
     "total_cloud_water": (fetch_latest_cwat_grib2, grib2_cwat_to_overlay_texture),
     "precip_3hr": (fetch_latest_precip_3hr_grib2, grib2_precip_3hr_to_overlay_texture),
+    "wet_bulb_temp": (fetch_latest_wet_bulb_inputs_grib2, grib2_wet_bulb_to_overlay_texture),
 }
 
 REFRESH_INTERVAL_S = 6 * 60 * 60  # matches GFS's own 6-hourly cycle (research.md §1/spec FR-007); also used as the overlay loop's poll interval — coarser than CAMS' own ~12h cadence, but re-fetching early just re-uploads the same cycle's data, harmless

@@ -117,9 +117,14 @@ const OVERLAY_OPTIONS = {
   air: [
     { key: 'wind', kind: 'speed', label: 'Wind' },
     { key: 'temperature', kind: 'overlay', label: 'Temp' },
-    { label: 'RH' }, { label: 'Dew' }, { label: 'WBT' }, { label: '3HPA' },
-    { label: 'CAPE' }, { label: 'TPW' }, { label: 'TCW' }, { label: 'MSLP' }, { label: 'MI' },
-    { label: 'UVI' }, { label: 'WPD' },
+    { key: 'relative_humidity', kind: 'overlay', label: 'RH' },
+    { label: 'Dew' }, { label: 'WBT' },
+    { key: 'precip_3hr', kind: 'overlay', label: '3HPA' },
+    { key: 'cape', kind: 'overlay', label: 'CAPE' },
+    { key: 'total_precipitable_water', kind: 'overlay', label: 'TPW' },
+    { key: 'total_cloud_water', kind: 'overlay', label: 'TCW' },
+    { key: 'mean_sea_level_pressure', kind: 'overlay', label: 'MSLP' },
+    { label: 'MI' }, { label: 'UVI' }, { label: 'WPD' },
   ],
   ocean: [
     { key: 'ocean_current', kind: 'speed', label: 'Currents' },

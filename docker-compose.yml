@@ -336,6 +336,81 @@ services:
     networks:
       - mhews
 
+  # Air mode's remaining "easy" GFS-native Overlay fields (spec 054
+  # follow-up, 2026-08-05) — same image/pattern as temperature-importer-
+  # scheduled above, one independent container per field.
+  relative-humidity-importer-scheduled:
+    build:
+      context: ./wind-importer
+      dockerfile: Dockerfile
+    container_name: mhews-relative-humidity-importer-scheduled
+    restart: unless-stopped
+    command: ["--overlay-type=relative_humidity"]
+    env_file:
+      - ./server/.env
+    networks:
+      - mhews
+
+  mslp-importer-scheduled:
+    build:
+      context: ./wind-importer
+      dockerfile: Dockerfile
+    container_name: mhews-mslp-importer-scheduled
+    restart: unless-stopped
+    command: ["--overlay-type=mean_sea_level_pressure"]
+    env_file:
+      - ./server/.env
+    networks:
+      - mhews
+
+  cape-importer-scheduled:
+    build:
+      context: ./wind-importer
+      dockerfile: Dockerfile
+    container_name: mhews-cape-importer-scheduled
+    restart: unless-stopped
+    command: ["--overlay-type=cape"]
+    env_file:
+      - ./server/.env
+    networks:
+      - mhews
+
+  pwat-importer-scheduled:
+    build:
+      context: ./wind-importer
+      dockerfile: Dockerfile
+    container_name: mhews-pwat-importer-scheduled
+    restart: unless-stopped
+    command: ["--overlay-type=total_precipitable_water"]
+    env_file:
+      - ./server/.env
+    networks:
+      - mhews
+
+  cwat-importer-scheduled:
+    build:
+      context: ./wind-importer
+      dockerfile: Dockerfile
+    container_name: mhews-cwat-importer-scheduled
+    restart: unless-stopped
+    command: ["--overlay-type=total_cloud_water"]
+    env_file:
+      - ./server/.env
+    networks:
+      - mhews
+
+  precip-3hr-importer-scheduled:
+    build:
+      context: ./wind-importer
+      dockerfile: Dockerfile
+    container_name: mhews-precip-3hr-importer-scheduled
+    restart: unless-stopped
+    command: ["--overlay-type=precip_3hr"]
+    env_file:
+      - ./server/.env
+    networks:
+      - mhews
+
   # ── GDO Soil Moisture + fAPAR Anomaly importer (manual, run-to-completion) ──
   # WCS GeoTIFF (no Python/NetCDF needed, see gdoAnomalyFetch.ts) ->
   # exposure_datasets, for both GDO anomaly sources in one run.

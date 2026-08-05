@@ -40,9 +40,8 @@ class GfsCycle:
     def dir_param(self) -> str:
         return f"/gfs.{self.date:%Y%m%d}/{self.hour:02d}/atmos"
 
-    @property
-    def filename(self) -> str:
-        return f"gfs.t{self.hour:02d}z.pgrb2.0p25.{FORECAST_HOUR}"
+    def filename(self, forecast_hour: str = FORECAST_HOUR) -> str:
+        return f"gfs.t{self.hour:02d}z.pgrb2.0p25.{forecast_hour}"
 
 
 def latest_available_cycle(now: dt.datetime | None = None) -> GfsCycle:
@@ -65,10 +64,10 @@ def previous_cycle(cycle: GfsCycle) -> GfsCycle:
     return GfsCycle(date=cycle.date - dt.timedelta(days=1), hour=CYCLE_HOURS[-1])
 
 
-def _download(cycle: GfsCycle, timeout_s: int, extra_params: dict[str, str]) -> bytes:
+def _download(cycle: GfsCycle, timeout_s: int, extra_params: dict[str, str], forecast_hour: str) -> bytes:
     params = {
         "dir": cycle.dir_param,
-        "file": cycle.filename,
+        "file": cycle.filename(forecast_hour),
         **extra_params,
     }
     response = requests.get(NOMADS_FILTER_URL, params=params, timeout=timeout_s)
@@ -78,25 +77,30 @@ def _download(cycle: GfsCycle, timeout_s: int, extra_params: dict[str, str]) -> 
     # requested cycle/file doesn't exist yet — a real GRIB2 file always
     # starts with the 4-byte "GRIB" magic, live-verified 2026-08-05.
     if body[:4] != b"GRIB":
-        raise RuntimeError(f"NOMADS did not return a GRIB2 file for {cycle.dir_param}/{cycle.filename}")
+        raise RuntimeError(f"NOMADS did not return a GRIB2 file for {cycle.dir_param}/{cycle.filename(forecast_hour)}")
     return body
 
 
-def _fetch_latest_field(extra_params: dict[str, str], field_label: str, timeout_s: int) -> tuple[bytes, dt.datetime]:
+def _fetch_latest_field(
+    extra_params: dict[str, str], field_label: str, timeout_s: int, forecast_hour: str = FORECAST_HOUR,
+) -> tuple[bytes, dt.datetime]:
     """
     Shared "latest cycle, fall back one cycle on miss" retry (see
     fetch_latest_wind_grib2's own docstring) — parameterized by which
     NOMADS var_*/lev_* filter params to request, so wind and temperature
     (and any future GFS field) share the exact same cycle-selection logic
-    instead of drifting apart.
+    instead of drifting apart. `forecast_hour` defaults to f000 (nowcast,
+    see FORECAST_HOUR's own docstring) but accumulation fields like APCP
+    (precip) are always zero at f000 — they need a real forecast step
+    (e.g. f003) to have any accumulated value at all.
     """
     cycle = latest_available_cycle()
     try:
-        return _download(cycle, timeout_s, extra_params), cycle.issued_at
+        return _download(cycle, timeout_s, extra_params, forecast_hour), cycle.issued_at
     except (requests.RequestException, RuntimeError) as first_error:
         fallback = previous_cycle(cycle)
         try:
-            return _download(fallback, timeout_s, extra_params), fallback.issued_at
+            return _download(fallback, timeout_s, extra_params, forecast_hour), fallback.issued_at
         except (requests.RequestException, RuntimeError) as second_error:
             raise RuntimeError(
                 f"Failed to fetch GFS {field_label} data for {cycle.dir_param} "
@@ -121,4 +125,53 @@ def fetch_latest_temperature_grib2(timeout_s: int = 60) -> tuple[bytes, dt.datet
     """
     return _fetch_latest_field(
         {"var_TMP": "on", "lev_2_m_above_ground": "on"}, "temperature", timeout_s,
+    )
+
+
+# GFS var_*/lev_* pairs live-verified 2026-08-05 by reading a real GFS
+# cycle's own .idx index file (NOMADS publishes one alongside every GRIB2,
+# listing every var/level combination actually present) rather than
+# guessed — same "confirm against the real thing" standard as fetch_gfs's
+# original wind live-verification note.
+def fetch_latest_relative_humidity_grib2(timeout_s: int = 60) -> tuple[bytes, dt.datetime]:
+    """Returns (grib2_bytes, issued_at) — GFS 2m relative humidity (RH, %), Overlay: RH."""
+    return _fetch_latest_field({"var_RH": "on", "lev_2_m_above_ground": "on"}, "relative_humidity", timeout_s)
+
+
+def fetch_latest_mslp_grib2(timeout_s: int = 60) -> tuple[bytes, dt.datetime]:
+    """Returns (grib2_bytes, issued_at) — GFS mean sea level pressure (PRMSL, Pa), Overlay: MSLP."""
+    return _fetch_latest_field({"var_PRMSL": "on", "lev_mean_sea_level": "on"}, "mslp", timeout_s)
+
+
+def fetch_latest_cape_grib2(timeout_s: int = 60) -> tuple[bytes, dt.datetime]:
+    """Returns (grib2_bytes, issued_at) — GFS surface-based CAPE (J/kg), Overlay: CAPE."""
+    return _fetch_latest_field({"var_CAPE": "on", "lev_surface": "on"}, "cape", timeout_s)
+
+
+def fetch_latest_pwat_grib2(timeout_s: int = 60) -> tuple[bytes, dt.datetime]:
+    """Returns (grib2_bytes, issued_at) — GFS total precipitable water (PWAT, kg/m^2), Overlay: TPW."""
+    return _fetch_latest_field(
+        {"var_PWAT": "on", "lev_entire_atmosphere_(considered_as_a_single_layer)": "on"}, "pwat", timeout_s,
+    )
+
+
+def fetch_latest_cwat_grib2(timeout_s: int = 60) -> tuple[bytes, dt.datetime]:
+    """Returns (grib2_bytes, issued_at) — GFS total column cloud water (CWAT, kg/m^2), Overlay: TCW."""
+    return _fetch_latest_field(
+        {"var_CWAT": "on", "lev_entire_atmosphere_(considered_as_a_single_layer)": "on"}, "cwat", timeout_s,
+    )
+
+
+def fetch_latest_precip_3hr_grib2(timeout_s: int = 60) -> tuple[bytes, dt.datetime]:
+    """
+    Returns (grib2_bytes, issued_at) — GFS 3-hour accumulated precipitation
+    (APCP, kg/m^2 = mm), Overlay: 3HPA. Unlike every other field here,
+    APCP is an accumulation *over* a forecast window, not an instantaneous
+    analysis value — it's exactly zero at f000 (the nowcast forecast hour
+    every other fetch_latest_* function uses), so this one requests f003
+    (the 0-3h accumulation window) instead, live-verified against the real
+    .idx file (f000's index has no APCP entry at all; f003's does).
+    """
+    return _fetch_latest_field(
+        {"var_APCP": "on", "lev_surface": "on"}, "precip_3hr", timeout_s, forecast_hour="f003",
     )

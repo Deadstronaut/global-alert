@@ -53,6 +53,62 @@ TEMP_RAMP = [
 # well above -60°C at 2m rather than the surface-level record lows).
 TEMP_DOMAIN_C = (-60.0, 50.0)
 
+# The rest of Air mode's "easy" GFS-native Overlay fields (spec 054
+# follow-up, 2026-08-05) — same live-extraction-not-guessing standard as
+# TEMP_RAMP above, one 12-stop ramp per field, sampled from
+# earth.nullschool.net's own colorbar for that field. Domains are this
+# app's own choice (nullschool doesn't expose its numeric colorbar bounds
+# in the DOM) picked to cover realistic real-world ranges for each field.
+RH_RAMP = [
+    (0xe6, 0xa5, 0x1e), (0xbe, 0x8e, 0x35), (0x96, 0x76, 0x4d), (0x73, 0x60, 0x5f),
+    (0x5e, 0x52, 0x5e), (0x49, 0x43, 0x5d), (0x35, 0x35, 0x5c), (0x23, 0x24, 0x76),
+    (0x18, 0x12, 0xb2), (0x2e, 0x24, 0xd4), (0x46, 0x52, 0xed), (0x19, 0xff, 0xff),
+]
+RH_DOMAIN_PCT = (0.0, 100.0)
+
+MSLP_RAMP = [
+    (0x28, 0x00, 0x00), (0x61, 0x17, 0x0c), (0x9c, 0x2f, 0x18), (0xa9, 0x32, 0x1f),
+    (0x78, 0x1c, 0x20), (0x18, 0x03, 0x2a), (0x19, 0x01, 0x41), (0x22, 0x01, 0x59),
+    (0xf0, 0xfd, 0x25), (0xe7, 0xf8, 0xb2), (0xef, 0xfa, 0xec), (0xff, 0xff, 0xff),
+]
+# Live-verified range 2026-08-05: a real global GFS cycle spanned
+# 944.93-1075.78 hPa (a deep low + a strong high both present somewhere on
+# Earth at once) — widened slightly beyond that observed range so neither
+# extreme sits pinned at the very end of the ramp.
+MSLP_DOMAIN_HPA = (940.0, 1080.0)
+
+CAPE_RAMP = [
+    (0x05, 0x30, 0x61), (0x1e, 0x61, 0xa5), (0x3d, 0x8b, 0xbf), (0x7c, 0xb7, 0xd6),
+    (0xb9, 0xd9, 0xe9), (0xe6, 0xef, 0xf4), (0xfa, 0xea, 0xe1), (0xfa, 0xc6, 0xad),
+    (0xec, 0x92, 0x73), (0xd0, 0x53, 0x47), (0xaa, 0x16, 0x2a), (0x67, 0x00, 0x1f),
+]
+CAPE_DOMAIN_JKG = (0.0, 5000.0)
+
+TPW_RAMP = [
+    (0xe6, 0xa5, 0x1e), (0xa1, 0x7c, 0x47), (0x62, 0x55, 0x5e), (0x30, 0x31, 0x5c),
+    (0x1e, 0x1b, 0x92), (0x1f, 0x16, 0xc9), (0x41, 0x36, 0xe3), (0x3f, 0x6b, 0xf0),
+    (0x30, 0xa8, 0xf6), (0x20, 0xe4, 0xfc), (0x47, 0xff, 0xff), (0x96, 0xff, 0xff),
+]
+# Live-verified range 2026-08-05: real global max was 87.54mm (deep
+# tropical moisture) — widened past 70mm to avoid clipping that.
+TPW_DOMAIN_MM = (0.0, 90.0)
+
+TCW_RAMP = [
+    (0x05, 0x05, 0x59), (0x4f, 0x4f, 0x99), (0x9b, 0x9b, 0xd9), (0xb2, 0xb2, 0xe8),
+    (0xbb, 0xbb, 0xeb), (0xc5, 0xc5, 0xee), (0xcf, 0xcf, 0xf1), (0xd8, 0xd8, 0xf4),
+    (0xe2, 0xe2, 0xf6), (0xec, 0xec, 0xf9), (0xf5, 0xf5, 0xfc), (0xff, 0xff, 0xff),
+]
+# Live-verified range 2026-08-05: real global max was 3.34 kg/m^2 (dense
+# convective cloud) — the initial 0-1.5 guess clipped that badly.
+TCW_DOMAIN_KGM2 = (0.0, 4.0)
+
+PRECIP_3HR_RAMP = [
+    (0x25, 0x4f, 0x5c), (0x3e, 0x3a, 0xac), (0x87, 0x00, 0x97), (0xc6, 0x00, 0x85),
+    (0xf2, 0x00, 0x6b), (0xff, 0x53, 0x4c), (0xff, 0x8e, 0x2b), (0xff, 0xc6, 0x00),
+    (0xff, 0xdd, 0x15), (0xff, 0xe7, 0x27), (0xff, 0xf1, 0x35), (0xff, 0xfb, 0x41),
+]
+PRECIP_3HR_DOMAIN_MM = (0.0, 50.0)
+
 
 def colorize_linear(values: np.ndarray, ramp: list[tuple[int, int, int]], lo: float, hi: float) -> np.ndarray:
     """Linear interpolation across `ramp`'s stops over the fixed [lo, hi]
@@ -175,32 +231,41 @@ def netcdf_pm25_to_overlay_texture(netcdf_bytes: bytes) -> OverlayTexture:
         gdal.Unlink(source_path)
 
 
-def grib2_temperature_to_overlay_texture(grib2_bytes: bytes) -> OverlayTexture:
+def grib2_scalar_to_overlay_texture(
+    grib2_bytes: bytes,
+    grib_element: str,
+    ramp: list[tuple[int, int, int]],
+    domain: tuple[float, float],
+    transform=None,
+) -> OverlayTexture:
     """
-    GFS 2m air temperature (TMP) -> the Overlay: Temp field — spec 054
-    follow-up, 2026-08-05. Same GDAL GRIB2 access pattern as
-    grib_to_texture.py's wind conversion (band selected by GRIB_ELEMENT
-    metadata), but colored with colorize_linear's fixed absolute-value
-    scale instead of build_flow_texture's vector encoding, since this is a
-    scalar overlay, not an animated particle field.
+    Generic GFS scalar-field -> pre-colored Overlay texture, shared by
+    Temp/RH/MSLP/CAPE/TPW/TCW/precip (spec 054 follow-up, 2026-08-05) —
+    each is a single-band GRIB2 field colored with colorize_linear's
+    fixed absolute-value scale, differing only in which GRIB_ELEMENT band
+    to read and what color ramp/domain/unit conversion applies. Same GDAL
+    GRIB2 access pattern as grib_to_texture.py's wind conversion (band
+    selected by GRIB_ELEMENT metadata).
+    `transform`, if given, is applied to the raw resampled array before
+    colorizing (e.g. Pa -> hPa for MSLP) — None means use the band's
+    values as-is (e.g. Temp, already Celsius per NOMADS' own GRIB_UNIT
+    metadata, live-verified 2026-08-05).
     """
-    source_path = "/vsimem/temp_overlay_source.grib2"
+    source_path = "/vsimem/scalar_overlay_source.grib2"
     gdal.FileFromMemBuffer(source_path, grib2_bytes)
     try:
         dataset = gdal.Open(source_path)
         if dataset is None:
-            raise RuntimeError("GDAL could not open the fetched GFS temperature GRIB2 data")
+            raise RuntimeError(f"GDAL could not open the fetched GFS {grib_element} GRIB2 data")
 
-        band = _band_by_grib_element(dataset, "TMP")
-        # NOMADS' filter_gfs_0p25.pl TMP band is already Celsius (GRIB_UNIT
-        # metadata reads "[C]", not the raw GRIB2 Kelvin one might expect) —
-        # live-verified 2026-08-05: converting as if it were Kelvin produced
-        # impossible ~-300°C values. No unit conversion needed here.
-        values_c = resample_band_to_grid(band, dataset)
+        band = _band_by_grib_element(dataset, grib_element)
+        values = resample_band_to_grid(band, dataset)
+        if transform is not None:
+            values = transform(values)
 
-        value_min = float(np.nanmin(values_c))
-        value_max = float(np.nanmax(values_c))
-        rgba = colorize_linear(values_c, TEMP_RAMP, *TEMP_DOMAIN_C)
+        value_min = float(np.nanmin(values))
+        value_max = float(np.nanmax(values))
+        rgba = colorize_linear(values, ramp, *domain)
 
         buffer = io.BytesIO()
         Image.fromarray(rgba, mode="RGBA").save(buffer, format="PNG")
@@ -218,3 +283,47 @@ def grib2_temperature_to_overlay_texture(grib2_bytes: bytes) -> OverlayTexture:
         )
     finally:
         gdal.Unlink(source_path)
+
+
+def grib2_temperature_to_overlay_texture(grib2_bytes: bytes) -> OverlayTexture:
+    """GFS 2m air temperature (TMP) -> the Overlay: Temp field — spec 054 follow-up, 2026-08-05."""
+    return grib2_scalar_to_overlay_texture(grib2_bytes, "TMP", TEMP_RAMP, TEMP_DOMAIN_C)
+
+
+def grib2_relative_humidity_to_overlay_texture(grib2_bytes: bytes) -> OverlayTexture:
+    """GFS 2m relative humidity (RH, %) -> the Overlay: RH field."""
+    return grib2_scalar_to_overlay_texture(grib2_bytes, "RH", RH_RAMP, RH_DOMAIN_PCT)
+
+
+def grib2_mslp_to_overlay_texture(grib2_bytes: bytes) -> OverlayTexture:
+    """GFS mean sea level pressure (PRMSL, Pa -> hPa) -> the Overlay: MSLP field."""
+    return grib2_scalar_to_overlay_texture(grib2_bytes, "PRMSL", MSLP_RAMP, MSLP_DOMAIN_HPA, transform=lambda v: v / 100.0)
+
+
+def grib2_cape_to_overlay_texture(grib2_bytes: bytes) -> OverlayTexture:
+    """GFS surface-based CAPE (J/kg) -> the Overlay: CAPE field."""
+    return grib2_scalar_to_overlay_texture(grib2_bytes, "CAPE", CAPE_RAMP, CAPE_DOMAIN_JKG)
+
+
+def grib2_pwat_to_overlay_texture(grib2_bytes: bytes) -> OverlayTexture:
+    """GFS total precipitable water (PWAT, kg/m^2 = mm) -> the Overlay: TPW field."""
+    return grib2_scalar_to_overlay_texture(grib2_bytes, "PWAT", TPW_RAMP, TPW_DOMAIN_MM)
+
+
+def grib2_cwat_to_overlay_texture(grib2_bytes: bytes) -> OverlayTexture:
+    """GFS total column cloud water (CWAT, kg/m^2) -> the Overlay: TCW field."""
+    return grib2_scalar_to_overlay_texture(grib2_bytes, "CWAT", TCW_RAMP, TCW_DOMAIN_KGM2)
+
+
+def grib2_precip_3hr_to_overlay_texture(grib2_bytes: bytes) -> OverlayTexture:
+    """
+    GFS 3-hour accumulated precipitation (kg/m^2 = mm) -> the Overlay: 3HPA
+    field. GDAL's GRIB_ELEMENT for this band is "APCP03" (the accumulation
+    period baked into the element name), not plain "APCP" — live-verified
+    2026-08-05 after an initial guess of "APCP" found zero matching bands
+    (the f003 GRIB2 response has two identical APCP03 bands, an apparent
+    GFS/NOMADS quirk of encoding the same field under two GRIB2 templates;
+    _band_by_grib_element's first-match behavior picks either, harmless
+    since they're identical).
+    """
+    return grib2_scalar_to_overlay_texture(grib2_bytes, "APCP03", PRECIP_3HR_RAMP, PRECIP_3HR_DOMAIN_MM)

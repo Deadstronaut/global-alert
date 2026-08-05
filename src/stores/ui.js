@@ -133,15 +133,6 @@ export const useUIStore = defineStore('ui', () => {
     function toggleOverlay(key) {
         activeOverlayKey.value = activeOverlayKey.value === key ? null : key;
     }
-    const speedOverlayEnabled = computed(() => ({
-        wind: activeOverlayKey.value === 'wind',
-        ocean_current: activeOverlayKey.value === 'ocean_current',
-        wave: activeOverlayKey.value === 'wave',
-    }));
-    const preColoredOverlayEnabled = computed(() => ({
-        air_quality_pm25: activeOverlayKey.value === 'air_quality_pm25',
-        temperature: activeOverlayKey.value === 'temperature',
-    }));
 
     // Live-tunable flow-particle rendering (gear icon in FlowControlPanel.vue)
     // — defaults are the live-testing result, 2026-08-05, that produced the
@@ -299,8 +290,6 @@ export const useUIStore = defineStore('ui', () => {
         selectedMode,
         activeOverlayKey,
         toggleOverlay,
-        preColoredOverlayEnabled,
-        speedOverlayEnabled,
         flowSpeedMultiplier,
         flowTrailLength,
         flowTrailThickness,

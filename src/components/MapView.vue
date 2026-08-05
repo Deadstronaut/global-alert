@@ -2949,24 +2949,20 @@ async function setSpeedOverlayLayerEnabled(layerType, enabled) {
   map.addLayer({ id: layerId, type: 'raster', source: sourceId, paint: { 'raster-opacity': 0.55 } })
 }
 
-watch(
-  () => uiStore.speedOverlayEnabled.wind,
-  (enabled) => setSpeedOverlayLayerEnabled('wind', enabled),
-)
-watch(
-  () => uiStore.speedOverlayEnabled.ocean_current,
-  (enabled) => setSpeedOverlayLayerEnabled('ocean_current', enabled),
-)
-watch(
-  () => uiStore.speedOverlayEnabled.wave,
-  (enabled) => setSpeedOverlayLayerEnabled('wave', enabled),
-)
-
 // Overlay layers (spec 054 US2) — a plain MapLibre `image` source + `raster`
 // layer, NOT SimpleWindLayer: the Overlay is a pre-colored scalar raster
 // (contracts/overlay-snapshot-contract.md), no particle advection needed,
 // so no custom WebGL layer is warranted here (research.md §4).
-const overlayLayerIds = { air_quality_pm25: 'overlay-air-quality-pm25', temperature: 'overlay-temperature' }
+const overlayLayerIds = {
+  air_quality_pm25: 'overlay-air-quality-pm25',
+  temperature: 'overlay-temperature',
+  relative_humidity: 'overlay-relative-humidity',
+  mean_sea_level_pressure: 'overlay-mean-sea-level-pressure',
+  cape: 'overlay-cape',
+  total_precipitable_water: 'overlay-total-precipitable-water',
+  total_cloud_water: 'overlay-total-cloud-water',
+  precip_3hr: 'overlay-precip-3hr',
+}
 
 async function setOverlayLayerEnabled(overlayType, enabled) {
   if (!map || !mapLoaded) return
@@ -2994,13 +2990,29 @@ async function setOverlayLayerEnabled(overlayType, enabled) {
   map.addLayer({ id: layerId, type: 'raster', source: sourceId, paint: { 'raster-opacity': 0.65 } })
 }
 
+// One watcher covers every Overlay key regardless of which mechanism
+// produces it (speedOverlayLayerIds' client-recolored flow_snapshots vs.
+// overlayLayerIds' pre-colored overlay_snapshots) — replaces what used to
+// be a hand-written watch per key; scales to new Overlay entries (spec 054
+// follow-up, 2026-08-05: 6 more GFS fields added at once) without growing
+// this file every time.
+const OVERLAY_KIND = {
+  wind: 'speed', ocean_current: 'speed', wave: 'speed',
+  air_quality_pm25: 'overlay', temperature: 'overlay', relative_humidity: 'overlay',
+  mean_sea_level_pressure: 'overlay', cape: 'overlay', total_precipitable_water: 'overlay',
+  total_cloud_water: 'overlay', precip_3hr: 'overlay',
+}
+function applyOverlayKey(key, enabled) {
+  const kind = OVERLAY_KIND[key]
+  if (kind === 'speed') return setSpeedOverlayLayerEnabled(key, enabled)
+  if (kind === 'overlay') return setOverlayLayerEnabled(key, enabled)
+}
 watch(
-  () => uiStore.preColoredOverlayEnabled.air_quality_pm25,
-  (enabled) => setOverlayLayerEnabled('air_quality_pm25', enabled),
-)
-watch(
-  () => uiStore.preColoredOverlayEnabled.temperature,
-  (enabled) => setOverlayLayerEnabled('temperature', enabled),
+  () => uiStore.activeOverlayKey,
+  (newKey, oldKey) => {
+    if (oldKey) applyOverlayKey(oldKey, false)
+    if (newKey) applyOverlayKey(newKey, true)
+  },
 )
 
 // simple-wind-layer.js freezes itself (stops self-triggering repaints) once

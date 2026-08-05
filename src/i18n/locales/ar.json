@@ -925,11 +925,11 @@
     },
     "confidenceLevel": "مستوى الثقة",
     "confidenceLevels": {
-      "5": "إدخال يدوي",
-      "4": "مؤكد",
-      "3": "محتمل",
+      "1": "غير موثوق",
       "2": "غير مؤكد",
-      "1": "غير موثوق"
+      "3": "محتمل",
+      "4": "مؤكد",
+      "5": "إدخال يدوي"
     },
     "linkedIncident": "الحادث المرتبط",
     "noLinkedIncident": "— لا شيء —",
@@ -1147,6 +1147,34 @@
     "rejectedFollowUp": "تم الرفض، لم يتم حفظ أي شيء. هل تحتاج شيئًا آخر؟",
     "greetingChatOnly": "مرحبًا، أنا Deadstro! لا توجد مهمة موجهة متاحة في هذه الصفحة، لكن يمكنك الدردشة معي أدناه.",
     "typePlaceholder": "اكتب رسالة...",
-    "send": "إرسال"
+    "send": "إرسال",
+    "noCountryContext": "لم يتم تكوين سياق بلد في هذا المتصفح بعد — افتح أولاً علامة التبويب \"AI Yardımı\" في AdminView وفعّل إمكانية لبلد ما.",
+    "waitingServer": "بانتظار الرد من الخادم..."
+  },
+  "windLayer": {
+    "toggleLabel": "الرياح",
+    "currentsToggleLabel": "التيارات المحيطية",
+    "panelTitle": "الرياح والتيارات",
+    "panelExpand": "فتح لوحة تحكم الرياح",
+    "panelCollapse": "إغلاق لوحة تحكم الرياح",
+    "unavailable": "البيانات غير متوفرة حاليًا",
+    "asOf": "آخر تحديث: {time}",
+    "stale": "بيانات قديمة",
+    "speedLegendLabel": "السرعة",
+    "speedLow": "منخفضة",
+    "speedHigh": "مرتفعة",
+    "modeLabel": "الوضع",
+    "modeAir": "الجو",
+    "modeOcean": "المحيط",
+    "modeChem": "الكيمياء",
+    "modeParticulates": "الجسيمات",
+    "modeSpace": "الفضاء",
+    "modeBio": "الأحياء",
+    "animateLabel": "التحريك",
+    "overlayLabel": "الطبقة",
+    "wavesToggleLabel": "الأمواج",
+    "pm25ToggleLabel": "PM2.5 (جودة الهواء)",
+    "modeDisabledNote": "لا يوجد مصدر بيانات لهذا الوضع بعد",
+    "waveHeightLegendLabel": "ارتفاع الأمواج"
   }
 }

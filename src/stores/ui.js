@@ -89,6 +89,35 @@ export const useUIStore = defineStore('ui', () => {
         showCommunityReports.value = !showCommunityReports.value;
     }
 
+    // Wind / ocean-current animated flow layers (spec 053) — same
+    // independent, always-relevant-regardless-of-mapMode, off-by-default
+    // pattern as showShelters/showCommunityReports above. Two separate
+    // flags (not one "flow layer" toggle) because they're independently
+    // togglable per spec FR-012 — a user can have wind on with currents
+    // off, or both at once.
+    const windEnabled = ref(false);
+    function toggleWind() {
+        windEnabled.value = !windEnabled.value;
+    }
+    const currentsEnabled = ref(false);
+    function toggleCurrents() {
+        currentsEnabled.value = !currentsEnabled.value;
+    }
+    // Spec 054: Waves (Ocean mode) and the air-quality Overlay (Chem/
+    // Particulates mode), same independent-toggle shape as wind/currents
+    // above. selectedMode drives which Animate/Overlay row the control
+    // panel shows (spec FR-007's Mode grouping) — 'air' is the default
+    // since Wind already existed before Mode grouping was introduced.
+    const wavesEnabled = ref(false);
+    function toggleWaves() {
+        wavesEnabled.value = !wavesEnabled.value;
+    }
+    const airQualityOverlayEnabled = ref(false);
+    function toggleAirQualityOverlay() {
+        airQualityOverlayEnabled.value = !airQualityOverlayEnabled.value;
+    }
+    const selectedMode = ref('air');
+
     function applyThemeAttrs() {
         const theme = highContrast.value ? 'high-contrast' : (darkMode.value ? 'dark' : 'light');
         document.documentElement.setAttribute('data-theme', theme);
@@ -212,6 +241,15 @@ export const useUIStore = defineStore('ui', () => {
         toggleShelters,
         showCommunityReports,
         toggleCommunityReports,
+        windEnabled,
+        toggleWind,
+        currentsEnabled,
+        toggleCurrents,
+        wavesEnabled,
+        toggleWaves,
+        airQualityOverlayEnabled,
+        toggleAirQualityOverlay,
+        selectedMode,
         transitionToMap,
         transitionToGlobe,
         selectDisaster,

@@ -925,11 +925,11 @@
     },
     "confidenceLevel": "可信度",
     "confidenceLevels": {
-      "5": "手动录入",
-      "4": "已确认",
-      "3": "可能",
+      "1": "不可靠",
       "2": "不确定",
-      "1": "不可靠"
+      "3": "可能",
+      "4": "已确认",
+      "5": "手动录入"
     },
     "linkedIncident": "关联事件",
     "noLinkedIncident": "— 无 —",
@@ -1147,6 +1147,34 @@
     "rejectedFollowUp": "已拒绝,未保存任何内容。还需要其他帮助吗?",
     "greetingChatOnly": "你好,我是 Deadstro!此页面没有可用的引导任务,但你可以在下方与我聊天。",
     "typePlaceholder": "输入消息...",
-    "send": "发送"
+    "send": "发送",
+    "noCountryContext": "此浏览器中尚未配置国家上下文 — 请先在 AdminView 的“AI Yardımı”标签页中为某个国家启用一项功能。",
+    "waitingServer": "正在等待服务器响应..."
+  },
+  "windLayer": {
+    "toggleLabel": "风",
+    "currentsToggleLabel": "洋流",
+    "panelTitle": "风与洋流",
+    "panelExpand": "打开风力控制面板",
+    "panelCollapse": "关闭风力控制面板",
+    "unavailable": "数据暂不可用",
+    "asOf": "更新时间: {time}",
+    "stale": "数据过期",
+    "speedLegendLabel": "风速",
+    "speedLow": "低",
+    "speedHigh": "高",
+    "modeLabel": "模式",
+    "modeAir": "空气",
+    "modeOcean": "海洋",
+    "modeChem": "化学",
+    "modeParticulates": "颗粒物",
+    "modeSpace": "太空",
+    "modeBio": "生物",
+    "animateLabel": "动画",
+    "overlayLabel": "叠加层",
+    "wavesToggleLabel": "波浪",
+    "pm25ToggleLabel": "PM2.5(空气质量)",
+    "modeDisabledNote": "该模式暂无数据源",
+    "waveHeightLegendLabel": "波高"
   }
 }

@@ -236,6 +236,90 @@ services:
     networks:
       - mhews
 
+  # ── Wind/ocean-current flow-texture importer (manual, run-to-completion) ────
+  # spec 053 — GFS wind U/V GRIB2 (NOMADS, fetch_gfs.py) -> GDAL -> RG-channel
+  # PNG texture (grib_to_texture.py) -> Supabase Storage + flow_snapshots row.
+  # A new Python+GDAL container, not netcdf-service or raster-importer's Deno
+  # image (see wind-importer/Dockerfile's header and
+  # specs/053-wind-flow-visualization/research.md §4 for why).
+  #   docker compose run --rm wind-importer --layer-type=wind --once
+  #   docker compose run --rm wind-importer --layer-type=ocean_current --once
+  wind-importer:
+    build:
+      context: ./wind-importer
+      dockerfile: Dockerfile
+    container_name: mhews-wind-importer
+    command: ["--layer-type=wind", "--once"]
+    env_file:
+      - ./server/.env
+    networks:
+      - mhews
+
+  # ── Wind flow importer, always-on / 6-hourly-scheduled ───────────────────────
+  # Same as wind-importer above, but stays running and re-imports every 6h
+  # (matches GFS's own 00/06/12/18 UTC cycle, spec FR-007) via main.py's own
+  # in-process loop — see main.py's header for why this doesn't use
+  # raster-importer/cron.ts's Deno.cron pattern (different runtime, Python
+  # not Deno).
+  wind-importer-scheduled:
+    build:
+      context: ./wind-importer
+      dockerfile: Dockerfile
+    container_name: mhews-wind-importer-scheduled
+    restart: unless-stopped
+    command: ["--layer-type=wind"]
+    env_file:
+      - ./server/.env
+    networks:
+      - mhews
+
+  # Same as wind-importer-scheduled above, for the ocean-currents layer
+  # (spec User Story 4) — independent container so a stall/failure in one
+  # layer's import never blocks the other's.
+  currents-importer-scheduled:
+    build:
+      context: ./wind-importer
+      dockerfile: Dockerfile
+    container_name: mhews-currents-importer-scheduled
+    restart: unless-stopped
+    command: ["--layer-type=ocean_current"]
+    env_file:
+      - ./server/.env
+    networks:
+      - mhews
+
+  # Same importer image, for the Waves animation (spec 054 US1, Ocean mode)
+  # — reuses SimpleWindLayer as-is via the synthetic u/v vector encoding
+  # (research.md §2), so it's just a third instance of the same
+  # scheduled-loop pattern, not a new codebase.
+  waves-importer-scheduled:
+    build:
+      context: ./wind-importer
+      dockerfile: Dockerfile
+    container_name: mhews-waves-importer-scheduled
+    restart: unless-stopped
+    command: ["--layer-type=wave"]
+    env_file:
+      - ./server/.env
+    networks:
+      - mhews
+
+  # Air-quality Overlay (spec 054 US2, Chem/Particulates mode) — a
+  # different CLI mode (--overlay-type, not --layer-type) on the same
+  # image, since it shares the GDAL/Python foundation but writes to
+  # overlay_snapshots instead of flow_snapshots.
+  overlay-importer-scheduled:
+    build:
+      context: ./wind-importer
+      dockerfile: Dockerfile
+    container_name: mhews-overlay-importer-scheduled
+    restart: unless-stopped
+    command: ["--overlay-type=air_quality_pm25"]
+    env_file:
+      - ./server/.env
+    networks:
+      - mhews
+
   # ── GDO Soil Moisture + fAPAR Anomaly importer (manual, run-to-completion) ──
   # WCS GeoTIFF (no Python/NetCDF needed, see gdoAnomalyFetch.ts) ->
   # exposure_datasets, for both GDO anomaly sources in one run.

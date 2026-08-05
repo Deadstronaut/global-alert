@@ -1241,6 +1241,34 @@
     "rejectedFollowUp": "Reddedildi, hiçbir şey kaydedilmedi. Başka bir şey var mı?",
     "greetingChatOnly": "Merhaba, ben Deadstro! Bu sayfada hazır bir görev yok ama aşağıdan benimle sohbet edebilirsin.",
     "typePlaceholder": "Bir mesaj yaz...",
-    "send": "Gönder"
+    "send": "Gönder",
+    "noCountryContext": "Bu tarayıcıda henüz bir ülke bağlamı ayarlanmamış — önce AdminView'daki \"AI Yardımı\" sekmesinden bir ülke için bir yetenek aç.",
+    "waitingServer": "Sunucudan cevap bekleniyor..."
+  },
+  "windLayer": {
+    "toggleLabel": "Rüzgar",
+    "currentsToggleLabel": "Okyanus Akıntıları",
+    "panelTitle": "Rüzgar & Akıntı",
+    "panelExpand": "Rüzgar kontrol panelini aç",
+    "panelCollapse": "Rüzgar kontrol panelini kapat",
+    "unavailable": "Veri şu anda kullanılamıyor",
+    "asOf": "Güncel: {time}",
+    "stale": "eski veri",
+    "speedLegendLabel": "Hız",
+    "speedLow": "Düşük",
+    "speedHigh": "Yüksek",
+    "modeLabel": "Mod",
+    "modeAir": "Hava",
+    "modeOcean": "Okyanus",
+    "modeChem": "Kimya",
+    "modeParticulates": "Partikül",
+    "modeSpace": "Uzay",
+    "modeBio": "Biyo",
+    "animateLabel": "Animasyon",
+    "overlayLabel": "Katman",
+    "wavesToggleLabel": "Dalgalar",
+    "pm25ToggleLabel": "PM2.5 (Hava Kalitesi)",
+    "modeDisabledNote": "Bu mod için henüz veri kaynağı yok",
+    "waveHeightLegendLabel": "Dalga Yüksekliği"
   }
 }

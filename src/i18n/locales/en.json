@@ -1241,6 +1241,34 @@
     "rejectedFollowUp": "Rejected, nothing was saved. Anything else?",
     "greetingChatOnly": "Hi, I'm Deadstro! No guided task is available on this page, but you can chat with me below.",
     "typePlaceholder": "Type a message...",
-    "send": "Send"
+    "send": "Send",
+    "noCountryContext": "No country context is configured in this browser yet — open AdminView's \"AI Yardımı\" tab and enable a capability for a country first.",
+    "waitingServer": "Waiting for a response from the server..."
+  },
+  "windLayer": {
+    "toggleLabel": "Wind",
+    "currentsToggleLabel": "Ocean Currents",
+    "panelTitle": "Wind & Currents",
+    "panelExpand": "Open wind control panel",
+    "panelCollapse": "Close wind control panel",
+    "unavailable": "Data currently unavailable",
+    "asOf": "As of: {time}",
+    "stale": "stale data",
+    "speedLegendLabel": "Speed",
+    "speedLow": "Low",
+    "speedHigh": "High",
+    "modeLabel": "Mode",
+    "modeAir": "Air",
+    "modeOcean": "Ocean",
+    "modeChem": "Chem",
+    "modeParticulates": "Particulates",
+    "modeSpace": "Space",
+    "modeBio": "Bio",
+    "animateLabel": "Animate",
+    "overlayLabel": "Overlay",
+    "wavesToggleLabel": "Waves",
+    "pm25ToggleLabel": "PM2.5 (Air Quality)",
+    "modeDisabledNote": "No data source for this mode yet",
+    "waveHeightLegendLabel": "Wave Height"
   }
 }

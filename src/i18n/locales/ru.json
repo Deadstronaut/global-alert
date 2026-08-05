@@ -925,11 +925,11 @@
     },
     "confidenceLevel": "Достоверность",
     "confidenceLevels": {
-      "5": "Ручной Ввод",
-      "4": "Подтверждено",
-      "3": "Вероятно",
+      "1": "Ненадёжно",
       "2": "Неопределённо",
-      "1": "Ненадёжно"
+      "3": "Вероятно",
+      "4": "Подтверждено",
+      "5": "Ручной Ввод"
     },
     "linkedIncident": "Связанное Происшествие",
     "noLinkedIncident": "— нет —",
@@ -1147,6 +1147,34 @@
     "rejectedFollowUp": "Отклонено, ничего не сохранено. Что-нибудь ещё?",
     "greetingChatOnly": "Привет, я Deadstro! На этой странице нет доступных задач, но вы можете пообщаться со мной ниже.",
     "typePlaceholder": "Введите сообщение...",
-    "send": "Отправить"
+    "send": "Отправить",
+    "noCountryContext": "В этом браузере ещё не настроен контекст страны — сначала откройте вкладку «AI Yardımı» в AdminView и включите возможность для страны.",
+    "waitingServer": "Ожидание ответа от сервера..."
+  },
+  "windLayer": {
+    "toggleLabel": "Ветер",
+    "currentsToggleLabel": "Океанские течения",
+    "panelTitle": "Ветер и течения",
+    "panelExpand": "Открыть панель управления ветром",
+    "panelCollapse": "Закрыть панель управления ветром",
+    "unavailable": "Данные недоступны",
+    "asOf": "Обновлено: {time}",
+    "stale": "устаревшие данные",
+    "speedLegendLabel": "Скорость",
+    "speedLow": "Низкая",
+    "speedHigh": "Высокая",
+    "modeLabel": "Режим",
+    "modeAir": "Воздух",
+    "modeOcean": "Океан",
+    "modeChem": "Химия",
+    "modeParticulates": "Частицы",
+    "modeSpace": "Космос",
+    "modeBio": "Био",
+    "animateLabel": "Анимация",
+    "overlayLabel": "Наложение",
+    "wavesToggleLabel": "Волны",
+    "pm25ToggleLabel": "PM2.5 (качество воздуха)",
+    "modeDisabledNote": "Пока нет источника данных для этого режима",
+    "waveHeightLegendLabel": "Высота волн"
   }
 }

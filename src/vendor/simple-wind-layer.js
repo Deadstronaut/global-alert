@@ -1,0 +1,344 @@
+/**
+ * Minimal animated wind/current particle layer — spec 053.
+ *
+ * Built against MapLibre GL JS's PUBLIC, stable CustomLayerInterface
+ * (onAdd(map, gl) / render(gl, matrix)) rather than any private internals.
+ * This exists because both third-party candidates evaluated for this
+ * feature (@sakitam-gis/maplibre-wind, mapbox-exif-layer) reach into
+ * MapLibre's *private* `map.transform` object for their own camera sync —
+ * live-verified 2026-08-05 that `map.transform` is `undefined` in
+ * maplibre-gl v6 (a real, confirmed removal/rename, not a version-range
+ * technicality: sakitam's peerDependencies claim `>=3.0.0` compatibility
+ * and still crash; mapbox-exif-layer's own peerDependencies explicitly cap
+ * at `^5.0.0`, one version short of what this app runs). The public
+ * `render(gl, matrix)` contract — a plain projection matrix handed to the
+ * layer every frame — has stayed stable since MapLibre forked from
+ * Mapbox and is the only interface a custom layer can build against
+ * without re-breaking on the next MapLibre internal refactor.
+ *
+ * Technique: CPU-side particle advection (not a GPU ping-pong update
+ * shader) — reads the wind texture once into an offscreen canvas for
+ * pixel sampling, steps a fixed particle count per frame in JS, uploads
+ * updated positions to a GPU point-sprite buffer. Simpler and more robust
+ * to get right than a full GPGPU update pass, at the cost of being
+ * capped to a few thousand particles rather nullschool-scale hundreds of
+ * thousands — an acceptable trade for this feature's actual visual goal
+ * (readable flow direction/speed, not a photorealistic density field).
+ */
+
+const PARTICLE_COUNT = 3000
+const MAX_AGE_FRAMES = 90 // respawn a particle after this many frames so flow keeps circulating
+const SPEED_FACTOR = 0.4 // tunes how many degrees/frame a particle moves per m/s of wind
+// Each particle keeps its last TRAIL_LENGTH positions and redraws them as a
+// fading polyline every frame (instead of a single dot). MapLibre clears the
+// canvas each render pass, so there's no persistent framebuffer to "leave a
+// trail" on like nullschool's canvas-2D fade trick — the trail has to be
+// stored and redrawn explicitly per particle. Live-testing feedback,
+// 2026-08-05: without this, particles rendered as scattered static dots
+// instead of the flowing streamlines the feature was asking to replicate.
+const TRAIL_LENGTH = 6
+
+const VERTEX_SHADER = `
+  uniform mat4 u_matrix;
+  attribute vec2 a_pos; // Mercator x/y, both in [0,1]
+  attribute float a_speed;
+  attribute float a_alpha;
+  varying float v_speed;
+  varying float v_alpha;
+  void main() {
+    gl_Position = u_matrix * vec4(a_pos, 0.0, 1.0);
+    gl_PointSize = 2.0;
+    v_speed = a_speed;
+    v_alpha = a_alpha;
+  }
+`
+
+const FRAGMENT_SHADER = `
+  precision mediump float;
+  varying float v_speed;
+  varying float v_alpha;
+  void main() {
+    // Cool blue (calm) -> warm orange/red (strong), readable against both
+    // the dark and light base map styles this app uses.
+    vec3 slow = vec3(0.25, 0.55, 0.95);
+    vec3 fast = vec3(0.95, 0.35, 0.15);
+    vec3 color = mix(slow, fast, clamp(v_speed, 0.0, 1.0));
+    gl_FragColor = vec4(color, v_alpha);
+  }
+`
+
+function compileShader(gl, type, source) {
+  const shader = gl.createShader(type)
+  gl.shaderSource(shader, source)
+  gl.compileShader(shader)
+  if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+    const info = gl.getShaderInfoLog(shader)
+    gl.deleteShader(shader)
+    throw new Error(`Wind layer shader compile error: ${info}`)
+  }
+  return shader
+}
+
+function linkProgram(gl, vertexSource, fragmentSource) {
+  const program = gl.createProgram()
+  gl.attachShader(program, compileShader(gl, gl.VERTEX_SHADER, vertexSource))
+  gl.attachShader(program, compileShader(gl, gl.FRAGMENT_SHADER, fragmentSource))
+  gl.linkProgram(program)
+  if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
+    const info = gl.getProgramInfoLog(program)
+    gl.deleteProgram(program)
+    throw new Error(`Wind layer program link error: ${info}`)
+  }
+  return program
+}
+
+/**
+ * @param {number} lng
+ * @param {number} lat
+ * @returns {[number, number]} Mercator x/y in [0,1], matching
+ *   maplibregl.MercatorCoordinate.fromLngLat()'s own convention — computed
+ *   directly here (plain trig, no MapLibre import needed) so this file has
+ *   zero dependency on any maplibre-gl internals, public or private.
+ */
+function lngLatToMercator(lng, lat) {
+  const x = (180 + lng) / 360
+  const sinLat = Math.sin((lat * Math.PI) / 180)
+  const y = 0.5 - Math.log((1 + sinLat) / (1 - sinLat)) / (4 * Math.PI)
+  return [x, y]
+}
+
+// Constitution Principle VI (reduced-motion support): respects both the OS-
+// level preference (prefers-reduced-motion, e.g. vestibular-disorder users
+// who never touched this app's own settings) and the app's own explicit
+// safeMode toggle (uiStore.safeMode / <html data-safe-mode>, spec 004) —
+// either one is enough to ask for less motion. Checked live each render
+// rather than cached once, so toggling either setting takes effect on the
+// very next frame without this layer needing to be told directly.
+function reducedMotionRequested() {
+  if (document.documentElement.getAttribute('data-safe-mode') === 'true') return true
+  return typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches === true
+}
+
+export class SimpleWindLayer {
+  /**
+   * @param {string} id
+   * @param {{ textureUrl: string, bounds: [number, number, number, number], dataRange: [[number,number],[number,number]] }} options
+   *   bounds = [west, south, east, north]; dataRange = [[uMin,uMax],[vMin,vMax]]
+   */
+  constructor(id, options) {
+    this.id = id
+    this.type = 'custom'
+    this.renderingMode = '2d'
+    this.options = options
+    this.particles = null // Float32Array-backed, lazily initialized once the wind image has loaded
+    this.imageData = null
+    this.imageReady = false
+  }
+
+  onAdd(map, gl) {
+    this.map = map
+    this.gl = gl
+    this.program = linkProgram(gl, VERTEX_SHADER, FRAGMENT_SHADER)
+    this.buffer = gl.createBuffer()
+
+    const image = new Image()
+    image.crossOrigin = 'anonymous'
+    image.onload = () => {
+      const canvas = document.createElement('canvas')
+      canvas.width = image.width
+      canvas.height = image.height
+      const ctx = canvas.getContext('2d')
+      ctx.drawImage(image, 0, 0)
+      this.imageData = ctx.getImageData(0, 0, image.width, image.height)
+      this.imageReady = true
+      this._initParticles()
+      this.map.triggerRepaint()
+    }
+    image.onerror = () => {
+      console.warn(`[SimpleWindLayer] Failed to load texture for ${this.id}`)
+    }
+    image.src = this.options.textureUrl
+  }
+
+  onRemove() {
+    if (!this.gl) return
+    this.gl.deleteProgram(this.program)
+    this.gl.deleteBuffer(this.buffer)
+    if (this.speedBuffer) this.gl.deleteBuffer(this.speedBuffer)
+    if (this.alphaBuffer) this.gl.deleteBuffer(this.alphaBuffer)
+  }
+
+  _initParticles() {
+    const [west, south, east, north] = this.options.bounds
+    this.particles = []
+    for (let i = 0; i < PARTICLE_COUNT; i++) {
+      this.particles.push(this._spawnParticle(west, south, east, north))
+    }
+  }
+
+  _spawnParticle(west, south, east, north) {
+    const lng = west + Math.random() * (east - west)
+    const lat = south + Math.random() * (north - south)
+    return {
+      lng,
+      lat,
+      age: Math.floor(Math.random() * MAX_AGE_FRAMES),
+      history: [[lng, lat]], // most recent position first; grows to TRAIL_LENGTH as it moves
+      speedNormalized: 0,
+    }
+  }
+
+  /** Samples the wind texture at a given lng/lat, returns [u, v, speedNormalized] or null if out of bounds. */
+  _sampleWind(lng, lat) {
+    const { bounds, dataRange } = this.options
+    const [west, south, east, north] = bounds
+    if (lng < west || lng > east || lat < south || lat > north) return null
+
+    const px = Math.floor(((lng - west) / (east - west)) * this.imageData.width)
+    const py = Math.floor(((north - lat) / (north - south)) * this.imageData.height)
+    const idx = (Math.min(py, this.imageData.height - 1) * this.imageData.width + Math.min(px, this.imageData.width - 1)) * 4
+    const r = this.imageData.data[idx]
+    const g = this.imageData.data[idx + 1]
+
+    const [uMin, uMax] = dataRange[0]
+    const [vMin, vMax] = dataRange[1]
+    const u = uMin + (r / 255) * (uMax - uMin)
+    const v = vMin + (g / 255) * (vMax - vMin)
+    const speed = Math.sqrt(u * u + v * v)
+    // Normalizes against a generous 40 m/s ceiling (well above all but
+    // extreme storm-force wind) so the color scale stays meaningful
+    // instead of always maxing out on rare outliers.
+    const speedNormalized = Math.min(speed / 40, 1)
+    return [u, v, speedNormalized]
+  }
+
+  render(gl, options) {
+    if (!this.imageReady || !this.particles) return
+    // MapLibre v6 changed CustomRenderMethod's signature from the old
+    // `render(gl, matrix)` (a raw mat4) to `render(gl, options)` (an
+    // options object, to support globe projection) — live-verified
+    // 2026-08-05: passing `options` itself straight into uniformMatrix4fv
+    // throws ("must have a callable @@iterator property", since it's a
+    // plain object, not an array-like). `defaultProjectionData.mainMatrix`
+    // is what MapLibre's own docs point to for "simple custom layers that
+    // only support mercator projection" — exactly this layer.
+    const matrix = options.defaultProjectionData.mainMatrix
+    const [west, south, east, north] = this.options.bounds
+
+    // Reduced motion: let the trails fully build up once (TRAIL_LENGTH
+    // frames), then stop moving/re-triggering repaints — a static flow
+    // snapshot instead of a continuous animation. Resets the moment
+    // reduced motion is turned back off, so it doesn't stay frozen forever.
+    const reducedMotion = reducedMotionRequested()
+    if (!reducedMotion) {
+      this._staticFramesRemaining = null
+    } else if (this._staticFramesRemaining == null) {
+      this._staticFramesRemaining = TRAIL_LENGTH
+    }
+    const advect = !reducedMotion || this._staticFramesRemaining > 0
+    if (reducedMotion && advect) this._staticFramesRemaining -= 1
+
+    // Worst case: every particle has a full trail, drawn as TRAIL_LENGTH-1
+    // separate 2-vertex line segments (gl.LINES, not LINE_STRIP — a single
+    // strip can't represent N disconnected per-particle polylines in one
+    // draw call). Actual usage (vIdx) is usually smaller right after
+    // particles respawn, so buffers are uploaded as a trimmed subarray.
+    const maxVertices = this.particles.length * (TRAIL_LENGTH - 1) * 2
+    const positions = new Float32Array(maxVertices * 2)
+    const speeds = new Float32Array(maxVertices)
+    const alphas = new Float32Array(maxVertices)
+    let vIdx = 0
+
+    for (let i = 0; i < this.particles.length; i++) {
+      let p = this.particles[i]
+
+      if (advect) {
+        const sample = this._sampleWind(p.lng, p.lat)
+        p.age += 1
+
+        if (!sample || p.age > MAX_AGE_FRAMES) {
+          p = this._spawnParticle(west, south, east, north)
+          this.particles[i] = p
+        } else {
+          const [u, v, speedNormalized] = sample
+          // Degrees-per-frame step: scaled down at low latitudes' wider
+          // degrees-per-km and, deliberately, NOT by current map zoom — a
+          // particle's real-world speed should look consistent whether the
+          // user is zoomed in or out, only the on-screen pixel distance
+          // should change (which naturally happens via the projection
+          // matrix, not this step size).
+          const latRad = (p.lat * Math.PI) / 180
+          // Guards against the degrees-per-km divisor collapsing toward 0
+          // near the poles — live-testing finding, 2026-08-05: without this
+          // clamp, a particle above ~89°N/S could jump thousands of degrees
+          // of longitude in a single frame (division by a near-zero
+          // cosine), which drew as a full-map-width erroneous streak once
+          // trails (not just single points) were rendered.
+          const cosLat = Math.max(Math.cos(latRad), 0.05)
+          p.lng += (u * SPEED_FACTOR) / (111.32 * cosLat * 100)
+          p.lat += (v * SPEED_FACTOR) / (110.57 * 100)
+          // Mercator's y projection (lngLatToMercator) divides by (1 -
+          // sin(lat)), which blows up the same way as lat approaches ±90 —
+          // clamp so a fast poleward-blowing v-component can't push a
+          // particle to exactly the pole in one step.
+          p.lat = Math.max(-89.9, Math.min(89.9, p.lat))
+          p.speedNormalized = speedNormalized
+          p.history.unshift([p.lng, p.lat])
+          if (p.history.length > TRAIL_LENGTH) p.history.pop()
+        }
+      }
+
+      for (let h = 0; h < p.history.length - 1; h++) {
+        const newer = p.history[h]
+        const older = p.history[h + 1]
+        const fade = 1 - h / (TRAIL_LENGTH - 1) // segments nearer the head are more opaque
+        const [mx0, my0] = lngLatToMercator(older[0], older[1])
+        const [mx1, my1] = lngLatToMercator(newer[0], newer[1])
+        positions[vIdx * 2] = mx0
+        positions[vIdx * 2 + 1] = my0
+        speeds[vIdx] = p.speedNormalized
+        alphas[vIdx] = fade * 0.25
+        vIdx++
+        positions[vIdx * 2] = mx1
+        positions[vIdx * 2 + 1] = my1
+        speeds[vIdx] = p.speedNormalized
+        alphas[vIdx] = fade * 0.85
+        vIdx++
+      }
+    }
+
+    gl.useProgram(this.program)
+    gl.enable(gl.BLEND)
+    gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA)
+
+    gl.uniformMatrix4fv(gl.getUniformLocation(this.program, 'u_matrix'), false, matrix)
+
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.buffer)
+    gl.bufferData(gl.ARRAY_BUFFER, positions.subarray(0, vIdx * 2), gl.DYNAMIC_DRAW)
+    const posLoc = gl.getAttribLocation(this.program, 'a_pos')
+    gl.enableVertexAttribArray(posLoc)
+    gl.vertexAttribPointer(posLoc, 2, gl.FLOAT, false, 0, 0)
+
+    if (!this.speedBuffer) this.speedBuffer = gl.createBuffer()
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.speedBuffer)
+    gl.bufferData(gl.ARRAY_BUFFER, speeds.subarray(0, vIdx), gl.DYNAMIC_DRAW)
+    const speedLoc = gl.getAttribLocation(this.program, 'a_speed')
+    gl.enableVertexAttribArray(speedLoc)
+    gl.vertexAttribPointer(speedLoc, 1, gl.FLOAT, false, 0, 0)
+
+    if (!this.alphaBuffer) this.alphaBuffer = gl.createBuffer()
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.alphaBuffer)
+    gl.bufferData(gl.ARRAY_BUFFER, alphas.subarray(0, vIdx), gl.DYNAMIC_DRAW)
+    const alphaLoc = gl.getAttribLocation(this.program, 'a_alpha')
+    gl.enableVertexAttribArray(alphaLoc)
+    gl.vertexAttribPointer(alphaLoc, 1, gl.FLOAT, false, 0, 0)
+
+    gl.drawArrays(gl.LINES, 0, vIdx)
+
+    // custom layers don't animate on their own; keep the loop going — unless
+    // reduced motion has finished building its static trail, in which case
+    // staying frozen (no more self-triggered repaints) IS the point. The
+    // map's own pan/zoom repaints still redraw this last frame as-is.
+    if (advect) this.map.triggerRepaint()
+  }
+}

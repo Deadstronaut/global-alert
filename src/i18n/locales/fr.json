@@ -925,11 +925,11 @@
     },
     "confidenceLevel": "Fiabilité",
     "confidenceLevels": {
-      "5": "Saisie Manuelle",
-      "4": "Confirmé",
-      "3": "Probable",
+      "1": "Peu Fiable",
       "2": "Incertain",
-      "1": "Peu Fiable"
+      "3": "Probable",
+      "4": "Confirmé",
+      "5": "Saisie Manuelle"
     },
     "linkedIncident": "Incident Lié",
     "noLinkedIncident": "— aucun —",
@@ -1147,6 +1147,34 @@
     "rejectedFollowUp": "Rejeté, rien n'a été enregistré. Autre chose ?",
     "greetingChatOnly": "Bonjour, je suis Deadstro ! Aucune tâche guidée n'est disponible sur cette page, mais vous pouvez discuter avec moi ci-dessous.",
     "typePlaceholder": "Écrivez un message...",
-    "send": "Envoyer"
+    "send": "Envoyer",
+    "noCountryContext": "Aucun contexte pays n'est configuré dans ce navigateur — ouvrez d'abord l'onglet « AI Yardımı » d'AdminView et activez une capacité pour un pays.",
+    "waitingServer": "En attente d'une réponse du serveur..."
+  },
+  "windLayer": {
+    "toggleLabel": "Vent",
+    "currentsToggleLabel": "Courants Océaniques",
+    "panelTitle": "Vent et Courants",
+    "panelExpand": "Ouvrir le panneau de contrôle du vent",
+    "panelCollapse": "Fermer le panneau de contrôle du vent",
+    "unavailable": "Données indisponibles",
+    "asOf": "Mis à jour : {time}",
+    "stale": "données anciennes",
+    "speedLegendLabel": "Vitesse",
+    "speedLow": "Faible",
+    "speedHigh": "Élevée",
+    "modeLabel": "Mode",
+    "modeAir": "Air",
+    "modeOcean": "Océan",
+    "modeChem": "Chimie",
+    "modeParticulates": "Particules",
+    "modeSpace": "Espace",
+    "modeBio": "Bio",
+    "animateLabel": "Animer",
+    "overlayLabel": "Superposition",
+    "wavesToggleLabel": "Vagues",
+    "pm25ToggleLabel": "PM2.5 (Qualité de l'air)",
+    "modeDisabledNote": "Pas encore de source de données pour ce mode",
+    "waveHeightLegendLabel": "Hauteur des vagues"
   }
 }

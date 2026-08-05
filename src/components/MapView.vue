@@ -33,6 +33,7 @@ import ImpactPanel from '@/components/impact/ImpactPanel.vue'
 import GeocodingSearch from '@/components/impact/GeocodingSearch.vue'
 import SettingsPanel from '@/components/SettingsPanel.vue'
 import PanelCollapseToggle from '@/components/PanelCollapseToggle.vue'
+import FlowControlPanel from '@/components/FlowControlPanel.vue'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { useMapLayersStore } from '@/stores/mapLayers.js'
@@ -49,6 +50,8 @@ import { circlePolygon, distanceKm } from '@/utils/circleGeometry.js'
 import { defaultBufferRadiusKm } from '@/lib/hazardBuffer.js'
 import { buildFeaturePopupHtml } from '@/utils/exposureFeaturePopup.js'
 import { disasterSourceBadges } from '@/utils/disasterSourceBadges.js'
+import { fetchLatestFlowSnapshot, fetchLatestOverlaySnapshot } from '@/utils/windLayerData.js'
+import { SimpleWindLayer } from '@/vendor/simple-wind-layer.js'
 import { POPUP_CLOSE_BTN_HTML } from '@/utils/popupCloseButton.js'
 import { friendlyDatasetLabel } from '@/utils/exposureLayerLabel.js'
 import { formatPopulationLabel } from '@/utils/formatPopulationLabel.js'
@@ -2828,6 +2831,112 @@ function updateCommunityReportMarkers() {
   )
 }
 
+// Wind / ocean-current animated flow layers (spec 053, User Story 1/4).
+// One SimpleWindLayer instance per layer_type, added/removed on its own
+// ui-store toggle — mirrors updateShelterMarkers/updateCommunityReportMarkers'
+// toggle-driven show/hide pattern above, except the underlying MapLibre
+// layer itself is created/destroyed rather than just having its visibility
+// flipped, since SimpleWindLayer owns its own WebGL resources (particle
+// buffers) that should be freed when the layer is off, not just hidden
+// (spec US1 acceptance scenario 3: disabling must leave no residual state).
+// See src/vendor/simple-wind-layer.js's own header for why this is a
+// small from-scratch layer instead of a third-party one — both realistic
+// npm candidates reach into MapLibre's private `map.transform`, which no
+// longer exists in v6 (live-verified 2026-08-05).
+const flowLayerInstances = { wind: null, ocean_current: null, wave: null }
+const FLOW_LAYER_IDS = { wind: 'flow-wind', ocean_current: 'flow-ocean-current', wave: 'flow-wave' }
+
+async function setFlowLayerEnabled(layerType, enabled) {
+  if (!map || !mapLoaded) return
+  const layerId = FLOW_LAYER_IDS[layerType]
+
+  if (!enabled) {
+    if (map.getLayer(layerId)) map.removeLayer(layerId)
+    flowLayerInstances[layerType] = null
+    return
+  }
+
+  if (flowLayerInstances[layerType]) return // already on
+
+  const snapshot = await fetchLatestFlowSnapshot(layerType)
+  if (!snapshot) {
+    // FR-006: graceful "unavailable" state, not a broken map — the toggle
+    // stays reflected as "on" in the UI (ui store), but no layer is added;
+    // T027 (US3) wires a visible message for this case into the control
+    // panel. Logged here in the meantime so it's not silent.
+    console.warn(`[MapView] No ${layerType} flow snapshot available yet`)
+    return
+  }
+
+  const layer = new SimpleWindLayer(layerId, {
+    textureUrl: snapshot.textureUrl,
+    bounds: snapshot.bounds,
+    dataRange: snapshot.dataRange,
+  })
+  flowLayerInstances[layerType] = layer
+  map.addLayer(layer)
+}
+
+watch(
+  () => uiStore.windEnabled,
+  (enabled) => setFlowLayerEnabled('wind', enabled),
+)
+watch(
+  () => uiStore.currentsEnabled,
+  (enabled) => setFlowLayerEnabled('ocean_current', enabled),
+)
+watch(
+  () => uiStore.wavesEnabled,
+  (enabled) => setFlowLayerEnabled('wave', enabled),
+)
+
+// Overlay layers (spec 054 US2) — a plain MapLibre `image` source + `raster`
+// layer, NOT SimpleWindLayer: the Overlay is a pre-colored scalar raster
+// (contracts/overlay-snapshot-contract.md), no particle advection needed,
+// so no custom WebGL layer is warranted here (research.md §4).
+const overlayLayerIds = { air_quality_pm25: 'overlay-air-quality-pm25' }
+
+async function setOverlayLayerEnabled(overlayType, enabled) {
+  if (!map || !mapLoaded) return
+  const layerId = overlayLayerIds[overlayType]
+  const sourceId = `${layerId}-source`
+
+  if (!enabled) {
+    if (map.getLayer(layerId)) map.removeLayer(layerId)
+    if (map.getSource(sourceId)) map.removeSource(sourceId)
+    return
+  }
+
+  if (map.getLayer(layerId)) return // already on
+
+  const snapshot = await fetchLatestOverlaySnapshot(overlayType)
+  if (!snapshot) {
+    // FR-008: graceful "unavailable" state, matching setFlowLayerEnabled's
+    // own handling — the toggle stays reflected as "on" in the ui store,
+    // but no layer is added.
+    console.warn(`[MapView] No ${overlayType} overlay snapshot available yet`)
+    return
+  }
+
+  map.addSource(sourceId, { type: 'image', url: snapshot.textureUrl, coordinates: snapshot.coordinates })
+  map.addLayer({ id: layerId, type: 'raster', source: sourceId, paint: { 'raster-opacity': 0.65 } })
+}
+
+watch(
+  () => uiStore.airQualityOverlayEnabled,
+  (enabled) => setOverlayLayerEnabled('air_quality_pm25', enabled),
+)
+
+// simple-wind-layer.js freezes itself (stops self-triggering repaints) once
+// reduced motion has built a static trail — turning safeMode back off needs
+// one explicit repaint to wake it back up, since nothing else would
+// otherwise call the layer's render() again until an unrelated map
+// interaction (pan/zoom) happens to trigger one.
+watch(
+  () => uiStore.safeMode,
+  () => map?.triggerRepaint(),
+)
+
 function hazardDisplayNameForMap(code) {
   return hazardTypesStore.hazardTypes.find((h) => h.code === code)?.display_name ?? code
 }
@@ -3634,6 +3743,12 @@ onBeforeUnmount(() => {
           </div>
         </div>
       </div>
+
+      <!-- spec 053: compact wind/current control — sits alongside the other
+           bottom-left legend cards, on the severity panel's own corner of
+           the group (live-testing ask, 2026-08-05: "şiddet panelinin
+           üzerine ufak bir kare tuş"). -->
+      <FlowControlPanel />
     </div>
 
     <!-- Live pitch/detail tuning (spec-less follow-up, 2026-07-28): only
@@ -3724,54 +3839,43 @@ onBeforeUnmount(() => {
          definition, regardless of how wide the shelters panel or layer
          stack currently are (collapsed vs. expanded). -->
     <div class="top-controls-row" :class="{ 'legend-sidebar-collapsed': uiStore.sidebarCollapsed }">
-      <!-- Shelter map layer toggle (spec 027) — always visible, independent of WMS/WFS layers. -->
-      <div
-        class="shelters-layer-panel"
-        :class="{ 'shelters-layer-panel--collapsed': sheltersLayerPanelCollapsed }"
-      >
+      <!-- Shelter map layer toggle (spec 027) — always visible, independent of WMS/WFS layers.
+           Persistent icon button + Transition-driven flyout body, matching the wind/currents
+           flow-control panel's calm fade+scale expand (live-testing ask, 2026-08-05: "aynı
+           geçiş efektini sığınak ve etki alanı katmanlarında da kullan"). -->
+      <div class="shelters-layer-panel">
         <Button
-          v-if="sheltersLayerPanelCollapsed"
           ref="sheltersHintAnchorEl"
           type="button"
           variant="ghost"
           size="icon"
-          class="shelters-layer-collapse-btn shelters-layer-collapse-btn--collapsed"
-          :aria-label="t('shelters.map.panelExpand')"
-          :title="t('shelters.map.panelExpand')"
-          @click="sheltersLayerPanelCollapsed = false"
+          class="shelters-layer-collapse-btn"
+          :aria-label="sheltersLayerPanelCollapsed ? t('shelters.map.panelExpand') : t('shelters.map.panelCollapse')"
+          :title="sheltersLayerPanelCollapsed ? t('shelters.map.panelExpand') : t('shelters.map.panelCollapse')"
+          @click="sheltersLayerPanelCollapsed = !sheltersLayerPanelCollapsed"
         >
           <svg class="shelters-layer-icon" viewBox="0 0 24 24" aria-hidden="true">
             <path d="M12 2a7 7 0 0 0-7 7c0 5.25 7 13 7 13s7-7.75 7-13a7 7 0 0 0-7-7z" />
             <circle cx="12" cy="9" r="2.6" fill="rgba(0,0,0,.35)" />
           </svg>
         </Button>
-        <template v-else>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            class="shelters-layer-collapse-btn"
-            :aria-label="t('shelters.map.panelCollapse')"
-            :title="t('shelters.map.panelCollapse')"
-            @click="sheltersLayerPanelCollapsed = true"
-          >
-            <svg class="shelters-layer-arrow" viewBox="0 0 24 24" aria-hidden="true">
-              <path d="M17 17 L7 7 M7 7 H15 M7 7 V15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
-            </svg>
-          </Button>
-          <h4 class="map-layers-title shelters-layer-title">{{ t('shelters.map.panelTitle') }}</h4>
-          <label class="map-layer-toggle">
-            <Checkbox :model-value="uiStore.showShelters" @update:model-value="uiStore.toggleShelters()" />
-            <span>{{ t('shelters.map.toggleLabel') }}</span>
-          </label>
-          <label class="map-layer-toggle">
-            <Checkbox
-              :model-value="uiStore.showCommunityReports"
-              @update:model-value="uiStore.toggleCommunityReports()"
-            />
-            <span>{{ t('communityReport.map.toggleLabel') }}</span>
-          </label>
-        </template>
+
+        <Transition name="flow-panel-expand">
+          <div v-if="!sheltersLayerPanelCollapsed" class="shelters-layer-panel-body">
+            <h4 class="map-layers-title">{{ t('shelters.map.panelTitle') }}</h4>
+            <label class="map-layer-toggle">
+              <Checkbox :model-value="uiStore.showShelters" @update:model-value="uiStore.toggleShelters()" />
+              <span>{{ t('shelters.map.toggleLabel') }}</span>
+            </label>
+            <label class="map-layer-toggle">
+              <Checkbox
+                :model-value="uiStore.showCommunityReports"
+                @update:model-value="uiStore.toggleCommunityReports()"
+              />
+              <span>{{ t('communityReport.map.toggleLabel') }}</span>
+            </label>
+          </div>
+        </Transition>
       </div>
 
       <GeocodingSearch @location-selected="onLocationSelected" />
@@ -3803,19 +3907,17 @@ onBeforeUnmount(() => {
              same session-only state shape as the WMS/WFS panel above. -->
         <div
           v-if="exposureLayersStore.loaded"
-          class="map-layers-panel exposure-layers-panel"
-          :class="{ 'exposure-layers-panel--collapsed': exposureLayersPanelCollapsed }"
+          class="exposure-layers-panel"
         >
           <Button
-            v-if="exposureLayersPanelCollapsed"
             ref="exposureHintAnchorEl"
             type="button"
             variant="ghost"
             size="icon"
-            class="exposure-layers-collapse-btn exposure-layers-collapse-btn--collapsed"
-            :aria-label="t('exposureLayers.expand')"
-            :title="t('exposureLayers.expand')"
-            @click="exposureLayersPanelCollapsed = false"
+            class="exposure-layers-collapse-btn"
+            :aria-label="exposureLayersPanelCollapsed ? t('exposureLayers.expand') : t('exposureLayers.collapse')"
+            :title="exposureLayersPanelCollapsed ? t('exposureLayers.expand') : t('exposureLayers.collapse')"
+            @click="exposureLayersPanelCollapsed = !exposureLayersPanelCollapsed"
           >
             <svg class="exposure-layers-icon" viewBox="0 0 24 24" aria-hidden="true">
               <path d="M12 2 L2 7 L12 12 L22 7 Z" />
@@ -3823,20 +3925,9 @@ onBeforeUnmount(() => {
               <path d="M2 17 L12 22 L22 17" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" />
             </svg>
           </Button>
-          <template v-else>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              class="exposure-layers-collapse-btn"
-              :aria-label="t('exposureLayers.collapse')"
-              :title="t('exposureLayers.collapse')"
-              @click="exposureLayersPanelCollapsed = true"
-            >
-              <svg class="exposure-layers-arrow" viewBox="0 0 24 24" aria-hidden="true">
-                <path d="M7 17 L17 7 M17 7 H9 M17 7 V15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
-              </svg>
-            </Button>
+
+          <Transition name="flow-panel-expand">
+          <div v-if="!exposureLayersPanelCollapsed" class="map-layers-panel exposure-layers-panel-body">
             <h4 class="map-layers-title">{{ t('exposureLayers.panelTitle') }}</h4>
             <!-- Gated on selectedCountryName, not selectedCountryCode: a custom
                  territory (e.g. KKTC) can be genuinely selected with no country
@@ -3916,7 +4007,8 @@ onBeforeUnmount(() => {
               >{{ t('assetCategory.' + category, category) }}</button>
             </div>
           </div>
-          </template>
+          </div>
+          </Transition>
         </div>
       </div>
     </div>
@@ -4058,14 +4150,18 @@ onBeforeUnmount(() => {
 
 .layer-panel-stack {
   /* Right-hand column of .top-controls-row's 3-col grid — hugs the row's
-     right edge via justify-self, doesn't position itself independently. */
+     right edge via justify-self, doesn't position itself independently.
+     No max-height/overflow here (unlike before): both children are now
+     small persistent icon buttons with their expanded content flown out
+     via position:absolute (see .exposure-layers-panel-body) rather than
+     stacked in-flow, and an overflow:auto ancestor would clip that
+     absolutely-positioned flyout exactly like the collapsed-hint bubble
+     bug described on showCollapsedPanelHints above. */
   justify-self: end;
   display: flex;
   flex-direction: column;
   align-items: flex-end;
   gap: 10px;
-  max-height: calc(100% - 32px);
-  overflow-y: auto;
 }
 .map-layers-panel {
   background: rgba(15,17,23,.9);
@@ -4078,66 +4174,49 @@ onBeforeUnmount(() => {
   font-size: .8rem;
 }
 .exposure-layers-panel {
+  /* Persistent icon button + Transition-driven flyout body — same calm
+     fade+scale expand as the wind/currents flow-control panel
+     (FlowControlPanel.vue's .flow-panel-expand-*), not a width/height
+     resize. Right-hand column, so the flyout opens down-and-left. */
   position: relative;
-  max-width: 420px;
-  /* Current full size is the ceiling — collapsing shrinks it down to a
-     small layers-icon square anchored at its own top-right corner
-     (.layer-panel-stack's align-items: flex-end keeps that corner fixed
-     while the box's own width/height animate), never grows past this. */
-  transition: width 0.35s ease, min-width 0.35s ease, max-width 0.35s ease, height 0.35s ease, padding 0.35s ease;
-  overflow: hidden;
-}
-.exposure-layers-panel.exposure-layers-panel--collapsed {
-  width: 44px;
-  min-width: 44px;
-  max-width: 44px;
-  height: 44px;
-  padding: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  z-index: 40;
 }
 .exposure-layers-collapse-btn {
-  position: absolute;
-  top: 6px;
-  right: 6px;
-  width: 24px;
-  height: 24px;
-  padding: 0;
-  border: none;
-  background: rgba(255, 255, 255, 0.08);
-  border-radius: 6px;
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: rgba(20, 24, 33, 0.92);
   color: #e2e8f0;
+  padding: 0;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: background 0.15s;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.28);
+  backdrop-filter: blur(8px);
+  transition: background 0.15s ease;
 }
 .exposure-layers-collapse-btn:hover {
-  background: rgba(255, 255, 255, 0.16);
-}
-.exposure-layers-collapse-btn--collapsed {
-  position: static;
-  width: 100%;
-  height: 100%;
-  border-radius: 10px;
-  background: transparent;
-}
-.exposure-layers-collapse-btn--collapsed:hover {
-  background: rgba(255, 255, 255, 0.08);
-}
-.exposure-layers-arrow {
-  width: 14px;
-  height: 14px;
+  background: rgba(35, 41, 56, 0.95);
 }
 .exposure-layers-icon {
   width: 22px;
   height: 22px;
   fill: #4da3ff;
 }
+.exposure-layers-panel-body {
+  position: absolute;
+  top: calc(100% + 10px);
+  right: 0;
+  max-width: 420px;
+  min-width: 280px;
+  max-height: calc(100vh - 140px);
+  overflow-y: auto;
+  transform-origin: top right;
+  z-index: 40;
+}
 .map-layers-title { margin: 0 0 10px; font-size: .8rem; font-weight: 700; }
-.exposure-layers-panel .map-layers-title { margin-right: 28px; }
 .map-layer-row { margin-bottom: 8px; }
 .map-layer-toggle { display: flex; align-items: center; gap: 6px; cursor: pointer; }
 .map-layer-type { margin-left: auto; font-size: .68rem; color: var(--color-text-muted,#94a3b8); }
@@ -4213,79 +4292,71 @@ onBeforeUnmount(() => {
 
 .shelters-layer-panel {
   /* Left-hand column of .top-controls-row's 3-col grid — hugs the row's
-     left edge via justify-self, doesn't position itself independently
-     (the row handles clearing the sidebar). Still position:relative so
-     .shelters-layer-collapse-btn (absolute) anchors to this box, not the
-     grid row. */
+     left edge via justify-self. Persistent icon button + Transition-driven
+     flyout body, same calm fade+scale expand as the wind/currents
+     flow-control panel (FlowControlPanel.vue's .flow-panel-expand-*),
+     not a width/height resize. */
   position: relative;
   justify-self: start;
-  background: rgba(15,17,23,.9);
-  border: 1px solid rgba(255,255,255,.12);
-  border-radius: 10px;
-  padding: 10px 12px;
-  color: #e2e8f0;
-  font-size: .8rem;
-  min-width: 200px;
-  /* Same collapse mechanic as .exposure-layers-panel on the right — full
-     size is the ceiling, collapsing only ever shrinks toward the icon
-     square, anchored at this box's own top-left corner. */
-  transition: width 0.35s ease, min-width 0.35s ease, max-width 0.35s ease, height 0.35s ease, padding 0.35s ease;
-  overflow: hidden;
-}
-
-.shelters-layer-panel.shelters-layer-panel--collapsed {
-  width: 44px;
-  min-width: 44px;
-  max-width: 44px;
-  height: 44px;
-  padding: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  z-index: 40;
 }
 
 .shelters-layer-collapse-btn {
-  /* Same-row-as-title layout as .exposure-layers-collapse-btn, just mirrored
-     to the left edge since this panel sits on the left side of the screen. */
-  position: absolute;
-  top: 6px;
-  left: 6px;
-  width: 24px;
-  height: 24px;
-  padding: 0;
-  border: none;
-  background: rgba(255, 255, 255, 0.08);
-  border-radius: 6px;
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: rgba(20, 24, 33, 0.92);
   color: #e2e8f0;
+  padding: 0;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: background 0.15s;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.28);
+  backdrop-filter: blur(8px);
+  transition: background 0.15s ease;
 }
 .shelters-layer-collapse-btn:hover {
-  background: rgba(255, 255, 255, 0.16);
-}
-.shelters-layer-collapse-btn--collapsed {
-  position: static;
-  width: 100%;
-  height: 100%;
-  border-radius: 10px;
-  background: transparent;
-}
-.shelters-layer-collapse-btn--collapsed:hover {
-  background: rgba(255, 255, 255, 0.08);
-}
-.shelters-layer-arrow {
-  width: 14px;
-  height: 14px;
+  background: rgba(35, 41, 56, 0.95);
 }
 .shelters-layer-icon {
   width: 22px;
   height: 22px;
   fill: #e0453f;
 }
-.shelters-layer-title { margin-left: 28px; }
+
+.shelters-layer-panel-body {
+  position: absolute;
+  top: calc(100% + 10px);
+  left: 0;
+  width: 220px;
+  padding: 14px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: rgba(15, 18, 26, 0.98);
+  backdrop-filter: blur(10px);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.55);
+  color: #e2e8f0;
+  font-size: .8rem;
+  transform-origin: top left;
+  z-index: 40;
+}
+
+/* Shared calm fade+scale expand — mirrors FlowControlPanel.vue's own
+   .flow-panel-expand-* transition (same name, duplicated here since Vue's
+   scoped CSS doesn't cross component boundaries) so the wind/currents
+   panel, shelters panel, and exposure-layers panel all open identically
+   (live-testing ask, 2026-08-05). */
+.flow-panel-expand-enter-active,
+.flow-panel-expand-leave-active {
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+.flow-panel-expand-enter-from,
+.flow-panel-expand-leave-to {
+  opacity: 0;
+  transform: translate(0, -8px) scale(0.92);
+}
 
 .shelter-marker-dot {
   width: 26px;

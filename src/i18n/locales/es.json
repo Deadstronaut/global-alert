@@ -925,11 +925,11 @@
     },
     "confidenceLevel": "Confianza",
     "confidenceLevels": {
-      "5": "Entrada Manual",
-      "4": "Confirmado",
-      "3": "Probable",
+      "1": "Poco Fiable",
       "2": "Incierto",
-      "1": "Poco Fiable"
+      "3": "Probable",
+      "4": "Confirmado",
+      "5": "Entrada Manual"
     },
     "linkedIncident": "Incidente Vinculado",
     "noLinkedIncident": "— ninguno —",
@@ -1147,6 +1147,34 @@
     "rejectedFollowUp": "Rechazado, no se guardó nada. ¿Algo más?",
     "greetingChatOnly": "¡Hola, soy Deadstro! No hay una tarea guiada en esta página, pero puedes chatear conmigo abajo.",
     "typePlaceholder": "Escribe un mensaje...",
-    "send": "Enviar"
+    "send": "Enviar",
+    "noCountryContext": "Aún no hay un contexto de país configurado en este navegador — primero abre la pestaña \"AI Yardımı\" en AdminView y activa una capacidad para un país.",
+    "waitingServer": "Esperando respuesta del servidor..."
+  },
+  "windLayer": {
+    "toggleLabel": "Viento",
+    "currentsToggleLabel": "Corrientes Oceánicas",
+    "panelTitle": "Viento y Corrientes",
+    "panelExpand": "Abrir panel de control de viento",
+    "panelCollapse": "Cerrar panel de control de viento",
+    "unavailable": "Datos no disponibles",
+    "asOf": "Actualizado: {time}",
+    "stale": "datos antiguos",
+    "speedLegendLabel": "Velocidad",
+    "speedLow": "Baja",
+    "speedHigh": "Alta",
+    "modeLabel": "Modo",
+    "modeAir": "Aire",
+    "modeOcean": "Océano",
+    "modeChem": "Química",
+    "modeParticulates": "Partículas",
+    "modeSpace": "Espacio",
+    "modeBio": "Bio",
+    "animateLabel": "Animar",
+    "overlayLabel": "Superposición",
+    "wavesToggleLabel": "Olas",
+    "pm25ToggleLabel": "PM2.5 (Calidad del aire)",
+    "modeDisabledNote": "Aún no hay fuente de datos para este modo",
+    "waveHeightLegendLabel": "Altura de las olas"
   }
 }

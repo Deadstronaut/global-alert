@@ -89,12 +89,13 @@ def netcdf_pm25_to_overlay_texture(netcdf_bytes: bytes) -> OverlayTexture:
     Raises RuntimeError on anything GDAL can't open/read, same "fail
     loudly" convention as the wind/currents/wave conversions.
 
-    NOTE: the NetCDF subdataset variable name ('pm2p5') and unit assumption
-    (µg/m³-comparable surface concentration) follow CAMS/ADS's documented
-    variable naming but have NOT been live-verified against a real
-    downloaded file in this session (no ADS credentials available) — same
-    "first real run's error points at what needs adjusting" situation
-    fetch_overlay_cams.py's own docstring flags.
+    NetCDF subdataset variable name ('pm2p5') and units live-verified
+    2026-08-05 via gdalinfo against a real downloaded CAMS file: GRIB_units
+    / units = 'kg m**-3' (mass concentration), NOT the µg/m³ PM2.5 is
+    conventionally reported in — real observed range on that file was
+    ~1.9e-13 to 1.1e-6 kg/m³. Converted to µg/m³ (×1e9) below so
+    value_min/value_max read as normal PM2.5 numbers (single/low-triple
+    digits) in the frontend legend instead of a string of leading zeros.
     """
     source_path = "/vsimem/overlay_source.nc"
     gdal.FileFromMemBuffer(source_path, netcdf_bytes)
@@ -104,7 +105,7 @@ def netcdf_pm25_to_overlay_texture(netcdf_bytes: bytes) -> OverlayTexture:
             raise RuntimeError("GDAL could not open the fetched CAMS PM2.5 NetCDF (expected a 'pm2p5' subdataset)")
 
         band = dataset.GetRasterBand(1)
-        values = resample_band_to_grid(band, dataset)
+        values = resample_band_to_grid(band, dataset) * 1e9  # kg/m^3 -> ug/m^3
 
         value_min = float(np.nanmin(values))
         value_max = float(np.nanmax(values))

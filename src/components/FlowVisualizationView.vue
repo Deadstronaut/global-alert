@@ -229,12 +229,36 @@ async function setPreColoredOverlay(key, enabled) {
   map.addLayer({ id: layerId, type: 'raster', source: sourceId, paint: { 'raster-opacity': 0.65 } })
 }
 
+function applyOverlayOption(option, enabled) {
+  if (option.kind === 'speed') return setSpeedOverlay(option.key, enabled)
+  return setPreColoredOverlay(option.key, enabled)
+}
+
+function findOverlayOptionByKey(key) {
+  for (const list of Object.values(OVERLAY_OPTIONS)) {
+    const found = list.find((o) => o.key === key)
+    if (found) return found
+  }
+  return null
+}
+
+// Radio-button semantics, per the reference tool: only one Overlay color
+// layer is ever shown at a time (stacking several would just be visual
+// noise) — clicking an option turns off whichever was previously active
+// (even from another mode's list) before turning this one on. Clicking the
+// already-active option again turns it off, matching a "None" selection.
 function toggleOverlayOption(option) {
   if (!option.key) return // disabled placeholder — no handler beyond this early return
-  const enabled = !overlayEnabled.value[option.key]
-  overlayEnabled.value = { ...overlayEnabled.value, [option.key]: enabled }
-  if (option.kind === 'speed') setSpeedOverlay(option.key, enabled)
-  else setPreColoredOverlay(option.key, enabled)
+  const previousKey = Object.keys(overlayEnabled.value).find((k) => overlayEnabled.value[k])
+
+  if (previousKey && previousKey !== option.key) {
+    const previous = findOverlayOptionByKey(previousKey)
+    if (previous) applyOverlayOption(previous, false)
+  }
+
+  const enabling = previousKey !== option.key
+  overlayEnabled.value = enabling ? { [option.key]: true } : {}
+  applyOverlayOption(option, enabling)
 }
 
 // ── Live tuning (gear icon) ─────────────────────────────────────────────

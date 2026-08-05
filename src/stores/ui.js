@@ -122,6 +122,18 @@ export const useUIStore = defineStore('ui', () => {
     }
     const selectedMode = ref('air');
 
+    // Height selector (spec 054 follow-up, 2026-08-06) — 'Sfc' or a GFS
+    // pressure-level string ('1000'|'850'|'700'|'500'|'250'|'70'|'10').
+    // Only Temp/RH actually vary by level; every other Overlay field
+    // ignores this and always reads its one 'sfc' row (see MapView.vue's
+    // LEVEL_AWARE_OVERLAY_KEYS). Moved here (not local FlowControlPanel
+    // state) so MapView.vue can watch it directly, same reasoning as
+    // activeOverlayKey living here instead of in the panel component.
+    const selectedHeight = ref('Sfc');
+    function setSelectedHeight(level) {
+        selectedHeight.value = level;
+    }
+
     // Overlay row — same single-select-with-toggle-off correction as
     // Animate above, and for the same reason (nullschool's own Overlay row
     // is also `role="radiogroup"`): one shared key across BOTH overlay
@@ -288,6 +300,8 @@ export const useUIStore = defineStore('ui', () => {
         wavesEnabled,
         toggleWaves,
         selectedMode,
+        selectedHeight,
+        setSelectedHeight,
         activeOverlayKey,
         toggleOverlay,
         flowSpeedMultiplier,

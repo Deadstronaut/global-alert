@@ -2988,9 +2988,25 @@ const overlayLayerIds = {
   sulfate_aod: 'overlay-sulfate-aod',
 }
 
-async function setOverlayLayerEnabled(overlayType, enabled) {
+// Height selector (spec 054 follow-up, 2026-08-06) — only Temp/RH have
+// real per-pressure-level data (wind-importer's LEVEL_AWARE_OVERLAY_FIELDS);
+// every other overlay type only ever has a 'sfc' row regardless of what
+// uiStore.selectedHeight is set to, so this list is what actually decides
+// whether the current Height selection affects a given active overlay.
+const LEVEL_AWARE_OVERLAY_KEYS = new Set(['temperature', 'relative_humidity'])
+
+function heightLabelToLevel(label) {
+  return label === 'Sfc' ? 'sfc' : label // FlowControlPanel's HEIGHT_LEVELS values ('1000'|'850'|...) already match wind-importer's own level strings
+}
+
+function overlayLayerId(overlayType, level) {
+  const base = overlayLayerIds[overlayType]
+  return level === 'sfc' ? base : `${base}-${level}`
+}
+
+async function setOverlayLayerEnabled(overlayType, enabled, level = 'sfc') {
   if (!map || !mapLoaded) return
-  const layerId = overlayLayerIds[overlayType]
+  const layerId = overlayLayerId(overlayType, level)
   const sourceId = `${layerId}-source`
 
   if (!enabled) {
@@ -3001,12 +3017,12 @@ async function setOverlayLayerEnabled(overlayType, enabled) {
 
   if (map.getLayer(layerId)) return // already on
 
-  const snapshot = await fetchLatestOverlaySnapshot(overlayType)
+  const snapshot = await fetchLatestOverlaySnapshot(overlayType, level)
   if (!snapshot) {
     // FR-008: graceful "unavailable" state, matching setFlowLayerEnabled's
     // own handling — the toggle stays reflected as "on" in the ui store,
     // but no layer is added.
-    console.warn(`[MapView] No ${overlayType} overlay snapshot available yet`)
+    console.warn(`[MapView] No ${overlayType}@${level} overlay snapshot available yet`)
     return
   }
 
@@ -3030,13 +3046,29 @@ const OVERLAY_KIND = {
 function applyOverlayKey(key, enabled) {
   const kind = OVERLAY_KIND[key]
   if (kind === 'speed') return setSpeedOverlayLayerEnabled(key, enabled)
-  if (kind === 'overlay') return setOverlayLayerEnabled(key, enabled)
+  if (kind === 'overlay') {
+    const level = LEVEL_AWARE_OVERLAY_KEYS.has(key) ? heightLabelToLevel(uiStore.selectedHeight) : 'sfc'
+    return setOverlayLayerEnabled(key, enabled, level)
+  }
 }
 watch(
   () => uiStore.activeOverlayKey,
   (newKey, oldKey) => {
     if (oldKey) applyOverlayKey(oldKey, false)
     if (newKey) applyOverlayKey(newKey, true)
+  },
+)
+// Height selector — only matters while the active Overlay is one of
+// LEVEL_AWARE_OVERLAY_KEYS; swaps the old level's layer for the new one
+// the same way switching Overlay keys does. No-op otherwise (e.g. CAPE
+// active, Height changed — CAPE has no per-level data, nothing to redo).
+watch(
+  () => uiStore.selectedHeight,
+  (newHeight, oldHeight) => {
+    const key = uiStore.activeOverlayKey
+    if (!key || !LEVEL_AWARE_OVERLAY_KEYS.has(key)) return
+    setOverlayLayerEnabled(key, false, heightLabelToLevel(oldHeight))
+    setOverlayLayerEnabled(key, true, heightLabelToLevel(newHeight))
   },
 )
 

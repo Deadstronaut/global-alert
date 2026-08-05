@@ -135,7 +135,14 @@ export async function fetchLatestFlowSnapshot(layerType) {
  * The returned PNG is already RGBA-colored server-side (overlay_texture.py)
  * — the frontend just draws it as a plain MapLibre image/raster source, no
  * decode step needed, unlike the vector flow-snapshot texture above.
- * @param {'air_quality_pm25'} overlayType
+ * @param {'air_quality_pm25'|'temperature'|'relative_humidity'|...} overlayType
+ * @param {string} [level] Height selector (spec 054 follow-up, 2026-08-06)
+ *   — 'sfc' (default) for every overlay type, or a GFS pressure level
+ *   string ('1000'|'850'|'700'|'500'|'250'|'70'|'10') for the two
+ *   level-aware fields (Temp, RH). Fields that never had per-level data
+ *   only ever have a 'sfc' row, so passing anything else for them would
+ *   just find nothing — callers are expected to only vary level for the
+ *   fields that actually support it (FlowControlPanel.vue's Height row).
  * @returns {Promise<{
  *   textureUrl: string,
  *   coordinates: [[number,number],[number,number],[number,number],[number,number]],
@@ -143,11 +150,12 @@ export async function fetchLatestFlowSnapshot(layerType) {
  *   issuedAt: string,
  * } | null>}
  */
-export async function fetchLatestOverlaySnapshot(overlayType) {
+export async function fetchLatestOverlaySnapshot(overlayType, level = 'sfc') {
   const { data, error } = await supabase
     .from('overlay_snapshots')
     .select('texture_storage_path, value_min, value_max, bounds, issued_at')
     .eq('overlay_type', overlayType)
+    .eq('level', level)
     .order('issued_at', { ascending: false })
     .limit(1)
     .maybeSingle()

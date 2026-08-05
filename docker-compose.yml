@@ -370,6 +370,38 @@ services:
     networks:
       - mhews
 
+  # Height selector (spec 054 follow-up, 2026-08-06) — Temp/RH at GFS's
+  # other pressure levels, one container per field looping through all 7
+  # levels each 6h cycle (main.py's --levels) rather than 7 more
+  # containers each — the sfc-only services above stay untouched/unaware
+  # of this, so a stall in the levels loop never blocks the always-shown
+  # surface layer.
+  temperature-levels-importer-scheduled:
+    build:
+      context: ./wind-importer
+      dockerfile: Dockerfile
+    image: mhews-wind-importer:latest
+    container_name: mhews-temperature-levels-importer-scheduled
+    restart: unless-stopped
+    command: ["--overlay-type=temperature", "--levels=1000,850,700,500,250,70,10"]
+    env_file:
+      - ./server/.env
+    networks:
+      - mhews
+
+  relative-humidity-levels-importer-scheduled:
+    build:
+      context: ./wind-importer
+      dockerfile: Dockerfile
+    image: mhews-wind-importer:latest
+    container_name: mhews-relative-humidity-levels-importer-scheduled
+    restart: unless-stopped
+    command: ["--overlay-type=relative_humidity", "--levels=1000,850,700,500,250,70,10"]
+    env_file:
+      - ./server/.env
+    networks:
+      - mhews
+
   mslp-importer-scheduled:
     build:
       context: ./wind-importer

@@ -115,16 +115,29 @@ def fetch_latest_wind_grib2(timeout_s: int = 60) -> tuple[bytes, dt.datetime]:
     )
 
 
-def fetch_latest_temperature_grib2(timeout_s: int = 60) -> tuple[bytes, dt.datetime]:
+# Height selector (spec 054 follow-up, 2026-08-06) — GFS pressure levels
+# live-verified against a real cycle's own .idx file (TMP and RH both
+# exist at all seven). 'sfc' keeps using each field's original near-
+# surface level (2m for both Temp and RH) rather than an actual pressure
+# level, matching the reference tool's own "Sfc" meaning "near-surface",
+# not "1013 mb" or similar.
+PRESSURE_LEVELS = ("1000", "850", "700", "500", "250", "70", "10")
+
+
+def fetch_latest_temperature_grib2(timeout_s: int = 60, level: str = "sfc") -> tuple[bytes, dt.datetime]:
     """
-    Returns (grib2_bytes, issued_at) — GFS 2m-above-ground air temperature
-    (TMP), the Overlay: Temp field (spec 054 follow-up, 2026-08-05: "ilk
-    yapmamız gereken şey overlay yapmak"). Same NOMADS filter service, same
-    cycle/fallback logic as wind — GFS publishes TMP in the same 0.25°
-    pgrb2 file family, just a different var_*/lev_* filter selection.
+    Returns (grib2_bytes, issued_at) — GFS air temperature (TMP), the
+    Overlay: Temp field (spec 054 follow-up, 2026-08-05: "ilk yapmamız
+    gereken şey overlay yapmak"). `level='sfc'` (default) is 2m-above-
+    ground; anything in PRESSURE_LEVELS selects that isobaric level
+    instead (spec 054 follow-up, 2026-08-06: Height selector). Same
+    NOMADS filter service, same cycle/fallback logic as wind — GFS
+    publishes TMP in the same 0.25° pgrb2 file family, just a different
+    var_*/lev_* filter selection.
     """
+    lev_param = "lev_2_m_above_ground" if level == "sfc" else f"lev_{level}_mb"
     return _fetch_latest_field(
-        {"var_TMP": "on", "lev_2_m_above_ground": "on"}, "temperature", timeout_s,
+        {"var_TMP": "on", lev_param: "on"}, f"temperature@{level}", timeout_s,
     )
 
 
@@ -133,9 +146,11 @@ def fetch_latest_temperature_grib2(timeout_s: int = 60) -> tuple[bytes, dt.datet
 # listing every var/level combination actually present) rather than
 # guessed — same "confirm against the real thing" standard as fetch_gfs's
 # original wind live-verification note.
-def fetch_latest_relative_humidity_grib2(timeout_s: int = 60) -> tuple[bytes, dt.datetime]:
-    """Returns (grib2_bytes, issued_at) — GFS 2m relative humidity (RH, %), Overlay: RH."""
-    return _fetch_latest_field({"var_RH": "on", "lev_2_m_above_ground": "on"}, "relative_humidity", timeout_s)
+def fetch_latest_relative_humidity_grib2(timeout_s: int = 60, level: str = "sfc") -> tuple[bytes, dt.datetime]:
+    """Returns (grib2_bytes, issued_at) — GFS relative humidity (RH, %), Overlay: RH.
+    Same `level` parameter/meaning as fetch_latest_temperature_grib2's own."""
+    lev_param = "lev_2_m_above_ground" if level == "sfc" else f"lev_{level}_mb"
+    return _fetch_latest_field({"var_RH": "on", lev_param: "on"}, f"relative_humidity@{level}", timeout_s)
 
 
 def fetch_latest_mslp_grib2(timeout_s: int = 60) -> tuple[bytes, dt.datetime]:

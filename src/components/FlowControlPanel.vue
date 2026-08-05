@@ -52,11 +52,13 @@ function selectMode(mode) {
   uiStore.selectedMode = mode.id
 }
 
-// Air mode's pressure-level selector — this app only has surface (Sfc)
-// data for any GFS field today, so every other level is a disabled
-// placeholder, same honesty pattern as the rest of this menu.
+// Air mode's pressure-level selector — real for Temp/RH (spec 054
+// follow-up, 2026-08-06: wind-importer fetches both at all seven GFS
+// pressure levels, not just surface). Height itself is global state
+// (uiStore.selectedHeight), same reasoning as activeOverlayKey living
+// there: MapView.vue needs to watch it directly to swap the active
+// Overlay layer when it changes.
 const HEIGHT_LEVELS = ['Sfc', '1000', '850', '700', '500', '250', '70', '10']
-const selectedHeight = ref('Sfc')
 
 // ── Animate (global — same three regardless of Mode, matching the
 //    reference tool's own screenshots) ─────────────────────────────────
@@ -248,10 +250,9 @@ const activeModeInfo = computed(() => MODES.find((m) => m.id === uiStore.selecte
             v-for="level in HEIGHT_LEVELS"
             :key="level"
             type="button"
-            class="flow-view-chip"
-            :class="level === 'Sfc' ? ['flow-view-mode-btn', { 'flow-view-mode-btn--active': selectedHeight === level }] : 'flow-view-chip--disabled'"
-            :title="level === 'Sfc' ? '' : 'Yakında — sadece yüzey verisi var'"
-            @click="level === 'Sfc' && (selectedHeight = selectedHeight === level ? null : level)"
+            class="flow-view-chip flow-view-mode-btn"
+            :class="{ 'flow-view-mode-btn--active': uiStore.selectedHeight === level }"
+            @click="uiStore.setSelectedHeight(level)"
           >{{ level }}</button>
         </div>
 

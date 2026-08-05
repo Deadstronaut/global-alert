@@ -85,6 +85,12 @@ GFS_OVERLAY_FIELDS = {
     "wet_bulb_temp": (fetch_latest_wet_bulb_inputs_grib2, grib2_wet_bulb_to_overlay_texture),
 }
 
+# Height selector (spec 054 follow-up, 2026-08-06) — only these two
+# GFS_OVERLAY_FIELDS entries have a real per-pressure-level GFS field;
+# the rest (MSLP, CAPE, TPW, TCW, precip) are surface/column-integrated
+# quantities with no "at 850mb" meaning, so they always run at 'sfc'.
+LEVEL_AWARE_OVERLAY_FIELDS = {"temperature", "relative_humidity"}
+
 # CAMS-native Overlay fields (spec 054 US2 + 2026-08-06 follow-up) — same
 # dict-driven dispatch shape as GFS_OVERLAY_FIELDS, kept as a separate dict
 # since these go through fetch_overlay_cams.py/cdsapi rather than NOMADS,
@@ -138,9 +144,14 @@ def _upload_texture(layer_type: str, issued_at: dt.datetime, png_bytes: bytes) -
     return path
 
 
-def _upload_overlay_texture(overlay_type: str, issued_at: dt.datetime, png_bytes: bytes) -> str:
-    """Same shape as _upload_texture, targeting the overlay-snapshots bucket (contracts/overlay-snapshot-contract.md)."""
-    path = f"{overlay_type}/{issued_at.strftime('%Y-%m-%dT%H-%M-%SZ')}.png"
+def _upload_overlay_texture(overlay_type: str, level: str, issued_at: dt.datetime, png_bytes: bytes) -> str:
+    """Same shape as _upload_texture, targeting the overlay-snapshots bucket
+    (contracts/overlay-snapshot-contract.md). 'sfc' keeps the original flat
+    path (backward compatible with every overlay_type that existed before
+    Height/level support); other levels get their own subfolder so they
+    don't collide with the sfc snapshot's own path."""
+    prefix = overlay_type if level == "sfc" else f"{overlay_type}/{level}"
+    path = f"{prefix}/{issued_at.strftime('%Y-%m-%dT%H-%M-%SZ')}.png"
     url = f"{SUPABASE_URL}/storage/v1/object/{OVERLAY_STORAGE_BUCKET}/{path}"
     response = requests.post(
         url,
@@ -191,12 +202,15 @@ def _insert_flow_snapshot_row(layer_type: str, issued_at: dt.datetime, texture: 
     response.raise_for_status()
 
 
-def _insert_overlay_snapshot_row(overlay_type: str, issued_at: dt.datetime, texture: OverlayTexture, storage_path: str) -> None:
+def _insert_overlay_snapshot_row(
+    overlay_type: str, level: str, issued_at: dt.datetime, texture: OverlayTexture, storage_path: str,
+) -> None:
     url = f"{SUPABASE_URL}/rest/v1/overlay_snapshots"
     west, south, east, north = texture.bounds
     row = {
         "id": str(uuid.uuid4()),
         "overlay_type": overlay_type,
+        "level": level,
         "issued_at": issued_at.isoformat(),
         "texture_storage_path": storage_path,
         "value_min": texture.value_min, "value_max": texture.value_max,
@@ -256,30 +270,37 @@ def run_once(layer_type: str) -> None:
     _ = metadata_json(texture)
 
 
-def run_once_overlay(overlay_type: str) -> None:
+def run_once_overlay(overlay_type: str, level: str = "sfc") -> None:
     """Fetch -> color -> upload -> insert, for the Overlay path — same
     fail-loudly-keep-prior-data rule as run_once() (contracts/
-    overlay-snapshot-contract.md Producer)."""
+    overlay-snapshot-contract.md Producer). `level` is only meaningful for
+    LEVEL_AWARE_OVERLAY_FIELDS entries (Temp/RH) — every other field
+    ignores it and always runs at 'sfc' regardless of what's passed."""
     _require_supabase_env()
 
     fields = {**GFS_OVERLAY_FIELDS, **CAMS_OVERLAY_FIELDS}
     if overlay_type in fields:
         fetch_fn, convert_fn = fields[overlay_type]
-        raw_bytes, issued_at = fetch_fn()
-        texture = convert_fn(raw_bytes)
+        if overlay_type in LEVEL_AWARE_OVERLAY_FIELDS:
+            raw_bytes, issued_at = fetch_fn(level=level)
+            texture = convert_fn(raw_bytes, level=level)
+        else:
+            level = "sfc"
+            raw_bytes, issued_at = fetch_fn()
+            texture = convert_fn(raw_bytes)
     else:
         expected = ", ".join(repr(k) for k in fields)
         raise ValueError(f"Unknown overlay_type {overlay_type!r} (expected one of: {expected})")
 
-    print(f"[wind-importer] Fetched {overlay_type} data issued at {issued_at.isoformat()}")
+    print(f"[wind-importer] Fetched {overlay_type}@{level} data issued at {issued_at.isoformat()}")
     print(
         f"[wind-importer] Colored to overlay texture: "
         f"value=[{texture.value_min:.2f},{texture.value_max:.2f}] ({len(texture.png_bytes)} bytes PNG)"
     )
-    storage_path = _upload_overlay_texture(overlay_type, issued_at, texture.png_bytes)
+    storage_path = _upload_overlay_texture(overlay_type, level, issued_at, texture.png_bytes)
     print(f"[wind-importer] Uploaded overlay texture to {OVERLAY_STORAGE_BUCKET}/{storage_path}")
-    _insert_overlay_snapshot_row(overlay_type, issued_at, texture, storage_path)
-    print(f"[wind-importer] Inserted overlay_snapshots row for {overlay_type} @ {issued_at.isoformat()}")
+    _insert_overlay_snapshot_row(overlay_type, level, issued_at, texture, storage_path)
+    print(f"[wind-importer] Inserted overlay_snapshots row for {overlay_type}@{level} @ {issued_at.isoformat()}")
 
 
 def main() -> None:
@@ -288,9 +309,22 @@ def main() -> None:
     mode.add_argument("--layer-type", choices=["wind", "ocean_current", "wave"])
     mode.add_argument("--overlay-type", choices=[*GFS_OVERLAY_FIELDS, *CAMS_OVERLAY_FIELDS])
     parser.add_argument("--once", action="store_true", help="Run a single import and exit, instead of looping every 6h")
+    parser.add_argument("--level", default="sfc", help="Single pressure level for one-off overlay runs (sfc or e.g. 850) — LEVEL_AWARE_OVERLAY_FIELDS only")
+    parser.add_argument(
+        "--levels", default=None,
+        help="Comma-separated levels to cycle through every scheduled run (e.g. 1000,850,700,500,250,70,10) — LEVEL_AWARE_OVERLAY_FIELDS only",
+    )
     args = parser.parse_args()
 
-    run = (lambda: run_once(args.layer_type)) if args.layer_type else (lambda: run_once_overlay(args.overlay_type))
+    def run():
+        if args.layer_type:
+            run_once(args.layer_type)
+        elif args.levels:
+            for level in args.levels.split(","):
+                run_once_overlay(args.overlay_type, level=level.strip())
+        else:
+            run_once_overlay(args.overlay_type, level=args.level)
+
     label = args.layer_type or args.overlay_type
 
     if args.once:

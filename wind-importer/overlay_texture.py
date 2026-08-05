@@ -111,6 +111,24 @@ TEMP_RAMP = [
 # well above -60°C at 2m rather than the surface-level record lows).
 TEMP_DOMAIN_C = (-60.0, 50.0)
 
+# Height selector (spec 054 follow-up, 2026-08-06) — a single fixed domain
+# doesn't work across all altitudes: stratospheric levels (70/10mb) never
+# get anywhere near TEMP_DOMAIN_C's warm end, so every pixel up there would
+# pin to the same coldest ramp color with no visible variation. Per-level
+# domains live-verified 2026-08-06 against real global min/max at each
+# level, widened a little past the observed range the same way TEMP_DOMAIN_C
+# itself was.
+TEMP_DOMAIN_BY_LEVEL_C = {
+    "sfc": TEMP_DOMAIN_C,
+    "1000": (-55.0, 50.0),
+    "850": (-55.0, 40.0),
+    "700": (-60.0, 30.0),
+    "500": (-60.0, 15.0),
+    "250": (-80.0, -15.0),
+    "70": (-95.0, -30.0),
+    "10": (-95.0, -25.0),
+}
+
 # The rest of Air mode's "easy" GFS-native Overlay fields (spec 054
 # follow-up, 2026-08-05) — same live-extraction-not-guessing standard as
 # TEMP_RAMP above, one 12-stop ramp per field, sampled from
@@ -452,13 +470,21 @@ def grib2_scalar_to_overlay_texture(
         gdal.Unlink(source_path)
 
 
-def grib2_temperature_to_overlay_texture(grib2_bytes: bytes) -> OverlayTexture:
-    """GFS 2m air temperature (TMP) -> the Overlay: Temp field — spec 054 follow-up, 2026-08-05."""
-    return grib2_scalar_to_overlay_texture(grib2_bytes, "TMP", TEMP_RAMP, TEMP_DOMAIN_C)
+def grib2_temperature_to_overlay_texture(grib2_bytes: bytes, level: str = "sfc") -> OverlayTexture:
+    """GFS air temperature (TMP) -> the Overlay: Temp field — spec 054
+    follow-up, 2026-08-05. `level` (Height selector, 2026-08-06) picks the
+    color domain matching that altitude's real temperature range —
+    see TEMP_DOMAIN_BY_LEVEL_C's own comment for why a single domain
+    doesn't work across every level."""
+    return grib2_scalar_to_overlay_texture(grib2_bytes, "TMP", TEMP_RAMP, TEMP_DOMAIN_BY_LEVEL_C[level])
 
 
-def grib2_relative_humidity_to_overlay_texture(grib2_bytes: bytes) -> OverlayTexture:
-    """GFS 2m relative humidity (RH, %) -> the Overlay: RH field."""
+def grib2_relative_humidity_to_overlay_texture(grib2_bytes: bytes, level: str = "sfc") -> OverlayTexture:
+    """GFS relative humidity (RH, %) -> the Overlay: RH field. `level` is
+    accepted (not just ignored outright) for the same uniform LEVEL_AWARE_
+    OVERLAY_FIELDS calling convention grib2_temperature_to_overlay_texture
+    needs — RH's own 0-100% domain is already level-independent, so it's
+    unused here."""
     return grib2_scalar_to_overlay_texture(grib2_bytes, "RH", RH_RAMP, RH_DOMAIN_PCT)
 
 

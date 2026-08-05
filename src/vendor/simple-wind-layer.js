@@ -171,7 +171,7 @@ export class SimpleWindLayer {
   }
 
   setTrailThickness(value) {
-    this.trailThickness = Math.max(1, value)
+    this.trailThickness = Math.max(0.1, value)
   }
 
   onAdd(map, gl) {

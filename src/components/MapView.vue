@@ -34,7 +34,6 @@ import GeocodingSearch from '@/components/impact/GeocodingSearch.vue'
 import SettingsPanel from '@/components/SettingsPanel.vue'
 import PanelCollapseToggle from '@/components/PanelCollapseToggle.vue'
 import FlowControlPanel from '@/components/FlowControlPanel.vue'
-import FlowVisualizationView from '@/components/FlowVisualizationView.vue'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { useMapLayersStore } from '@/stores/mapLayers.js'
@@ -51,7 +50,7 @@ import { circlePolygon, distanceKm } from '@/utils/circleGeometry.js'
 import { defaultBufferRadiusKm } from '@/lib/hazardBuffer.js'
 import { buildFeaturePopupHtml } from '@/utils/exposureFeaturePopup.js'
 import { disasterSourceBadges } from '@/utils/disasterSourceBadges.js'
-import { fetchLatestFlowSnapshot, fetchLatestOverlaySnapshot } from '@/utils/windLayerData.js'
+import { fetchLatestFlowSnapshot, fetchLatestOverlaySnapshot, buildWindSpeedOverlayDataUrl } from '@/utils/windLayerData.js'
 import { SimpleWindLayer } from '@/vendor/simple-wind-layer.js'
 import { POPUP_CLOSE_BTN_HTML } from '@/utils/popupCloseButton.js'
 import { friendlyDatasetLabel } from '@/utils/exposureLayerLabel.js'
@@ -2844,7 +2843,6 @@ function updateCommunityReportMarkers() {
 // small from-scratch layer instead of a third-party one — both realistic
 // npm candidates reach into MapLibre's private `map.transform`, which no
 // longer exists in v6 (live-verified 2026-08-05).
-const showFlowVisualization = ref(false)
 const flowLayerInstances = { wind: null, ocean_current: null, wave: null }
 const FLOW_LAYER_IDS = { wind: 'flow-wind', ocean_current: 'flow-ocean-current', wave: 'flow-wave' }
 
@@ -2874,12 +2872,12 @@ async function setFlowLayerEnabled(layerType, enabled) {
     textureUrl: snapshot.textureUrl,
     bounds: snapshot.bounds,
     dataRange: snapshot.dataRange,
-    // Live-tuned via FlowVisualizationView.vue's settings sliders,
+    // Live-tuned via FlowControlPanel.vue's gear-icon sliders (uiStore),
     // 2026-08-05 — at real-world scale, movement was sub-pixel per frame
-    // and looked like static twinkling rather than flow; this combination
-    // produces the actual nullschool-style flowing-streamline look.
-    speedMultiplier: 336,
-    trailLength: 89,
+    // and looked like static twinkling rather than flow; these defaults
+    // produce the actual nullschool-style flowing-streamline look.
+    speedMultiplier: uiStore.flowSpeedMultiplier,
+    trailLength: uiStore.flowTrailLength,
   })
   flowLayerInstances[layerType] = layer
   map.addLayer(layer)
@@ -2896,6 +2894,65 @@ watch(
 watch(
   () => uiStore.wavesEnabled,
   (enabled) => setFlowLayerEnabled('wave', enabled),
+)
+
+// Gear-icon live tuning (FlowControlPanel.vue) — applied to every currently
+// active particle layer immediately, same as FlowControlPanel's predecessor
+// (FlowVisualizationView.vue's own settings sliders) did on its own map.
+watch(
+  () => uiStore.flowSpeedMultiplier,
+  (value) => {
+    for (const layer of Object.values(flowLayerInstances)) layer?.setSpeedMultiplier(value)
+  },
+)
+watch(
+  () => uiStore.flowTrailLength,
+  (value) => {
+    for (const layer of Object.values(flowLayerInstances)) layer?.setTrailLength(value)
+  },
+)
+
+// Overlay: Wind/Currents/Waves (spec 054 follow-up, 2026-08-05) — the
+// reference tool's speed-as-color heatmap, distinct from the animated
+// particles above; reuses the same flow_snapshots texture, recolored
+// client-side (windLayerData.js's buildWindSpeedOverlayDataUrl), so no new
+// backend importer is needed. Plain image/raster source, same pattern as
+// setOverlayLayerEnabled below, not SimpleWindLayer (no particle advection).
+const speedOverlayLayerIds = { wind: 'speed-overlay-wind', ocean_current: 'speed-overlay-ocean-current', wave: 'speed-overlay-wave' }
+
+async function setSpeedOverlayLayerEnabled(layerType, enabled) {
+  if (!map || !mapLoaded) return
+  const layerId = speedOverlayLayerIds[layerType]
+  const sourceId = `${layerId}-source`
+
+  if (!enabled) {
+    if (map.getLayer(layerId)) map.removeLayer(layerId)
+    if (map.getSource(sourceId)) map.removeSource(sourceId)
+    return
+  }
+  if (map.getLayer(layerId)) return // already on
+
+  const snapshot = await fetchLatestFlowSnapshot(layerType)
+  if (!snapshot) {
+    console.warn(`[MapView] No ${layerType} flow snapshot available yet for speed overlay`)
+    return
+  }
+  const dataUrl = await buildWindSpeedOverlayDataUrl(snapshot)
+  map.addSource(sourceId, { type: 'image', url: dataUrl, coordinates: snapshot.coordinates })
+  map.addLayer({ id: layerId, type: 'raster', source: sourceId, paint: { 'raster-opacity': 0.55 } })
+}
+
+watch(
+  () => uiStore.speedOverlayEnabled.wind,
+  (enabled) => setSpeedOverlayLayerEnabled('wind', enabled),
+)
+watch(
+  () => uiStore.speedOverlayEnabled.ocean_current,
+  (enabled) => setSpeedOverlayLayerEnabled('ocean_current', enabled),
+)
+watch(
+  () => uiStore.speedOverlayEnabled.wave,
+  (enabled) => setSpeedOverlayLayerEnabled('wave', enabled),
 )
 
 // Overlay layers (spec 054 US2) — a plain MapLibre `image` source + `raster`
@@ -3758,10 +3815,8 @@ onBeforeUnmount(() => {
            bottom-left legend cards, on the severity panel's own corner of
            the group (live-testing ask, 2026-08-05: "şiddet panelinin
            üzerine ufak bir kare tuş"). -->
-      <FlowControlPanel @open-standalone="showFlowVisualization = true" />
+      <FlowControlPanel />
     </div>
-
-    <FlowVisualizationView v-if="showFlowVisualization" @close="showFlowVisualization = false" />
 
     <!-- Live pitch/detail tuning (spec-less follow-up, 2026-07-28): only
          while 3D terrain is actually on — tuning knobs for a feature that's

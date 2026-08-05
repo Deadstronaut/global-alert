@@ -1,11 +1,18 @@
 <script setup>
 // Flow visualization control panel — spec 053 (Wind/Currents) + spec 054
-// (Mode/Animate/Overlay structure). A small square button (anchored on the
-// severity legend panel's corner) that expands, animated toward the
-// top-right, into the nullschool/GEOS-5-style Mode -> Animate/Overlay
-// control bar the user repeatedly referenced — mirrors that reference
-// tool's own compact settings-icon affordance instead of always-visible
-// standalone controls (live-testing ask, 2026-08-05).
+// (full Mode/Animate/Height/Overlay/Annotation menu, matching the reference
+// tool's own layout exactly). A small square button (anchored on the
+// severity legend panel's corner) that expands upward into the full menu.
+//
+// This panel owns no map of its own — every toggle here flows through
+// uiStore, and MapView.vue's own watchers are what actually add/remove
+// layers on the real map. This replaced a separate, isolated-map
+// "standalone" view (FlowVisualizationView.vue) that existed only while
+// debugging why particles weren't rendering on the main map; once that bug
+// was fixed and confirmed working, the user asked for the standalone
+// entry point to go away entirely — this panel, opened from the same blue
+// button, IS the real feature now (2026-08-05: "o maviye bastığımızda...
+// bu menü açılmalı... standalone'ın artık gerek yok").
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useUIStore } from '@/stores/ui.js'
@@ -14,33 +21,55 @@ import { isFlowSnapshotStale } from '@/utils/flowSnapshotStaleness.js'
 
 const { t } = useI18n()
 const uiStore = useUIStore()
-const emit = defineEmits(['open-standalone'])
 
 const open = ref(false)
 
 // Every Mode the reference tool shows (spec 054 FR-007) — `functional`
 // modes have at least one real Animate/Overlay entry; the rest render
-// visible-but-disabled with modeDisabledNote, matching how Currents itself
-// looked in this panel before spec 053 shipped it (never hidden, always
-// honest about not being ready yet).
+// visible-but-disabled with modeDisabledNote.
 const MODES = [
-  { id: 'air', labelKey: 'modeAir', functional: true },
-  { id: 'ocean', labelKey: 'modeOcean', functional: true },
-  { id: 'chem', labelKey: 'modeChem', functional: false },
-  { id: 'particulates', labelKey: 'modeParticulates', functional: false },
-  { id: 'space', labelKey: 'modeSpace', functional: false },
-  { id: 'bio', labelKey: 'modeBio', functional: false },
+  { id: 'air', label: 'Air', functional: true },
+  { id: 'ocean', label: 'Ocean', functional: true },
+  { id: 'chem', label: 'Chem', functional: false },
+  { id: 'particulates', label: 'Particulates', functional: false },
+  { id: 'space', label: 'Space', functional: false },
+  { id: 'bio', label: 'Bio', functional: false },
 ]
+const MODE_SOURCE = {
+  air: 'GFS / NCEP / US National Weather Service',
+  ocean: 'Global Ocean Physics Analysis and Forecast / CMEMS',
+  chem: 'GEOS-5 / GMAO / NASA',
+  particulates: 'CAMS / Copernicus / European Commission + ECMWF',
+  space: 'OVATION / SWPC / NCEP / NWS / NOAA',
+  bio: 'OVATION / SWPC / NCEP / NWS / NOAA',
+}
+// Reference tool's own HD-mode overlay list appends fire-hotspot
+// attribution to every Source line — this app already ingests NASA FIRMS
+// hotspot data elsewhere, so this is a real, accurate attribution to show.
+const FIRE_SOURCE_SUFFIX = ' + VIIRS NRT / FIRMS / EOSDIS / NASA'
 
 function selectMode(mode) {
-  if (!mode.functional) return // disabled modes have no click handler wired beyond this early return — spec 054 T022
   uiStore.selectedMode = mode.id
 }
 
-// One entry per layer_type/overlay_type — null until fetched, 'unavailable'
-// on a failed/empty fetch (FR-006's graceful state, contracts/*-contract.md).
-const status = ref({ wind: null, ocean_current: null, wave: null })
+// Air mode's pressure-level selector — this app only has surface (Sfc)
+// data for any GFS field today, so every other level is a disabled
+// placeholder, same honesty pattern as the rest of this menu.
+const HEIGHT_LEVELS = ['Sfc', '1000', '850', '700', '500', '250', '70', '10']
+const selectedHeight = ref('Sfc')
 
+// ── Animate (global — same three regardless of Mode, matching the
+//    reference tool's own screenshots) ─────────────────────────────────
+const ANIMATE_LABELS = { wind: 'Rüzgar', ocean_current: 'Okyanus Akıntıları', wave: 'Dalgalar' }
+const SOURCE_LABELS = {
+  wind: 'GFS / NCEP / US National Weather Service',
+  ocean_current: 'CMEMS / Copernicus Marine',
+  wave: 'WAVEWATCH III / NCEP / NWS',
+}
+
+// One entry per layer_type/overlay_type — null until fetched, 'unavailable'
+// on a failed/empty fetch (FR-006's graceful "unavailable" state).
+const status = ref({ wind: null, ocean_current: null, wave: null })
 async function refreshStatus(layerType) {
   const snapshot = await fetchLatestFlowSnapshot(layerType)
   status.value = { ...status.value, [layerType]: snapshot }
@@ -51,86 +80,101 @@ function toggle() {
   if (open.value && !status.value.wind) refreshStatus('wind')
 }
 
-function openStandalone() {
-  // Separate, isolated MapLibre instance (live-testing decision,
-  // 2026-08-05): kept as an alternate entry point alongside the inline
-  // panel, not a replacement — while the integrated-into-the-main-map
-  // rendering bug is being tracked down, this button is a guaranteed-
-  // working fallback the user can reach for their actual use case
-  // (checking wind direction against fire locations on the real map is
-  // the goal; this view is a stopgap, not the destination).
-  emit('open-standalone')
-}
-
 function toggleWind() {
   uiStore.toggleWind()
   if (uiStore.windEnabled && !status.value.wind) refreshStatus('wind')
 }
-
 function toggleCurrents() {
   uiStore.toggleCurrents()
   if (uiStore.currentsEnabled && !status.value.ocean_current) refreshStatus('ocean_current')
 }
-
 function toggleWaves() {
   uiStore.toggleWaves()
   if (uiStore.wavesEnabled && !status.value.wave) refreshStatus('wave')
 }
 
-// Overlay status is a separate small map (not `status`, whose entries are
-// flow_snapshots-shaped) — fetchLatestOverlaySnapshot returns a differently
-// -shaped object (valueRange, no dataRange) per contracts/overlay-snapshot-contract.md.
-const overlayStatus = ref({ air_quality_pm25: null })
-
-async function refreshOverlayStatus(overlayType) {
-  const snapshot = await fetchLatestOverlaySnapshot(overlayType)
-  overlayStatus.value = { ...overlayStatus.value, [overlayType]: snapshot }
+function formatIssuedAt(iso) {
+  if (!iso) return null
+  return new Date(iso).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
 }
-
-function toggleAirQualityOverlay() {
-  uiStore.toggleAirQualityOverlay()
-  if (uiStore.airQualityOverlayEnabled && !overlayStatus.value.air_quality_pm25) refreshOverlayStatus('air_quality_pm25')
-}
-
-const overlayStale = computed(() => {
-  const snap = overlayStatus.value.air_quality_pm25
-  return snap ? isFlowSnapshotStale(snap.issuedAt) : false
-})
-const overlayIssuedAtLabel = computed(() => {
-  const snap = overlayStatus.value.air_quality_pm25
-  if (!snap) return null
-  return new Date(snap.issuedAt).toLocaleString(undefined, {
-    month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
-  })
+// One row per currently-enabled Animate layer with real snapshot data —
+// reference tool's "Source"/"Date" rows, but for every active layer at once.
+const activeAnimateSources = computed(() => {
+  const entries = []
+  for (const [key, snap] of Object.entries(status.value)) {
+    if (snap && snap !== 'unavailable') {
+      entries.push({ key, label: ANIMATE_LABELS[key], source: SOURCE_LABELS[key], date: formatIssuedAt(snap.issuedAt) })
+    }
+  }
+  return entries
 })
 
-function makeStaleComputed(layerType) {
-  return computed(() => {
-    const snap = status.value[layerType]
-    return snap ? isFlowSnapshotStale(snap.issuedAt) : false
-  })
+// ── Overlay (per-mode lists) ────────────────────────────────────────────
+// `key` present + one of the two `kind`s below = working; no `key` =
+// visible-but-disabled placeholder (same honesty pattern as Chem/
+// Particulates/Space/Bio elsewhere in this panel).
+const OVERLAY_OPTIONS = {
+  air: [
+    { key: 'wind', kind: 'speed', label: 'Wind' },
+    { label: 'Temp' }, { label: 'RH' }, { label: 'Dew' }, { label: 'WBT' }, { label: '3HPA' },
+    { label: 'CAPE' }, { label: 'TPW' }, { label: 'TCW' }, { label: 'MSLP' }, { label: 'MI' },
+    { label: 'UVI' }, { label: 'WPD' },
+  ],
+  ocean: [
+    { key: 'ocean_current', kind: 'speed', label: 'Currents' },
+    { key: 'wave', kind: 'speed', label: 'Waves' },
+    { label: 'HTSGW' }, { label: 'SST' }, { label: 'SSTA' }, { label: 'BAA' },
+  ],
+  chem: [{ label: 'COsc' }, { label: 'CO2sc' }, { label: 'SO2sm' }, { label: 'NO2' }],
+  particulates: [
+    { label: 'DUex' }, { label: 'PM1' },
+    { key: 'air_quality_pm25', kind: 'overlay', label: 'PM2.5' },
+    { label: 'PM10' }, { label: 'OMaot' }, { label: 'SO4ex' },
+  ],
+  space: [{ label: 'Aurora' }],
+  bio: [{ label: 'BAA' }],
 }
-function makeIssuedAtLabelComputed(layerType) {
-  return computed(() => {
-    const snap = status.value[layerType]
-    if (!snap) return null
-    return new Date(snap.issuedAt).toLocaleString(undefined, {
-      month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
-    })
-  })
+const BIO_ANNOTATIONS = [{ label: 'Fires' }, { label: 'None' }]
+
+// Overlay status is separately keyed from `status` (speed overlays reuse
+// flow_snapshots; PM2.5 reads overlay_snapshots, a differently-shaped row).
+const overlayStatus = ref({})
+async function refreshOverlayStatus(key, kind) {
+  const snapshot = kind === 'speed' ? await fetchLatestFlowSnapshot(key) : await fetchLatestOverlaySnapshot(key)
+  overlayStatus.value = { ...overlayStatus.value, [key]: snapshot }
 }
 
-const windStale = makeStaleComputed('wind')
-const windIssuedAtLabel = makeIssuedAtLabelComputed('wind')
-const currentsStale = makeStaleComputed('ocean_current')
-const currentsIssuedAtLabel = makeIssuedAtLabelComputed('ocean_current')
-const waveStale = makeStaleComputed('wave')
-const waveIssuedAtLabel = makeIssuedAtLabelComputed('wave')
+function overlayActive(option) {
+  if (!option.key) return false
+  if (option.kind === 'speed') return !!uiStore.speedOverlayEnabled[option.key]
+  return !!uiStore.airQualityOverlayEnabled
+}
 
-// Waves' particle "speed" is really wave height (meters), not m/s wind
-// speed (contracts/wave-snapshot-contract.md's frontend note) — swap the
-// shared legend's label whenever Waves is the active animated layer.
-const speedLegendLabelKey = computed(() => (uiStore.wavesEnabled ? 'windLayer.waveHeightLegendLabel' : 'windLayer.speedLegendLabel'))
+// Independent toggles, not radio-button/mutually-exclusive — explicit
+// correction, 2026-08-05: "bunların hepsi toggle olmalı radio button değil,
+// hiçbirini seçmeden de olmalı" (all of these should be toggles, not radio
+// buttons, and having none selected should also be possible).
+function toggleOverlayOption(option) {
+  if (!option.key) return // disabled placeholder — no handler beyond this early return
+  if (option.kind === 'speed') {
+    uiStore.toggleSpeedOverlay(option.key)
+    if (uiStore.speedOverlayEnabled[option.key] && !overlayStatus.value[option.key]) refreshOverlayStatus(option.key, 'speed')
+  } else {
+    uiStore.toggleAirQualityOverlay()
+    if (uiStore.airQualityOverlayEnabled && !overlayStatus.value[option.key]) refreshOverlayStatus(option.key, 'overlay')
+  }
+}
+
+// ── Live tuning (gear icon) ─────────────────────────────────────────────
+const showSettings = ref(false)
+function onSpeedInput(e) {
+  uiStore.setFlowSpeedMultiplier(Number(e.target.value))
+}
+function onTrailInput(e) {
+  uiStore.setFlowTrailLength(Number(e.target.value))
+}
+
+const activeModeInfo = computed(() => MODES.find((m) => m.id === uiStore.selectedMode))
 </script>
 
 <template>
@@ -149,103 +193,96 @@ const speedLegendLabelKey = computed(() => (uiStore.wavesEnabled ? 'windLayer.wa
       <div v-if="open" class="flow-control-panel-body">
         <div class="flow-control-panel-header">
           <h4 class="flow-control-panel-title">{{ t('windLayer.panelTitle') }}</h4>
-          <button type="button" class="flow-standalone-btn" @click="openStandalone">⛶</button>
         </div>
 
-        <div class="flow-control-section">
-          <span class="flow-control-section-label">{{ t('windLayer.modeLabel') }}</span>
-          <div class="flow-mode-row">
-            <button
-              v-for="mode in MODES"
-              :key="mode.id"
-              type="button"
-              class="flow-mode-btn"
-              :class="{ 'flow-mode-btn--active': uiStore.selectedMode === mode.id, 'flow-mode-btn--disabled': !mode.functional }"
-              :aria-disabled="!mode.functional"
-              :title="mode.functional ? t('windLayer.' + mode.labelKey) : t('windLayer.modeDisabledNote')"
-              @click="selectMode(mode)"
-            >
-              {{ t('windLayer.' + mode.labelKey) }}
-            </button>
-          </div>
-          <p v-if="!MODES.find((m) => m.id === uiStore.selectedMode)?.functional" class="flow-control-note">
-            {{ t('windLayer.modeDisabledNote') }}
-          </p>
+        <div class="flow-view-bar-row">
+          <span class="flow-view-bar-label">Source</span>
+          <span class="flow-view-source-text">{{ MODE_SOURCE[uiStore.selectedMode] }}{{ FIRE_SOURCE_SUFFIX }}</span>
         </div>
 
-        <div v-if="uiStore.selectedMode === 'air'" class="flow-control-section">
-          <span class="flow-control-section-label">{{ t('windLayer.animateLabel') }}</span>
-          <label class="flow-control-row">
-            <input type="checkbox" :checked="uiStore.windEnabled" @change="toggleWind" />
-            <span>{{ t('windLayer.toggleLabel') }}</span>
-          </label>
-          <p v-if="uiStore.windEnabled && status.wind === 'unavailable'" class="flow-control-note flow-control-note--warn">
-            {{ t('windLayer.unavailable') }}
-          </p>
-          <p v-else-if="uiStore.windEnabled && windIssuedAtLabel" class="flow-control-note" :class="{ 'flow-control-note--warn': windStale }">
-            {{ t('windLayer.asOf', { time: windIssuedAtLabel }) }}
-            <span v-if="windStale">— {{ t('windLayer.stale') }}</span>
-          </p>
+        <div class="flow-view-bar-row">
+          <span class="flow-view-bar-label">Mode</span>
+          <button
+            v-for="mode in MODES"
+            :key="mode.id"
+            type="button"
+            class="flow-view-chip flow-view-mode-btn"
+            :class="{ 'flow-view-mode-btn--active': uiStore.selectedMode === mode.id, 'flow-view-mode-btn--disabled': !mode.functional }"
+            :title="mode.functional ? '' : t('windLayer.modeDisabledNote')"
+            @click="selectMode(mode)"
+          >{{ mode.label }}</button>
+        </div>
+        <p v-if="activeModeInfo && !activeModeInfo.functional" class="flow-control-note">
+          {{ t('windLayer.modeDisabledNote') }}
+        </p>
+
+        <div v-if="uiStore.selectedMode === 'air'" class="flow-view-bar-row">
+          <span class="flow-view-bar-label">Animate</span>
+          <button type="button" class="flow-view-chip flow-view-mode-btn" :class="{ 'flow-view-mode-btn--active': uiStore.windEnabled }" @click="toggleWind">{{ t('windLayer.toggleLabel') }}</button>
+        </div>
+        <div v-if="uiStore.selectedMode === 'ocean'" class="flow-view-bar-row">
+          <span class="flow-view-bar-label">Animate</span>
+          <button type="button" class="flow-view-chip flow-view-mode-btn" :class="{ 'flow-view-mode-btn--active': uiStore.currentsEnabled }" @click="toggleCurrents">{{ t('windLayer.currentsToggleLabel') }}</button>
+          <button type="button" class="flow-view-chip flow-view-mode-btn" :class="{ 'flow-view-mode-btn--active': uiStore.wavesEnabled }" @click="toggleWaves">{{ t('windLayer.wavesToggleLabel') }}</button>
         </div>
 
-        <div v-if="uiStore.selectedMode === 'ocean'" class="flow-control-section">
-          <span class="flow-control-section-label">{{ t('windLayer.animateLabel') }}</span>
-          <label class="flow-control-row">
-            <input type="checkbox" :checked="uiStore.currentsEnabled" @change="toggleCurrents" />
-            <span>{{ t('windLayer.currentsToggleLabel') }}</span>
-          </label>
-          <p v-if="uiStore.currentsEnabled && status.ocean_current === 'unavailable'" class="flow-control-note flow-control-note--warn">
-            {{ t('windLayer.unavailable') }}
-          </p>
-          <p v-else-if="uiStore.currentsEnabled && currentsIssuedAtLabel" class="flow-control-note" :class="{ 'flow-control-note--warn': currentsStale }">
-            {{ t('windLayer.asOf', { time: currentsIssuedAtLabel }) }}
-            <span v-if="currentsStale">— {{ t('windLayer.stale') }}</span>
-          </p>
-
-          <label class="flow-control-row">
-            <input type="checkbox" :checked="uiStore.wavesEnabled" @change="toggleWaves" />
-            <span>{{ t('windLayer.wavesToggleLabel') }}</span>
-          </label>
-          <p v-if="uiStore.wavesEnabled && status.wave === 'unavailable'" class="flow-control-note flow-control-note--warn">
-            {{ t('windLayer.unavailable') }}
-          </p>
-          <p v-else-if="uiStore.wavesEnabled && waveIssuedAtLabel" class="flow-control-note" :class="{ 'flow-control-note--warn': waveStale }">
-            {{ t('windLayer.asOf', { time: waveIssuedAtLabel }) }}
-            <span v-if="waveStale">— {{ t('windLayer.stale') }}</span>
-          </p>
+        <div v-if="uiStore.selectedMode === 'air'" class="flow-view-bar-row">
+          <span class="flow-view-bar-label">Height</span>
+          <button
+            v-for="level in HEIGHT_LEVELS"
+            :key="level"
+            type="button"
+            class="flow-view-chip"
+            :class="level === 'Sfc' ? ['flow-view-mode-btn', { 'flow-view-mode-btn--active': selectedHeight === level }] : 'flow-view-chip--disabled'"
+            :title="level === 'Sfc' ? '' : 'Yakında — sadece yüzey verisi var'"
+            @click="level === 'Sfc' && (selectedHeight = level)"
+          >{{ level }}</button>
         </div>
 
-        <div v-if="uiStore.selectedMode === 'chem' || uiStore.selectedMode === 'particulates'" class="flow-control-section">
-          <span class="flow-control-section-label">{{ t('windLayer.overlayLabel') }}</span>
-          <label class="flow-control-row">
-            <input type="checkbox" :checked="uiStore.airQualityOverlayEnabled" @change="toggleAirQualityOverlay" />
-            <span>{{ t('windLayer.pm25ToggleLabel') }}</span>
-          </label>
-          <p v-if="uiStore.airQualityOverlayEnabled && overlayStatus.air_quality_pm25 === 'unavailable'" class="flow-control-note flow-control-note--warn">
-            {{ t('windLayer.unavailable') }}
-          </p>
-          <p v-else-if="uiStore.airQualityOverlayEnabled && overlayIssuedAtLabel" class="flow-control-note" :class="{ 'flow-control-note--warn': overlayStale }">
-            {{ t('windLayer.asOf', { time: overlayIssuedAtLabel }) }}
-            <span v-if="overlayStale">— {{ t('windLayer.stale') }}</span>
-          </p>
+        <div class="flow-view-bar-row">
+          <span class="flow-view-bar-label">Overlay</span>
+          <button
+            v-for="option in OVERLAY_OPTIONS[uiStore.selectedMode]"
+            :key="option.label"
+            type="button"
+            class="flow-view-chip"
+            :class="option.key ? ['flow-view-mode-btn', { 'flow-view-mode-btn--active': overlayActive(option) }] : 'flow-view-chip--disabled'"
+            :title="option.key ? '' : 'Yakında — veri kaynağı henüz eklenmedi'"
+            @click="toggleOverlayOption(option)"
+          >{{ option.label }}</button>
+        </div>
 
-          <div v-if="uiStore.airQualityOverlayEnabled" class="flow-control-legend">
-            <span class="flow-control-legend-label">{{ t('windLayer.pm25ToggleLabel') }}</span>
-            <div class="flow-control-legend-gradient flow-control-legend-gradient--pm25"></div>
-            <div class="flow-control-legend-scale">
-              <span>{{ t('windLayer.speedLow') }}</span>
-              <span>{{ t('windLayer.speedHigh') }}</span>
-            </div>
+        <div v-if="uiStore.selectedMode === 'bio'" class="flow-view-bar-row">
+          <span class="flow-view-bar-label">Annotation</span>
+          <span v-for="a in BIO_ANNOTATIONS" :key="a.label" class="flow-view-chip flow-view-chip--disabled" title="Yakında">{{ a.label }}</span>
+        </div>
+
+        <div v-if="activeAnimateSources.length" class="flow-view-source-block">
+          <div v-for="s in activeAnimateSources" :key="s.key" class="flow-view-source-row">
+            <span class="flow-view-bar-label">{{ s.label }}</span>
+            <span class="flow-view-source-text">{{ s.source }}<template v-if="s.date"> — {{ s.date }}</template></span>
           </div>
         </div>
 
         <div class="flow-control-legend">
-          <span class="flow-control-legend-label">{{ t(speedLegendLabelKey) }}</span>
+          <span class="flow-control-legend-label">{{ uiStore.wavesEnabled ? t('windLayer.waveHeightLegendLabel') : t('windLayer.speedLegendLabel') }}</span>
           <div class="flow-control-legend-gradient"></div>
           <div class="flow-control-legend-scale">
             <span>{{ t('windLayer.speedLow') }}</span>
             <span>{{ t('windLayer.speedHigh') }}</span>
           </div>
+        </div>
+
+        <button type="button" class="flow-view-gear" @click="showSettings = !showSettings">⚙️</button>
+        <div v-if="showSettings" class="flow-view-settings">
+          <label class="flow-view-settings-label">
+            Hız çarpanı: {{ uiStore.flowSpeedMultiplier.toFixed(1) }}x
+            <input type="range" min="0.5" max="1000" step="0.5" :value="uiStore.flowSpeedMultiplier" @input="onSpeedInput" />
+          </label>
+          <label class="flow-view-settings-label">
+            İz uzunluğu: {{ uiStore.flowTrailLength }}
+            <input type="range" min="2" max="2000" step="1" :value="uiStore.flowTrailLength" @input="onTrailInput" />
+          </label>
         </div>
       </div>
     </Transition>
@@ -282,7 +319,8 @@ const speedLegendLabelKey = computed(() => (uiStore.wavesEnabled ? 'windLayer.wa
   position: absolute;
   bottom: calc(100% + 10px);
   left: -8px;
-  width: 260px;
+  width: 360px;
+  max-width: min(420px, calc(100vw - 32px));
   padding: 14px;
   border-radius: 10px;
   border: 1px solid rgba(255, 255, 255, 0.18);
@@ -295,11 +333,8 @@ const speedLegendLabelKey = computed(() => (uiStore.wavesEnabled ? 'windLayer.wa
      off the edge of the screen, since this button sits near the left
      edge of the map (end of the bottom-left legend group). */
   transform-origin: bottom left;
-  /* Sits well above the other bottom-left legend cards (.map-legend is
-     part of the same flex group, unstacked) so the expanded panel never
-     reads as merged with the severity card next to it. */
   z-index: 40;
-  max-height: 70vh;
+  max-height: 78vh;
   overflow-y: auto;
 }
 
@@ -317,95 +352,16 @@ const speedLegendLabelKey = computed(() => (uiStore.wavesEnabled ? 'windLayer.wa
   color: #e2e8f0;
 }
 
-.flow-standalone-btn {
-  width: 22px;
-  height: 22px;
-  border-radius: 5px;
-  border: 1px solid rgba(255, 255, 255, 0.16);
-  background: rgba(255, 255, 255, 0.06);
-  color: #cbd5e1;
-  font-size: 0.75rem;
-  line-height: 1;
-  cursor: pointer;
-}
-.flow-standalone-btn:hover {
-  background: rgba(255, 255, 255, 0.14);
-}
-
-.flow-control-section {
-  margin-bottom: 12px;
-  padding-bottom: 10px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-}
-.flow-control-section:last-of-type {
-  border-bottom: none;
-}
-
-.flow-control-section-label {
-  display: block;
-  font-size: 0.65rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: rgba(255, 255, 255, 0.5);
-  margin-bottom: 6px;
-}
-
-.flow-mode-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-
-.flow-mode-btn {
-  padding: 4px 9px;
-  border-radius: 6px;
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  background: rgba(255, 255, 255, 0.04);
-  color: #cbd5e1;
-  font-size: 0.7rem;
-  cursor: pointer;
-  transition: background 0.15s ease, color 0.15s ease;
-}
-.flow-mode-btn:hover:not(.flow-mode-btn--disabled) {
-  background: rgba(255, 255, 255, 0.1);
-}
-.flow-mode-btn--active {
-  background: #2f81f7;
-  border-color: #2f81f7;
-  color: #0b1220;
-  font-weight: 700;
-}
-.flow-mode-btn--disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-}
-
-.flow-control-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 0.78rem;
-  color: #e2e8f0;
-  margin-bottom: 4px;
-  cursor: pointer;
-}
-.flow-control-row--disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
 .flow-control-note {
   font-size: 0.68rem;
   color: #8c97a8;
-  margin: 0 0 4px 24px;
-}
-.flow-control-note--warn {
-  color: #f0b84a;
+  margin: 0 0 8px 0;
 }
 
 .flow-control-legend {
-  margin-top: 4px;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
 }
 .flow-control-legend-label {
   display: block;
@@ -418,25 +374,115 @@ const speedLegendLabelKey = computed(() => (uiStore.wavesEnabled ? 'windLayer.wa
   border-radius: 4px;
   background: linear-gradient(90deg, rgb(64, 140, 242), rgb(242, 89, 38));
 }
-/* Matches wind-importer/overlay_texture.py's PM25_RAMP exactly (same 5
-   colors, same order) so the legend never drifts from what's actually
-   drawn on the map. */
-.flow-control-legend-gradient--pm25 {
-  background: linear-gradient(
-    90deg,
-    rgb(0, 228, 0),
-    rgb(255, 255, 0),
-    rgb(255, 126, 0),
-    rgb(255, 0, 0),
-    rgb(126, 0, 35)
-  );
-}
 .flow-control-legend-scale {
   display: flex;
   justify-content: space-between;
   font-size: 0.65rem;
   color: #8c97a8;
   margin-top: 2px;
+}
+
+.flow-view-bar-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.flow-view-bar-label {
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: rgba(255, 255, 255, 0.5);
+  min-width: 56px;
+}
+.flow-view-chip {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 0.75rem;
+  color: #e2e8f0;
+  cursor: pointer;
+  background: none;
+  border: none;
+  padding: 0;
+  font-family: inherit;
+}
+.flow-view-chip--disabled {
+  color: rgba(255, 255, 255, 0.32);
+  cursor: not-allowed;
+}
+
+.flow-view-mode-btn {
+  padding: 3px 8px;
+  border-radius: 5px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.04);
+}
+.flow-view-mode-btn:hover:not(.flow-view-mode-btn--disabled) {
+  background: rgba(255, 255, 255, 0.1);
+}
+.flow-view-mode-btn--active {
+  background: #d4a94a;
+  border-color: #d4a94a;
+  color: #0b1220;
+  font-weight: 700;
+  box-shadow: 0 0 8px 1px rgba(212, 169, 74, 0.6);
+}
+.flow-view-mode-btn--disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.flow-view-source-block {
+  margin-bottom: 8px;
+  padding: 8px 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+.flow-view-source-row {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  margin-bottom: 5px;
+}
+.flow-view-source-row:last-child {
+  margin-bottom: 0;
+}
+.flow-view-source-text {
+  font-size: 0.7rem;
+  color: #8c97a8;
+}
+
+.flow-view-gear {
+  margin-top: 8px;
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.06);
+  cursor: pointer;
+  font-size: 0.85rem;
+}
+.flow-view-gear:hover {
+  background: rgba(255, 255, 255, 0.14);
+}
+
+.flow-view-settings {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(255, 255, 255, 0.12);
+}
+.flow-view-settings-label {
+  display: block;
+  font-size: 0.75rem;
+  color: #cbd5e1;
+}
+.flow-view-settings-label input[type='range'] {
+  display: block;
+  width: 100%;
+  margin-top: 6px;
 }
 
 /* Expands from the button toward the top-right — matches the reference

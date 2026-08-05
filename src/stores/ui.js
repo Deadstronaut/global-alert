@@ -118,6 +118,31 @@ export const useUIStore = defineStore('ui', () => {
     }
     const selectedMode = ref('air');
 
+    // Spec 054 follow-up (2026-08-05): the reference tool's "Overlay: Wind/
+    // Currents/Waves" entries — the same flow_snapshots texture already used
+    // for the animated particles, recolored client-side as a static speed
+    // heatmap (windLayerData.js's buildWindSpeedOverlayDataUrl). Independent
+    // toggles, not mutually exclusive with each other or with Animate —
+    // explicit correction, 2026-08-05: "bunların hepsi toggle olmalı radio
+    // button değil, hiçbirini seçmeden de olmalı".
+    const speedOverlayEnabled = ref({wind: false, ocean_current: false, wave: false});
+    function toggleSpeedOverlay(key) {
+        speedOverlayEnabled.value = {...speedOverlayEnabled.value, [key]: !speedOverlayEnabled.value[key]};
+    }
+
+    // Live-tunable flow-particle rendering (gear icon in FlowControlPanel.vue)
+    // — defaults are the live-testing result, 2026-08-05, that produced the
+    // actual nullschool-style flowing-streamline look (see MapView.vue's
+    // setFlowLayerEnabled comment).
+    const flowSpeedMultiplier = ref(336);
+    const flowTrailLength = ref(89);
+    function setFlowSpeedMultiplier(value) {
+        flowSpeedMultiplier.value = value;
+    }
+    function setFlowTrailLength(value) {
+        flowTrailLength.value = value;
+    }
+
     function applyThemeAttrs() {
         const theme = highContrast.value ? 'high-contrast' : (darkMode.value ? 'dark' : 'light');
         document.documentElement.setAttribute('data-theme', theme);

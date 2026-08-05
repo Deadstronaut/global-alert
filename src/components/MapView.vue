@@ -2919,6 +2919,24 @@ watch(
   },
 )
 
+// Every Overlay raster layer below needs to sit ABOVE the base map tiles
+// but BELOW this app's own interactive layers (hex severity fill, region
+// polygons, community-report clusters) — added with no `beforeId`,
+// map.addLayer() appends at the very TOP of the stack instead, burying
+// those layers under an opaque-ish (raster-opacity 0.65) image (user
+// feedback, 2026-08-06: "resim olduğu için üzerine oturuyorlar" — since
+// they're images, they sit right on top [of everything]). Checks a fixed
+// list of this app's own earliest-added, always-stable layer ids (not a
+// generic heuristic like the standalone view's old findLandLayerId() —
+// deliberately narrower/safer, matching this file's own prior documented
+// caution about risking re-burying a layer in a 68-layer style) and
+// inserts before the first one found; undefined (append at top) if none
+// of them exist yet, same as the previous behavior.
+function overlayBeforeId() {
+  const candidates = ['country-hex-fill', 'hex-fill', 'community-reports-clusters']
+  return candidates.find((id) => map.getLayer(id))
+}
+
 // Overlay: Wind/Currents/Waves (spec 054 follow-up, 2026-08-05) — the
 // reference tool's speed-as-color heatmap, distinct from the animated
 // particles above; reuses the same flow_snapshots texture, recolored
@@ -2946,7 +2964,7 @@ async function setSpeedOverlayLayerEnabled(layerType, enabled) {
   }
   const dataUrl = await buildWindSpeedOverlayDataUrl(snapshot)
   map.addSource(sourceId, { type: 'image', url: dataUrl, coordinates: snapshot.coordinates })
-  map.addLayer({ id: layerId, type: 'raster', source: sourceId, paint: { 'raster-opacity': 0.55 } })
+  map.addLayer({ id: layerId, type: 'raster', source: sourceId, paint: { 'raster-opacity': 0.55 } }, overlayBeforeId())
 }
 
 // Overlay layers (spec 054 US2) — a plain MapLibre `image` source + `raster`
@@ -2987,7 +3005,7 @@ async function setOverlayLayerEnabled(overlayType, enabled) {
   }
 
   map.addSource(sourceId, { type: 'image', url: snapshot.textureUrl, coordinates: snapshot.coordinates })
-  map.addLayer({ id: layerId, type: 'raster', source: sourceId, paint: { 'raster-opacity': 0.65 } })
+  map.addLayer({ id: layerId, type: 'raster', source: sourceId, paint: { 'raster-opacity': 0.65 } }, overlayBeforeId())
 }
 
 // One watcher covers every Overlay key regardless of which mechanism

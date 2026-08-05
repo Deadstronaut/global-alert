@@ -9,13 +9,20 @@
 // gives the flow layers a minimal, easy-to-reason-about context of their
 // own (explicit user request, 2026-08-05: "ayrı bir uygulama gibi... bu
 // haritada göreceğiz diye bir derdimiz yok").
+//
+// Menu structure (Mode/Animate/Height/Overlay/Annotation rows, per-mode
+// Overlay lists, Source lines) matches the reference tool's own layout
+// exactly (live-testing ask, 2026-08-05: "önce bir menü olarak hazırla") —
+// most entries are visible-but-disabled placeholders for data sources not
+// wired up yet, same honesty pattern as Space/Bio in the main panel. Only
+// entries with a `key` matching a real flow_snapshots/overlay_snapshots
+// row are actually functional.
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import * as maplibregl from 'maplibre-gl'
 import maplibreWorkerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?url'
 import { useI18n } from 'vue-i18n'
 import { SimpleWindLayer } from '@/vendor/simple-wind-layer.js'
 import { fetchLatestFlowSnapshot, fetchLatestOverlaySnapshot, buildWindSpeedOverlayDataUrl } from '@/utils/windLayerData.js'
-import { isFlowSnapshotStale } from '@/utils/flowSnapshotStaleness.js'
 
 maplibregl.setWorkerUrl(maplibreWorkerUrl) // idempotent if MapView.vue already called this
 
@@ -25,44 +32,64 @@ const { t } = useI18n()
 const mapContainer = ref(null)
 let map = null
 
+// ── Mode ─────────────────────────────────────────────────────────────────
+const MODES = [
+  { id: 'air', label: 'Air' },
+  { id: 'ocean', label: 'Ocean' },
+  { id: 'chem', label: 'Chem' },
+  { id: 'particulates', label: 'Particulates' },
+  { id: 'space', label: 'Space' },
+  { id: 'bio', label: 'Bio' },
+]
+const selectedMode = ref('air')
+const MODE_SOURCE = {
+  air: 'GFS / NCEP / US National Weather Service',
+  ocean: 'Global Ocean Physics Analysis and Forecast / CMEMS',
+  chem: 'GEOS-5 / GMAO / NASA',
+  particulates: 'CAMS / Copernicus / European Commission + ECMWF',
+  space: 'OVATION / SWPC / NCEP / NWS / NOAA',
+  bio: 'OVATION / SWPC / NCEP / NWS / NOAA',
+}
+// Reference tool's own HD-mode overlay list appends fire-hotspot
+// attribution to every Source line — this app already ingests NASA FIRMS
+// hotspot data elsewhere (server/.env's NASA_FIRMS_KEY), so this is a
+// real, accurate attribution to show, even though FIRMS isn't wired as a
+// toggle in THIS panel yet (it's already a full disaster-event layer in
+// the main map).
+const FIRE_SOURCE_SUFFIX = ' + VIIRS NRT / FIRMS / EOSDIS / NASA'
+
+// Air mode's pressure-level selector — this app only has surface (Sfc)
+// data for any GFS field today, so every other level is a disabled
+// placeholder, same honesty pattern as the rest of this menu.
+const HEIGHT_LEVELS = ['Sfc', '1000', '850', '700', '500', '250', '70', '10']
+const selectedHeight = ref('Sfc')
+
+// ── Animate (global — same three regardless of Mode, matching the
+//    reference tool's own screenshots, which show the identical Animate
+//    row in every Mode) ──────────────────────────────────────────────────
 const windEnabled = ref(true) // on by default here — this view's whole purpose is showing flow, unlike the main map's off-by-default toggle
 const currentsEnabled = ref(false)
 const wavesEnabled = ref(false)
-const overlayEnabled = ref(false)
 
-const status = ref({ wind: null, ocean_current: null, wave: null, air_quality_pm25: null, wind_speed_overlay: null })
+const status = ref({ wind: null, ocean_current: null, wave: null })
 const layerInstances = { wind: null, ocean_current: null, wave: null }
 const LAYER_IDS = { wind: 'standalone-flow-wind', ocean_current: 'standalone-flow-currents', wave: 'standalone-flow-wave' }
-const OVERLAY_LAYER_ID = 'standalone-overlay-pm25'
 
-// Real source attribution per layer (matches SOURCE_NAME_BY_LAYER /
-// SOURCE_NAME_BY_OVERLAY in wind-importer/main.py exactly — not
-// placeholder text) — live-testing ask, 2026-08-05: "kaynak göstermesi"
-// (reference tool's own "Source" row).
 const SOURCE_LABELS = {
   wind: 'GFS / NCEP / US National Weather Service',
   ocean_current: 'CMEMS / Copernicus Marine',
   wave: 'WAVEWATCH III / NCEP / NWS',
-  air_quality_pm25: 'CAMS / Copernicus Atmosphere Data Store',
-  wind_speed_overlay: 'GFS / NCEP / US National Weather Service',
 }
-const ANIMATE_LABELS = {
-  wind: 'Rüzgar',
-  ocean_current: 'Okyanus Akıntıları',
-  wave: 'Dalgalar',
-  air_quality_pm25: 'PM2.5 (Hava Kalitesi)',
-  wind_speed_overlay: 'Rüzgar Hızı (Katman)',
-}
+const ANIMATE_LABELS = { wind: 'Rüzgar', ocean_current: 'Okyanus Akıntıları', wave: 'Dalgalar' }
 
 function formatIssuedAt(iso) {
   if (!iso) return null
   return new Date(iso).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
 }
-// One row per currently-enabled layer with real snapshot data — reference
-// tool's "Source"/"Date" rows, but for every active layer at once (this
-// view supports several simultaneously, unlike the reference tool's
-// single active selection).
-const activeSources = computed(() => {
+// One row per currently-enabled Animate layer with real snapshot data —
+// reference tool's "Source"/"Date" rows, but for every active layer at
+// once (this view supports several simultaneously).
+const activeAnimateSources = computed(() => {
   const entries = []
   for (const [key, snap] of Object.entries(status.value)) {
     if (snap && snap !== 'unavailable') {
@@ -72,34 +99,6 @@ const activeSources = computed(() => {
   return entries
 })
 
-// Live speed-tuning (gear icon) — live-testing ask, 2026-08-05: movement at
-// real-world scale read as too slow/flickery to track by eye; rather than
-// guess-and-rebuild a fixed multiplier, this exposes the same
-// setSpeedMultiplier() SimpleWindLayer already supports as a slider so it
-// can be tuned by feel, live, without a code change each time.
-const showSettings = ref(false)
-const speedMultiplier = ref(336) // live-testing result, 2026-08-05: this + trailLength=89 produced the actual nullschool-style flowing streamline look
-function onSpeedInput(e) {
-  speedMultiplier.value = Number(e.target.value)
-  for (const layer of Object.values(layerInstances)) layer?.setSpeedMultiplier(speedMultiplier.value)
-}
-
-// Same live-tuning idea for trail length — live-testing ask, 2026-08-05:
-// "iz bırakması lazım" (needs to leave a trail), the fixed default wasn't
-// visibly persisting enough at the zoom/density being tested.
-const trailLength = ref(89)
-function onTrailInput(e) {
-  trailLength.value = Number(e.target.value)
-  for (const layer of Object.values(layerInstances)) layer?.setTrailLength(trailLength.value)
-}
-
-// Land polygons should visually cover the flow particles over them (only
-// meaningful over water/air, not literally on the ground) — live-testing
-// ask, 2026-08-05. MapLibre layer order IS z-order (later = drawn on top),
-// so inserting our custom layer just before the style's own first land-ish
-// fill layer, instead of appending it at the very top, puts land back over
-// it. Falls back to on-top (previous behavior) if no such layer is found
-// — depends on OpenFreeMap's own layer naming, not guaranteed stable.
 function findLandLayerId() {
   const layers = map?.getStyle()?.layers ?? []
   const landLayer = layers.find((l) => /^landcover|^landuse|^land\b/i.test(l.id))
@@ -116,9 +115,7 @@ async function setFlowLayer(layerType, enabled) {
   }
   if (layerInstances[layerType]) return
 
-  const snapshot = layerType === 'wind' || layerType === 'ocean_current' || layerType === 'wave'
-    ? await fetchLatestFlowSnapshot(layerType)
-    : null
+  const snapshot = await fetchLatestFlowSnapshot(layerType)
   if (!snapshot) {
     status.value = { ...status.value, [layerType]: 'unavailable' }
     console.warn(`[FlowVisualizationView] No ${layerType} snapshot available`)
@@ -137,26 +134,6 @@ async function setFlowLayer(layerType, enabled) {
   map.addLayer(layer, findLandLayerId())
 }
 
-async function setOverlayLayer(enabled) {
-  if (!map) return
-  const sourceId = `${OVERLAY_LAYER_ID}-source`
-  if (!enabled) {
-    if (map.getLayer(OVERLAY_LAYER_ID)) map.removeLayer(OVERLAY_LAYER_ID)
-    if (map.getSource(sourceId)) map.removeSource(sourceId)
-    return
-  }
-  if (map.getLayer(OVERLAY_LAYER_ID)) return
-
-  const snapshot = await fetchLatestOverlaySnapshot('air_quality_pm25')
-  if (!snapshot) {
-    status.value = { ...status.value, air_quality_pm25: 'unavailable' }
-    return
-  }
-  status.value = { ...status.value, air_quality_pm25: snapshot }
-  map.addSource(sourceId, { type: 'image', url: snapshot.textureUrl, coordinates: snapshot.coordinates })
-  map.addLayer({ id: OVERLAY_LAYER_ID, type: 'raster', source: sourceId, paint: { 'raster-opacity': 0.65 } })
-}
-
 function toggleWind() {
   windEnabled.value = !windEnabled.value
   setFlowLayer('wind', windEnabled.value)
@@ -169,51 +146,109 @@ function toggleWaves() {
   wavesEnabled.value = !wavesEnabled.value
   setFlowLayer('wave', wavesEnabled.value)
 }
-function toggleOverlay() {
-  overlayEnabled.value = !overlayEnabled.value
-  setOverlayLayer(overlayEnabled.value)
+
+// ── Overlay (per-mode lists) ────────────────────────────────────────────
+// `key` present + one of the two generic setter functions below = working;
+// no `key` = visible-but-disabled placeholder (spec 054's own honesty
+// pattern for Space/Bio, applied here per-entry instead of per-mode).
+const OVERLAY_OPTIONS = {
+  air: [
+    { key: 'wind', kind: 'speed', label: 'Wind' },
+    { label: 'Temp' }, { label: 'RH' }, { label: 'Dew' }, { label: 'WBT' }, { label: '3HPA' },
+    { label: 'CAPE' }, { label: 'TPW' }, { label: 'TCW' }, { label: 'MSLP' }, { label: 'MI' },
+    { label: 'UVI' }, { label: 'WPD' }, { label: 'None' },
+  ],
+  ocean: [
+    { key: 'ocean_current', kind: 'speed', label: 'Currents' },
+    { key: 'wave', kind: 'speed', label: 'Waves' },
+    { label: 'HTSGW' }, { label: 'SST' }, { label: 'SSTA' }, { label: 'BAA' }, { label: 'None' },
+  ],
+  chem: [{ label: 'COsc' }, { label: 'CO2sc' }, { label: 'SO2sm' }, { label: 'NO2' }],
+  particulates: [
+    { label: 'DUex' }, { label: 'PM1' },
+    { key: 'air_quality_pm25', kind: 'overlay', label: 'PM2.5' },
+    { label: 'PM10' }, { label: 'OMaot' }, { label: 'SO4ex' },
+  ],
+  space: [{ label: 'Aurora' }],
+  bio: [{ label: 'BAA' }, { label: 'None' }],
+}
+const BIO_ANNOTATIONS = [{ label: 'Fires' }, { label: 'None' }]
+
+// "speed" overlays (Wind/Currents/Waves) decode an existing flow_snapshots
+// texture client-side (buildWindSpeedOverlayDataUrl — works for any of the
+// three, not wind-specific despite the name). "overlay" kind reads an
+// already-pre-colored overlay_snapshots row (PM2.5). Both share one
+// enabled-state map and one MapLibre source/layer-id scheme so toggling
+// works the same way regardless of which kind a given entry is.
+const overlayEnabled = ref({}) // { [key]: boolean }
+const overlayStatus = ref({}) // { [key]: snapshot | 'unavailable' | null }
+function overlayLayerId(key) {
+  return `standalone-overlay-${key}`
 }
 
-// "Overlay: Wind" (wind SPEED as a color heatmap, distinct from the
-// animated flow lines) — live-testing ask, 2026-08-05, matches the
-// reference tool's own Overlay row. Reuses the already-fetched wind
-// flow_snapshots texture (buildWindSpeedOverlayDataUrl decodes it
-// client-side), no new backend importer needed — unlike PM2.5, which
-// needs its own CAMS source.
-const windSpeedOverlayEnabled = ref(false)
-const WIND_SPEED_OVERLAY_ID = 'standalone-overlay-wind-speed'
-async function setWindSpeedOverlayLayer(enabled) {
+async function setSpeedOverlay(key, enabled) {
   if (!map) return
-  const sourceId = `${WIND_SPEED_OVERLAY_ID}-source`
+  const layerId = overlayLayerId(key)
+  const sourceId = `${layerId}-source`
   if (!enabled) {
-    if (map.getLayer(WIND_SPEED_OVERLAY_ID)) map.removeLayer(WIND_SPEED_OVERLAY_ID)
+    if (map.getLayer(layerId)) map.removeLayer(layerId)
     if (map.getSource(sourceId)) map.removeSource(sourceId)
     return
   }
-  if (map.getLayer(WIND_SPEED_OVERLAY_ID)) return
+  if (map.getLayer(layerId)) return
 
-  const snapshot = await fetchLatestFlowSnapshot('wind')
+  const snapshot = await fetchLatestFlowSnapshot(key)
   if (!snapshot) {
-    status.value = { ...status.value, wind_speed_overlay: 'unavailable' }
+    overlayStatus.value = { ...overlayStatus.value, [key]: 'unavailable' }
     return
   }
-  status.value = { ...status.value, wind_speed_overlay: snapshot }
+  overlayStatus.value = { ...overlayStatus.value, [key]: snapshot }
   const dataUrl = await buildWindSpeedOverlayDataUrl(snapshot)
   map.addSource(sourceId, { type: 'image', url: dataUrl, coordinates: snapshot.coordinates })
-  map.addLayer({ id: WIND_SPEED_OVERLAY_ID, type: 'raster', source: sourceId, paint: { 'raster-opacity': 0.55 } })
-}
-function toggleWindSpeedOverlay() {
-  windSpeedOverlayEnabled.value = !windSpeedOverlayEnabled.value
-  setWindSpeedOverlayLayer(windSpeedOverlayEnabled.value)
+  map.addLayer({ id: layerId, type: 'raster', source: sourceId, paint: { 'raster-opacity': 0.55 } })
 }
 
-// Reference tool's full Overlay row (Temp/RH/Dew/WBT/3HPA/CAPE/TPW/TCW/
-// MSLP/MI/UVI/WPD) — live-testing ask, 2026-08-05. Each of these needs its
-// own real data source (most are additional GFS surface fields, fetchable
-// the same way wind/waves already are); listed here for context/honesty
-// about the full reference structure, same "visible but disabled, not
-// hidden" pattern as Space/Bio modes — not implemented yet, not faked.
-const COMING_SOON_OVERLAYS = ['Temp', 'RH', 'Dew', 'WBT', '3HPA', 'CAPE', 'TPW', 'TCW', 'MSLP', 'MI', 'UVI', 'WPD']
+async function setPreColoredOverlay(key, enabled) {
+  if (!map) return
+  const layerId = overlayLayerId(key)
+  const sourceId = `${layerId}-source`
+  if (!enabled) {
+    if (map.getLayer(layerId)) map.removeLayer(layerId)
+    if (map.getSource(sourceId)) map.removeSource(sourceId)
+    return
+  }
+  if (map.getLayer(layerId)) return
+
+  const snapshot = await fetchLatestOverlaySnapshot(key)
+  if (!snapshot) {
+    overlayStatus.value = { ...overlayStatus.value, [key]: 'unavailable' }
+    return
+  }
+  overlayStatus.value = { ...overlayStatus.value, [key]: snapshot }
+  map.addSource(sourceId, { type: 'image', url: snapshot.textureUrl, coordinates: snapshot.coordinates })
+  map.addLayer({ id: layerId, type: 'raster', source: sourceId, paint: { 'raster-opacity': 0.65 } })
+}
+
+function toggleOverlayOption(option) {
+  if (!option.key) return // disabled placeholder — no handler beyond this early return
+  const enabled = !overlayEnabled.value[option.key]
+  overlayEnabled.value = { ...overlayEnabled.value, [option.key]: enabled }
+  if (option.kind === 'speed') setSpeedOverlay(option.key, enabled)
+  else setPreColoredOverlay(option.key, enabled)
+}
+
+// ── Live tuning (gear icon) ─────────────────────────────────────────────
+const showSettings = ref(false)
+const speedMultiplier = ref(336) // live-testing result, 2026-08-05: this + trailLength=89 produced the actual nullschool-style flowing streamline look
+function onSpeedInput(e) {
+  speedMultiplier.value = Number(e.target.value)
+  for (const layer of Object.values(layerInstances)) layer?.setSpeedMultiplier(speedMultiplier.value)
+}
+const trailLength = ref(89)
+function onTrailInput(e) {
+  trailLength.value = Number(e.target.value)
+  for (const layer of Object.values(layerInstances)) layer?.setTrailLength(trailLength.value)
+}
 
 let resizeObserver = null
 
@@ -231,9 +266,6 @@ onMounted(() => {
   // 0x0 or mid-CSS-transition the instant `new Map()` reads its layout box
   // — nothing about the map "failing" (no console error, tiles load fine),
   // it just paints into a wrongly-sized/degenerate canvas forever after.
-  // Root cause of this view showing literally nothing despite render()
-  // running every frame with real, non-empty vertex data (live-debugged
-  // 2026-08-05).
   resizeObserver = new ResizeObserver(() => map?.resize())
   resizeObserver.observe(mapContainer.value)
 
@@ -242,7 +274,6 @@ onMounted(() => {
     if (windEnabled.value) setFlowLayer('wind', true)
     if (currentsEnabled.value) setFlowLayer('ocean_current', true)
     if (wavesEnabled.value) setFlowLayer('wave', true)
-    if (overlayEnabled.value) setOverlayLayer(true)
   })
 
   map.on('error', (e) => console.error('[FlowVisualizationView] map error', e))
@@ -262,32 +293,74 @@ onBeforeUnmount(() => {
 
     <div class="flow-view-controls">
       <div class="flow-view-bar-row">
-        <span class="flow-view-bar-label">Animasyon</span>
+        <span class="flow-view-bar-label">Source</span>
+        <span class="flow-view-source-text">{{ MODE_SOURCE[selectedMode] }}{{ FIRE_SOURCE_SUFFIX }}</span>
+      </div>
+
+      <div class="flow-view-legend">
+        <span class="flow-view-bar-label">Scale</span>
+        <div class="flow-view-legend-gradient"></div>
+      </div>
+
+      <div class="flow-view-bar-row">
+        <span class="flow-view-bar-label">Mode</span>
+        <button
+          v-for="mode in MODES"
+          :key="mode.id"
+          type="button"
+          class="flow-view-chip flow-view-mode-btn"
+          :class="{ 'flow-view-mode-btn--active': selectedMode === mode.id }"
+          @click="selectedMode = mode.id"
+        >
+          {{ mode.label }}
+        </button>
+      </div>
+
+      <div class="flow-view-bar-row">
+        <span class="flow-view-bar-label">Animate</span>
         <label class="flow-view-chip"><input type="checkbox" :checked="windEnabled" @change="toggleWind" />{{ t('windLayer.toggleLabel') }}</label>
         <label class="flow-view-chip"><input type="checkbox" :checked="currentsEnabled" @change="toggleCurrents" />{{ t('windLayer.currentsToggleLabel') }}</label>
         <label class="flow-view-chip"><input type="checkbox" :checked="wavesEnabled" @change="toggleWaves" />{{ t('windLayer.wavesToggleLabel') }}</label>
       </div>
-      <div class="flow-view-bar-row">
-        <span class="flow-view-bar-label">Katman</span>
-        <label class="flow-view-chip"><input type="checkbox" :checked="windSpeedOverlayEnabled" @change="toggleWindSpeedOverlay" />Wind</label>
-        <label class="flow-view-chip"><input type="checkbox" :checked="overlayEnabled" @change="toggleOverlay" />{{ t('windLayer.pm25ToggleLabel') }}</label>
-        <span v-for="name in COMING_SOON_OVERLAYS" :key="name" class="flow-view-chip flow-view-chip--disabled" :title="'Yakında — veri kaynağı henüz eklenmedi'">{{ name }}</span>
+
+      <div v-if="selectedMode === 'air'" class="flow-view-bar-row">
+        <span class="flow-view-bar-label">Height</span>
+        <span
+          v-for="level in HEIGHT_LEVELS"
+          :key="level"
+          class="flow-view-chip"
+          :class="level === 'Sfc' ? { 'flow-view-mode-btn--active': selectedHeight === level } : 'flow-view-chip--disabled'"
+          :title="level === 'Sfc' ? '' : 'Yakında — sadece yüzey verisi var'"
+          @click="level === 'Sfc' && (selectedHeight = level)"
+        >{{ level }}</span>
       </div>
 
-      <!-- Reference tool's "Source"/"Date" rows — real values (matches
-           SOURCE_NAME_BY_LAYER in wind-importer/main.py), one line per
-           currently-active layer, not a single fixed selection, since this
-           view supports several layers at once. -->
-      <div v-if="activeSources.length" class="flow-view-source-block">
-        <div v-for="s in activeSources" :key="s.key" class="flow-view-source-row">
+      <div class="flow-view-bar-row">
+        <span class="flow-view-bar-label">Overlay</span>
+        <label
+          v-for="option in OVERLAY_OPTIONS[selectedMode]"
+          :key="option.label"
+          class="flow-view-chip"
+          :class="{ 'flow-view-chip--disabled': !option.key }"
+          :title="option.key ? '' : 'Yakında — veri kaynağı henüz eklenmedi'"
+        >
+          <input v-if="option.key" type="checkbox" :checked="!!overlayEnabled[option.key]" @change="toggleOverlayOption(option)" />
+          {{ option.label }}
+        </label>
+      </div>
+
+      <div v-if="selectedMode === 'bio'" class="flow-view-bar-row">
+        <span class="flow-view-bar-label">Annotation</span>
+        <span v-for="a in BIO_ANNOTATIONS" :key="a.label" class="flow-view-chip flow-view-chip--disabled" title="Yakında">{{ a.label }}</span>
+      </div>
+
+      <!-- Real per-Animate-layer Source/Date, matching the reference
+           tool's own rows but for every active layer at once. -->
+      <div v-if="activeAnimateSources.length" class="flow-view-source-block">
+        <div v-for="s in activeAnimateSources" :key="s.key" class="flow-view-source-row">
           <span class="flow-view-bar-label">{{ s.label }}</span>
           <span class="flow-view-source-text">{{ s.source }}<template v-if="s.date"> — {{ s.date }}</template></span>
         </div>
-      </div>
-
-      <div class="flow-view-legend">
-        <span class="flow-view-bar-label">Skala</span>
-        <div class="flow-view-legend-gradient"></div>
       </div>
 
       <button type="button" class="flow-view-gear" @click="showSettings = !showSettings">⚙️</button>
@@ -345,22 +418,8 @@ onBeforeUnmount(() => {
   border: 1px solid rgba(255, 255, 255, 0.18);
   background: rgba(15, 18, 26, 0.92);
   backdrop-filter: blur(10px);
-  min-width: 280px;
-  max-width: 340px;
-}
-.flow-view-controls h3 {
-  margin: 0 0 10px;
-  font-size: 0.85rem;
-  color: #e2e8f0;
-}
-.flow-view-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 0.8rem;
-  color: #e2e8f0;
-  margin-bottom: 6px;
-  cursor: pointer;
+  min-width: 320px;
+  max-width: 420px;
 }
 
 .flow-view-bar-row {
@@ -385,10 +444,30 @@ onBeforeUnmount(() => {
   font-size: 0.75rem;
   color: #e2e8f0;
   cursor: pointer;
+  background: none;
+  border: none;
+  padding: 0;
+  font-family: inherit;
 }
 .flow-view-chip--disabled {
   color: rgba(255, 255, 255, 0.32);
   cursor: not-allowed;
+}
+
+.flow-view-mode-btn {
+  padding: 3px 8px;
+  border-radius: 5px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.04);
+}
+.flow-view-mode-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+.flow-view-mode-btn--active {
+  background: #d4a94a;
+  border-color: #d4a94a;
+  color: #0b1220;
+  font-weight: 700;
 }
 
 .flow-view-source-block {

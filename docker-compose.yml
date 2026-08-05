@@ -244,10 +244,23 @@ services:
   # specs/053-wind-flow-visualization/research.md §4 for why).
   #   docker compose run --rm wind-importer --layer-type=wind --once
   #   docker compose run --rm wind-importer --layer-type=ocean_current --once
+  #
+  # Every service below built from ./wind-importer shares this same
+  # `image: mhews-wind-importer:latest` tag — without an explicit `image:`,
+  # Compose tags each service's build as `<project>-<service>:latest`
+  # separately, which meant "docker compose build wind-importer" silently
+  # left the other ~10 services (temperature-importer-scheduled, etc.) on
+  # a stale image. Live-verified 2026-08-06: after fixing the Mercator-
+  # warp overlay bug, only the one-off `docker compose run wind-importer`
+  # calls picked up the fix — recreating temperature-importer-scheduled's
+  # *container* (`--force-recreate`) reran its still-old *image*, which
+  # immediately re-uploaded the unwarped texture right over the freshly
+  # fixed one. One shared tag means one build updates every container.
   wind-importer:
     build:
       context: ./wind-importer
       dockerfile: Dockerfile
+    image: mhews-wind-importer:latest
     container_name: mhews-wind-importer
     command: ["--layer-type=wind", "--once"]
     env_file:
@@ -265,6 +278,7 @@ services:
     build:
       context: ./wind-importer
       dockerfile: Dockerfile
+    image: mhews-wind-importer:latest
     container_name: mhews-wind-importer-scheduled
     restart: unless-stopped
     command: ["--layer-type=wind"]
@@ -280,6 +294,7 @@ services:
     build:
       context: ./wind-importer
       dockerfile: Dockerfile
+    image: mhews-wind-importer:latest
     container_name: mhews-currents-importer-scheduled
     restart: unless-stopped
     command: ["--layer-type=ocean_current"]
@@ -296,6 +311,7 @@ services:
     build:
       context: ./wind-importer
       dockerfile: Dockerfile
+    image: mhews-wind-importer:latest
     container_name: mhews-waves-importer-scheduled
     restart: unless-stopped
     command: ["--layer-type=wave"]
@@ -312,6 +328,7 @@ services:
     build:
       context: ./wind-importer
       dockerfile: Dockerfile
+    image: mhews-wind-importer:latest
     container_name: mhews-overlay-importer-scheduled
     restart: unless-stopped
     command: ["--overlay-type=air_quality_pm25"]
@@ -328,6 +345,7 @@ services:
     build:
       context: ./wind-importer
       dockerfile: Dockerfile
+    image: mhews-wind-importer:latest
     container_name: mhews-temperature-importer-scheduled
     restart: unless-stopped
     command: ["--overlay-type=temperature"]
@@ -343,6 +361,7 @@ services:
     build:
       context: ./wind-importer
       dockerfile: Dockerfile
+    image: mhews-wind-importer:latest
     container_name: mhews-relative-humidity-importer-scheduled
     restart: unless-stopped
     command: ["--overlay-type=relative_humidity"]
@@ -355,6 +374,7 @@ services:
     build:
       context: ./wind-importer
       dockerfile: Dockerfile
+    image: mhews-wind-importer:latest
     container_name: mhews-mslp-importer-scheduled
     restart: unless-stopped
     command: ["--overlay-type=mean_sea_level_pressure"]
@@ -367,6 +387,7 @@ services:
     build:
       context: ./wind-importer
       dockerfile: Dockerfile
+    image: mhews-wind-importer:latest
     container_name: mhews-cape-importer-scheduled
     restart: unless-stopped
     command: ["--overlay-type=cape"]
@@ -379,6 +400,7 @@ services:
     build:
       context: ./wind-importer
       dockerfile: Dockerfile
+    image: mhews-wind-importer:latest
     container_name: mhews-pwat-importer-scheduled
     restart: unless-stopped
     command: ["--overlay-type=total_precipitable_water"]
@@ -391,6 +413,7 @@ services:
     build:
       context: ./wind-importer
       dockerfile: Dockerfile
+    image: mhews-wind-importer:latest
     container_name: mhews-cwat-importer-scheduled
     restart: unless-stopped
     command: ["--overlay-type=total_cloud_water"]
@@ -403,6 +426,7 @@ services:
     build:
       context: ./wind-importer
       dockerfile: Dockerfile
+    image: mhews-wind-importer:latest
     container_name: mhews-precip-3hr-importer-scheduled
     restart: unless-stopped
     command: ["--overlay-type=precip_3hr"]

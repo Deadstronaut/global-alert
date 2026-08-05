@@ -2874,6 +2874,12 @@ async function setFlowLayerEnabled(layerType, enabled) {
     textureUrl: snapshot.textureUrl,
     bounds: snapshot.bounds,
     dataRange: snapshot.dataRange,
+    // Live-tuned via FlowVisualizationView.vue's settings sliders,
+    // 2026-08-05 — at real-world scale, movement was sub-pixel per frame
+    // and looked like static twinkling rather than flow; this combination
+    // produces the actual nullschool-style flowing-streamline look.
+    speedMultiplier: 336,
+    trailLength: 89,
   })
   flowLayerInstances[layerType] = layer
   map.addLayer(layer)

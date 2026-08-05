@@ -27,16 +27,27 @@
  */
 
 const PARTICLE_COUNT = 3000
-const MAX_AGE_FRAMES = 90 // respawn a particle after this many frames so flow keeps circulating
+// Respawn a particle after this many frames so flow keeps circulating. Was
+// 90 (~1.5s @60fps) — live-testing finding, 2026-08-05: at world zoom a
+// single frame's real-world movement is sub-pixel (see the gl.POINTS fix
+// above), so the dominant thing actually visible frame to frame wasn't
+// drift, it was respawns — particles "teleporting" to a fresh random spot
+// read as constant twinkling rather than flow. Raised so respawns are rare
+// enough not to dominate the visual, while still keeping particles
+// circulating instead of freezing in place forever.
+const MAX_AGE_FRAMES = 400
 const SPEED_FACTOR = 0.4 // tunes how many degrees/frame a particle moves per m/s of wind
 // Each particle keeps its last TRAIL_LENGTH positions and redraws them as a
-// fading polyline every frame (instead of a single dot). MapLibre clears the
-// canvas each render pass, so there's no persistent framebuffer to "leave a
-// trail" on like nullschool's canvas-2D fade trick — the trail has to be
-// stored and redrawn explicitly per particle. Live-testing feedback,
-// 2026-08-05: without this, particles rendered as scattered static dots
-// instead of the flowing streamlines the feature was asking to replicate.
-const TRAIL_LENGTH = 6
+// fading polyline+point trail every frame (instead of a single dot).
+// MapLibre clears the canvas each render pass, so there's no persistent
+// framebuffer to "leave a trail" on like nullschool's canvas-2D fade trick
+// — the trail has to be stored and redrawn explicitly per particle.
+// Was 6, raised to 18 — live-testing feedback, 2026-08-05: at world zoom a
+// single frame's real movement is sub-pixel, so a short trail read as
+// "twinkling dots," not flow; a longer trail traces enough of each
+// particle's actual curved path to show swirl/vortex shapes, closer to
+// the reference tool's "ghost sliding" look.
+const TRAIL_LENGTH = 18
 
 const VERTEX_SHADER = `
   uniform mat4 u_matrix;
@@ -133,6 +144,21 @@ export class SimpleWindLayer {
     this.particles = null // Float32Array-backed, lazily initialized once the wind image has loaded
     this.imageData = null
     this.imageReady = false
+    // Live-tunable via setSpeedMultiplier()/setTrailLength() — read fresh
+    // every render() frame, so UI sliders can adjust apparent flow speed
+    // and trail length in real time without recreating the layer
+    // (live-testing ask, 2026-08-05: movement read as too slow/flickery to
+    // track by eye at real-world scale, trail wasn't visibly persisting).
+    this.speedMultiplier = options.speedMultiplier ?? 1
+    this.trailLength = options.trailLength ?? TRAIL_LENGTH
+  }
+
+  setSpeedMultiplier(value) {
+    this.speedMultiplier = value
+  }
+
+  setTrailLength(value) {
+    this.trailLength = Math.max(2, Math.round(value))
   }
 
   onAdd(map, gl) {
@@ -229,21 +255,22 @@ export class SimpleWindLayer {
     // frames), then stop moving/re-triggering repaints — a static flow
     // snapshot instead of a continuous animation. Resets the moment
     // reduced motion is turned back off, so it doesn't stay frozen forever.
+    const trailLength = this.trailLength
     const reducedMotion = reducedMotionRequested()
     if (!reducedMotion) {
       this._staticFramesRemaining = null
     } else if (this._staticFramesRemaining == null) {
-      this._staticFramesRemaining = TRAIL_LENGTH
+      this._staticFramesRemaining = trailLength
     }
     const advect = !reducedMotion || this._staticFramesRemaining > 0
     if (reducedMotion && advect) this._staticFramesRemaining -= 1
 
-    // Worst case: every particle has a full trail, drawn as TRAIL_LENGTH-1
+    // Worst case: every particle has a full trail, drawn as trailLength-1
     // separate 2-vertex line segments (gl.LINES, not LINE_STRIP — a single
     // strip can't represent N disconnected per-particle polylines in one
     // draw call). Actual usage (vIdx) is usually smaller right after
     // particles respawn, so buffers are uploaded as a trimmed subarray.
-    const maxVertices = this.particles.length * (TRAIL_LENGTH - 1) * 2
+    const maxVertices = this.particles.length * (trailLength - 1) * 2
     const positions = new Float32Array(maxVertices * 2)
     const speeds = new Float32Array(maxVertices)
     const alphas = new Float32Array(maxVertices)
@@ -275,8 +302,9 @@ export class SimpleWindLayer {
           // cosine), which drew as a full-map-width erroneous streak once
           // trails (not just single points) were rendered.
           const cosLat = Math.max(Math.cos(latRad), 0.05)
-          p.lng += (u * SPEED_FACTOR) / (111.32 * cosLat * 100)
-          p.lat += (v * SPEED_FACTOR) / (110.57 * 100)
+          const step = SPEED_FACTOR * this.speedMultiplier
+          p.lng += (u * step) / (111.32 * cosLat * 100)
+          p.lat += (v * step) / (110.57 * 100)
           // Mercator's y projection (lngLatToMercator) divides by (1 -
           // sin(lat)), which blows up the same way as lat approaches ±90 —
           // clamp so a fast poleward-blowing v-component can't push a
@@ -284,14 +312,14 @@ export class SimpleWindLayer {
           p.lat = Math.max(-89.9, Math.min(89.9, p.lat))
           p.speedNormalized = speedNormalized
           p.history.unshift([p.lng, p.lat])
-          if (p.history.length > TRAIL_LENGTH) p.history.pop()
+          if (p.history.length > trailLength) p.history.pop()
         }
       }
 
       for (let h = 0; h < p.history.length - 1; h++) {
         const newer = p.history[h]
         const older = p.history[h + 1]
-        const fade = 1 - h / (TRAIL_LENGTH - 1) // segments nearer the head are more opaque
+        const fade = 1 - h / (trailLength - 1) // segments nearer the head are more opaque
         const [mx0, my0] = lngLatToMercator(older[0], older[1])
         const [mx1, my1] = lngLatToMercator(newer[0], newer[1])
         positions[vIdx * 2] = mx0

@@ -35,6 +35,27 @@ const layerInstances = { wind: null, ocean_current: null, wave: null }
 const LAYER_IDS = { wind: 'standalone-flow-wind', ocean_current: 'standalone-flow-currents', wave: 'standalone-flow-wave' }
 const OVERLAY_LAYER_ID = 'standalone-overlay-pm25'
 
+// Live speed-tuning (gear icon) — live-testing ask, 2026-08-05: movement at
+// real-world scale read as too slow/flickery to track by eye; rather than
+// guess-and-rebuild a fixed multiplier, this exposes the same
+// setSpeedMultiplier() SimpleWindLayer already supports as a slider so it
+// can be tuned by feel, live, without a code change each time.
+const showSettings = ref(false)
+const speedMultiplier = ref(336) // live-testing result, 2026-08-05: this + trailLength=89 produced the actual nullschool-style flowing streamline look
+function onSpeedInput(e) {
+  speedMultiplier.value = Number(e.target.value)
+  for (const layer of Object.values(layerInstances)) layer?.setSpeedMultiplier(speedMultiplier.value)
+}
+
+// Same live-tuning idea for trail length — live-testing ask, 2026-08-05:
+// "iz bırakması lazım" (needs to leave a trail), the fixed default wasn't
+// visibly persisting enough at the zoom/density being tested.
+const trailLength = ref(89)
+function onTrailInput(e) {
+  trailLength.value = Number(e.target.value)
+  for (const layer of Object.values(layerInstances)) layer?.setTrailLength(trailLength.value)
+}
+
 async function setFlowLayer(layerType, enabled) {
   if (!map) return
   const layerId = LAYER_IDS[layerType]
@@ -59,6 +80,8 @@ async function setFlowLayer(layerType, enabled) {
     textureUrl: snapshot.textureUrl,
     bounds: snapshot.bounds,
     dataRange: snapshot.dataRange,
+    speedMultiplier: speedMultiplier.value,
+    trailLength: trailLength.value,
   })
   layerInstances[layerType] = layer
   map.addLayer(layer)
@@ -164,6 +187,18 @@ onBeforeUnmount(() => {
         <input type="checkbox" :checked="overlayEnabled" @change="toggleOverlay" />
         <span>{{ t('windLayer.pm25ToggleLabel') }}</span>
       </label>
+
+      <button type="button" class="flow-view-gear" @click="showSettings = !showSettings">⚙️</button>
+      <div v-if="showSettings" class="flow-view-settings">
+        <label class="flow-view-settings-label">
+          Hız çarpanı: {{ speedMultiplier.toFixed(1) }}x
+          <input type="range" min="0.5" max="1000" step="0.5" :value="speedMultiplier" @input="onSpeedInput" />
+        </label>
+        <label class="flow-view-settings-label">
+          İz uzunluğu: {{ trailLength }}
+          <input type="range" min="2" max="120" step="1" :value="trailLength" @input="onTrailInput" />
+        </label>
+      </div>
     </div>
 
     <div ref="mapContainer" class="flow-view-map"></div>
@@ -201,7 +236,7 @@ onBeforeUnmount(() => {
 .flow-view-controls {
   position: absolute;
   top: 16px;
-  left: 16px;
+  left: 90px; /* live-testing ask, 2026-08-05: 16px overlapped something underneath */
   z-index: 10;
   padding: 14px;
   border-radius: 10px;
@@ -223,5 +258,35 @@ onBeforeUnmount(() => {
   color: #e2e8f0;
   margin-bottom: 6px;
   cursor: pointer;
+}
+
+.flow-view-gear {
+  margin-top: 8px;
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.06);
+  cursor: pointer;
+  font-size: 0.85rem;
+}
+.flow-view-gear:hover {
+  background: rgba(255, 255, 255, 0.14);
+}
+
+.flow-view-settings {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(255, 255, 255, 0.12);
+}
+.flow-view-settings-label {
+  display: block;
+  font-size: 0.75rem;
+  color: #cbd5e1;
+}
+.flow-view-settings-label input[type='range'] {
+  display: block;
+  width: 100%;
+  margin-top: 6px;
 }
 </style>

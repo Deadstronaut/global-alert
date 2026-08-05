@@ -47,7 +47,7 @@ const VERTEX_SHADER = `
   varying float v_alpha;
   void main() {
     gl_Position = u_matrix * vec4(a_pos, 0.0, 1.0);
-    gl_PointSize = 2.0;
+    gl_PointSize = 3.0;
     v_speed = a_speed;
     v_alpha = a_alpha;
   }
@@ -154,8 +154,8 @@ export class SimpleWindLayer {
       this._initParticles()
       this.map.triggerRepaint()
     }
-    image.onerror = () => {
-      console.warn(`[SimpleWindLayer] Failed to load texture for ${this.id}`)
+    image.onerror = (e) => {
+      console.warn(`[SimpleWindLayer] Failed to load texture for ${this.id}`, e)
     }
     image.src = this.options.textureUrl
   }
@@ -310,6 +310,25 @@ export class SimpleWindLayer {
     gl.useProgram(this.program)
     gl.enable(gl.BLEND)
     gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA)
+    // Live-debugged 2026-08-05: this layer rendered nothing on the main
+    // map (68-layer style including fill-extrusion/3D + dimming layers)
+    // while working fine on a simpler style — root cause was gl.DEPTH_TEST
+    // being left enabled from an earlier layer's draw call. Our vertices
+    // write z=0 (`vec4(a_pos, 0.0, 1.0)`), which the depth test then
+    // silently failed against whatever depth values 3D/extrusion layers
+    // already wrote at those pixels — drawArrays ran with zero errors and
+    // correct vertex data, every fragment was just discarded. This layer
+    // never needs depth testing (flat 2D particles, no self-occlusion to
+    // resolve), so it's simplest to unconditionally disable it here.
+    gl.disable(gl.DEPTH_TEST)
+    // Same "don't inherit state from whatever layer drew last" reasoning
+    // as DEPTH_TEST above — a stencil test left enabled (MapLibre uses the
+    // stencil buffer for tile/fill clipping) or a colorMask left partially
+    // disabled by an earlier layer would silently discard our fragments
+    // exactly like the depth-test bug did, with zero errors either way.
+    gl.disable(gl.STENCIL_TEST)
+    gl.disable(gl.SCISSOR_TEST)
+    gl.colorMask(true, true, true, true)
 
     gl.uniformMatrix4fv(gl.getUniformLocation(this.program, 'u_matrix'), false, matrix)
 
@@ -334,6 +353,25 @@ export class SimpleWindLayer {
     gl.vertexAttribPointer(alphaLoc, 1, gl.FLOAT, false, 0, 0)
 
     gl.drawArrays(gl.LINES, 0, vIdx)
+    // Also draw every trail vertex as a small point (gl_PointSize=3 in the
+    // vertex shader) — live-testing finding, 2026-08-05: at world-zoom, a
+    // single frame's worth of real-world particle movement is often
+    // sub-pixel, so the LINES draw above can be technically correct but
+    // visually imperceptible (confirmed via matrix/NDC math: particles
+    // were provably on-screen yet invisible). A fixed-size point doesn't
+    // depend on movement distance, so it stays visible regardless of zoom
+    // — reuses the exact same already-bound buffers, no extra upload.
+    gl.drawArrays(gl.POINTS, 0, vIdx)
+
+    // Custom layers are responsible for restoring GL state they change —
+    // MapLibre's own subsequent draws (fill/symbol/other custom layers)
+    // assume blending is off unless a layer explicitly needs it. Left
+    // enabled, a later-drawn layer (e.g. a second SimpleWindLayer instance,
+    // or MapView.vue's own layers) could pick up unintended alpha
+    // blending. Cheap and correct to reset every frame.
+    gl.disable(gl.BLEND)
+    gl.enable(gl.DEPTH_TEST) // restore MapLibre's own defaults so later layers (3D/extrusion, tile clipping) still work correctly
+    gl.enable(gl.STENCIL_TEST)
 
     // custom layers don't animate on their own; keep the loop going — unless
     // reduced motion has finished building its static trail, in which case

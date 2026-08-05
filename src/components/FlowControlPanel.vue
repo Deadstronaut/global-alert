@@ -14,6 +14,7 @@ import { isFlowSnapshotStale } from '@/utils/flowSnapshotStaleness.js'
 
 const { t } = useI18n()
 const uiStore = useUIStore()
+const emit = defineEmits(['open-standalone'])
 
 const open = ref(false)
 
@@ -48,6 +49,17 @@ async function refreshStatus(layerType) {
 function toggle() {
   open.value = !open.value
   if (open.value && !status.value.wind) refreshStatus('wind')
+}
+
+function openStandalone() {
+  // Separate, isolated MapLibre instance (live-testing decision,
+  // 2026-08-05): kept as an alternate entry point alongside the inline
+  // panel, not a replacement — while the integrated-into-the-main-map
+  // rendering bug is being tracked down, this button is a guaranteed-
+  // working fallback the user can reach for their actual use case
+  // (checking wind direction against fire locations on the real map is
+  // the goal; this view is a stopgap, not the destination).
+  emit('open-standalone')
 }
 
 function toggleWind() {
@@ -135,7 +147,10 @@ const speedLegendLabelKey = computed(() => (uiStore.wavesEnabled ? 'windLayer.wa
 
     <Transition name="flow-panel-expand">
       <div v-if="open" class="flow-control-panel-body">
-        <h4 class="flow-control-panel-title">{{ t('windLayer.panelTitle') }}</h4>
+        <div class="flow-control-panel-header">
+          <h4 class="flow-control-panel-title">{{ t('windLayer.panelTitle') }}</h4>
+          <button type="button" class="flow-standalone-btn" @click="openStandalone">⛶</button>
+        </div>
 
         <div class="flow-control-section">
           <span class="flow-control-section-label">{{ t('windLayer.modeLabel') }}</span>
@@ -288,11 +303,33 @@ const speedLegendLabelKey = computed(() => (uiStore.wavesEnabled ? 'windLayer.wa
   overflow-y: auto;
 }
 
+.flow-control-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
 .flow-control-panel-title {
-  margin: 0 0 10px;
+  margin: 0;
   font-size: 0.8rem;
   font-weight: 700;
   color: #e2e8f0;
+}
+
+.flow-standalone-btn {
+  width: 22px;
+  height: 22px;
+  border-radius: 5px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: rgba(255, 255, 255, 0.06);
+  color: #cbd5e1;
+  font-size: 0.75rem;
+  line-height: 1;
+  cursor: pointer;
+}
+.flow-standalone-btn:hover {
+  background: rgba(255, 255, 255, 0.14);
 }
 
 .flow-control-section {

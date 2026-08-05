@@ -34,6 +34,7 @@ import GeocodingSearch from '@/components/impact/GeocodingSearch.vue'
 import SettingsPanel from '@/components/SettingsPanel.vue'
 import PanelCollapseToggle from '@/components/PanelCollapseToggle.vue'
 import FlowControlPanel from '@/components/FlowControlPanel.vue'
+import FlowVisualizationView from '@/components/FlowVisualizationView.vue'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { useMapLayersStore } from '@/stores/mapLayers.js'
@@ -984,6 +985,7 @@ let styleLoadVersion = 0
 // viewport gone black). One observer for the container's whole lifetime,
 // disconnected on unmount.
 let mapResizeObserver = null
+let containerResizeObserver = null
 let markerObjects = []
 let popupZIndexCounter = 1000 // bring-to-front stacking order for open popups
 
@@ -2374,9 +2376,8 @@ function initMap() {
   // A ResizeObserver on the same container is the standard fix: any size
   // change (including the container settling into its final CSS-driven
   // size a tick after mount) triggers a real map.resize().
-  const containerResizeObserver = new ResizeObserver(() => map?.resize())
+  containerResizeObserver = new ResizeObserver(() => map?.resize())
   containerResizeObserver.observe(mapContainer.value)
-  onBeforeUnmount(() => containerResizeObserver.disconnect())
 
   // Custom vertical zoom bar (template below) replaces the default
   // NavigationControl — [+] / [x N] / [−] stacked to the left of the
@@ -2843,6 +2844,7 @@ function updateCommunityReportMarkers() {
 // small from-scratch layer instead of a third-party one — both realistic
 // npm candidates reach into MapLibre's private `map.transform`, which no
 // longer exists in v6 (live-verified 2026-08-05).
+const showFlowVisualization = ref(false)
 const flowLayerInstances = { wind: null, ocean_current: null, wave: null }
 const FLOW_LAYER_IDS = { wind: 'flow-wind', ocean_current: 'flow-ocean-current', wave: 'flow-wave' }
 
@@ -3650,6 +3652,8 @@ onBeforeUnmount(() => {
   }
   mapResizeObserver?.disconnect()
   mapResizeObserver = null
+  containerResizeObserver?.disconnect()
+  containerResizeObserver = null
   if (map) {
     map.remove()
     map = null
@@ -3748,8 +3752,10 @@ onBeforeUnmount(() => {
            bottom-left legend cards, on the severity panel's own corner of
            the group (live-testing ask, 2026-08-05: "şiddet panelinin
            üzerine ufak bir kare tuş"). -->
-      <FlowControlPanel />
+      <FlowControlPanel @open-standalone="showFlowVisualization = true" />
     </div>
+
+    <FlowVisualizationView v-if="showFlowVisualization" @close="showFlowVisualization = false" />
 
     <!-- Live pitch/detail tuning (spec-less follow-up, 2026-07-28): only
          while 3D terrain is actually on — tuning knobs for a feature that's

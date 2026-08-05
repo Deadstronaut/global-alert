@@ -85,7 +85,17 @@ def build_flow_texture(u_array: np.ndarray, v_array: np.ndarray, bounds: tuple[f
 
     red = normalize_to_uint8(u_array, u_min, u_max)
     green = normalize_to_uint8(v_array, v_min, v_max)
-    blue = np.zeros_like(red)  # unused channel, kept for a standard 3-channel PNG
+    # Blue channel = validity mask, not a data value: 255 where both u/v are
+    # real samples, 0 where either was NaN (land/nodata, e.g. CMEMS's ocean
+    # mask or WAVEWATCH III's land mask). Live-testing finding, 2026-08-05:
+    # without this, land pixels decode client-side to a fixed (u_min,v_min)
+    # "vector" (since NaN was zeroed before normalization) — every particle
+    # that drifts onto land reads the exact same fake direction/magnitude,
+    # drawing visually obvious parallel diagonal lines across entire
+    # continents. The renderer treats blue<128 as "no data here" and
+    # respawns the particle instead of drawing a fake trail segment.
+    valid = np.isfinite(u_array) & np.isfinite(v_array)
+    blue = np.where(valid, 255, 0).astype(np.uint8)
     rgb = np.dstack([red, green, blue])
 
     buffer = io.BytesIO()

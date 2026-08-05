@@ -225,6 +225,15 @@ export class SimpleWindLayer {
     const idx = (Math.min(py, this.imageData.height - 1) * this.imageData.width + Math.min(px, this.imageData.width - 1)) * 4
     const r = this.imageData.data[idx]
     const g = this.imageData.data[idx + 1]
+    // Blue channel = validity mask (flow_texture_common.py's
+    // build_flow_texture), not a color — 0 means "no real data here"
+    // (land, for ocean-current/wave textures). Treating it the same as
+    // out-of-bounds (respawn, don't draw) instead of decoding a fake
+    // vector fixes the parallel-diagonal-lines-across-continents bug
+    // live-tested 2026-08-05: land pixels used to all decode to the exact
+    // same (uMin,vMin) "vector" since NaN was zeroed before normalization.
+    const b = this.imageData.data[idx + 2]
+    if (b < 128) return null
 
     const [uMin, uMax] = dataRange[0]
     const [vMin, vMax] = dataRange[1]

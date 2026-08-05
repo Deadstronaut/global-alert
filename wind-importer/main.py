@@ -40,11 +40,14 @@ from fetch_gfs import (
     fetch_latest_wind_grib2,
 )
 from fetch_overlay_cams import (
+    fetch_latest_co_netcdf,
     fetch_latest_dust_aod_netcdf,
+    fetch_latest_no2_netcdf,
     fetch_latest_organic_matter_aod_netcdf,
     fetch_latest_pm1_netcdf,
     fetch_latest_pm10_netcdf,
     fetch_latest_pm25_netcdf,
+    fetch_latest_so2_netcdf,
     fetch_latest_sulfate_aod_netcdf,
 )
 from fetch_waves import fetch_latest_wave_grib2
@@ -65,7 +68,10 @@ from overlay_texture import (
     netcdf_organic_matter_aod_to_overlay_texture,
     netcdf_pm1_to_overlay_texture,
     netcdf_pm10_to_overlay_texture,
+    netcdf_co_to_overlay_texture,
+    netcdf_no2_to_overlay_texture,
     netcdf_pm25_to_overlay_texture,
+    netcdf_so2_to_overlay_texture,
     netcdf_sulfate_aod_to_overlay_texture,
 )
 from wave_vector import wave_grib2_to_flow_texture
@@ -104,6 +110,9 @@ CAMS_OVERLAY_FIELDS = {
     "dust_aod": (fetch_latest_dust_aod_netcdf, netcdf_dust_aod_to_overlay_texture),
     "organic_matter_aod": (fetch_latest_organic_matter_aod_netcdf, netcdf_organic_matter_aod_to_overlay_texture),
     "sulfate_aod": (fetch_latest_sulfate_aod_netcdf, netcdf_sulfate_aod_to_overlay_texture),
+    "co_surface": (fetch_latest_co_netcdf, netcdf_co_to_overlay_texture),
+    "so2_surface": (fetch_latest_so2_netcdf, netcdf_so2_to_overlay_texture),
+    "no2_surface": (fetch_latest_no2_netcdf, netcdf_no2_to_overlay_texture),
 }
 
 REFRESH_INTERVAL_S = 6 * 60 * 60  # matches GFS's own 6-hourly cycle (research.md §1/spec FR-007); also used as the overlay loop's poll interval — coarser than CAMS' own ~12h cadence, but re-fetching early just re-uploads the same cycle's data, harmless

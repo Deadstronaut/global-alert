@@ -415,6 +415,103 @@ def netcdf_sulfate_aod_to_overlay_texture(netcdf_bytes: bytes) -> OverlayTexture
     return netcdf_aod_to_overlay_texture(netcdf_bytes, "suaod550", SULFATE_AOD_RAMP, SULFATE_AOD_DOMAIN)
 
 
+# Chem mode (spec 054 follow-up, 2026-08-06) — CAMS reports CO/SO2/NO2 as
+# mass mixing ratio (kg gas per kg air, live-verified 2026-08-06 via
+# gdalinfo), not a directly readable air-quality unit. Converted to ppb
+# (parts per billion by volume), the standard unit these gases are
+# conventionally reported in, via the textbook mixing-ratio -> volume-
+# ratio formula: ppb = mixing_ratio * (M_air / M_gas) * 1e9. Molar masses
+# in g/mol (M_AIR is the standard dry-air mean; M_CO/M_SO2/M_NO2 are each
+# gas's own molar mass) — a fixed physical constant per gas, not
+# something to live-verify.
+M_AIR_G_MOL = 28.9644
+M_CO_G_MOL = 28.01
+M_SO2_G_MOL = 64.066
+M_NO2_G_MOL = 46.0055
+
+
+def mixing_ratio_to_ppb(values: np.ndarray, molar_mass_g_mol: float) -> np.ndarray:
+    return values * (M_AIR_G_MOL / molar_mass_g_mol) * 1e9
+
+
+CO_RAMP = [
+    (0x00, 0x26, 0x28), (0x97, 0xa4, 0x93), (0xf7, 0xee, 0xc7), (0xeb, 0xc2, 0x95),
+    (0xe3, 0x91, 0x76), (0xd3, 0x5c, 0x6e), (0xb5, 0x24, 0x76), (0x78, 0x00, 0x88),
+    (0x2f, 0x02, 0x87), (0x18, 0x09, 0x60), (0x16, 0x08, 0x31), (0x00, 0x00, 0x00),
+]
+# Live-verified 2026-08-06: a real global 1000mb cycle spanned ~40-3400ppb
+# (background to a wildfire-plume-scale spike) — widened a bit past that.
+CO_DOMAIN_PPB = (0.0, 3500.0)
+
+SO2_RAMP = [
+    (0x86, 0x86, 0x6b), (0x8c, 0x8c, 0x71), (0xa0, 0xa0, 0x84), (0xc5, 0xc5, 0xa8),
+    (0xec, 0xec, 0xcd), (0xf3, 0xe5, 0xbf), (0xe3, 0xb1, 0x8b), (0xd1, 0x76, 0x6f),
+    (0xb2, 0x3b, 0x6c), (0x7c, 0x05, 0x76), (0x1e, 0x05, 0x6f), (0x17, 0x14, 0x12),
+]
+# Live-verified 2026-08-06: real global max ~111ppb (volcanic/industrial-
+# plume scale).
+SO2_DOMAIN_PPB = (0.0, 130.0)
+
+NO2_RAMP = [
+    (0x1a, 0x1a, 0x1a), (0x49, 0x49, 0x49), (0x7c, 0x7c, 0x7c), (0xab, 0xab, 0xab),
+    (0xd1, 0xd1, 0xd1), (0xf0, 0xef, 0xee), (0xfd, 0xed, 0xe3), (0xf9, 0xc6, 0xad),
+    (0xea, 0x91, 0x74), (0xcf, 0x53, 0x49), (0xa6, 0x1b, 0x2c), (0x67, 0x00, 0x1f),
+]
+# Live-verified 2026-08-06: real global max ~59.4ppb (polluted-urban scale).
+NO2_DOMAIN_PPB = (0.0, 70.0)
+
+
+def netcdf_gas_to_overlay_texture(
+    netcdf_bytes: bytes, subdataset_var: str, molar_mass_g_mol: float,
+    ramp: list[tuple[int, int, int]], domain: tuple[float, float],
+) -> OverlayTexture:
+    """Shared CO/SO2/NO2 converter — same shape as netcdf_aod_to_overlay_texture
+    but with the kg/kg -> ppb conversion applied before colorizing."""
+    source_path = "/vsimem/gas_overlay_source.nc"
+    gdal.FileFromMemBuffer(source_path, netcdf_bytes)
+    try:
+        dataset = gdal.Open(f'NETCDF:"{source_path}":{subdataset_var}')
+        if dataset is None:
+            raise RuntimeError(f"GDAL could not open the fetched CAMS NetCDF (expected a {subdataset_var!r} subdataset)")
+
+        band = dataset.GetRasterBand(1)
+        values_ppb = mixing_ratio_to_ppb(resample_band_to_grid(band, dataset), molar_mass_g_mol)
+
+        value_min = float(np.nanmin(values_ppb))
+        value_max = float(np.nanmax(values_ppb))
+        rgba = colorize_linear(values_ppb, ramp, *domain)
+
+        gt = dataset.GetGeoTransform()
+        width, height = dataset.RasterXSize, dataset.RasterYSize
+        west, north = gt[0], gt[3]
+        east = west + width * gt[1]
+        south = north + height * gt[5]
+        rgba = warp_equirect_rgba_to_web_mercator(rgba, south, north)
+
+        buffer = io.BytesIO()
+        Image.fromarray(rgba, mode="RGBA").save(buffer, format="PNG")
+
+        return OverlayTexture(
+            png_bytes=buffer.getvalue(),
+            value_min=value_min, value_max=value_max,
+            bounds=(west, -WEB_MERCATOR_MAX_LAT, east, WEB_MERCATOR_MAX_LAT),
+        )
+    finally:
+        gdal.Unlink(source_path)
+
+
+def netcdf_co_to_overlay_texture(netcdf_bytes: bytes) -> OverlayTexture:
+    return netcdf_gas_to_overlay_texture(netcdf_bytes, "co", M_CO_G_MOL, CO_RAMP, CO_DOMAIN_PPB)
+
+
+def netcdf_so2_to_overlay_texture(netcdf_bytes: bytes) -> OverlayTexture:
+    return netcdf_gas_to_overlay_texture(netcdf_bytes, "so2", M_SO2_G_MOL, SO2_RAMP, SO2_DOMAIN_PPB)
+
+
+def netcdf_no2_to_overlay_texture(netcdf_bytes: bytes) -> OverlayTexture:
+    return netcdf_gas_to_overlay_texture(netcdf_bytes, "no2", M_NO2_G_MOL, NO2_RAMP, NO2_DOMAIN_PPB)
+
+
 def grib2_scalar_to_overlay_texture(
     grib2_bytes: bytes,
     grib_element: str,

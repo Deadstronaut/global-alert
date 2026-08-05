@@ -551,6 +551,49 @@ services:
     networks:
       - mhews
 
+  # Chem mode (spec 054 follow-up, 2026-08-06) — CO/SO2/NO2 @ 1000mb
+  # surface proxy, same CAMS image/pattern as the Particulates services
+  # above. CO2sc has no CAMS data source (see fetch_overlay_cams.py's own
+  # comment) so there's no co2-importer-scheduled here.
+  co-importer-scheduled:
+    build:
+      context: ./wind-importer
+      dockerfile: Dockerfile
+    image: mhews-wind-importer:latest
+    container_name: mhews-co-importer-scheduled
+    restart: unless-stopped
+    command: ["--overlay-type=co_surface"]
+    env_file:
+      - ./server/.env
+    networks:
+      - mhews
+
+  so2-importer-scheduled:
+    build:
+      context: ./wind-importer
+      dockerfile: Dockerfile
+    image: mhews-wind-importer:latest
+    container_name: mhews-so2-importer-scheduled
+    restart: unless-stopped
+    command: ["--overlay-type=so2_surface"]
+    env_file:
+      - ./server/.env
+    networks:
+      - mhews
+
+  no2-importer-scheduled:
+    build:
+      context: ./wind-importer
+      dockerfile: Dockerfile
+    image: mhews-wind-importer:latest
+    container_name: mhews-no2-importer-scheduled
+    restart: unless-stopped
+    command: ["--overlay-type=no2_surface"]
+    env_file:
+      - ./server/.env
+    networks:
+      - mhews
+
   # ── GDO Soil Moisture + fAPAR Anomaly importer (manual, run-to-completion) ──
   # WCS GeoTIFF (no Python/NetCDF needed, see gdoAnomalyFetch.ts) ->
   # exposure_datasets, for both GDO anomaly sources in one run.

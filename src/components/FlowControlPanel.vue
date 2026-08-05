@@ -30,7 +30,7 @@ const open = ref(false)
 const MODES = [
   { id: 'air', label: 'Air', functional: true },
   { id: 'ocean', label: 'Ocean', functional: true },
-  { id: 'chem', label: 'Chem', functional: false },
+  { id: 'chem', label: 'Chem', functional: true },
   { id: 'particulates', label: 'Particulates', functional: false },
   { id: 'space', label: 'Space', functional: false },
   { id: 'bio', label: 'Bio', functional: false },
@@ -134,7 +134,12 @@ const OVERLAY_OPTIONS = {
     { key: 'wave', kind: 'speed', label: 'Waves' },
     { label: 'HTSGW' }, { label: 'SST' }, { label: 'SSTA' }, { label: 'BAA' },
   ],
-  chem: [{ label: 'COsc' }, { label: 'CO2sc' }, { label: 'SO2sm' }, { label: 'NO2' }],
+  chem: [
+    { key: 'co_surface', kind: 'overlay', label: 'COsc' },
+    { label: 'CO2sc' }, // no CAMS data source for CO2 — see fetch_overlay_cams.py's own comment
+    { key: 'so2_surface', kind: 'overlay', label: 'SO2sm' },
+    { key: 'no2_surface', kind: 'overlay', label: 'NO2' },
+  ],
   particulates: [
     { key: 'dust_aod', kind: 'overlay', label: 'DUex' },
     { key: 'pm1', kind: 'overlay', label: 'PM1' },

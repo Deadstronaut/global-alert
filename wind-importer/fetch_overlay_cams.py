@@ -35,7 +35,10 @@ CYCLE_HOURS = (0, 6, 12, 18)
 CATALOG_LAG_DAYS = 1
 
 
-def _download(client: "cdsapi.Client", variable: str, catalog_date: dt.date, cycle_hour: int, tmp_dir: str) -> bytes:
+def _download(
+    client: "cdsapi.Client", variable: str, catalog_date: dt.date, cycle_hour: int, tmp_dir: str,
+    extra_params: dict | None = None,
+) -> bytes:
     request = {
         "variable": [variable],
         "date": [catalog_date.strftime("%Y-%m-%d")],
@@ -43,6 +46,7 @@ def _download(client: "cdsapi.Client", variable: str, catalog_date: dt.date, cyc
         "leadtime_hour": ["0"],
         "type": ["forecast"],
         "data_format": "netcdf_zip",
+        **(extra_params or {}),
     }
     zip_path = os.path.join(tmp_dir, f"{variable}.zip")
     client.retrieve(DATASET_ID, request).download(zip_path)
@@ -53,7 +57,7 @@ def _download(client: "cdsapi.Client", variable: str, catalog_date: dt.date, cyc
         return zf.read(nc_names[0])
 
 
-def _fetch_latest_cams_netcdf(variable: str, timeout_s: int) -> tuple[bytes, dt.datetime]:
+def _fetch_latest_cams_netcdf(variable: str, timeout_s: int, extra_params: dict | None = None) -> tuple[bytes, dt.datetime]:
     """
     Shared fetch for any single-variable CAMS global-atmospheric-
     composition-forecasts request — request shape live-verified 2026-08-05
@@ -90,13 +94,13 @@ def _fetch_latest_cams_netcdf(variable: str, timeout_s: int) -> tuple[bytes, dt.
     client = cdsapi.Client(url=url, key=key, timeout=timeout_s)
     with tempfile.TemporaryDirectory() as tmp_dir:
         try:
-            netcdf_bytes = _download(client, variable, catalog_date, cycle_hour, tmp_dir)
+            netcdf_bytes = _download(client, variable, catalog_date, cycle_hour, tmp_dir, extra_params)
             issued_hour = cycle_hour
         except Exception as first_error:  # noqa: BLE001 - ADS raises requests.HTTPError, not a specific typed exception to catch narrowly
             if cycle_hour == 0:
                 raise
             try:
-                netcdf_bytes = _download(client, variable, catalog_date, 0, tmp_dir)
+                netcdf_bytes = _download(client, variable, catalog_date, 0, tmp_dir, extra_params)
                 issued_hour = 0
             except Exception as second_error:
                 raise RuntimeError(
@@ -141,3 +145,34 @@ def fetch_latest_organic_matter_aod_netcdf(timeout_s: int = 120) -> tuple[bytes,
 def fetch_latest_sulfate_aod_netcdf(timeout_s: int = 120) -> tuple[bytes, dt.datetime]:
     """Sulphate aerosol optical depth @ 550nm — NetCDF subdataset variable name 'suaod550'."""
     return _fetch_latest_cams_netcdf("sulphate_aerosol_optical_depth_550nm", timeout_s)
+
+
+# Chem mode (spec 054 follow-up, 2026-08-06) — carbon_monoxide/
+# sulphur_dioxide/nitrogen_dioxide are 3D species in this dataset (unlike
+# every PM/AOD field above, which are inherently surface/column fields
+# with no level to pick) — live-verified 2026-08-06 via the ADS API's own
+# constraints endpoint: requesting them without a pressure_level/model_level
+# 400s. pressure_level=1000 (the lowest level this dataset offers) is the
+# closest available proxy for "surface concentration", matching what the
+# reference tool itself calls these fields (COsc/SO2sm — "surface").
+# CO2 has NO entry in this dataset's variable list at all (verified against
+# the same constraints endpoint) — CAMS publishes CO2 forecasts as a
+# separate product this app doesn't integrate, so CO2sc has no real data
+# source and stays a disabled placeholder in the frontend, same honesty
+# pattern as every other not-yet-wired entry in this menu.
+_SURFACE_PROXY_PRESSURE_LEVEL = {"pressure_level": ["1000"]}
+
+
+def fetch_latest_co_netcdf(timeout_s: int = 120) -> tuple[bytes, dt.datetime]:
+    """Carbon monoxide @ 1000mb (surface proxy) — NetCDF subdataset variable name 'co', mass mixing ratio (kg/kg)."""
+    return _fetch_latest_cams_netcdf("carbon_monoxide", timeout_s, _SURFACE_PROXY_PRESSURE_LEVEL)
+
+
+def fetch_latest_so2_netcdf(timeout_s: int = 120) -> tuple[bytes, dt.datetime]:
+    """Sulphur dioxide @ 1000mb (surface proxy) — NetCDF subdataset variable name 'so2', mass mixing ratio (kg/kg)."""
+    return _fetch_latest_cams_netcdf("sulphur_dioxide", timeout_s, _SURFACE_PROXY_PRESSURE_LEVEL)
+
+
+def fetch_latest_no2_netcdf(timeout_s: int = 120) -> tuple[bytes, dt.datetime]:
+    """Nitrogen dioxide @ 1000mb (surface proxy) — NetCDF subdataset variable name 'no2', mass mixing ratio (kg/kg)."""
+    return _fetch_latest_cams_netcdf("nitrogen_dioxide", timeout_s, _SURFACE_PROXY_PRESSURE_LEVEL)

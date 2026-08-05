@@ -14,7 +14,7 @@ import * as maplibregl from 'maplibre-gl'
 import maplibreWorkerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?url'
 import { useI18n } from 'vue-i18n'
 import { SimpleWindLayer } from '@/vendor/simple-wind-layer.js'
-import { fetchLatestFlowSnapshot, fetchLatestOverlaySnapshot } from '@/utils/windLayerData.js'
+import { fetchLatestFlowSnapshot, fetchLatestOverlaySnapshot, buildWindSpeedOverlayDataUrl } from '@/utils/windLayerData.js'
 import { isFlowSnapshotStale } from '@/utils/flowSnapshotStaleness.js'
 
 maplibregl.setWorkerUrl(maplibreWorkerUrl) // idempotent if MapView.vue already called this
@@ -30,7 +30,7 @@ const currentsEnabled = ref(false)
 const wavesEnabled = ref(false)
 const overlayEnabled = ref(false)
 
-const status = ref({ wind: null, ocean_current: null, wave: null, air_quality_pm25: null })
+const status = ref({ wind: null, ocean_current: null, wave: null, air_quality_pm25: null, wind_speed_overlay: null })
 const layerInstances = { wind: null, ocean_current: null, wave: null }
 const LAYER_IDS = { wind: 'standalone-flow-wind', ocean_current: 'standalone-flow-currents', wave: 'standalone-flow-wave' }
 const OVERLAY_LAYER_ID = 'standalone-overlay-pm25'
@@ -44,8 +44,15 @@ const SOURCE_LABELS = {
   ocean_current: 'CMEMS / Copernicus Marine',
   wave: 'WAVEWATCH III / NCEP / NWS',
   air_quality_pm25: 'CAMS / Copernicus Atmosphere Data Store',
+  wind_speed_overlay: 'GFS / NCEP / US National Weather Service',
 }
-const ANIMATE_LABELS = { wind: 'Rüzgar', ocean_current: 'Okyanus Akıntıları', wave: 'Dalgalar', air_quality_pm25: 'PM2.5 (Hava Kalitesi)' }
+const ANIMATE_LABELS = {
+  wind: 'Rüzgar',
+  ocean_current: 'Okyanus Akıntıları',
+  wave: 'Dalgalar',
+  air_quality_pm25: 'PM2.5 (Hava Kalitesi)',
+  wind_speed_overlay: 'Rüzgar Hızı (Katman)',
+}
 
 function formatIssuedAt(iso) {
   if (!iso) return null
@@ -167,6 +174,47 @@ function toggleOverlay() {
   setOverlayLayer(overlayEnabled.value)
 }
 
+// "Overlay: Wind" (wind SPEED as a color heatmap, distinct from the
+// animated flow lines) — live-testing ask, 2026-08-05, matches the
+// reference tool's own Overlay row. Reuses the already-fetched wind
+// flow_snapshots texture (buildWindSpeedOverlayDataUrl decodes it
+// client-side), no new backend importer needed — unlike PM2.5, which
+// needs its own CAMS source.
+const windSpeedOverlayEnabled = ref(false)
+const WIND_SPEED_OVERLAY_ID = 'standalone-overlay-wind-speed'
+async function setWindSpeedOverlayLayer(enabled) {
+  if (!map) return
+  const sourceId = `${WIND_SPEED_OVERLAY_ID}-source`
+  if (!enabled) {
+    if (map.getLayer(WIND_SPEED_OVERLAY_ID)) map.removeLayer(WIND_SPEED_OVERLAY_ID)
+    if (map.getSource(sourceId)) map.removeSource(sourceId)
+    return
+  }
+  if (map.getLayer(WIND_SPEED_OVERLAY_ID)) return
+
+  const snapshot = await fetchLatestFlowSnapshot('wind')
+  if (!snapshot) {
+    status.value = { ...status.value, wind_speed_overlay: 'unavailable' }
+    return
+  }
+  status.value = { ...status.value, wind_speed_overlay: snapshot }
+  const dataUrl = await buildWindSpeedOverlayDataUrl(snapshot)
+  map.addSource(sourceId, { type: 'image', url: dataUrl, coordinates: snapshot.coordinates })
+  map.addLayer({ id: WIND_SPEED_OVERLAY_ID, type: 'raster', source: sourceId, paint: { 'raster-opacity': 0.55 } })
+}
+function toggleWindSpeedOverlay() {
+  windSpeedOverlayEnabled.value = !windSpeedOverlayEnabled.value
+  setWindSpeedOverlayLayer(windSpeedOverlayEnabled.value)
+}
+
+// Reference tool's full Overlay row (Temp/RH/Dew/WBT/3HPA/CAPE/TPW/TCW/
+// MSLP/MI/UVI/WPD) — live-testing ask, 2026-08-05. Each of these needs its
+// own real data source (most are additional GFS surface fields, fetchable
+// the same way wind/waves already are); listed here for context/honesty
+// about the full reference structure, same "visible but disabled, not
+// hidden" pattern as Space/Bio modes — not implemented yet, not faked.
+const COMING_SOON_OVERLAYS = ['Temp', 'RH', 'Dew', 'WBT', '3HPA', 'CAPE', 'TPW', 'TCW', 'MSLP', 'MI', 'UVI', 'WPD']
+
 let resizeObserver = null
 
 onMounted(() => {
@@ -221,7 +269,9 @@ onBeforeUnmount(() => {
       </div>
       <div class="flow-view-bar-row">
         <span class="flow-view-bar-label">Katman</span>
+        <label class="flow-view-chip"><input type="checkbox" :checked="windSpeedOverlayEnabled" @change="toggleWindSpeedOverlay" />Wind</label>
         <label class="flow-view-chip"><input type="checkbox" :checked="overlayEnabled" @change="toggleOverlay" />{{ t('windLayer.pm25ToggleLabel') }}</label>
+        <span v-for="name in COMING_SOON_OVERLAYS" :key="name" class="flow-view-chip flow-view-chip--disabled" :title="'Yakında — veri kaynağı henüz eklenmedi'">{{ name }}</span>
       </div>
 
       <!-- Reference tool's "Source"/"Date" rows — real values (matches
@@ -335,6 +385,10 @@ onBeforeUnmount(() => {
   font-size: 0.75rem;
   color: #e2e8f0;
   cursor: pointer;
+}
+.flow-view-chip--disabled {
+  color: rgba(255, 255, 255, 0.32);
+  cursor: not-allowed;
 }
 
 .flow-view-source-block {

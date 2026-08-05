@@ -93,3 +93,67 @@ export async function fetchLatestOverlaySnapshot(overlayType) {
     issuedAt: data.issued_at,
   }
 }
+
+// Smooth multi-stop speed ramp (calm -> extreme), matching the reference
+// tool's own wind-speed overlay language more closely than a discrete
+// quantile-bucket ramp would — this overlay has no server-side coloring
+// step to bucket in, so it's computed client-side per pixel anyway.
+const WIND_SPEED_RAMP = [
+  [98, 113, 183], [61, 159, 133], [86, 173, 74],
+  [203, 190, 60], [223, 137, 45], [200, 63, 63], [147, 66, 173],
+]
+function speedToColor(t) {
+  const clamped = Math.max(0, Math.min(1, t))
+  const scaled = clamped * (WIND_SPEED_RAMP.length - 1)
+  const i = Math.min(Math.floor(scaled), WIND_SPEED_RAMP.length - 2)
+  const frac = scaled - i
+  const [r0, g0, b0] = WIND_SPEED_RAMP[i]
+  const [r1, g1, b1] = WIND_SPEED_RAMP[i + 1]
+  return [r0 + (r1 - r0) * frac, g0 + (g1 - g0) * frac, b0 + (b1 - b0) * frac]
+}
+
+/**
+ * Spec 054 follow-up (live-testing ask, 2026-08-05: reference tool's own
+ * "Overlay: Wind" entry — wind SPEED as a color heatmap, distinct from the
+ * animated flow lines) — reuses the already-fetched flow_snapshots wind
+ * texture and decodes it client-side, no new backend importer needed.
+ * @param {{ textureUrl: string, dataRange: [[number,number],[number,number]] }} flowSnapshot
+ * @returns {Promise<string>} a PNG data URL, same shape overlay_snapshots'
+ *   pre-colored textures have, so it can be used as a plain image source.
+ */
+export async function buildWindSpeedOverlayDataUrl(flowSnapshot) {
+  const image = new Image()
+  image.crossOrigin = 'anonymous'
+  await new Promise((resolve, reject) => {
+    image.onload = resolve
+    image.onerror = reject
+    image.src = flowSnapshot.textureUrl
+  })
+
+  const canvas = document.createElement('canvas')
+  canvas.width = image.width
+  canvas.height = image.height
+  const ctx = canvas.getContext('2d')
+  ctx.drawImage(image, 0, 0)
+  const src = ctx.getImageData(0, 0, image.width, image.height)
+  const out = ctx.createImageData(image.width, image.height)
+
+  const [[uMin, uMax], [vMin, vMax]] = flowSnapshot.dataRange
+  for (let i = 0; i < src.data.length; i += 4) {
+    const b = src.data[i + 2] // validity mask, flow_texture_common.py's build_flow_texture
+    if (b < 128) {
+      out.data[i + 3] = 0 // transparent — no real data here (land/nodata)
+      continue
+    }
+    const u = uMin + (src.data[i] / 255) * (uMax - uMin)
+    const v = vMin + (src.data[i + 1] / 255) * (vMax - vMin)
+    const speed = Math.sqrt(u * u + v * v)
+    const [r, g, bb] = speedToColor(speed / 40) // same 40 m/s ceiling as SimpleWindLayer's own particle color
+    out.data[i] = r
+    out.data[i + 1] = g
+    out.data[i + 2] = bb
+    out.data[i + 3] = 200
+  }
+  ctx.putImageData(out, 0, 0)
+  return canvas.toDataURL('image/png')
+}

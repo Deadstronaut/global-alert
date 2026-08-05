@@ -9,7 +9,7 @@
 // gives the flow layers a minimal, easy-to-reason-about context of their
 // own (explicit user request, 2026-08-05: "ayrı bir uygulama gibi... bu
 // haritada göreceğiz diye bir derdimiz yok").
-import { ref, onMounted, onBeforeUnmount } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import * as maplibregl from 'maplibre-gl'
 import maplibreWorkerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?url'
 import { useI18n } from 'vue-i18n'
@@ -35,6 +35,36 @@ const layerInstances = { wind: null, ocean_current: null, wave: null }
 const LAYER_IDS = { wind: 'standalone-flow-wind', ocean_current: 'standalone-flow-currents', wave: 'standalone-flow-wave' }
 const OVERLAY_LAYER_ID = 'standalone-overlay-pm25'
 
+// Real source attribution per layer (matches SOURCE_NAME_BY_LAYER /
+// SOURCE_NAME_BY_OVERLAY in wind-importer/main.py exactly — not
+// placeholder text) — live-testing ask, 2026-08-05: "kaynak göstermesi"
+// (reference tool's own "Source" row).
+const SOURCE_LABELS = {
+  wind: 'GFS / NCEP / US National Weather Service',
+  ocean_current: 'CMEMS / Copernicus Marine',
+  wave: 'WAVEWATCH III / NCEP / NWS',
+  air_quality_pm25: 'CAMS / Copernicus Atmosphere Data Store',
+}
+const ANIMATE_LABELS = { wind: 'Rüzgar', ocean_current: 'Okyanus Akıntıları', wave: 'Dalgalar', air_quality_pm25: 'PM2.5 (Hava Kalitesi)' }
+
+function formatIssuedAt(iso) {
+  if (!iso) return null
+  return new Date(iso).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+}
+// One row per currently-enabled layer with real snapshot data — reference
+// tool's "Source"/"Date" rows, but for every active layer at once (this
+// view supports several simultaneously, unlike the reference tool's
+// single active selection).
+const activeSources = computed(() => {
+  const entries = []
+  for (const [key, snap] of Object.entries(status.value)) {
+    if (snap && snap !== 'unavailable') {
+      entries.push({ key, label: ANIMATE_LABELS[key], source: SOURCE_LABELS[key], date: formatIssuedAt(snap.issuedAt) })
+    }
+  }
+  return entries
+})
+
 // Live speed-tuning (gear icon) — live-testing ask, 2026-08-05: movement at
 // real-world scale read as too slow/flickery to track by eye; rather than
 // guess-and-rebuild a fixed multiplier, this exposes the same
@@ -54,6 +84,19 @@ const trailLength = ref(89)
 function onTrailInput(e) {
   trailLength.value = Number(e.target.value)
   for (const layer of Object.values(layerInstances)) layer?.setTrailLength(trailLength.value)
+}
+
+// Land polygons should visually cover the flow particles over them (only
+// meaningful over water/air, not literally on the ground) — live-testing
+// ask, 2026-08-05. MapLibre layer order IS z-order (later = drawn on top),
+// so inserting our custom layer just before the style's own first land-ish
+// fill layer, instead of appending it at the very top, puts land back over
+// it. Falls back to on-top (previous behavior) if no such layer is found
+// — depends on OpenFreeMap's own layer naming, not guaranteed stable.
+function findLandLayerId() {
+  const layers = map?.getStyle()?.layers ?? []
+  const landLayer = layers.find((l) => /^landcover|^landuse|^land\b/i.test(l.id))
+  return landLayer?.id
 }
 
 async function setFlowLayer(layerType, enabled) {
@@ -84,7 +127,7 @@ async function setFlowLayer(layerType, enabled) {
     trailLength: trailLength.value,
   })
   layerInstances[layerType] = layer
-  map.addLayer(layer)
+  map.addLayer(layer, findLandLayerId())
 }
 
 async function setOverlayLayer(enabled) {
@@ -170,23 +213,32 @@ onBeforeUnmount(() => {
     <button type="button" class="flow-view-close" :aria-label="t('windLayer.panelCollapse')" @click="emit('close')">✕</button>
 
     <div class="flow-view-controls">
-      <h3>{{ t('windLayer.panelTitle') }}</h3>
-      <label class="flow-view-row">
-        <input type="checkbox" :checked="windEnabled" @change="toggleWind" />
-        <span>{{ t('windLayer.toggleLabel') }}</span>
-      </label>
-      <label class="flow-view-row">
-        <input type="checkbox" :checked="currentsEnabled" @change="toggleCurrents" />
-        <span>{{ t('windLayer.currentsToggleLabel') }}</span>
-      </label>
-      <label class="flow-view-row">
-        <input type="checkbox" :checked="wavesEnabled" @change="toggleWaves" />
-        <span>{{ t('windLayer.wavesToggleLabel') }}</span>
-      </label>
-      <label class="flow-view-row">
-        <input type="checkbox" :checked="overlayEnabled" @change="toggleOverlay" />
-        <span>{{ t('windLayer.pm25ToggleLabel') }}</span>
-      </label>
+      <div class="flow-view-bar-row">
+        <span class="flow-view-bar-label">Animasyon</span>
+        <label class="flow-view-chip"><input type="checkbox" :checked="windEnabled" @change="toggleWind" />{{ t('windLayer.toggleLabel') }}</label>
+        <label class="flow-view-chip"><input type="checkbox" :checked="currentsEnabled" @change="toggleCurrents" />{{ t('windLayer.currentsToggleLabel') }}</label>
+        <label class="flow-view-chip"><input type="checkbox" :checked="wavesEnabled" @change="toggleWaves" />{{ t('windLayer.wavesToggleLabel') }}</label>
+      </div>
+      <div class="flow-view-bar-row">
+        <span class="flow-view-bar-label">Katman</span>
+        <label class="flow-view-chip"><input type="checkbox" :checked="overlayEnabled" @change="toggleOverlay" />{{ t('windLayer.pm25ToggleLabel') }}</label>
+      </div>
+
+      <!-- Reference tool's "Source"/"Date" rows — real values (matches
+           SOURCE_NAME_BY_LAYER in wind-importer/main.py), one line per
+           currently-active layer, not a single fixed selection, since this
+           view supports several layers at once. -->
+      <div v-if="activeSources.length" class="flow-view-source-block">
+        <div v-for="s in activeSources" :key="s.key" class="flow-view-source-row">
+          <span class="flow-view-bar-label">{{ s.label }}</span>
+          <span class="flow-view-source-text">{{ s.source }}<template v-if="s.date"> — {{ s.date }}</template></span>
+        </div>
+      </div>
+
+      <div class="flow-view-legend">
+        <span class="flow-view-bar-label">Skala</span>
+        <div class="flow-view-legend-gradient"></div>
+      </div>
 
       <button type="button" class="flow-view-gear" @click="showSettings = !showSettings">⚙️</button>
       <div v-if="showSettings" class="flow-view-settings">
@@ -196,7 +248,7 @@ onBeforeUnmount(() => {
         </label>
         <label class="flow-view-settings-label">
           İz uzunluğu: {{ trailLength }}
-          <input type="range" min="2" max="120" step="1" :value="trailLength" @input="onTrailInput" />
+          <input type="range" min="2" max="2000" step="1" :value="trailLength" @input="onTrailInput" />
         </label>
       </div>
     </div>
@@ -243,7 +295,8 @@ onBeforeUnmount(() => {
   border: 1px solid rgba(255, 255, 255, 0.18);
   background: rgba(15, 18, 26, 0.92);
   backdrop-filter: blur(10px);
-  min-width: 180px;
+  min-width: 280px;
+  max-width: 340px;
 }
 .flow-view-controls h3 {
   margin: 0 0 10px;
@@ -258,6 +311,60 @@ onBeforeUnmount(() => {
   color: #e2e8f0;
   margin-bottom: 6px;
   cursor: pointer;
+}
+
+.flow-view-bar-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.flow-view-bar-label {
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: rgba(255, 255, 255, 0.5);
+  min-width: 60px;
+}
+.flow-view-chip {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 0.75rem;
+  color: #e2e8f0;
+  cursor: pointer;
+}
+
+.flow-view-source-block {
+  margin-bottom: 8px;
+  padding: 8px 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+.flow-view-source-row {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  margin-bottom: 5px;
+}
+.flow-view-source-row:last-child {
+  margin-bottom: 0;
+}
+.flow-view-source-text {
+  font-size: 0.7rem;
+  color: #8c97a8;
+}
+
+.flow-view-legend {
+  margin-bottom: 8px;
+}
+.flow-view-legend-gradient {
+  margin-top: 4px;
+  height: 8px;
+  border-radius: 4px;
+  background: linear-gradient(90deg, rgb(64, 140, 242), rgb(242, 89, 38));
 }
 
 .flow-view-gear {

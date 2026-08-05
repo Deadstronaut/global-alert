@@ -32,7 +32,7 @@ const MODES = [
   { id: 'ocean', label: 'Ocean', functional: true },
   { id: 'chem', label: 'Chem', functional: true },
   { id: 'particulates', label: 'Particulates', functional: false },
-  { id: 'space', label: 'Space', functional: false },
+  { id: 'space', label: 'Space', functional: true },
   { id: 'bio', label: 'Bio', functional: false },
 ]
 const MODE_SOURCE = {
@@ -148,7 +148,7 @@ const OVERLAY_OPTIONS = {
     { key: 'organic_matter_aod', kind: 'overlay', label: 'OMaot' },
     { key: 'sulfate_aod', kind: 'overlay', label: 'SO4ex' },
   ],
-  space: [{ label: 'Aurora' }],
+  space: [{ key: 'aurora', kind: 'overlay', label: 'Aurora' }],
   bio: [{ label: 'BAA' }],
 }
 const BIO_ANNOTATIONS = [{ label: 'Fires' }, { label: 'None' }]

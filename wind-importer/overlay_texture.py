@@ -512,6 +512,44 @@ def netcdf_no2_to_overlay_texture(netcdf_bytes: bytes) -> OverlayTexture:
     return netcdf_gas_to_overlay_texture(netcdf_bytes, "no2", M_NO2_G_MOL, NO2_RAMP, NO2_DOMAIN_PPB)
 
 
+# Space mode (spec 054 follow-up, 2026-08-06) — earth.nullschool.net's own
+# Aurora color ramp, same live-extraction standard as every other ramp.
+AURORA_RAMP = [
+    (0x00, 0x00, 0x00), (0x13, 0x23, 0x2b), (0x2a, 0x5d, 0x3f), (0x3c, 0x9d, 0x51),
+    (0x4a, 0xe1, 0x61), (0x91, 0xff, 0x5c), (0xd8, 0xff, 0x48), (0xfd, 0xf0, 0x59),
+    (0xfc, 0xcc, 0x8d), (0xf7, 0xa5, 0xb6), (0xec, 0x7c, 0xdc), (0xdb, 0x4b, 0xff),
+]
+# NOAA's OVATION Prime value is a 0-100 probability-ish index — kept at
+# its full theoretical range (not the ~0-24 seen on a geomagnetically
+# quiet day) so the color scale stays meaningful during an actual storm.
+AURORA_DOMAIN = (0.0, 100.0)
+
+
+def aurora_json_to_overlay_texture(json_bytes: bytes) -> OverlayTexture:
+    """
+    NOAA SWPC OVATION Prime JSON -> the Overlay: Aurora field. No GDAL
+    involved (unlike every other converter in this module) — this source
+    is a small flat JSON grid, not GRIB2/NetCDF, so fetch_aurora.py's own
+    aurora_json_to_grid() does the parsing directly with plain numpy.
+    """
+    from fetch_aurora import aurora_json_to_grid
+
+    values = aurora_json_to_grid(json_bytes)
+    value_min = float(np.nanmin(values))
+    value_max = float(np.nanmax(values))
+    rgba = colorize_linear(values, AURORA_RAMP, *AURORA_DOMAIN)
+    rgba = warp_equirect_rgba_to_web_mercator(rgba, -90.0, 90.0)
+
+    buffer = io.BytesIO()
+    Image.fromarray(rgba, mode="RGBA").save(buffer, format="PNG")
+
+    return OverlayTexture(
+        png_bytes=buffer.getvalue(),
+        value_min=value_min, value_max=value_max,
+        bounds=(-180.0, -WEB_MERCATOR_MAX_LAT, 180.0, WEB_MERCATOR_MAX_LAT),
+    )
+
+
 def grib2_scalar_to_overlay_texture(
     grib2_bytes: bytes,
     grib_element: str,

@@ -594,6 +594,24 @@ services:
     networks:
       - mhews
 
+  # Space mode (spec 054 follow-up, 2026-08-06) — Overlay: Aurora, NOAA
+  # SWPC's public OVATION Prime JSON feed. No CAMS/cdsapi/COPERNICUS_*
+  # credentials needed (unlike every service above except the GFS ones)
+  # — just a plain public HTTP GET, so env_file is still included for
+  # SUPABASE_URL/SUPABASE_SERVICE_ROLE_KEY but nothing aurora-specific.
+  aurora-importer-scheduled:
+    build:
+      context: ./wind-importer
+      dockerfile: Dockerfile
+    image: mhews-wind-importer:latest
+    container_name: mhews-aurora-importer-scheduled
+    restart: unless-stopped
+    command: ["--overlay-type=aurora"]
+    env_file:
+      - ./server/.env
+    networks:
+      - mhews
+
   # ── GDO Soil Moisture + fAPAR Anomaly importer (manual, run-to-completion) ──
   # WCS GeoTIFF (no Python/NetCDF needed, see gdoAnomalyFetch.ts) ->
   # exposure_datasets, for both GDO anomaly sources in one run.

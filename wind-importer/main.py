@@ -27,6 +27,7 @@ import uuid
 
 import requests
 
+from fetch_aurora import fetch_latest_aurora_json
 from fetch_currents import fetch_latest_currents_netcdf
 from fetch_gfs import (
     fetch_latest_cape_grib2,
@@ -56,6 +57,7 @@ from grib_to_texture import grib2_to_flow_texture
 from netcdf_to_texture import netcdf_uv_to_flow_texture
 from overlay_texture import (
     OverlayTexture,
+    aurora_json_to_overlay_texture,
     grib2_cape_to_overlay_texture,
     grib2_cwat_to_overlay_texture,
     grib2_mslp_to_overlay_texture,
@@ -113,6 +115,15 @@ CAMS_OVERLAY_FIELDS = {
     "co_surface": (fetch_latest_co_netcdf, netcdf_co_to_overlay_texture),
     "so2_surface": (fetch_latest_so2_netcdf, netcdf_so2_to_overlay_texture),
     "no2_surface": (fetch_latest_no2_netcdf, netcdf_no2_to_overlay_texture),
+}
+
+# Space mode (spec 054 follow-up, 2026-08-06) — a separate dict from
+# GFS_OVERLAY_FIELDS/CAMS_OVERLAY_FIELDS since this comes from neither
+# NOMADS nor ADS/cdsapi, just a small public NOAA SWPC JSON endpoint (no
+# auth, unlike CAMS). Kept as its own dict for the same "name the actual
+# source" clarity those two have, even though there's only one entry.
+NOAA_OVERLAY_FIELDS = {
+    "aurora": (fetch_latest_aurora_json, aurora_json_to_overlay_texture),
 }
 
 REFRESH_INTERVAL_S = 6 * 60 * 60  # matches GFS's own 6-hourly cycle (research.md §1/spec FR-007); also used as the overlay loop's poll interval — coarser than CAMS' own ~12h cadence, but re-fetching early just re-uploads the same cycle's data, harmless
@@ -181,6 +192,7 @@ SOURCE_NAME_BY_LAYER = {"wind": "gfs", "ocean_current": "cmems", "wave": "wavewa
 SOURCE_NAME_BY_OVERLAY = {
     **{key: "gfs" for key in GFS_OVERLAY_FIELDS},
     **{key: "cams" for key in CAMS_OVERLAY_FIELDS},
+    **{key: "noaa_swpc" for key in NOAA_OVERLAY_FIELDS},
 }
 
 
@@ -287,7 +299,7 @@ def run_once_overlay(overlay_type: str, level: str = "sfc") -> None:
     ignores it and always runs at 'sfc' regardless of what's passed."""
     _require_supabase_env()
 
-    fields = {**GFS_OVERLAY_FIELDS, **CAMS_OVERLAY_FIELDS}
+    fields = {**GFS_OVERLAY_FIELDS, **CAMS_OVERLAY_FIELDS, **NOAA_OVERLAY_FIELDS}
     if overlay_type in fields:
         fetch_fn, convert_fn = fields[overlay_type]
         if overlay_type in LEVEL_AWARE_OVERLAY_FIELDS:
@@ -316,7 +328,7 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     mode = parser.add_mutually_exclusive_group(required=True)
     mode.add_argument("--layer-type", choices=["wind", "ocean_current", "wave"])
-    mode.add_argument("--overlay-type", choices=[*GFS_OVERLAY_FIELDS, *CAMS_OVERLAY_FIELDS])
+    mode.add_argument("--overlay-type", choices=[*GFS_OVERLAY_FIELDS, *CAMS_OVERLAY_FIELDS, *NOAA_OVERLAY_FIELDS])
     parser.add_argument("--once", action="store_true", help="Run a single import and exit, instead of looping every 6h")
     parser.add_argument("--level", default="sfc", help="Single pressure level for one-off overlay runs (sfc or e.g. 850) — LEVEL_AWARE_OVERLAY_FIELDS only")
     parser.add_argument(

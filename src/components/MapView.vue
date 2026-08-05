@@ -2989,6 +2989,7 @@ const overlayLayerIds = {
   co_surface: 'overlay-co-surface',
   so2_surface: 'overlay-so2-surface',
   no2_surface: 'overlay-no2-surface',
+  aurora: 'overlay-aurora',
 }
 
 // Height selector (spec 054 follow-up, 2026-08-06) — only Temp/RH have
@@ -3045,7 +3046,7 @@ const OVERLAY_KIND = {
   mean_sea_level_pressure: 'overlay', cape: 'overlay', total_precipitable_water: 'overlay',
   total_cloud_water: 'overlay', precip_3hr: 'overlay', wet_bulb_temp: 'overlay',
   pm1: 'overlay', pm10: 'overlay', dust_aod: 'overlay', organic_matter_aod: 'overlay', sulfate_aod: 'overlay',
-  co_surface: 'overlay', so2_surface: 'overlay', no2_surface: 'overlay',
+  co_surface: 'overlay', so2_surface: 'overlay', no2_surface: 'overlay', aurora: 'overlay',
 }
 function applyOverlayKey(key, enabled) {
   const kind = OVERLAY_KIND[key]

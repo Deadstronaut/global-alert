@@ -2981,6 +2981,11 @@ const overlayLayerIds = {
   total_cloud_water: 'overlay-total-cloud-water',
   precip_3hr: 'overlay-precip-3hr',
   wet_bulb_temp: 'overlay-wet-bulb-temp',
+  pm1: 'overlay-pm1',
+  pm10: 'overlay-pm10',
+  dust_aod: 'overlay-dust-aod',
+  organic_matter_aod: 'overlay-organic-matter-aod',
+  sulfate_aod: 'overlay-sulfate-aod',
 }
 
 async function setOverlayLayerEnabled(overlayType, enabled) {
@@ -3020,6 +3025,7 @@ const OVERLAY_KIND = {
   air_quality_pm25: 'overlay', temperature: 'overlay', relative_humidity: 'overlay',
   mean_sea_level_pressure: 'overlay', cape: 'overlay', total_precipitable_water: 'overlay',
   total_cloud_water: 'overlay', precip_3hr: 'overlay', wet_bulb_temp: 'overlay',
+  pm1: 'overlay', pm10: 'overlay', dust_aod: 'overlay', organic_matter_aod: 'overlay', sulfate_aod: 'overlay',
 }
 function applyOverlayKey(key, enabled) {
   const kind = OVERLAY_KIND[key]

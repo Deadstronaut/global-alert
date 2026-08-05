@@ -255,25 +255,27 @@ def colorize_quantile(values: np.ndarray, ramp: list[tuple[int, int, int]]) -> n
     return rgba
 
 
-def netcdf_pm25_to_overlay_texture(netcdf_bytes: bytes) -> OverlayTexture:
+def netcdf_pm_mass_to_overlay_texture(netcdf_bytes: bytes, subdataset_var: str) -> OverlayTexture:
     """
+    Shared PM1/PM2.5/PM10 mass-concentration converter (spec 054 US2 +
+    2026-08-06 follow-up) — all three CAMS particulate-mass fields share
+    the same PM25_RAMP quantile-bucket coloring and the same kg/m^3 ->
+    µg/m^3 unit conversion (units live-verified 2026-08-05 against a real
+    downloaded CAMS PM2.5 file: GRIB_units = 'kg m**-3', NOT the µg/m³
+    these are conventionally reported in). `subdataset_var` is the
+    NetCDF's own internal variable name, which does NOT always match the
+    CAMS request's `variable` string (e.g. PM2.5 -> 'pm2p5'; live-verified
+    per-field in fetch_overlay_cams.py's own header comment).
+
     Raises RuntimeError on anything GDAL can't open/read, same "fail
     loudly" convention as the wind/currents/wave conversions.
-
-    NetCDF subdataset variable name ('pm2p5') and units live-verified
-    2026-08-05 via gdalinfo against a real downloaded CAMS file: GRIB_units
-    / units = 'kg m**-3' (mass concentration), NOT the µg/m³ PM2.5 is
-    conventionally reported in — real observed range on that file was
-    ~1.9e-13 to 1.1e-6 kg/m³. Converted to µg/m³ (×1e9) below so
-    value_min/value_max read as normal PM2.5 numbers (single/low-triple
-    digits) in the frontend legend instead of a string of leading zeros.
     """
     source_path = "/vsimem/overlay_source.nc"
     gdal.FileFromMemBuffer(source_path, netcdf_bytes)
     try:
-        dataset = gdal.Open(f'NETCDF:"{source_path}":pm2p5')
+        dataset = gdal.Open(f'NETCDF:"{source_path}":{subdataset_var}')
         if dataset is None:
-            raise RuntimeError("GDAL could not open the fetched CAMS PM2.5 NetCDF (expected a 'pm2p5' subdataset)")
+            raise RuntimeError(f"GDAL could not open the fetched CAMS NetCDF (expected a {subdataset_var!r} subdataset)")
 
         band = dataset.GetRasterBand(1)
         values = resample_band_to_grid(band, dataset) * 1e9  # kg/m^3 -> ug/m^3
@@ -299,6 +301,100 @@ def netcdf_pm25_to_overlay_texture(netcdf_bytes: bytes) -> OverlayTexture:
         )
     finally:
         gdal.Unlink(source_path)
+
+
+def netcdf_pm25_to_overlay_texture(netcdf_bytes: bytes) -> OverlayTexture:
+    return netcdf_pm_mass_to_overlay_texture(netcdf_bytes, "pm2p5")
+
+
+def netcdf_pm1_to_overlay_texture(netcdf_bytes: bytes) -> OverlayTexture:
+    return netcdf_pm_mass_to_overlay_texture(netcdf_bytes, "pm1")
+
+
+def netcdf_pm10_to_overlay_texture(netcdf_bytes: bytes) -> OverlayTexture:
+    return netcdf_pm_mass_to_overlay_texture(netcdf_bytes, "pm10")
+
+
+# earth.nullschool.net's own DUex/OMaot/SO4ex color ramps — same live-
+# extraction standard as every other ramp in this module. Aerosol optical
+# depth is dimensionless (GRIB_units '~', live-verified 2026-08-06 — no
+# unit conversion needed, unlike the PM mass fields above), so these use
+# colorize_linear's fixed domain the same way Temp/CAPE/etc. do.
+DUST_AOD_RAMP = [
+    (0x04, 0x04, 0x04), (0x2b, 0x13, 0x26), (0x2c, 0x21, 0x71), (0x1b, 0x3e, 0x84),
+    (0x04, 0x5f, 0x72), (0x00, 0x7f, 0x52), (0x00, 0x9d, 0x32), (0x40, 0xb5, 0x00),
+    (0x99, 0xc4, 0x00), (0xda, 0xcd, 0x74), (0xf7, 0xe2, 0xd1), (0xff, 0xff, 0xff),
+]
+# Live-verified 2026-08-06: a real global cycle's max dust AOD was 1.28 —
+# widened a bit past that so an unusually dusty day still leaves headroom.
+DUST_AOD_DOMAIN = (0.0, 2.0)
+
+ORGANIC_MATTER_AOD_RAMP = [
+    (0x17, 0x4f, 0x7c), (0x90, 0xb5, 0xda), (0xdc, 0xe7, 0xf3), (0xfd, 0xe0, 0xcf),
+    (0xec, 0xa7, 0x7b), (0xcb, 0x93, 0x57), (0xac, 0x7f, 0x34), (0x8c, 0x6b, 0x04),
+    (0x78, 0x51, 0x1a), (0x65, 0x38, 0x24), (0x52, 0x1e, 0x2a), (0x3d, 0x00, 0x2d),
+]
+# Live-verified 2026-08-06: a real global cycle's max was 1.79, past the
+# initial 0-1.0 guess — widened to avoid clipping that.
+ORGANIC_MATTER_AOD_DOMAIN = (0.0, 2.0)
+
+SULFATE_AOD_RAMP = [
+    (0x00, 0x00, 0x00), (0x19, 0x12, 0x2b), (0x17, 0x35, 0x4c), (0x18, 0x5c, 0x48),
+    (0x3b, 0x75, 0x33), (0x7e, 0x7a, 0x36), (0xbc, 0x79, 0x67), (0xd4, 0x86, 0xb1),
+    (0xcb, 0xa8, 0xe6), (0xc1, 0xd2, 0xf3), (0xd6, 0xf0, 0xef), (0xff, 0xff, 0xff),
+]
+SULFATE_AOD_DOMAIN = (0.0, 1.0)
+
+
+def netcdf_aod_to_overlay_texture(
+    netcdf_bytes: bytes, subdataset_var: str, ramp: list[tuple[int, int, int]], domain: tuple[float, float],
+) -> OverlayTexture:
+    """Shared DUex/OMaot/SO4ex converter — same shape as
+    netcdf_pm_mass_to_overlay_texture but with colorize_linear's fixed
+    absolute-value domain and no unit conversion (AOD is dimensionless)."""
+    source_path = "/vsimem/aod_overlay_source.nc"
+    gdal.FileFromMemBuffer(source_path, netcdf_bytes)
+    try:
+        dataset = gdal.Open(f'NETCDF:"{source_path}":{subdataset_var}')
+        if dataset is None:
+            raise RuntimeError(f"GDAL could not open the fetched CAMS NetCDF (expected a {subdataset_var!r} subdataset)")
+
+        band = dataset.GetRasterBand(1)
+        values = resample_band_to_grid(band, dataset)
+
+        value_min = float(np.nanmin(values))
+        value_max = float(np.nanmax(values))
+        rgba = colorize_linear(values, ramp, *domain)
+
+        gt = dataset.GetGeoTransform()
+        width, height = dataset.RasterXSize, dataset.RasterYSize
+        west, north = gt[0], gt[3]
+        east = west + width * gt[1]
+        south = north + height * gt[5]
+        rgba = warp_equirect_rgba_to_web_mercator(rgba, south, north)
+
+        buffer = io.BytesIO()
+        Image.fromarray(rgba, mode="RGBA").save(buffer, format="PNG")
+
+        return OverlayTexture(
+            png_bytes=buffer.getvalue(),
+            value_min=value_min, value_max=value_max,
+            bounds=(west, -WEB_MERCATOR_MAX_LAT, east, WEB_MERCATOR_MAX_LAT),
+        )
+    finally:
+        gdal.Unlink(source_path)
+
+
+def netcdf_dust_aod_to_overlay_texture(netcdf_bytes: bytes) -> OverlayTexture:
+    return netcdf_aod_to_overlay_texture(netcdf_bytes, "duaod550", DUST_AOD_RAMP, DUST_AOD_DOMAIN)
+
+
+def netcdf_organic_matter_aod_to_overlay_texture(netcdf_bytes: bytes) -> OverlayTexture:
+    return netcdf_aod_to_overlay_texture(netcdf_bytes, "omaod550", ORGANIC_MATTER_AOD_RAMP, ORGANIC_MATTER_AOD_DOMAIN)
+
+
+def netcdf_sulfate_aod_to_overlay_texture(netcdf_bytes: bytes) -> OverlayTexture:
+    return netcdf_aod_to_overlay_texture(netcdf_bytes, "suaod550", SULFATE_AOD_RAMP, SULFATE_AOD_DOMAIN)
 
 
 def grib2_scalar_to_overlay_texture(

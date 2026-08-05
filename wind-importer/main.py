@@ -39,7 +39,14 @@ from fetch_gfs import (
     fetch_latest_wet_bulb_inputs_grib2,
     fetch_latest_wind_grib2,
 )
-from fetch_overlay_cams import fetch_latest_pm25_netcdf
+from fetch_overlay_cams import (
+    fetch_latest_dust_aod_netcdf,
+    fetch_latest_organic_matter_aod_netcdf,
+    fetch_latest_pm1_netcdf,
+    fetch_latest_pm10_netcdf,
+    fetch_latest_pm25_netcdf,
+    fetch_latest_sulfate_aod_netcdf,
+)
 from fetch_waves import fetch_latest_wave_grib2
 from flow_texture_common import FlowTexture, metadata_json
 from grib_to_texture import grib2_to_flow_texture
@@ -54,7 +61,12 @@ from overlay_texture import (
     grib2_relative_humidity_to_overlay_texture,
     grib2_temperature_to_overlay_texture,
     grib2_wet_bulb_to_overlay_texture,
+    netcdf_dust_aod_to_overlay_texture,
+    netcdf_organic_matter_aod_to_overlay_texture,
+    netcdf_pm1_to_overlay_texture,
+    netcdf_pm10_to_overlay_texture,
     netcdf_pm25_to_overlay_texture,
+    netcdf_sulfate_aod_to_overlay_texture,
 )
 from wave_vector import wave_grib2_to_flow_texture
 
@@ -71,6 +83,21 @@ GFS_OVERLAY_FIELDS = {
     "total_cloud_water": (fetch_latest_cwat_grib2, grib2_cwat_to_overlay_texture),
     "precip_3hr": (fetch_latest_precip_3hr_grib2, grib2_precip_3hr_to_overlay_texture),
     "wet_bulb_temp": (fetch_latest_wet_bulb_inputs_grib2, grib2_wet_bulb_to_overlay_texture),
+}
+
+# CAMS-native Overlay fields (spec 054 US2 + 2026-08-06 follow-up) — same
+# dict-driven dispatch shape as GFS_OVERLAY_FIELDS, kept as a separate dict
+# since these go through fetch_overlay_cams.py/cdsapi rather than NOMADS,
+# and air_quality_pm25 (this dict's original single entry) is the name the
+# frontend/DB already use, so it stays as-is rather than being renamed to
+# match the newer 'pm1'/'pm10' naming.
+CAMS_OVERLAY_FIELDS = {
+    "air_quality_pm25": (fetch_latest_pm25_netcdf, netcdf_pm25_to_overlay_texture),
+    "pm1": (fetch_latest_pm1_netcdf, netcdf_pm1_to_overlay_texture),
+    "pm10": (fetch_latest_pm10_netcdf, netcdf_pm10_to_overlay_texture),
+    "dust_aod": (fetch_latest_dust_aod_netcdf, netcdf_dust_aod_to_overlay_texture),
+    "organic_matter_aod": (fetch_latest_organic_matter_aod_netcdf, netcdf_organic_matter_aod_to_overlay_texture),
+    "sulfate_aod": (fetch_latest_sulfate_aod_netcdf, netcdf_sulfate_aod_to_overlay_texture),
 }
 
 REFRESH_INTERVAL_S = 6 * 60 * 60  # matches GFS's own 6-hourly cycle (research.md §1/spec FR-007); also used as the overlay loop's poll interval — coarser than CAMS' own ~12h cadence, but re-fetching early just re-uploads the same cycle's data, harmless
@@ -131,7 +158,10 @@ def _upload_overlay_texture(overlay_type: str, issued_at: dt.datetime, png_bytes
 
 
 SOURCE_NAME_BY_LAYER = {"wind": "gfs", "ocean_current": "cmems", "wave": "wavewatch3"}
-SOURCE_NAME_BY_OVERLAY = {"air_quality_pm25": "cams", **{key: "gfs" for key in GFS_OVERLAY_FIELDS}}
+SOURCE_NAME_BY_OVERLAY = {
+    **{key: "gfs" for key in GFS_OVERLAY_FIELDS},
+    **{key: "cams" for key in CAMS_OVERLAY_FIELDS},
+}
 
 
 def _insert_flow_snapshot_row(layer_type: str, issued_at: dt.datetime, texture: FlowTexture, storage_path: str) -> None:
@@ -232,15 +262,13 @@ def run_once_overlay(overlay_type: str) -> None:
     overlay-snapshot-contract.md Producer)."""
     _require_supabase_env()
 
-    if overlay_type == "air_quality_pm25":
-        raw_bytes, issued_at = fetch_latest_pm25_netcdf()
-        texture = netcdf_pm25_to_overlay_texture(raw_bytes)
-    elif overlay_type in GFS_OVERLAY_FIELDS:
-        fetch_fn, convert_fn = GFS_OVERLAY_FIELDS[overlay_type]
+    fields = {**GFS_OVERLAY_FIELDS, **CAMS_OVERLAY_FIELDS}
+    if overlay_type in fields:
+        fetch_fn, convert_fn = fields[overlay_type]
         raw_bytes, issued_at = fetch_fn()
         texture = convert_fn(raw_bytes)
     else:
-        expected = ", ".join(["'air_quality_pm25'", *(repr(k) for k in GFS_OVERLAY_FIELDS)])
+        expected = ", ".join(repr(k) for k in fields)
         raise ValueError(f"Unknown overlay_type {overlay_type!r} (expected one of: {expected})")
 
     print(f"[wind-importer] Fetched {overlay_type} data issued at {issued_at.isoformat()}")
@@ -258,7 +286,7 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     mode = parser.add_mutually_exclusive_group(required=True)
     mode.add_argument("--layer-type", choices=["wind", "ocean_current", "wave"])
-    mode.add_argument("--overlay-type", choices=["air_quality_pm25", *GFS_OVERLAY_FIELDS])
+    mode.add_argument("--overlay-type", choices=[*GFS_OVERLAY_FIELDS, *CAMS_OVERLAY_FIELDS])
     parser.add_argument("--once", action="store_true", help="Run a single import and exit, instead of looping every 6h")
     args = parser.parse_args()
 

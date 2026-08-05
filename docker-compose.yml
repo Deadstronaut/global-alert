@@ -451,6 +451,74 @@ services:
     networks:
       - mhews
 
+  # Particulates mode's remaining Overlay entries (spec 054 follow-up,
+  # 2026-08-06) — CAMS-sourced, same image/pattern as overlay-importer-
+  # scheduled (PM2.5) above.
+  pm1-importer-scheduled:
+    build:
+      context: ./wind-importer
+      dockerfile: Dockerfile
+    image: mhews-wind-importer:latest
+    container_name: mhews-pm1-importer-scheduled
+    restart: unless-stopped
+    command: ["--overlay-type=pm1"]
+    env_file:
+      - ./server/.env
+    networks:
+      - mhews
+
+  pm10-importer-scheduled:
+    build:
+      context: ./wind-importer
+      dockerfile: Dockerfile
+    image: mhews-wind-importer:latest
+    container_name: mhews-pm10-importer-scheduled
+    restart: unless-stopped
+    command: ["--overlay-type=pm10"]
+    env_file:
+      - ./server/.env
+    networks:
+      - mhews
+
+  dust-aod-importer-scheduled:
+    build:
+      context: ./wind-importer
+      dockerfile: Dockerfile
+    image: mhews-wind-importer:latest
+    container_name: mhews-dust-aod-importer-scheduled
+    restart: unless-stopped
+    command: ["--overlay-type=dust_aod"]
+    env_file:
+      - ./server/.env
+    networks:
+      - mhews
+
+  organic-matter-aod-importer-scheduled:
+    build:
+      context: ./wind-importer
+      dockerfile: Dockerfile
+    image: mhews-wind-importer:latest
+    container_name: mhews-organic-matter-aod-importer-scheduled
+    restart: unless-stopped
+    command: ["--overlay-type=organic_matter_aod"]
+    env_file:
+      - ./server/.env
+    networks:
+      - mhews
+
+  sulfate-aod-importer-scheduled:
+    build:
+      context: ./wind-importer
+      dockerfile: Dockerfile
+    image: mhews-wind-importer:latest
+    container_name: mhews-sulfate-aod-importer-scheduled
+    restart: unless-stopped
+    command: ["--overlay-type=sulfate_aod"]
+    env_file:
+      - ./server/.env
+    networks:
+      - mhews
+
   # ── GDO Soil Moisture + fAPAR Anomaly importer (manual, run-to-completion) ──
   # WCS GeoTIFF (no Python/NetCDF needed, see gdoAnomalyFetch.ts) ->
   # exposure_datasets, for both GDO anomaly sources in one run.

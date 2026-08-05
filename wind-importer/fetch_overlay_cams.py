@@ -1,22 +1,14 @@
 """
-Fetches the latest CAMS PM2.5 surface-concentration forecast from the
-Copernicus Atmosphere Data Store (ADS) — spec 054 US2, research.md §3.
+Fetches the latest CAMS forecast fields from the Copernicus Atmosphere
+Data Store (ADS) — spec 054 US2, research.md §3, extended 2026-08-06 for
+Particulates mode's remaining Overlay entries (PM1/PM10/DUex/OMaot/SO4ex)
+alongside the original PM2.5.
 
 Unlike CMEMS's username/password auth (fetch_currents.py), ADS uses a
 single API key tied to a URL, via the `cdsapi` client library. Requires a
 free ADS account (https://ads.atmosphere.copernicus.eu) — registration is a
 manual step, not something this importer can do for itself. Credentials
 are read from COPERNICUS_ADS_URL / COPERNICUS_ADS_KEY env vars.
-
-NOTE: written against cdsapi's documented retrieve() API and the
-"cams-global-atmospheric-composition-forecasts" dataset id /
-'particulate_matter_2.5um' variable name, but NOT live-verified end to end
-the way fetch_gfs.py/fetch_waves.py's NOMADS URLs were — this repo has no
-ADS credentials to test against yet. If the dataset id, variable name, or
-response format (netcdf_zip contains a .nc file, assumed extractable by
-name) have drifted, the first real run's error will point at what needs
-adjusting — the same situation fetch_currents.py started in before CMEMS
-access was confirmed live.
 """
 from __future__ import annotations
 
@@ -43,15 +35,45 @@ CYCLE_HOURS = (0, 6, 12, 18)
 CATALOG_LAG_DAYS = 1
 
 
-def fetch_latest_pm25_netcdf(timeout_s: int = 120) -> tuple[bytes, dt.datetime]:
-    """Returns (netcdf_bytes, issued_at).
+def _download(client: "cdsapi.Client", variable: str, catalog_date: dt.date, cycle_hour: int, tmp_dir: str) -> bytes:
+    request = {
+        "variable": [variable],
+        "date": [catalog_date.strftime("%Y-%m-%d")],
+        "time": [f"{cycle_hour:02d}:00"],
+        "leadtime_hour": ["0"],
+        "type": ["forecast"],
+        "data_format": "netcdf_zip",
+    }
+    zip_path = os.path.join(tmp_dir, f"{variable}.zip")
+    client.retrieve(DATASET_ID, request).download(zip_path)
+    with zipfile.ZipFile(zip_path) as zf:
+        nc_names = [n for n in zf.namelist() if n.endswith(".nc")]
+        if not nc_names:
+            raise RuntimeError(f"CAMS response ZIP for {variable!r} had no .nc file (contents: {zf.namelist()})")
+        return zf.read(nc_names[0])
 
-    Request shape live-verified 2026-08-05 against the real ADS API's own
-    live constraints (fetched via cdsapi's apply_constraints(), the
-    authoritative source — unlike the static get_process() schema, which
-    is misleadingly incomplete: it omits `date` entirely and only lists 2
-    of the 4 real `time` cycles). `data_format: 'netcdf_zip'` and
-    `type: 'forecast'` are both valid per that same live check."""
+
+def _fetch_latest_cams_netcdf(variable: str, timeout_s: int) -> tuple[bytes, dt.datetime]:
+    """
+    Shared fetch for any single-variable CAMS global-atmospheric-
+    composition-forecasts request — request shape live-verified 2026-08-05
+    against the real ADS API's own live constraints (fetched via cdsapi's
+    apply_constraints(), the authoritative source — unlike the static
+    get_process() schema, which is misleadingly incomplete: it omits
+    `date` entirely and only lists 2 of the 4 real `time` cycles).
+    `data_format: 'netcdf_zip'` and `type: 'forecast'` are both valid per
+    that same live check. Returns (netcdf_bytes, issued_at).
+
+    Falls back to the day's 00:00 cycle if the "latest expected cycle"
+    guess 400s — live-verified 2026-08-05/06: CAMS' publish lag isn't just
+    the whole-day CATALOG_LAG_DAYS offset, individual later cycles (06/12/18)
+    for the newest available date can themselves not be published yet even
+    though the date itself already appears in the catalog, while 00:00
+    (published first, earliest in the day) reliably is — same "fail open,
+    don't block on the newest possible data" convention as fetch_gfs.py's
+    own cycle fallback, just a within-day fallback instead of a
+    previous-day one.
+    """
     url = os.environ.get("COPERNICUS_ADS_URL", "https://ads.atmosphere.copernicus.eu/api")
     key = os.environ.get("COPERNICUS_ADS_KEY")
     if not key:
@@ -64,23 +86,58 @@ def fetch_latest_pm25_netcdf(timeout_s: int = 120) -> tuple[bytes, dt.datetime]:
     now = dt.datetime.now(dt.timezone.utc)
     catalog_date = (now - dt.timedelta(days=CATALOG_LAG_DAYS)).date()
     cycle_hour = max(h for h in CYCLE_HOURS if h <= now.hour) if now.hour >= CYCLE_HOURS[0] else CYCLE_HOURS[-1]
-    issued_at = dt.datetime(catalog_date.year, catalog_date.month, catalog_date.day, cycle_hour, tzinfo=dt.timezone.utc)
 
     client = cdsapi.Client(url=url, key=key, timeout=timeout_s)
-    request = {
-        "variable": ["particulate_matter_2.5um"],
-        "date": [catalog_date.strftime("%Y-%m-%d")],
-        "time": [issued_at.strftime("%H:%M")],
-        "leadtime_hour": ["0"],
-        "type": ["forecast"],
-        "data_format": "netcdf_zip",
-    }
-
     with tempfile.TemporaryDirectory() as tmp_dir:
-        zip_path = os.path.join(tmp_dir, "pm25.zip")
-        client.retrieve(DATASET_ID, request).download(zip_path)
-        with zipfile.ZipFile(zip_path) as zf:
-            nc_names = [n for n in zf.namelist() if n.endswith(".nc")]
-            if not nc_names:
-                raise RuntimeError(f"CAMS response ZIP had no .nc file (contents: {zf.namelist()})")
-            return zf.read(nc_names[0]), issued_at
+        try:
+            netcdf_bytes = _download(client, variable, catalog_date, cycle_hour, tmp_dir)
+            issued_hour = cycle_hour
+        except Exception as first_error:  # noqa: BLE001 - ADS raises requests.HTTPError, not a specific typed exception to catch narrowly
+            if cycle_hour == 0:
+                raise
+            try:
+                netcdf_bytes = _download(client, variable, catalog_date, 0, tmp_dir)
+                issued_hour = 0
+            except Exception as second_error:
+                raise RuntimeError(
+                    f"Failed to fetch CAMS {variable!r} for {catalog_date} cycle {cycle_hour:02d}:00 "
+                    f"({first_error}) and fallback cycle 00:00 ({second_error})"
+                ) from second_error
+
+        issued_at = dt.datetime(catalog_date.year, catalog_date.month, catalog_date.day, issued_hour, tzinfo=dt.timezone.utc)
+        return netcdf_bytes, issued_at
+
+
+def fetch_latest_pm25_netcdf(timeout_s: int = 120) -> tuple[bytes, dt.datetime]:
+    """PM2.5 surface concentration — NetCDF subdataset variable name 'pm2p5'."""
+    return _fetch_latest_cams_netcdf("particulate_matter_2.5um", timeout_s)
+
+
+# CAMS request variable name -> NetCDF subdataset variable name pairs
+# live-verified 2026-08-06 against real downloaded files (gdalinfo on each
+# — CAMS' subdataset names don't always match the request name mechanically,
+# e.g. 'dust_aerosol_optical_depth_550nm' -> 'duaod550', so these were
+# confirmed one at a time rather than guessed).
+def fetch_latest_pm1_netcdf(timeout_s: int = 120) -> tuple[bytes, dt.datetime]:
+    """PM1 surface concentration — NetCDF subdataset variable name 'pm1'."""
+    return _fetch_latest_cams_netcdf("particulate_matter_1um", timeout_s)
+
+
+def fetch_latest_pm10_netcdf(timeout_s: int = 120) -> tuple[bytes, dt.datetime]:
+    """PM10 surface concentration — NetCDF subdataset variable name 'pm10'."""
+    return _fetch_latest_cams_netcdf("particulate_matter_10um", timeout_s)
+
+
+def fetch_latest_dust_aod_netcdf(timeout_s: int = 120) -> tuple[bytes, dt.datetime]:
+    """Dust aerosol optical depth @ 550nm — NetCDF subdataset variable name 'duaod550'."""
+    return _fetch_latest_cams_netcdf("dust_aerosol_optical_depth_550nm", timeout_s)
+
+
+def fetch_latest_organic_matter_aod_netcdf(timeout_s: int = 120) -> tuple[bytes, dt.datetime]:
+    """Organic matter aerosol optical depth @ 550nm — NetCDF subdataset variable name 'omaod550'."""
+    return _fetch_latest_cams_netcdf("organic_matter_aerosol_optical_depth_550nm", timeout_s)
+
+
+def fetch_latest_sulfate_aod_netcdf(timeout_s: int = 120) -> tuple[bytes, dt.datetime]:
+    """Sulphate aerosol optical depth @ 550nm — NetCDF subdataset variable name 'suaod550'."""
+    return _fetch_latest_cams_netcdf("sulphate_aerosol_optical_depth_550nm", timeout_s)

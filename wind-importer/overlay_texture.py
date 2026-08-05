@@ -10,6 +10,7 @@ visual technique matches this app's existing gridded-metric convention.
 from __future__ import annotations
 
 import io
+import math
 from dataclasses import dataclass
 
 import numpy as np
@@ -20,6 +21,63 @@ from flow_texture_common import resample_band_to_grid
 from grib_to_texture import _band_by_grib_element
 
 gdal.UseExceptions()
+
+# Matches src/utils/windLayerData.js's own WEB_MERCATOR_MAX_LAT exactly —
+# the standard Web Mercator projection limit (where the projected world
+# becomes a square), both files clamp/warp to this same value so frontend
+# and backend never disagree about where the overlay's edges are.
+WEB_MERCATOR_MAX_LAT = 85.0511287798
+
+
+def _mercator_y(lat_deg: float) -> float:
+    """Normalized Web Mercator y in [0,1]-ish (0 near the north pole, 1
+    near the south) — same formula as simple-wind-layer.js's
+    lngLatToMercator(), duplicated here in Python since GDAL/wind-importer
+    has no JS interop."""
+    lat_rad = math.radians(lat_deg)
+    sin_lat = math.sin(lat_rad)
+    return 0.5 - math.log((1 + sin_lat) / (1 - sin_lat)) / (4 * math.pi)
+
+
+def warp_equirect_rgba_to_web_mercator(rgba: np.ndarray, source_south: float, source_north: float) -> np.ndarray:
+    """
+    Row-remaps an equirectangular (plate carrée — uniform degrees per
+    pixel row, what resample_band_to_grid produces) RGBA image into Web
+    Mercator's own vertical spacing, output always spanning the fixed
+    [-WEB_MERCATOR_MAX_LAT, +WEB_MERCATOR_MAX_LAT] domain.
+
+    Why this is needed at all (live-debugged via user screenshot,
+    2026-08-06): MapLibre's `image` source places a texture by linearly
+    interpolating between its four given lng/lat corners, in *Mercator*
+    screen space — it does not know or care that the source pixel rows
+    are evenly spaced in *latitude* instead. Handing it an unwarped
+    equirectangular image made high-latitude content (Russia) read as
+    pushed further north than it should, and low/mid-latitude content
+    (Africa) read as stretched further south — a real geometric distortion,
+    not a resolution/scaling complaint. SimpleWindLayer's particles never
+    had this problem because they project each point's own lng/lat to
+    Mercator individually (lngLatToMercator) rather than relying on a
+    single linearly-interpolated quad.
+
+    Only the vertical (latitude) axis needs remapping — longitude maps
+    identically in both projections (both are simply linear in longitude),
+    so this is a per-row resample, not a full 2D reprojection: for each
+    output row, compute which latitude that row's Mercator-y position
+    corresponds to, then pick (nearest-neighbor) the closest source row
+    for that latitude.
+    """
+    height, width = rgba.shape[:2]
+    merc_north = _mercator_y(WEB_MERCATOR_MAX_LAT)
+    merc_south = _mercator_y(-WEB_MERCATOR_MAX_LAT)
+    out_row_frac = np.arange(height) / (height - 1)
+    merc_y = merc_north + out_row_frac * (merc_south - merc_north)
+    # Inverse of _mercator_y: solve y = 0.5 - ln((1+sin(lat))/(1-sin(lat)))/(4*pi) for lat.
+    a = (0.5 - merc_y) * 4 * np.pi
+    lat = np.degrees(np.arcsin(np.tanh(a / 2)))
+
+    src_row_frac = (source_north - lat) / (source_north - source_south) * (height - 1)
+    src_row = np.clip(np.round(src_row_frac).astype(np.int64), 0, height - 1)
+    return rgba[src_row]
 
 # WHO/EPA-style air-quality progression: green (clean) -> yellow -> orange
 # -> red -> purple (hazardous) — the conventional PM2.5 color language,
@@ -213,19 +271,20 @@ def netcdf_pm25_to_overlay_texture(netcdf_bytes: bytes) -> OverlayTexture:
         value_max = float(np.nanmax(values))
         rgba = colorize_quantile(values, PM25_RAMP)
 
-        buffer = io.BytesIO()
-        Image.fromarray(rgba, mode="RGBA").save(buffer, format="PNG")
-
         gt = dataset.GetGeoTransform()
         width, height = dataset.RasterXSize, dataset.RasterYSize
         west, north = gt[0], gt[3]
         east = west + width * gt[1]
         south = north + height * gt[5]
+        rgba = warp_equirect_rgba_to_web_mercator(rgba, south, north)
+
+        buffer = io.BytesIO()
+        Image.fromarray(rgba, mode="RGBA").save(buffer, format="PNG")
 
         return OverlayTexture(
             png_bytes=buffer.getvalue(),
             value_min=value_min, value_max=value_max,
-            bounds=(west, south, east, north),
+            bounds=(west, -WEB_MERCATOR_MAX_LAT, east, WEB_MERCATOR_MAX_LAT),
         )
     finally:
         gdal.Unlink(source_path)
@@ -267,19 +326,20 @@ def grib2_scalar_to_overlay_texture(
         value_max = float(np.nanmax(values))
         rgba = colorize_linear(values, ramp, *domain)
 
-        buffer = io.BytesIO()
-        Image.fromarray(rgba, mode="RGBA").save(buffer, format="PNG")
-
         gt = dataset.GetGeoTransform()
         width, height = dataset.RasterXSize, dataset.RasterYSize
         west, north = gt[0], gt[3]
         east = west + width * gt[1]
         south = north + height * gt[5]
+        rgba = warp_equirect_rgba_to_web_mercator(rgba, south, north)
+
+        buffer = io.BytesIO()
+        Image.fromarray(rgba, mode="RGBA").save(buffer, format="PNG")
 
         return OverlayTexture(
             png_bytes=buffer.getvalue(),
             value_min=value_min, value_max=value_max,
-            bounds=(west, south, east, north),
+            bounds=(west, -WEB_MERCATOR_MAX_LAT, east, WEB_MERCATOR_MAX_LAT),
         )
     finally:
         gdal.Unlink(source_path)

@@ -35,6 +35,48 @@ import { supabase } from '@/services/api/config.js'
  * Mercator-based web map clamp to this same value internally.
  */
 const WEB_MERCATOR_MAX_LAT = 85.0511287798
+
+function mercatorY(latDeg) {
+  const latRad = (latDeg * Math.PI) / 180
+  const sinLat = Math.sin(latRad)
+  return 0.5 - Math.log((1 + sinLat) / (1 - sinLat)) / (4 * Math.PI)
+}
+
+/**
+ * Row-remaps an equirectangular (plate carrée) ImageData into Web
+ * Mercator's own vertical spacing — the JS twin of wind-importer/
+ * overlay_texture.py's warp_equirect_rgba_to_web_mercator(), needed here
+ * because this speed-color overlay is colored entirely client-side
+ * (buildWindSpeedOverlayDataUrl below), unlike the pre-colored
+ * overlay_snapshots textures the Python importer already warps before
+ * upload. See that Python function's own docstring for why this step
+ * exists at all (MapLibre's `image` source assumes linear-in-Mercator
+ * spacing, not linear-in-latitude) — same root cause, same fix, just
+ * a per-row nearest-neighbor resample instead of a full reprojection
+ * since longitude needs no remapping.
+ */
+function warpEquirectImageDataToWebMercator(src, sourceSouth, sourceNorth) {
+  const { width, height } = src
+  const out = new ImageData(width, height)
+  const mercNorth = mercatorY(WEB_MERCATOR_MAX_LAT)
+  const mercSouth = mercatorY(-WEB_MERCATOR_MAX_LAT)
+  for (let row = 0; row < height; row++) {
+    const frac = row / (height - 1)
+    const mercY = mercNorth + frac * (mercSouth - mercNorth)
+    // Inverse of mercatorY: solve y = 0.5 - ln((1+sin(lat))/(1-sin(lat)))/(4*pi) for lat.
+    const a = (0.5 - mercY) * 4 * Math.PI
+    const lat = (Math.asin(Math.tanh(a / 2)) * 180) / Math.PI
+
+    const srcRowFrac = ((sourceNorth - lat) / (sourceNorth - sourceSouth)) * (height - 1)
+    const srcRow = Math.max(0, Math.min(height - 1, Math.round(srcRowFrac)))
+
+    const srcOffset = srcRow * width * 4
+    const outOffset = row * width * 4
+    out.data.set(src.data.subarray(srcOffset, srcOffset + width * 4), outOffset)
+  }
+  return out
+}
+
 export function boundsToImageCoordinates([west, south, east, north]) {
   const clampLat = (lat) => Math.max(-WEB_MERCATOR_MAX_LAT, Math.min(WEB_MERCATOR_MAX_LAT, lat))
   const clampLng = (lng) => Math.max(-180, Math.min(180, lng))
@@ -183,6 +225,8 @@ export async function buildWindSpeedOverlayDataUrl(flowSnapshot) {
     out.data[i + 2] = bb
     out.data[i + 3] = 200
   }
-  ctx.putImageData(out, 0, 0)
+  const [, south, , north] = flowSnapshot.bounds
+  const warped = warpEquirectImageDataToWebMercator(out, south, north)
+  ctx.putImageData(warped, 0, 0)
   return canvas.toDataURL('image/png')
 }

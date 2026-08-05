@@ -623,6 +623,101 @@ def grib2_relative_humidity_to_overlay_texture(grib2_bytes: bytes, level: str = 
     return grib2_scalar_to_overlay_texture(grib2_bytes, "RH", RH_RAMP, RH_DOMAIN_PCT)
 
 
+# Dew point uses the exact same color ramp as Temp on earth.nullschool.net
+# (live-verified against its own colorbar, 2026-08-06) — just a narrower
+# domain, since dew point is always <= actual air temperature.
+# Live-verified 2026-08-06: real global min was -78.45C (cold/dry polar
+# air) — widened past the initial -40C guess to avoid clipping that.
+DEW_POINT_DOMAIN_C = (-80.0, 30.0)
+
+
+def grib2_dew_point_to_overlay_texture(grib2_bytes: bytes) -> OverlayTexture:
+    """GFS 2m dew point temperature (DPT) -> the Overlay: Dew field."""
+    return grib2_scalar_to_overlay_texture(grib2_bytes, "DPT", TEMP_RAMP, DEW_POINT_DOMAIN_C)
+
+
+WPD_RAMP = [
+    (0x0f, 0x04, 0x60), (0x19, 0x7d, 0xc6), (0x34, 0xbf, 0xdd), (0x51, 0xb3, 0xcd),
+    (0x6c, 0x95, 0xb2), (0x88, 0x76, 0x96), (0xa4, 0x57, 0x7a), (0xc0, 0x38, 0x5e),
+    (0xdb, 0x1a, 0x43), (0xf1, 0x01, 0x3e), (0xf2, 0x00, 0x99), (0xf3, 0x00, 0xf1),
+]
+# Instantaneous Wind Power Density = 0.5 * air_density * speed^3 (W/m^2) —
+# a standard sea-level air density (1.225 kg/m^3) is used rather than a
+# real pressure-derived one, matching this being a rough visualization,
+# not an engineering-grade wind-resource calculation.
+AIR_DENSITY_KG_M3 = 1.225
+# Deliberately NOT widened to the real observed max (21472 W/m^2, a rare
+# ~32m/s storm outlier) — cubing wind speed means a domain wide enough to
+# fit that single extreme compresses every normal-wind area (the vast
+# majority of the globe, under ~15m/s) into a barely-varying sliver of the
+# ramp. 3000 W/m^2 keeps typical conditions (up to ~18m/s) readable across
+# most of the ramp; genuine storm-force winds just clip to the top color,
+# which reads correctly as "extreme" rather than needing its own shade.
+WPD_DOMAIN_WM2 = (0.0, 3000.0)
+
+
+def grib2_wpd_to_overlay_texture(grib2_bytes: bytes) -> OverlayTexture:
+    """GFS 10m wind (UGRD/VGRD, the same bands fetch_latest_wind_grib2()
+    already fetches for Animate) -> Instantaneous Wind Power Density, the
+    Overlay: WPD field. Reads both bands directly (not built on
+    grib2_scalar_to_overlay_texture's single-band shape) since WPD is
+    derived from wind speed, not a GFS field of its own."""
+    source_path = "/vsimem/wpd_overlay_source.grib2"
+    gdal.FileFromMemBuffer(source_path, grib2_bytes)
+    try:
+        dataset = gdal.Open(source_path)
+        if dataset is None:
+            raise RuntimeError("GDAL could not open the fetched GFS wind GRIB2 data")
+
+        u_band = _band_by_grib_element(dataset, "UGRD")
+        v_band = _band_by_grib_element(dataset, "VGRD")
+        u = resample_band_to_grid(u_band, dataset)
+        v = resample_band_to_grid(v_band, dataset)
+        speed = np.sqrt(u**2 + v**2)
+        wpd = 0.5 * AIR_DENSITY_KG_M3 * speed**3
+
+        value_min = float(np.nanmin(wpd))
+        value_max = float(np.nanmax(wpd))
+        rgba = colorize_linear(wpd, WPD_RAMP, *WPD_DOMAIN_WM2)
+
+        gt = dataset.GetGeoTransform()
+        width, height = dataset.RasterXSize, dataset.RasterYSize
+        west, north = gt[0], gt[3]
+        east = west + width * gt[1]
+        south = north + height * gt[5]
+        rgba = warp_equirect_rgba_to_web_mercator(rgba, south, north)
+
+        buffer = io.BytesIO()
+        Image.fromarray(rgba, mode="RGBA").save(buffer, format="PNG")
+
+        return OverlayTexture(
+            png_bytes=buffer.getvalue(),
+            value_min=value_min, value_max=value_max,
+            bounds=(west, -WEB_MERCATOR_MAX_LAT, east, WEB_MERCATOR_MAX_LAT),
+        )
+    finally:
+        gdal.Unlink(source_path)
+
+
+HTSGW_RAMP = [
+    (0x08, 0x1d, 0x58), (0x24, 0x43, 0x9b), (0x1e, 0x84, 0xba), (0x47, 0xb8, 0xc3),
+    (0x9e, 0xd9, 0xb8), (0xe6, 0xf5, 0xb2), (0xfe, 0xc6, 0x59), (0xfd, 0x9b, 0x43),
+    (0xf7, 0x67, 0x2f), (0xe9, 0x33, 0x21), (0xc6, 0x0a, 0x25), (0xa3, 0x00, 0x29),
+]
+HTSGW_DOMAIN_M = (0.0, 15.0)
+
+
+def grib2_htsgw_to_overlay_texture(grib2_bytes: bytes) -> OverlayTexture:
+    """
+    WAVEWATCH III significant wave height (HTSGW, meters) -> the Overlay:
+    HTSGW field. Reuses the exact same GRIB2 bytes fetch_latest_wave_grib2()
+    already fetches for Animate: Waves (it pulls HTSGW+DIRPW together to
+    build that layer's synthetic vector encoding) — no new NOMADS request
+    needed, just a different band read out of data already being fetched.
+    """
+    return grib2_scalar_to_overlay_texture(grib2_bytes, "HTSGW", HTSGW_RAMP, HTSGW_DOMAIN_M)
+
+
 def grib2_mslp_to_overlay_texture(grib2_bytes: bytes) -> OverlayTexture:
     """GFS mean sea level pressure (PRMSL, Pa -> hPa) -> the Overlay: MSLP field."""
     return grib2_scalar_to_overlay_texture(grib2_bytes, "PRMSL", MSLP_RAMP, MSLP_DOMAIN_HPA, transform=lambda v: v / 100.0)

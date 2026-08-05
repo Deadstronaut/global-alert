@@ -2990,6 +2990,9 @@ const overlayLayerIds = {
   so2_surface: 'overlay-so2-surface',
   no2_surface: 'overlay-no2-surface',
   aurora: 'overlay-aurora',
+  dew_point: 'overlay-dew-point',
+  wind_power_density: 'overlay-wind-power-density',
+  significant_wave_height: 'overlay-significant-wave-height',
 }
 
 // Height selector (spec 054 follow-up, 2026-08-06) — only Temp/RH have
@@ -3047,6 +3050,7 @@ const OVERLAY_KIND = {
   total_cloud_water: 'overlay', precip_3hr: 'overlay', wet_bulb_temp: 'overlay',
   pm1: 'overlay', pm10: 'overlay', dust_aod: 'overlay', organic_matter_aod: 'overlay', sulfate_aod: 'overlay',
   co_surface: 'overlay', so2_surface: 'overlay', no2_surface: 'overlay', aurora: 'overlay',
+  dew_point: 'overlay', wind_power_density: 'overlay', significant_wave_height: 'overlay',
 }
 function applyOverlayKey(key, enabled) {
   const kind = OVERLAY_KIND[key]

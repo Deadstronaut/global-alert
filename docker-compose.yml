@@ -612,6 +612,52 @@ services:
     networks:
       - mhews
 
+  # Air/Ocean's remaining easy wins (spec 054 follow-up, 2026-08-06) —
+  # Dew and WPD are GFS-native (same pattern as temperature-importer-
+  # scheduled etc.); significant-wave-height-importer-scheduled reuses the
+  # exact same WAVEWATCH III fetch waves-importer-scheduled already makes
+  # for Animate: Waves, just coloring HTSGW instead of building the vector
+  # texture — an independent container regardless, so a stall here never
+  # blocks the particle animation.
+  dew-point-importer-scheduled:
+    build:
+      context: ./wind-importer
+      dockerfile: Dockerfile
+    image: mhews-wind-importer:latest
+    container_name: mhews-dew-point-importer-scheduled
+    restart: unless-stopped
+    command: ["--overlay-type=dew_point"]
+    env_file:
+      - ./server/.env
+    networks:
+      - mhews
+
+  wpd-importer-scheduled:
+    build:
+      context: ./wind-importer
+      dockerfile: Dockerfile
+    image: mhews-wind-importer:latest
+    container_name: mhews-wpd-importer-scheduled
+    restart: unless-stopped
+    command: ["--overlay-type=wind_power_density"]
+    env_file:
+      - ./server/.env
+    networks:
+      - mhews
+
+  significant-wave-height-importer-scheduled:
+    build:
+      context: ./wind-importer
+      dockerfile: Dockerfile
+    image: mhews-wind-importer:latest
+    container_name: mhews-significant-wave-height-importer-scheduled
+    restart: unless-stopped
+    command: ["--overlay-type=significant_wave_height"]
+    env_file:
+      - ./server/.env
+    networks:
+      - mhews
+
   # ── GDO Soil Moisture + fAPAR Anomaly importer (manual, run-to-completion) ──
   # WCS GeoTIFF (no Python/NetCDF needed, see gdoAnomalyFetch.ts) ->
   # exposure_datasets, for both GDO anomaly sources in one run.

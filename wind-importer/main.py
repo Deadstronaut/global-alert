@@ -32,6 +32,7 @@ from fetch_currents import fetch_latest_currents_netcdf
 from fetch_gfs import (
     fetch_latest_cape_grib2,
     fetch_latest_cwat_grib2,
+    fetch_latest_dew_point_grib2,
     fetch_latest_mslp_grib2,
     fetch_latest_precip_3hr_grib2,
     fetch_latest_pwat_grib2,
@@ -60,12 +61,15 @@ from overlay_texture import (
     aurora_json_to_overlay_texture,
     grib2_cape_to_overlay_texture,
     grib2_cwat_to_overlay_texture,
+    grib2_dew_point_to_overlay_texture,
+    grib2_htsgw_to_overlay_texture,
     grib2_mslp_to_overlay_texture,
     grib2_precip_3hr_to_overlay_texture,
     grib2_pwat_to_overlay_texture,
     grib2_relative_humidity_to_overlay_texture,
     grib2_temperature_to_overlay_texture,
     grib2_wet_bulb_to_overlay_texture,
+    grib2_wpd_to_overlay_texture,
     netcdf_dust_aod_to_overlay_texture,
     netcdf_organic_matter_aod_to_overlay_texture,
     netcdf_pm1_to_overlay_texture,
@@ -91,6 +95,9 @@ GFS_OVERLAY_FIELDS = {
     "total_cloud_water": (fetch_latest_cwat_grib2, grib2_cwat_to_overlay_texture),
     "precip_3hr": (fetch_latest_precip_3hr_grib2, grib2_precip_3hr_to_overlay_texture),
     "wet_bulb_temp": (fetch_latest_wet_bulb_inputs_grib2, grib2_wet_bulb_to_overlay_texture),
+    "dew_point": (fetch_latest_dew_point_grib2, grib2_dew_point_to_overlay_texture),
+    "wind_power_density": (fetch_latest_wind_grib2, grib2_wpd_to_overlay_texture),
+    "significant_wave_height": (fetch_latest_wave_grib2, grib2_htsgw_to_overlay_texture),
 }
 
 # Height selector (spec 054 follow-up, 2026-08-06) — only these two
@@ -193,6 +200,7 @@ SOURCE_NAME_BY_OVERLAY = {
     **{key: "gfs" for key in GFS_OVERLAY_FIELDS},
     **{key: "cams" for key in CAMS_OVERLAY_FIELDS},
     **{key: "noaa_swpc" for key in NOAA_OVERLAY_FIELDS},
+    "significant_wave_height": "wavewatch3",  # overrides the blanket "gfs" above — matches flow_snapshots' own SOURCE_NAME_BY_LAYER["wave"]
 }
 
 

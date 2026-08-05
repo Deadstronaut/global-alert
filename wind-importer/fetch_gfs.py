@@ -153,6 +153,12 @@ def fetch_latest_relative_humidity_grib2(timeout_s: int = 60, level: str = "sfc"
     return _fetch_latest_field({"var_RH": "on", lev_param: "on"}, f"relative_humidity@{level}", timeout_s)
 
 
+def fetch_latest_dew_point_grib2(timeout_s: int = 60) -> tuple[bytes, dt.datetime]:
+    """Returns (grib2_bytes, issued_at) — GFS 2m dew point temperature (DPT, already Celsius
+    per NOMADS, live-verified 2026-08-06 same as TMP), Overlay: Dew."""
+    return _fetch_latest_field({"var_DPT": "on", "lev_2_m_above_ground": "on"}, "dew_point", timeout_s)
+
+
 def fetch_latest_mslp_grib2(timeout_s: int = 60) -> tuple[bytes, dt.datetime]:
     """Returns (grib2_bytes, issued_at) — GFS mean sea level pressure (PRMSL, Pa), Overlay: MSLP."""
     return _fetch_latest_field({"var_PRMSL": "on", "lev_mean_sea_level": "on"}, "mslp", timeout_s)

@@ -112,11 +112,18 @@ export const useUIStore = defineStore('ui', () => {
     function toggleWaves() {
         wavesEnabled.value = !wavesEnabled.value;
     }
-    const airQualityOverlayEnabled = ref(false);
-    function toggleAirQualityOverlay() {
-        airQualityOverlayEnabled.value = !airQualityOverlayEnabled.value;
-    }
     const selectedMode = ref('air');
+
+    // Pre-colored scalar Overlay layers (PM2.5, Temp, ...) — a plain raster
+    // image, not SimpleWindLayer, so this is a separate keyed map from
+    // speedOverlayEnabled above even though both are Overlay-row toggles.
+    // Started as a single airQualityOverlayEnabled boolean before Temp
+    // existed; generalized 2026-08-05 when Temp became the second entry
+    // rather than growing a new near-duplicate boolean per overlay added.
+    const preColoredOverlayEnabled = ref({air_quality_pm25: false, temperature: false});
+    function togglePreColoredOverlay(key) {
+        preColoredOverlayEnabled.value = {...preColoredOverlayEnabled.value, [key]: !preColoredOverlayEnabled.value[key]};
+    }
 
     // Spec 054 follow-up (2026-08-05): the reference tool's "Overlay: Wind/
     // Currents/Waves" entries — the same flow_snapshots texture already used
@@ -272,9 +279,9 @@ export const useUIStore = defineStore('ui', () => {
         toggleCurrents,
         wavesEnabled,
         toggleWaves,
-        airQualityOverlayEnabled,
-        toggleAirQualityOverlay,
         selectedMode,
+        preColoredOverlayEnabled,
+        togglePreColoredOverlay,
         speedOverlayEnabled,
         toggleSpeedOverlay,
         flowSpeedMultiplier,

@@ -320,6 +320,22 @@ services:
     networks:
       - mhews
 
+  # Overlay: Temp (spec 054 follow-up, 2026-08-05) — GFS 2m air temperature
+  # (fetch_gfs.py's fetch_latest_temperature_grib2), same image/pattern as
+  # overlay-importer-scheduled above, independent container so a stall in
+  # one overlay never blocks the other.
+  temperature-importer-scheduled:
+    build:
+      context: ./wind-importer
+      dockerfile: Dockerfile
+    container_name: mhews-temperature-importer-scheduled
+    restart: unless-stopped
+    command: ["--overlay-type=temperature"]
+    env_file:
+      - ./server/.env
+    networks:
+      - mhews
+
   # ── GDO Soil Moisture + fAPAR Anomaly importer (manual, run-to-completion) ──
   # WCS GeoTIFF (no Python/NetCDF needed, see gdoAnomalyFetch.ts) ->
   # exposure_datasets, for both GDO anomaly sources in one run.

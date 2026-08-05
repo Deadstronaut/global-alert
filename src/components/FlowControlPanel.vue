@@ -116,7 +116,8 @@ const activeAnimateSources = computed(() => {
 const OVERLAY_OPTIONS = {
   air: [
     { key: 'wind', kind: 'speed', label: 'Wind' },
-    { label: 'Temp' }, { label: 'RH' }, { label: 'Dew' }, { label: 'WBT' }, { label: '3HPA' },
+    { key: 'temperature', kind: 'overlay', label: 'Temp' },
+    { label: 'RH' }, { label: 'Dew' }, { label: 'WBT' }, { label: '3HPA' },
     { label: 'CAPE' }, { label: 'TPW' }, { label: 'TCW' }, { label: 'MSLP' }, { label: 'MI' },
     { label: 'UVI' }, { label: 'WPD' },
   ],
@@ -147,7 +148,7 @@ async function refreshOverlayStatus(key, kind) {
 function overlayActive(option) {
   if (!option.key) return false
   if (option.kind === 'speed') return !!uiStore.speedOverlayEnabled[option.key]
-  return !!uiStore.airQualityOverlayEnabled
+  return !!uiStore.preColoredOverlayEnabled[option.key]
 }
 
 // Independent toggles, not radio-button/mutually-exclusive — explicit
@@ -160,8 +161,8 @@ function toggleOverlayOption(option) {
     uiStore.toggleSpeedOverlay(option.key)
     if (uiStore.speedOverlayEnabled[option.key] && !overlayStatus.value[option.key]) refreshOverlayStatus(option.key, 'speed')
   } else {
-    uiStore.toggleAirQualityOverlay()
-    if (uiStore.airQualityOverlayEnabled && !overlayStatus.value[option.key]) refreshOverlayStatus(option.key, 'overlay')
+    uiStore.togglePreColoredOverlay(option.key)
+    if (uiStore.preColoredOverlayEnabled[option.key] && !overlayStatus.value[option.key]) refreshOverlayStatus(option.key, 'overlay')
   }
 }
 

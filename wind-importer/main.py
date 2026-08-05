@@ -28,13 +28,13 @@ import uuid
 import requests
 
 from fetch_currents import fetch_latest_currents_netcdf
-from fetch_gfs import fetch_latest_wind_grib2
+from fetch_gfs import fetch_latest_temperature_grib2, fetch_latest_wind_grib2
 from fetch_overlay_cams import fetch_latest_pm25_netcdf
 from fetch_waves import fetch_latest_wave_grib2
 from flow_texture_common import FlowTexture, metadata_json
 from grib_to_texture import grib2_to_flow_texture
 from netcdf_to_texture import netcdf_uv_to_flow_texture
-from overlay_texture import OverlayTexture, netcdf_pm25_to_overlay_texture
+from overlay_texture import OverlayTexture, grib2_temperature_to_overlay_texture, netcdf_pm25_to_overlay_texture
 from wave_vector import wave_grib2_to_flow_texture
 
 REFRESH_INTERVAL_S = 6 * 60 * 60  # matches GFS's own 6-hourly cycle (research.md §1/spec FR-007); also used as the overlay loop's poll interval — coarser than CAMS' own ~12h cadence, but re-fetching early just re-uploads the same cycle's data, harmless
@@ -95,7 +95,7 @@ def _upload_overlay_texture(overlay_type: str, issued_at: dt.datetime, png_bytes
 
 
 SOURCE_NAME_BY_LAYER = {"wind": "gfs", "ocean_current": "cmems", "wave": "wavewatch3"}
-SOURCE_NAME_BY_OVERLAY = {"air_quality_pm25": "cams"}
+SOURCE_NAME_BY_OVERLAY = {"air_quality_pm25": "cams", "temperature": "gfs"}
 
 
 def _insert_flow_snapshot_row(layer_type: str, issued_at: dt.datetime, texture: FlowTexture, storage_path: str) -> None:
@@ -199,8 +199,11 @@ def run_once_overlay(overlay_type: str) -> None:
     if overlay_type == "air_quality_pm25":
         raw_bytes, issued_at = fetch_latest_pm25_netcdf()
         texture = netcdf_pm25_to_overlay_texture(raw_bytes)
+    elif overlay_type == "temperature":
+        raw_bytes, issued_at = fetch_latest_temperature_grib2()
+        texture = grib2_temperature_to_overlay_texture(raw_bytes)
     else:
-        raise ValueError(f"Unknown overlay_type {overlay_type!r} (expected 'air_quality_pm25')")
+        raise ValueError(f"Unknown overlay_type {overlay_type!r} (expected 'air_quality_pm25' or 'temperature')")
 
     print(f"[wind-importer] Fetched {overlay_type} data issued at {issued_at.isoformat()}")
     print(
@@ -217,7 +220,7 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     mode = parser.add_mutually_exclusive_group(required=True)
     mode.add_argument("--layer-type", choices=["wind", "ocean_current", "wave"])
-    mode.add_argument("--overlay-type", choices=["air_quality_pm25"])
+    mode.add_argument("--overlay-type", choices=["air_quality_pm25", "temperature"])
     parser.add_argument("--once", action="store_true", help="Run a single import and exit, instead of looping every 6h")
     args = parser.parse_args()
 

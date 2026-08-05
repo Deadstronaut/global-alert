@@ -2959,7 +2959,7 @@ watch(
 // layer, NOT SimpleWindLayer: the Overlay is a pre-colored scalar raster
 // (contracts/overlay-snapshot-contract.md), no particle advection needed,
 // so no custom WebGL layer is warranted here (research.md §4).
-const overlayLayerIds = { air_quality_pm25: 'overlay-air-quality-pm25' }
+const overlayLayerIds = { air_quality_pm25: 'overlay-air-quality-pm25', temperature: 'overlay-temperature' }
 
 async function setOverlayLayerEnabled(overlayType, enabled) {
   if (!map || !mapLoaded) return
@@ -2988,8 +2988,12 @@ async function setOverlayLayerEnabled(overlayType, enabled) {
 }
 
 watch(
-  () => uiStore.airQualityOverlayEnabled,
+  () => uiStore.preColoredOverlayEnabled.air_quality_pm25,
   (enabled) => setOverlayLayerEnabled('air_quality_pm25', enabled),
+)
+watch(
+  () => uiStore.preColoredOverlayEnabled.temperature,
+  (enabled) => setOverlayLayerEnabled('temperature', enabled),
 )
 
 // simple-wind-layer.js freezes itself (stops self-triggering repaints) once

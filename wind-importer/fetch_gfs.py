@@ -65,13 +65,11 @@ def previous_cycle(cycle: GfsCycle) -> GfsCycle:
     return GfsCycle(date=cycle.date - dt.timedelta(days=1), hour=CYCLE_HOURS[-1])
 
 
-def _download(cycle: GfsCycle, timeout_s: int) -> bytes:
+def _download(cycle: GfsCycle, timeout_s: int, extra_params: dict[str, str]) -> bytes:
     params = {
         "dir": cycle.dir_param,
         "file": cycle.filename,
-        "var_UGRD": "on",
-        "var_VGRD": "on",
-        "lev_10_m_above_ground": "on",
+        **extra_params,
     }
     response = requests.get(NOMADS_FILTER_URL, params=params, timeout=timeout_s)
     response.raise_for_status()
@@ -84,23 +82,43 @@ def _download(cycle: GfsCycle, timeout_s: int) -> bytes:
     return body
 
 
-def fetch_latest_wind_grib2(timeout_s: int = 60) -> tuple[bytes, dt.datetime]:
+def _fetch_latest_field(extra_params: dict[str, str], field_label: str, timeout_s: int) -> tuple[bytes, dt.datetime]:
     """
-    Returns (grib2_bytes, issued_at). Tries the latest expected cycle first,
-    falling back one cycle (6h) if NOMADS hasn't published it yet — mirrors
-    this app's existing "fail open, don't block on the newest possible
-    data" convention (e.g. supabaseWriter.js's fail-open dedup checks)
-    rather than erroring outright on a processing-lag miss.
+    Shared "latest cycle, fall back one cycle on miss" retry (see
+    fetch_latest_wind_grib2's own docstring) — parameterized by which
+    NOMADS var_*/lev_* filter params to request, so wind and temperature
+    (and any future GFS field) share the exact same cycle-selection logic
+    instead of drifting apart.
     """
     cycle = latest_available_cycle()
     try:
-        return _download(cycle, timeout_s), cycle.issued_at
+        return _download(cycle, timeout_s, extra_params), cycle.issued_at
     except (requests.RequestException, RuntimeError) as first_error:
         fallback = previous_cycle(cycle)
         try:
-            return _download(fallback, timeout_s), fallback.issued_at
+            return _download(fallback, timeout_s, extra_params), fallback.issued_at
         except (requests.RequestException, RuntimeError) as second_error:
             raise RuntimeError(
-                f"Failed to fetch GFS wind data for {cycle.dir_param} "
+                f"Failed to fetch GFS {field_label} data for {cycle.dir_param} "
                 f"({first_error}) and fallback {fallback.dir_param} ({second_error})"
             ) from second_error
+
+
+def fetch_latest_wind_grib2(timeout_s: int = 60) -> tuple[bytes, dt.datetime]:
+    """Returns (grib2_bytes, issued_at)."""
+    return _fetch_latest_field(
+        {"var_UGRD": "on", "var_VGRD": "on", "lev_10_m_above_ground": "on"}, "wind", timeout_s,
+    )
+
+
+def fetch_latest_temperature_grib2(timeout_s: int = 60) -> tuple[bytes, dt.datetime]:
+    """
+    Returns (grib2_bytes, issued_at) — GFS 2m-above-ground air temperature
+    (TMP), the Overlay: Temp field (spec 054 follow-up, 2026-08-05: "ilk
+    yapmamız gereken şey overlay yapmak"). Same NOMADS filter service, same
+    cycle/fallback logic as wind — GFS publishes TMP in the same 0.25°
+    pgrb2 file family, just a different var_*/lev_* filter selection.
+    """
+    return _fetch_latest_field(
+        {"var_TMP": "on", "lev_2_m_above_ground": "on"}, "temperature", timeout_s,
+    )

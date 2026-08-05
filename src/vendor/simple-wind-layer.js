@@ -51,6 +51,7 @@ const TRAIL_LENGTH = 18
 
 const VERTEX_SHADER = `
   uniform mat4 u_matrix;
+  uniform float u_pointSize;
   attribute vec2 a_pos; // Mercator x/y, both in [0,1]
   attribute float a_speed;
   attribute float a_alpha;
@@ -58,7 +59,7 @@ const VERTEX_SHADER = `
   varying float v_alpha;
   void main() {
     gl_Position = u_matrix * vec4(a_pos, 0.0, 1.0);
-    gl_PointSize = 3.0;
+    gl_PointSize = u_pointSize;
     v_speed = a_speed;
     v_alpha = a_alpha;
   }
@@ -151,6 +152,14 @@ export class SimpleWindLayer {
     // track by eye at real-world scale, trail wasn't visibly persisting).
     this.speedMultiplier = options.speedMultiplier ?? 1
     this.trailLength = options.trailLength ?? TRAIL_LENGTH
+    // Point-sprite size along each trail (gl_PointSize) — live-testing
+    // feedback, 2026-08-05: at a thin size the trail reads as separated
+    // "tık tık tık" dots rather than a continuous flowing line, since the
+    // gl.POINTS draw (this file's own comment above on why it exists) is
+    // what actually carries visibility at world zoom, not the 1px-only
+    // gl.LINES draw underneath it — bigger points overlap frame to frame
+    // and read as smooth motion instead of a dotted trail.
+    this.trailThickness = options.trailThickness ?? 3.0
   }
 
   setSpeedMultiplier(value) {
@@ -159,6 +168,10 @@ export class SimpleWindLayer {
 
   setTrailLength(value) {
     this.trailLength = Math.max(2, Math.round(value))
+  }
+
+  setTrailThickness(value) {
+    this.trailThickness = Math.max(1, value)
   }
 
   onAdd(map, gl) {
@@ -368,6 +381,13 @@ export class SimpleWindLayer {
     gl.colorMask(true, true, true, true)
 
     gl.uniformMatrix4fv(gl.getUniformLocation(this.program, 'u_matrix'), false, matrix)
+    gl.uniform1f(gl.getUniformLocation(this.program, 'u_pointSize'), this.trailThickness)
+    // Best-effort — most WebGL implementations (ANGLE on Windows/Chrome in
+    // particular) clamp gl.lineWidth to 1 regardless of the value passed,
+    // a WebGL 1 spec-allowed limitation, not a bug here. Harmless to set
+    // anyway for the platforms that do honor it; the gl.POINTS draw below
+    // is what actually carries trail thickness cross-platform.
+    gl.lineWidth(this.trailThickness)
 
     gl.bindBuffer(gl.ARRAY_BUFFER, this.buffer)
     gl.bufferData(gl.ARRAY_BUFFER, positions.subarray(0, vIdx * 2), gl.DYNAMIC_DRAW)

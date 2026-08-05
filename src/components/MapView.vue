@@ -2878,6 +2878,7 @@ async function setFlowLayerEnabled(layerType, enabled) {
     // produce the actual nullschool-style flowing-streamline look.
     speedMultiplier: uiStore.flowSpeedMultiplier,
     trailLength: uiStore.flowTrailLength,
+    trailThickness: uiStore.flowTrailThickness,
   })
   flowLayerInstances[layerType] = layer
   map.addLayer(layer)
@@ -2909,6 +2910,12 @@ watch(
   () => uiStore.flowTrailLength,
   (value) => {
     for (const layer of Object.values(flowLayerInstances)) layer?.setTrailLength(value)
+  },
+)
+watch(
+  () => uiStore.flowTrailThickness,
+  (value) => {
+    for (const layer of Object.values(flowLayerInstances)) layer?.setTrailThickness(value)
   },
 )
 

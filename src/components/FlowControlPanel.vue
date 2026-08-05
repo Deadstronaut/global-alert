@@ -172,6 +172,9 @@ function onSpeedInput(e) {
 function onTrailInput(e) {
   uiStore.setFlowTrailLength(Number(e.target.value))
 }
+function onThicknessInput(e) {
+  uiStore.setFlowTrailThickness(Number(e.target.value))
+}
 
 const activeModeInfo = computed(() => MODES.find((m) => m.id === uiStore.selectedMode))
 </script>
@@ -277,6 +280,10 @@ const activeModeInfo = computed(() => MODES.find((m) => m.id === uiStore.selecte
           <label class="flow-view-settings-label">
             İz uzunluğu: {{ uiStore.flowTrailLength }}
             <input type="range" min="2" max="2000" step="1" :value="uiStore.flowTrailLength" @input="onTrailInput" />
+          </label>
+          <label class="flow-view-settings-label">
+            İz kalınlığı: {{ uiStore.flowTrailThickness.toFixed(1) }}px
+            <input type="range" min="1" max="15" step="0.5" :value="uiStore.flowTrailThickness" @input="onThicknessInput" />
           </label>
         </div>
       </div>

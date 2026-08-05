@@ -149,11 +149,20 @@ export const useUIStore = defineStore('ui', () => {
     // setFlowLayerEnabled comment).
     const flowSpeedMultiplier = ref(336);
     const flowTrailLength = ref(89);
+    // Point-sprite size along each trail — live-testing feedback,
+    // 2026-08-05: thin trails read as choppy "tık tık tık" dots instead of
+    // a flowing line (see simple-wind-layer.js's own trailThickness
+    // comment for why bigger points fix this). Default matches that
+    // file's own pre-existing gl_PointSize=3.0.
+    const flowTrailThickness = ref(3);
     function setFlowSpeedMultiplier(value) {
         flowSpeedMultiplier.value = value;
     }
     function setFlowTrailLength(value) {
         flowTrailLength.value = value;
+    }
+    function setFlowTrailThickness(value) {
+        flowTrailThickness.value = value;
     }
 
     function applyThemeAttrs() {
@@ -294,8 +303,10 @@ export const useUIStore = defineStore('ui', () => {
         speedOverlayEnabled,
         flowSpeedMultiplier,
         flowTrailLength,
+        flowTrailThickness,
         setFlowSpeedMultiplier,
         setFlowTrailLength,
+        setFlowTrailThickness,
         transitionToMap,
         transitionToGlobe,
         selectDisaster,

@@ -200,6 +200,11 @@ const activeModeInfo = computed(() => MODES.find((m) => m.id === uiStore.selecte
           <span class="flow-view-source-text">{{ MODE_SOURCE[uiStore.selectedMode] }}{{ FIRE_SOURCE_SUFFIX }}</span>
         </div>
 
+        <div class="flow-view-legend">
+          <span class="flow-view-bar-label">{{ uiStore.wavesEnabled ? t('windLayer.waveHeightLegendLabel') : t('windLayer.speedLegendLabel') }}</span>
+          <div class="flow-view-legend-gradient"></div>
+        </div>
+
         <div class="flow-view-bar-row">
           <span class="flow-view-bar-label">Mode</span>
           <button
@@ -261,15 +266,6 @@ const activeModeInfo = computed(() => MODES.find((m) => m.id === uiStore.selecte
           <div v-for="s in activeAnimateSources" :key="s.key" class="flow-view-source-row">
             <span class="flow-view-bar-label">{{ s.label }}</span>
             <span class="flow-view-source-text">{{ s.source }}<template v-if="s.date"> — {{ s.date }}</template></span>
-          </div>
-        </div>
-
-        <div class="flow-control-legend">
-          <span class="flow-control-legend-label">{{ uiStore.wavesEnabled ? t('windLayer.waveHeightLegendLabel') : t('windLayer.speedLegendLabel') }}</span>
-          <div class="flow-control-legend-gradient"></div>
-          <div class="flow-control-legend-scale">
-            <span>{{ t('windLayer.speedLow') }}</span>
-            <span>{{ t('windLayer.speedHigh') }}</span>
           </div>
         </div>
 
@@ -358,28 +354,14 @@ const activeModeInfo = computed(() => MODES.find((m) => m.id === uiStore.selecte
   margin: 0 0 8px 0;
 }
 
-.flow-control-legend {
-  margin-top: 8px;
-  padding-top: 8px;
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
+.flow-view-legend {
+  margin-bottom: 8px;
 }
-.flow-control-legend-label {
-  display: block;
-  font-size: 0.68rem;
-  color: #8c97a8;
-  margin-bottom: 4px;
-}
-.flow-control-legend-gradient {
+.flow-view-legend-gradient {
+  margin-top: 4px;
   height: 8px;
   border-radius: 4px;
   background: linear-gradient(90deg, rgb(64, 140, 242), rgb(242, 89, 38));
-}
-.flow-control-legend-scale {
-  display: flex;
-  justify-content: space-between;
-  font-size: 0.65rem;
-  color: #8c97a8;
-  margin-top: 2px;
 }
 
 .flow-view-bar-row {

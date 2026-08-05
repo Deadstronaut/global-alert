@@ -318,35 +318,35 @@ onBeforeUnmount(() => {
 
       <div class="flow-view-bar-row">
         <span class="flow-view-bar-label">Animate</span>
-        <label class="flow-view-chip"><input type="checkbox" :checked="windEnabled" @change="toggleWind" />{{ t('windLayer.toggleLabel') }}</label>
-        <label class="flow-view-chip"><input type="checkbox" :checked="currentsEnabled" @change="toggleCurrents" />{{ t('windLayer.currentsToggleLabel') }}</label>
-        <label class="flow-view-chip"><input type="checkbox" :checked="wavesEnabled" @change="toggleWaves" />{{ t('windLayer.wavesToggleLabel') }}</label>
+        <button type="button" class="flow-view-chip flow-view-mode-btn" :class="{ 'flow-view-mode-btn--active': windEnabled }" @click="toggleWind">{{ t('windLayer.toggleLabel') }}</button>
+        <button type="button" class="flow-view-chip flow-view-mode-btn" :class="{ 'flow-view-mode-btn--active': currentsEnabled }" @click="toggleCurrents">{{ t('windLayer.currentsToggleLabel') }}</button>
+        <button type="button" class="flow-view-chip flow-view-mode-btn" :class="{ 'flow-view-mode-btn--active': wavesEnabled }" @click="toggleWaves">{{ t('windLayer.wavesToggleLabel') }}</button>
       </div>
 
       <div v-if="selectedMode === 'air'" class="flow-view-bar-row">
         <span class="flow-view-bar-label">Height</span>
-        <span
+        <button
           v-for="level in HEIGHT_LEVELS"
           :key="level"
+          type="button"
           class="flow-view-chip"
-          :class="level === 'Sfc' ? { 'flow-view-mode-btn--active': selectedHeight === level } : 'flow-view-chip--disabled'"
+          :class="level === 'Sfc' ? ['flow-view-mode-btn', { 'flow-view-mode-btn--active': selectedHeight === level }] : 'flow-view-chip--disabled'"
           :title="level === 'Sfc' ? '' : 'Yakında — sadece yüzey verisi var'"
           @click="level === 'Sfc' && (selectedHeight = level)"
-        >{{ level }}</span>
+        >{{ level }}</button>
       </div>
 
       <div class="flow-view-bar-row">
         <span class="flow-view-bar-label">Overlay</span>
-        <label
+        <button
           v-for="option in OVERLAY_OPTIONS[selectedMode]"
           :key="option.label"
+          type="button"
           class="flow-view-chip"
-          :class="{ 'flow-view-chip--disabled': !option.key }"
+          :class="option.key ? ['flow-view-mode-btn', { 'flow-view-mode-btn--active': !!overlayEnabled[option.key] }] : 'flow-view-chip--disabled'"
           :title="option.key ? '' : 'Yakında — veri kaynağı henüz eklenmedi'"
-        >
-          <input v-if="option.key" type="checkbox" :checked="!!overlayEnabled[option.key]" @change="toggleOverlayOption(option)" />
-          {{ option.label }}
-        </label>
+          @click="toggleOverlayOption(option)"
+        >{{ option.label }}</button>
       </div>
 
       <div v-if="selectedMode === 'bio'" class="flow-view-bar-row">
@@ -468,6 +468,7 @@ onBeforeUnmount(() => {
   border-color: #d4a94a;
   color: #0b1220;
   font-weight: 700;
+  box-shadow: 0 0 8px 1px rgba(212, 169, 74, 0.6);
 }
 
 .flow-view-source-block {

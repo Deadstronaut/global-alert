@@ -11,13 +11,31 @@ import { supabase } from '@/services/api/config.js'
 /**
  * [west, south, east, north] -> maplibre-wind's ImageSourceOptions.coordinates
  * shape: [top-left, top-right, bottom-right, bottom-left].
+ *
+ * Clamps to valid lng/lat ranges — wind-importer's GDAL grid resampling
+ * (flow_texture_common.py's TEXTURE_WIDTH/HEIGHT) produces pixel-edge
+ * bounds like north=90.125/south=-90.125 (half a pixel beyond the pole,
+ * an artifact of how gdal.Translate reports a grid's outer edge, not a
+ * bug in the data itself). SimpleWindLayer's own manual per-particle
+ * projection tolerates that fine, but live-verified 2026-08-05:
+ * MapLibre's built-in `image` source type throws "Invalid LngLat
+ * latitude value: must be between -90 and 90" and silently fails to
+ * render anything — this is why every pre-colored Overlay layer (PM2.5,
+ * Temp, RH, ...) added no visible layer at all despite the source/layer
+ * both reporting success.
  */
 export function boundsToImageCoordinates([west, south, east, north]) {
+  const clampLat = (lat) => Math.max(-90, Math.min(90, lat))
+  const clampLng = (lng) => Math.max(-180, Math.min(180, lng))
+  const w = clampLng(west)
+  const e = clampLng(east)
+  const n = clampLat(north)
+  const s = clampLat(south)
   return [
-    [west, north],
-    [east, north],
-    [east, south],
-    [west, south],
+    [w, n],
+    [e, n],
+    [e, s],
+    [w, s],
   ]
 }
 

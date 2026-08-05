@@ -146,23 +146,21 @@ async function refreshOverlayStatus(key, kind) {
 }
 
 function overlayActive(option) {
-  if (!option.key) return false
-  if (option.kind === 'speed') return !!uiStore.speedOverlayEnabled[option.key]
-  return !!uiStore.preColoredOverlayEnabled[option.key]
+  return !!option.key && uiStore.activeOverlayKey === option.key
 }
 
-// Independent toggles, not radio-button/mutually-exclusive — explicit
-// correction, 2026-08-05: "bunların hepsi toggle olmalı radio button değil,
-// hiçbirini seçmeden de olmalı" (all of these should be toggles, not radio
-// buttons, and having none selected should also be possible).
+// Single-select "radio button with toggle-off" — corrected 2026-08-05
+// after an earlier independent-multi-toggle attempt let several Overlay
+// layers stack at once ("hiçbiri kapanmadı hepsi üst üste açılıyor").
+// Only one Overlay color layer should ever be on the map: clicking a
+// different option switches to it (uiStore.toggleOverlay turns off
+// whichever was active via the single shared key); clicking the
+// already-active one again turns it off.
 function toggleOverlayOption(option) {
   if (!option.key) return // disabled placeholder — no handler beyond this early return
-  if (option.kind === 'speed') {
-    uiStore.toggleSpeedOverlay(option.key)
-    if (uiStore.speedOverlayEnabled[option.key] && !overlayStatus.value[option.key]) refreshOverlayStatus(option.key, 'speed')
-  } else {
-    uiStore.togglePreColoredOverlay(option.key)
-    if (uiStore.preColoredOverlayEnabled[option.key] && !overlayStatus.value[option.key]) refreshOverlayStatus(option.key, 'overlay')
+  uiStore.toggleOverlay(option.key)
+  if (uiStore.activeOverlayKey === option.key && !overlayStatus.value[option.key]) {
+    refreshOverlayStatus(option.key, option.kind)
   }
 }
 
@@ -241,7 +239,7 @@ const activeModeInfo = computed(() => MODES.find((m) => m.id === uiStore.selecte
             class="flow-view-chip"
             :class="level === 'Sfc' ? ['flow-view-mode-btn', { 'flow-view-mode-btn--active': selectedHeight === level }] : 'flow-view-chip--disabled'"
             :title="level === 'Sfc' ? '' : 'Yakında — sadece yüzey verisi var'"
-            @click="level === 'Sfc' && (selectedHeight = level)"
+            @click="level === 'Sfc' && (selectedHeight = selectedHeight === level ? null : level)"
           >{{ level }}</button>
         </div>
 

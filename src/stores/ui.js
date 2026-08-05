@@ -89,53 +89,59 @@ export const useUIStore = defineStore('ui', () => {
         showCommunityReports.value = !showCommunityReports.value;
     }
 
-    // Wind / ocean-current animated flow layers (spec 053) — same
-    // independent, always-relevant-regardless-of-mapMode, off-by-default
-    // pattern as showShelters/showCommunityReports above. Two separate
-    // flags (not one "flow layer" toggle) because they're independently
-    // togglable per spec FR-012 — a user can have wind on with currents
-    // off, or both at once.
-    const windEnabled = ref(false);
+    // Animate row (Wind/Currents/Waves) — single-select "radio button with
+    // toggle-off" (spec 053/054 follow-up, corrected 2026-08-05): earlier
+    // this was three fully-independent flags, then earth.nullschool.net's
+    // own Animate row was found to be a `role="radiogroup"` (live-verified
+    // by reading its DOM, 2026-08-05) — only one flow ever animates at
+    // once there. Explicit correction from the user after seeing them all
+    // stack: "her biri radyo buton olmalı fakat tekrar bastığımda toggle
+    // olmalı, kendi içinde on/off olabilmeli" (each should be a radio
+    // button, but pressing the active one again should turn it off). A
+    // single nullable ref (not three booleans) makes mutual exclusion
+    // automatic instead of something every toggle function has to
+    // remember to enforce.
+    const activeAnimateLayer = ref(null); // null | 'wind' | 'ocean_current' | 'wave'
+    function toggleAnimateLayer(key) {
+        activeAnimateLayer.value = activeAnimateLayer.value === key ? null : key;
+    }
+    // Read-only computed booleans, kept so MapView.vue's existing per-layer
+    // watches (`() => uiStore.windEnabled`, etc.) didn't need to change
+    // shape when this became a single shared ref.
+    const windEnabled = computed(() => activeAnimateLayer.value === 'wind');
     function toggleWind() {
-        windEnabled.value = !windEnabled.value;
+        toggleAnimateLayer('wind');
     }
-    const currentsEnabled = ref(false);
+    const currentsEnabled = computed(() => activeAnimateLayer.value === 'ocean_current');
     function toggleCurrents() {
-        currentsEnabled.value = !currentsEnabled.value;
+        toggleAnimateLayer('ocean_current');
     }
-    // Spec 054: Waves (Ocean mode) and the air-quality Overlay (Chem/
-    // Particulates mode), same independent-toggle shape as wind/currents
-    // above. selectedMode drives which Animate/Overlay row the control
-    // panel shows (spec FR-007's Mode grouping) — 'air' is the default
-    // since Wind already existed before Mode grouping was introduced.
-    const wavesEnabled = ref(false);
+    const wavesEnabled = computed(() => activeAnimateLayer.value === 'wave');
     function toggleWaves() {
-        wavesEnabled.value = !wavesEnabled.value;
+        toggleAnimateLayer('wave');
     }
     const selectedMode = ref('air');
 
-    // Pre-colored scalar Overlay layers (PM2.5, Temp, ...) — a plain raster
-    // image, not SimpleWindLayer, so this is a separate keyed map from
-    // speedOverlayEnabled above even though both are Overlay-row toggles.
-    // Started as a single airQualityOverlayEnabled boolean before Temp
-    // existed; generalized 2026-08-05 when Temp became the second entry
-    // rather than growing a new near-duplicate boolean per overlay added.
-    const preColoredOverlayEnabled = ref({air_quality_pm25: false, temperature: false});
-    function togglePreColoredOverlay(key) {
-        preColoredOverlayEnabled.value = {...preColoredOverlayEnabled.value, [key]: !preColoredOverlayEnabled.value[key]};
+    // Overlay row — same single-select-with-toggle-off correction as
+    // Animate above, and for the same reason (nullschool's own Overlay row
+    // is also `role="radiogroup"`): one shared key across BOTH overlay
+    // "kinds" (speed-color layers reusing flow_snapshots textures, and
+    // pre-colored overlay_snapshots layers like PM2.5/Temp) since only one
+    // Overlay color layer should ever be on the map at a time regardless
+    // of which mechanism produced it.
+    const activeOverlayKey = ref(null); // null | 'wind' | 'ocean_current' | 'wave' | 'air_quality_pm25' | 'temperature' | ...
+    function toggleOverlay(key) {
+        activeOverlayKey.value = activeOverlayKey.value === key ? null : key;
     }
-
-    // Spec 054 follow-up (2026-08-05): the reference tool's "Overlay: Wind/
-    // Currents/Waves" entries — the same flow_snapshots texture already used
-    // for the animated particles, recolored client-side as a static speed
-    // heatmap (windLayerData.js's buildWindSpeedOverlayDataUrl). Independent
-    // toggles, not mutually exclusive with each other or with Animate —
-    // explicit correction, 2026-08-05: "bunların hepsi toggle olmalı radio
-    // button değil, hiçbirini seçmeden de olmalı".
-    const speedOverlayEnabled = ref({wind: false, ocean_current: false, wave: false});
-    function toggleSpeedOverlay(key) {
-        speedOverlayEnabled.value = {...speedOverlayEnabled.value, [key]: !speedOverlayEnabled.value[key]};
-    }
+    const speedOverlayEnabled = computed(() => ({
+        wind: activeOverlayKey.value === 'wind',
+        ocean_current: activeOverlayKey.value === 'ocean_current',
+        wave: activeOverlayKey.value === 'wave',
+    }));
+    const preColoredOverlayEnabled = computed(() => ({
+        air_quality_pm25: activeOverlayKey.value === 'air_quality_pm25',
+        temperature: activeOverlayKey.value === 'temperature',
+    }));
 
     // Live-tunable flow-particle rendering (gear icon in FlowControlPanel.vue)
     // — defaults are the live-testing result, 2026-08-05, that produced the
@@ -273,6 +279,8 @@ export const useUIStore = defineStore('ui', () => {
         toggleShelters,
         showCommunityReports,
         toggleCommunityReports,
+        activeAnimateLayer,
+        toggleAnimateLayer,
         windEnabled,
         toggleWind,
         currentsEnabled,
@@ -280,10 +288,10 @@ export const useUIStore = defineStore('ui', () => {
         wavesEnabled,
         toggleWaves,
         selectedMode,
+        activeOverlayKey,
+        toggleOverlay,
         preColoredOverlayEnabled,
-        togglePreColoredOverlay,
         speedOverlayEnabled,
-        toggleSpeedOverlay,
         flowSpeedMultiplier,
         flowTrailLength,
         setFlowSpeedMultiplier,

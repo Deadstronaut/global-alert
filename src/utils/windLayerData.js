@@ -23,9 +23,20 @@ import { supabase } from '@/services/api/config.js'
  * render anything — this is why every pre-colored Overlay layer (PM2.5,
  * Temp, RH, ...) added no visible layer at all despite the source/layer
  * both reporting success.
+ *
+ * ±90 itself is still not safe, even though it passes that validity
+ * check — live-verified in a second round, 2026-08-06: Web Mercator's own
+ * y = f(lat) formula (the same one lngLatToMercator in
+ * simple-wind-layer.js implements) divides by (1 - sin(lat)), which is
+ * exactly 0 at the true pole, producing y=Infinity and a downstream
+ * "outside of bounds" tile-coordinate crash. 85.0511287798° is the
+ * standard Web Mercator projection limit (the latitude where the
+ * projected square becomes literally square) — MapLibre and every other
+ * Mercator-based web map clamp to this same value internally.
  */
+const WEB_MERCATOR_MAX_LAT = 85.0511287798
 export function boundsToImageCoordinates([west, south, east, north]) {
-  const clampLat = (lat) => Math.max(-90, Math.min(90, lat))
+  const clampLat = (lat) => Math.max(-WEB_MERCATOR_MAX_LAT, Math.min(WEB_MERCATOR_MAX_LAT, lat))
   const clampLng = (lng) => Math.max(-180, Math.min(180, lng))
   const w = clampLng(west)
   const e = clampLng(east)

@@ -3862,11 +3862,21 @@ onBeforeUnmount(() => {
 
       <!-- Hexbin / marker severity legend -->
       <div v-else-if="uiStore.showHexbins || (!uiStore.showHeatmap && !uiStore.showHexbins)" class="severity-legend-stack">
-        <!-- Now the flow/overlay menu's own trigger (live-testing ask,
+        <!-- Rendered FIRST (not after the radar/card below) — live-testing
+             correction, 2026-08-06: with FlowControlPanel positioned
+             after them, its expand-upward anchor point sat below both,
+             so the opened panel grew up *through* them, covering the
+             very radar button that triggers it (couldn't even click it
+             to close). As a 0-size element (no visible content when
+             closed) it doesn't affect the radar/card's own visual order
+             below it — only where the panel's "bottom: 100%" anchor
+             ends up, which now needs to clear both of them, not just
+             sit right under the card. -->
+        <FlowControlPanel />
+
+        <!-- The flow/overlay menu's own trigger (live-testing ask,
              2026-08-06: moved FlowControlPanel's separate small toggle
-             button here) — clicking the radar opens that panel, which
-             still visually expands from its own corner of the legend
-             group (unaffected by this button living elsewhere). -->
+             button here) — clicking the radar opens that panel. -->
         <button
           type="button"
           class="severity-legend-stack-radar-btn"
@@ -3902,15 +3912,6 @@ onBeforeUnmount(() => {
             {{ t('map.markerTruncation', { shown: markerTruncation.shown, total: markerTruncation.total }) }}
           </p>
         </div>
-
-        <!-- Anchored here (not at the end of .map-legend-group like
-             before) so the expanded panel opens directly above the radar
-             button that now triggers it, flush left with the severity
-             card, instead of wherever FlowControlPanel happened to land
-             in the row after however many exposure legends are active
-             (live-testing ask, 2026-08-06: "şiddet kartı gibi sola
-             dayalı olsa radarın üstünde hemen"). -->
-        <FlowControlPanel />
       </div>
 
       <!-- Gridded exposure layer legends (population, rainfall/CHIRPS, drought,

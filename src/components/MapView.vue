@@ -2847,7 +2847,13 @@ function updateCommunityReportMarkers() {
 const flowLayerInstances = { wind: null, ocean_current: null, wave: null }
 const FLOW_LAYER_IDS = { wind: 'flow-wind', ocean_current: 'flow-ocean-current', wave: 'flow-wave' }
 
-async function setFlowLayerEnabled(layerType, enabled) {
+// Height selector (spec 054 follow-up, 2026-08-06) — only wind has real
+// per-pressure-level flow_snapshots data (wind-importer's own
+// LEVEL_AWARE_OVERLAY_FIELDS-equivalent scope for the layer_type path);
+// ocean_current/wave always run at 'sfc' regardless of Height.
+const LEVEL_AWARE_FLOW_KEYS = new Set(['wind'])
+
+async function setFlowLayerEnabled(layerType, enabled, level = 'sfc') {
   if (!map || !mapLoaded) return
   const layerId = FLOW_LAYER_IDS[layerType]
 
@@ -2859,7 +2865,7 @@ async function setFlowLayerEnabled(layerType, enabled) {
 
   if (flowLayerInstances[layerType]) return // already on
 
-  const snapshot = await fetchLatestFlowSnapshot(layerType)
+  const snapshot = await fetchLatestFlowSnapshot(layerType, level)
   if (!snapshot) {
     // FR-006: graceful "unavailable" state, not a broken map — the toggle
     // stays reflected as "on" in the UI (ui store), but no layer is added;
@@ -2887,7 +2893,7 @@ async function setFlowLayerEnabled(layerType, enabled) {
 
 watch(
   () => uiStore.windEnabled,
-  (enabled) => setFlowLayerEnabled('wind', enabled),
+  (enabled) => setFlowLayerEnabled('wind', enabled, heightLabelToLevel(uiStore.selectedHeight)),
 )
 watch(
   () => uiStore.currentsEnabled,
@@ -2896,6 +2902,19 @@ watch(
 watch(
   () => uiStore.wavesEnabled,
   (enabled) => setFlowLayerEnabled('wave', enabled),
+)
+// Height changes while Wind is already animating — swap it for the new
+// level's own data, same remove-then-readd shape as toggling it off/on
+// (user feedback, 2026-08-06: "rüzgarın yüksekliğine göre paternlerinin
+// de değişmesi lazım" — Height only changed the Temp/RH Overlay coloring
+// before this, not the animated wind pattern itself).
+watch(
+  () => uiStore.selectedHeight,
+  async (newHeight, oldHeight) => {
+    if (!LEVEL_AWARE_FLOW_KEYS.has('wind') || !uiStore.windEnabled) return
+    await setFlowLayerEnabled('wind', false, heightLabelToLevel(oldHeight))
+    await setFlowLayerEnabled('wind', true, heightLabelToLevel(newHeight))
+  },
 )
 
 // Gear-icon live tuning (FlowControlPanel.vue) — applied to every currently

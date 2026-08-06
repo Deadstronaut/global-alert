@@ -402,6 +402,26 @@ services:
     networks:
       - mhews
 
+  # Animate: Wind at GFS's other pressure levels (2026-08-06 follow-up —
+  # user feedback: Height changed the Temp/RH Overlay coloring but not
+  # the animated wind pattern itself, since Animate: Wind always used
+  # --layer-type=wind's own hardcoded 'sfc'). Same one-container-loops-
+  # all-7-levels shape as the two services above; wind-importer-scheduled
+  # (sfc-only, Animate: Wind's original always-on default) stays
+  # untouched.
+  wind-levels-importer-scheduled:
+    build:
+      context: ./wind-importer
+      dockerfile: Dockerfile
+    image: mhews-wind-importer:latest
+    container_name: mhews-wind-levels-importer-scheduled
+    restart: unless-stopped
+    command: ["--layer-type=wind", "--levels=1000,850,700,500,250,70,10"]
+    env_file:
+      - ./server/.env
+    networks:
+      - mhews
+
   mslp-importer-scheduled:
     build:
       context: ./wind-importer

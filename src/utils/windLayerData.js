@@ -102,12 +102,18 @@ export function boundsToImageCoordinates([west, south, east, north]) {
  * } | null>} null when no snapshot exists yet (e.g. importer never run) —
  *   callers should treat this the same as a fetch failure (FR-006's
  *   graceful "unavailable" state), not throw.
+ * @param {string} [level] Height selector (spec 054 follow-up,
+ *   2026-08-06) — 'sfc' (default) for every layer type, or a GFS
+ *   pressure level string for 'wind' specifically (the only level-aware
+ *   flow_snapshots layer_type; ocean_current/wave only ever have a 'sfc'
+ *   row). Same contract as fetchLatestOverlaySnapshot's own `level` param.
  */
-export async function fetchLatestFlowSnapshot(layerType) {
+export async function fetchLatestFlowSnapshot(layerType, level = 'sfc') {
   const { data, error } = await supabase
     .from('flow_snapshots')
     .select('texture_storage_path, u_min, u_max, v_min, v_max, bounds, issued_at')
     .eq('layer_type', layerType)
+    .eq('level', level)
     .order('issued_at', { ascending: false })
     .limit(1)
     .maybeSingle()

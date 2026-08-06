@@ -108,10 +108,20 @@ def _fetch_latest_field(
             ) from second_error
 
 
-def fetch_latest_wind_grib2(timeout_s: int = 60) -> tuple[bytes, dt.datetime]:
-    """Returns (grib2_bytes, issued_at)."""
+def fetch_latest_wind_grib2(timeout_s: int = 60, level: str = "sfc") -> tuple[bytes, dt.datetime]:
+    """
+    Returns (grib2_bytes, issued_at). `level='sfc'` (default) is
+    10m-above-ground, the field Animate: Wind always used before Height
+    became level-aware — anything in PRESSURE_LEVELS selects that
+    isobaric level instead (spec 054 follow-up, 2026-08-06: user
+    feedback that changing Height didn't change the animated wind
+    pattern at all, only the Temp/RH Overlay coloring — UGRD/VGRD exist
+    at the same seven pressure levels as TMP/RH, live-verified against a
+    real cycle's own .idx file).
+    """
+    lev_param = "lev_10_m_above_ground" if level == "sfc" else f"lev_{level}_mb"
     return _fetch_latest_field(
-        {"var_UGRD": "on", "var_VGRD": "on", "lev_10_m_above_ground": "on"}, "wind", timeout_s,
+        {"var_UGRD": "on", "var_VGRD": "on", lev_param: "on"}, f"wind@{level}", timeout_s,
     )
 
 

@@ -147,9 +147,11 @@ def _require_supabase_env() -> None:
         sys.exit(1)
 
 
-def _upload_texture(layer_type: str, issued_at: dt.datetime, png_bytes: bytes) -> str:
-    """Uploads the PNG to Supabase Storage, returns the storage path (contracts/flow-snapshot-contract.md)."""
-    path = f"{layer_type}/{issued_at.strftime('%Y-%m-%dT%H-%M-%SZ')}.png"
+def _upload_texture(layer_type: str, level: str, issued_at: dt.datetime, png_bytes: bytes) -> str:
+    """Uploads the PNG to Supabase Storage, returns the storage path (contracts/flow-snapshot-contract.md).
+    Same 'sfc' backward-compat flat-path convention as _upload_overlay_texture."""
+    prefix = layer_type if level == "sfc" else f"{layer_type}/{level}"
+    path = f"{prefix}/{issued_at.strftime('%Y-%m-%dT%H-%M-%SZ')}.png"
     url = f"{SUPABASE_URL}/storage/v1/object/{STORAGE_BUCKET}/{path}"
     response = requests.post(
         url,
@@ -204,12 +206,15 @@ SOURCE_NAME_BY_OVERLAY = {
 }
 
 
-def _insert_flow_snapshot_row(layer_type: str, issued_at: dt.datetime, texture: FlowTexture, storage_path: str) -> None:
+def _insert_flow_snapshot_row(
+    layer_type: str, level: str, issued_at: dt.datetime, texture: FlowTexture, storage_path: str,
+) -> None:
     url = f"{SUPABASE_URL}/rest/v1/flow_snapshots"
     west, south, east, north = texture.bounds
     row = {
         "id": str(uuid.uuid4()),
         "layer_type": layer_type,
+        "level": level,
         "issued_at": issued_at.isoformat(),
         "texture_storage_path": storage_path,
         "u_min": texture.u_min, "u_max": texture.u_max,
@@ -260,7 +265,7 @@ def _insert_overlay_snapshot_row(
     response.raise_for_status()
 
 
-def run_once(layer_type: str) -> None:
+def run_once(layer_type: str, level: str = "sfc") -> None:
     """
     Fetch -> convert -> upload -> insert. Deliberately does NOT touch any
     prior row on failure at any step (an uncaught exception here just
@@ -268,31 +273,38 @@ def run_once(layer_type: str) -> None:
     stays exactly as it was) — contracts/flow-snapshot-contract.md's
     "fail loudly, keep prior data" rule, same convention as
     writeExposureDataset.ts's supersede-only-after-success behavior.
+
+    `level` (Height selector, 2026-08-06) only applies to 'wind' — GFS
+    has UGRD/VGRD at the same seven pressure levels Temp/RH already use;
+    ocean_current/wave have no per-pressure-level concept and always run
+    at 'sfc' regardless of what's passed.
     """
     _require_supabase_env()
 
     if layer_type == "wind":
-        raw_bytes, issued_at = fetch_latest_wind_grib2()
+        raw_bytes, issued_at = fetch_latest_wind_grib2(level=level)
         texture = grib2_to_flow_texture(raw_bytes)
     elif layer_type == "ocean_current":
+        level = "sfc"
         raw_bytes, issued_at = fetch_latest_currents_netcdf()
         texture = netcdf_uv_to_flow_texture(raw_bytes)
     elif layer_type == "wave":
+        level = "sfc"
         raw_bytes, issued_at = fetch_latest_wave_grib2()
         texture = wave_grib2_to_flow_texture(raw_bytes)
     else:
         raise ValueError(f"Unknown layer_type {layer_type!r} (expected 'wind', 'ocean_current', or 'wave')")
 
-    print(f"[wind-importer] Fetched {layer_type} data issued at {issued_at.isoformat()}")
+    print(f"[wind-importer] Fetched {layer_type}@{level} data issued at {issued_at.isoformat()}")
     print(
         f"[wind-importer] Converted to texture: "
         f"u=[{texture.u_min:.2f},{texture.u_max:.2f}] v=[{texture.v_min:.2f},{texture.v_max:.2f}] "
         f"({len(texture.png_bytes)} bytes PNG)"
     )
-    storage_path = _upload_texture(layer_type, issued_at, texture.png_bytes)
+    storage_path = _upload_texture(layer_type, level, issued_at, texture.png_bytes)
     print(f"[wind-importer] Uploaded texture to {STORAGE_BUCKET}/{storage_path}")
-    _insert_flow_snapshot_row(layer_type, issued_at, texture, storage_path)
-    print(f"[wind-importer] Inserted flow_snapshots row for {layer_type} @ {issued_at.isoformat()}")
+    _insert_flow_snapshot_row(layer_type, level, issued_at, texture, storage_path)
+    print(f"[wind-importer] Inserted flow_snapshots row for {layer_type}@{level} @ {issued_at.isoformat()}")
     # metadata_json(texture) is available for local debugging but is not
     # itself persisted — the flow_snapshots row's own columns are the
     # source of truth the frontend reads (contracts/flow-snapshot-contract.md).
@@ -338,16 +350,24 @@ def main() -> None:
     mode.add_argument("--layer-type", choices=["wind", "ocean_current", "wave"])
     mode.add_argument("--overlay-type", choices=[*GFS_OVERLAY_FIELDS, *CAMS_OVERLAY_FIELDS, *NOAA_OVERLAY_FIELDS])
     parser.add_argument("--once", action="store_true", help="Run a single import and exit, instead of looping every 6h")
-    parser.add_argument("--level", default="sfc", help="Single pressure level for one-off overlay runs (sfc or e.g. 850) — LEVEL_AWARE_OVERLAY_FIELDS only")
+    parser.add_argument(
+        "--level", default="sfc",
+        help="Single pressure level for one-off runs (sfc or e.g. 850) — only affects level-aware "
+        "layer/overlay types (--layer-type=wind, --overlay-type=temperature/relative_humidity); ignored otherwise",
+    )
     parser.add_argument(
         "--levels", default=None,
-        help="Comma-separated levels to cycle through every scheduled run (e.g. 1000,850,700,500,250,70,10) — LEVEL_AWARE_OVERLAY_FIELDS only",
+        help="Comma-separated levels to cycle through every scheduled run (e.g. 1000,850,700,500,250,70,10) "
+        "— same level-aware-types-only scope as --level",
     )
     args = parser.parse_args()
 
     def run():
-        if args.layer_type:
-            run_once(args.layer_type)
+        if args.layer_type and args.levels:
+            for level in args.levels.split(","):
+                run_once(args.layer_type, level=level.strip())
+        elif args.layer_type:
+            run_once(args.layer_type, level=args.level)
         elif args.levels:
             for level in args.levels.split(","):
                 run_once_overlay(args.overlay_type, level=level.strip())

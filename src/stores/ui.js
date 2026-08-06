@@ -134,6 +134,17 @@ export const useUIStore = defineStore('ui', () => {
         selectedHeight.value = level;
     }
 
+    // Whether the full flow/overlay menu (FlowControlPanel.vue) is
+    // expanded — moved here (not a local `open` ref in the panel itself),
+    // 2026-08-06: the panel's own trigger button was replaced by the
+    // radar scan badge that sits above the severity legend card
+    // (MapView.vue), a completely different part of the DOM tree, so
+    // both need to read/write the same shared open state.
+    const flowPanelOpen = ref(false);
+    function toggleFlowPanel() {
+        flowPanelOpen.value = !flowPanelOpen.value;
+    }
+
     // Overlay row — same single-select-with-toggle-off correction as
     // Animate above, and for the same reason (nullschool's own Overlay row
     // is also `role="radiogroup"`): one shared key across BOTH overlay
@@ -302,6 +313,8 @@ export const useUIStore = defineStore('ui', () => {
         selectedMode,
         selectedHeight,
         setSelectedHeight,
+        flowPanelOpen,
+        toggleFlowPanel,
         activeOverlayKey,
         toggleOverlay,
         flowSpeedMultiplier,

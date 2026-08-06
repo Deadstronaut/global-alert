@@ -13,17 +13,14 @@
 // entry point to go away entirely — this panel, opened from the same blue
 // button, IS the real feature now (2026-08-05: "o maviye bastığımızda...
 // bu menü açılmalı... standalone'ın artık gerek yok").
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useUIStore } from '@/stores/ui.js'
 import { fetchLatestFlowSnapshot, fetchLatestOverlaySnapshot } from '@/utils/windLayerData.js'
 import { isFlowSnapshotStale } from '@/utils/flowSnapshotStaleness.js'
-import RadarScanBadge from '@/components/RadarScanBadge.vue'
 
 const { t } = useI18n()
 const uiStore = useUIStore()
-
-const open = ref(false)
 
 // Every Mode the reference tool shows (spec 054 FR-007) — `functional`
 // modes have at least one real Animate/Overlay entry; the rest render
@@ -32,7 +29,7 @@ const MODES = [
   { id: 'air', label: 'Air', functional: true },
   { id: 'ocean', label: 'Ocean', functional: true },
   { id: 'chem', label: 'Chem', functional: true },
-  { id: 'particulates', label: 'Particulates', functional: false },
+  { id: 'particulates', label: 'Particulates', functional: true },
   { id: 'space', label: 'Space', functional: true },
   { id: 'bio', label: 'Bio', functional: false },
 ]
@@ -78,10 +75,15 @@ async function refreshStatus(layerType) {
   status.value = { ...status.value, [layerType]: snapshot }
 }
 
-function toggle() {
-  open.value = !open.value
-  if (open.value && !status.value.wind) refreshStatus('wind')
-}
+// Trigger button lives elsewhere now (the radar scan badge above the
+// severity legend card, MapView.vue) — this panel just reacts to the
+// shared uiStore.flowPanelOpen state instead of owning its own toggle.
+watch(
+  () => uiStore.flowPanelOpen,
+  (isOpen) => {
+    if (isOpen && !status.value.wind) refreshStatus('wind')
+  },
+)
 
 function toggleWind() {
   uiStore.toggleWind()
@@ -199,19 +201,9 @@ const activeModeInfo = computed(() => MODES.find((m) => m.id === uiStore.selecte
 </script>
 
 <template>
-  <div class="flow-control-panel" :class="{ 'flow-control-panel--open': open }">
-    <button
-      type="button"
-      class="flow-control-panel-btn"
-      :aria-label="open ? t('windLayer.panelCollapse') : t('windLayer.panelExpand')"
-      :title="open ? t('windLayer.panelCollapse') : t('windLayer.panelExpand')"
-      @click="toggle"
-    >
-      <RadarScanBadge class="flow-control-panel-btn-radar" />
-    </button>
-
+  <div class="flow-control-panel" :class="{ 'flow-control-panel--open': uiStore.flowPanelOpen }">
     <Transition name="flow-panel-expand">
-      <div v-if="open" class="flow-control-panel-body">
+      <div v-if="uiStore.flowPanelOpen" class="flow-control-panel-body">
         <div class="flow-control-panel-header">
           <h4 class="flow-control-panel-title">{{ t('windLayer.panelTitle') }}</h4>
         </div>
@@ -313,27 +305,6 @@ const activeModeInfo = computed(() => MODES.find((m) => m.id === uiStore.selecte
 .flow-control-panel {
   position: relative;
   z-index: 30;
-}
-
-/* Plain wrapper — RadarScanBadge already draws its own circular
-   background/border, so this button contributes no visuals of its own
-   beyond sizing/cursor/hover, avoiding a square-button-around-a-circle
-   double-frame look (live-testing ask, 2026-08-06: replaced the previous
-   🌬️ emoji button with the radar badge as the clickable toggle itself). */
-.flow-control-panel-btn {
-  width: 32px;
-  height: 32px;
-  border: none;
-  background: none;
-  padding: 0;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: transform 0.15s ease;
-}
-.flow-control-panel-btn:hover {
-  transform: scale(1.08);
 }
 
 .flow-control-panel-body {

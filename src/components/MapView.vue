@@ -3862,7 +3862,20 @@ onBeforeUnmount(() => {
 
       <!-- Hexbin / marker severity legend -->
       <div v-else-if="uiStore.showHexbins || (!uiStore.showHeatmap && !uiStore.showHexbins)" class="severity-legend-stack">
-        <RadarScanBadge class="severity-legend-stack-radar" />
+        <!-- Now the flow/overlay menu's own trigger (live-testing ask,
+             2026-08-06: moved FlowControlPanel's separate small toggle
+             button here) — clicking the radar opens that panel, which
+             still visually expands from its own corner of the legend
+             group (unaffected by this button living elsewhere). -->
+        <button
+          type="button"
+          class="severity-legend-stack-radar-btn"
+          :aria-label="uiStore.flowPanelOpen ? t('windLayer.panelCollapse') : t('windLayer.panelExpand')"
+          :title="uiStore.flowPanelOpen ? t('windLayer.panelCollapse') : t('windLayer.panelExpand')"
+          @click="uiStore.toggleFlowPanel()"
+        >
+          <RadarScanBadge class="severity-legend-stack-radar" />
+        </button>
         <div class="map-legend">
           <div class="legend-title">Şiddet</div>
           <div class="legend-severity-rows">
@@ -4843,6 +4856,19 @@ onBeforeUnmount(() => {
   flex-direction: column;
   align-items: center;
   gap: 8px;
+}
+.severity-legend-stack-radar-btn {
+  border: none;
+  background: none;
+  padding: 0;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.15s ease;
+}
+.severity-legend-stack-radar-btn:hover {
+  transform: scale(1.08);
 }
 .severity-legend-stack-radar {
   transform: scale(1.3);

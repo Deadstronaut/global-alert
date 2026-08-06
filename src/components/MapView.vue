@@ -34,7 +34,6 @@ import GeocodingSearch from '@/components/impact/GeocodingSearch.vue'
 import SettingsPanel from '@/components/SettingsPanel.vue'
 import PanelCollapseToggle from '@/components/PanelCollapseToggle.vue'
 import FlowControlPanel from '@/components/FlowControlPanel.vue'
-import RadarScanBadge from '@/components/RadarScanBadge.vue'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { useMapLayersStore } from '@/stores/mapLayers.js'
@@ -3861,34 +3860,31 @@ onBeforeUnmount(() => {
       </div>
 
       <!-- Hexbin / marker severity legend -->
-      <div v-else-if="uiStore.showHexbins || (!uiStore.showHeatmap && !uiStore.showHexbins)" class="severity-legend-stack">
-        <RadarScanBadge class="severity-legend-stack-radar" />
-        <div class="map-legend">
-          <div class="legend-title">Şiddet</div>
-          <div class="legend-severity-rows">
-            <div class="sev-row">
-              <span class="sev-dot" style="background: var(--color-minimal)"></span><span>Minimal</span>
-            </div>
-            <div class="sev-row">
-              <span class="sev-dot" style="background: var(--color-low)"></span><span>Düşük</span>
-            </div>
-            <div class="sev-row">
-              <span class="sev-dot" style="background: var(--color-moderate)"></span><span>Orta</span>
-            </div>
-            <div class="sev-row">
-              <span class="sev-dot" style="background: var(--color-high)"></span><span>Yüksek</span>
-            </div>
-            <div class="sev-row">
-              <span class="sev-dot" style="background: var(--color-critical)"></span><span>Kritik</span>
-            </div>
+      <div v-else-if="uiStore.showHexbins || (!uiStore.showHeatmap && !uiStore.showHexbins)" class="map-legend">
+        <div class="legend-title">Şiddet</div>
+        <div class="legend-severity-rows">
+          <div class="sev-row">
+            <span class="sev-dot" style="background: var(--color-minimal)"></span><span>Minimal</span>
           </div>
-          <p v-if="markerTruncation && markerTruncation.hiddenTiers.length > 0" class="marker-truncation-note">
-            {{ t('map.markerTruncationTiered', { shown: markerTruncation.shown, total: markerTruncation.total, tiers: markerHiddenTiersLabel }) }}
-          </p>
-          <p v-else-if="markerTruncation" class="marker-truncation-note">
-            {{ t('map.markerTruncation', { shown: markerTruncation.shown, total: markerTruncation.total }) }}
-          </p>
+          <div class="sev-row">
+            <span class="sev-dot" style="background: var(--color-low)"></span><span>Düşük</span>
+          </div>
+          <div class="sev-row">
+            <span class="sev-dot" style="background: var(--color-moderate)"></span><span>Orta</span>
+          </div>
+          <div class="sev-row">
+            <span class="sev-dot" style="background: var(--color-high)"></span><span>Yüksek</span>
+          </div>
+          <div class="sev-row">
+            <span class="sev-dot" style="background: var(--color-critical)"></span><span>Kritik</span>
+          </div>
         </div>
+        <p v-if="markerTruncation && markerTruncation.hiddenTiers.length > 0" class="marker-truncation-note">
+          {{ t('map.markerTruncationTiered', { shown: markerTruncation.shown, total: markerTruncation.total, tiers: markerHiddenTiersLabel }) }}
+        </p>
+        <p v-else-if="markerTruncation" class="marker-truncation-note">
+          {{ t('map.markerTruncation', { shown: markerTruncation.shown, total: markerTruncation.total }) }}
+        </p>
       </div>
 
       <!-- Gridded exposure layer legends (population, rainfall/CHIRPS, drought,
@@ -4833,20 +4829,6 @@ onBeforeUnmount(() => {
   padding: 8px 10px;
   min-width: 110px;
   pointer-events: none;
-}
-
-/* Stacks the radar scan badge directly above the severity legend card
-   (live-testing ask, 2026-08-06) — a plain flex item within
-   .map-legend-group's row layout, same as every other card in that
-   group, just column-oriented internally. */
-.severity-legend-stack {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 6px;
-}
-.severity-legend-stack-radar {
-  align-self: flex-start;
 }
 
 .marker-truncation-note {

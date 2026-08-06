@@ -18,6 +18,7 @@ import { useI18n } from 'vue-i18n'
 import { useUIStore } from '@/stores/ui.js'
 import { fetchLatestFlowSnapshot, fetchLatestOverlaySnapshot } from '@/utils/windLayerData.js'
 import { isFlowSnapshotStale } from '@/utils/flowSnapshotStaleness.js'
+import RadarScanBadge from '@/components/RadarScanBadge.vue'
 
 const { t } = useI18n()
 const uiStore = useUIStore()
@@ -206,7 +207,7 @@ const activeModeInfo = computed(() => MODES.find((m) => m.id === uiStore.selecte
       :title="open ? t('windLayer.panelCollapse') : t('windLayer.panelExpand')"
       @click="toggle"
     >
-      🌬️
+      <RadarScanBadge class="flow-control-panel-btn-radar" />
     </button>
 
     <Transition name="flow-panel-expand">
@@ -314,24 +315,25 @@ const activeModeInfo = computed(() => MODES.find((m) => m.id === uiStore.selecte
   z-index: 30;
 }
 
+/* Plain wrapper — RadarScanBadge already draws its own circular
+   background/border, so this button contributes no visuals of its own
+   beyond sizing/cursor/hover, avoiding a square-button-around-a-circle
+   double-frame look (live-testing ask, 2026-08-06: replaced the previous
+   🌬️ emoji button with the radar badge as the clickable toggle itself). */
 .flow-control-panel-btn {
-  width: 36px;
-  height: 36px;
-  border-radius: 8px;
-  border: 1px solid rgba(255, 255, 255, 0.18);
-  background: rgba(20, 24, 33, 0.92);
-  color: #e2e8f0;
-  font-size: 16px;
+  width: 32px;
+  height: 32px;
+  border: none;
+  background: none;
+  padding: 0;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.28);
-  backdrop-filter: blur(8px);
-  transition: background 0.15s ease;
+  transition: transform 0.15s ease;
 }
 .flow-control-panel-btn:hover {
-  background: rgba(35, 41, 56, 0.95);
+  transform: scale(1.08);
 }
 
 .flow-control-panel-body {

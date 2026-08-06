@@ -305,6 +305,14 @@ const activeModeInfo = computed(() => MODES.find((m) => m.id === uiStore.selecte
 .flow-control-panel {
   position: relative;
   z-index: 30;
+  /* This component now renders inside MapView.vue's centered
+     .severity-legend-stack (live-testing ask, 2026-08-06) — align-self
+     pins its own (otherwise 0-width when closed) box to that stack's
+     left edge regardless of the stack's own center-alignment, so the
+     expanded panel body (anchored to THIS element, left: -8px below)
+     opens flush with the severity card's left edge instead of from the
+     stack's horizontal center. */
+  align-self: flex-start;
 }
 
 .flow-control-panel-body {

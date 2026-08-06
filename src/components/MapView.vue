@@ -3902,6 +3902,15 @@ onBeforeUnmount(() => {
             {{ t('map.markerTruncation', { shown: markerTruncation.shown, total: markerTruncation.total }) }}
           </p>
         </div>
+
+        <!-- Anchored here (not at the end of .map-legend-group like
+             before) so the expanded panel opens directly above the radar
+             button that now triggers it, flush left with the severity
+             card, instead of wherever FlowControlPanel happened to land
+             in the row after however many exposure legends are active
+             (live-testing ask, 2026-08-06: "şiddet kartı gibi sola
+             dayalı olsa radarın üstünde hemen"). -->
+        <FlowControlPanel />
       </div>
 
       <!-- Gridded exposure layer legends (population, rainfall/CHIRPS, drought,
@@ -3916,12 +3925,6 @@ onBeforeUnmount(() => {
           </div>
         </div>
       </div>
-
-      <!-- spec 053: compact wind/current control — sits alongside the other
-           bottom-left legend cards, on the severity panel's own corner of
-           the group (live-testing ask, 2026-08-05: "şiddet panelinin
-           üzerine ufak bir kare tuş"). -->
-      <FlowControlPanel />
     </div>
 
     <!-- Live pitch/detail tuning (spec-less follow-up, 2026-07-28): only

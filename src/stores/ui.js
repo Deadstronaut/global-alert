@@ -147,17 +147,17 @@ export const useUIStore = defineStore('ui', () => {
     }
 
     // Live-tunable flow-particle rendering (gear icon in FlowControlPanel.vue)
-    // — defaults are the live-testing result, 2026-08-05, that produced the
-    // actual nullschool-style flowing-streamline look (see MapView.vue's
-    // setFlowLayerEnabled comment).
-    const flowSpeedMultiplier = ref(336);
-    const flowTrailLength = ref(89);
+    // — defaults are the live-testing result, 2026-08-06, tuned via the
+    // sliders themselves to the best-looking flowing-streamline balance
+    // (supersedes the original 2026-08-05 values once trail thickness
+    // became separately tunable).
+    const flowSpeedMultiplier = ref(333.0);
+    const flowTrailLength = ref(100);
     // Point-sprite size along each trail — live-testing feedback,
     // 2026-08-05: thin trails read as choppy "tık tık tık" dots instead of
     // a flowing line (see simple-wind-layer.js's own trailThickness
-    // comment for why bigger points fix this). Default matches that
-    // file's own pre-existing gl_PointSize=3.0.
-    const flowTrailThickness = ref(3);
+    // comment for why bigger points fix this).
+    const flowTrailThickness = ref(2.0);
     function setFlowSpeedMultiplier(value) {
         flowSpeedMultiplier.value = value;
     }

@@ -37,19 +37,28 @@ CATALOG_LAG_DAYS = 1
 
 def _download(
     client: "cdsapi.Client", variable: str, catalog_date: dt.date, cycle_hour: int, tmp_dir: str,
-    extra_params: dict | None = None,
+    extra_params: dict | None = None, dataset_id: str = DATASET_ID, include_time_type: bool = True,
 ) -> bytes:
+    """
+    `include_time_type=False` (cams-global-greenhouse-gas-forecasts only —
+    see fetch_latest_co2_netcdf's own comment) drops `time`/`type` from the
+    request entirely: live-verified 2026-08-06 via that dataset's own real
+    apply_constraints() schema, which has NO `time` or `type` key at all —
+    unlike cams-global-atmospheric-composition-forecasts (DATASET_ID, every
+    other function in this file), this dataset publishes one value per day
+    with no intraday cycle selection, and sending either key 400s with
+    "Invalid key names: 'time', 'type'".
+    """
     request = {
         "variable": [variable],
         "date": [catalog_date.strftime("%Y-%m-%d")],
-        "time": [f"{cycle_hour:02d}:00"],
         "leadtime_hour": ["0"],
-        "type": ["forecast"],
         "data_format": "netcdf_zip",
+        **({"time": [f"{cycle_hour:02d}:00"], "type": ["forecast"]} if include_time_type else {}),
         **(extra_params or {}),
     }
     zip_path = os.path.join(tmp_dir, f"{variable}.zip")
-    client.retrieve(DATASET_ID, request).download(zip_path)
+    client.retrieve(dataset_id, request).download(zip_path)
     with zipfile.ZipFile(zip_path) as zf:
         nc_names = [n for n in zf.namelist() if n.endswith(".nc")]
         if not nc_names:
@@ -176,3 +185,61 @@ def fetch_latest_so2_netcdf(timeout_s: int = 120) -> tuple[bytes, dt.datetime]:
 def fetch_latest_no2_netcdf(timeout_s: int = 120) -> tuple[bytes, dt.datetime]:
     """Nitrogen dioxide @ 1000mb (surface proxy) — NetCDF subdataset variable name 'no2', mass mixing ratio (kg/kg)."""
     return _fetch_latest_cams_netcdf("nitrogen_dioxide", timeout_s, _SURFACE_PROXY_PRESSURE_LEVEL)
+
+
+# CO2sc (spec 054 follow-up, 2026-08-06 — reopened after the note above:
+# "CO2 has NO entry in this dataset" is still true of
+# cams-global-atmospheric-composition-forecasts specifically, but CAMS
+# publishes CO2 as a SEPARATE product, cams-global-greenhouse-gas-forecasts
+# — different dataset_id, different request shape, same free ADS account/
+# credentials as every other CAMS fetch in this file.
+#
+# Live-verified 2026-08-06 against the real ADS API's own apply_constraints()
+# for this dataset (same standard this file's other fields already met):
+# variable name is 'carbon_dioxide' (confirmed present in the real variable
+# list); the schema's top-level keys are ONLY
+# ['variable','pressure_level','model_level','date','leadtime_hour','area',
+# 'data_format'] — no 'time', no 'type' at all (an earlier version of this
+# function 400'd with "Invalid key names: 'time', 'type'" before this was
+# checked) — see _download's own include_time_type param. `date` accepts a
+# single day (not a range) same as every other field here.
+GHG_DATASET_ID = "cams-global-greenhouse-gas-forecasts"
+
+
+def fetch_latest_co2_netcdf(timeout_s: int = 120) -> tuple[bytes, dt.datetime]:
+    """CO2 (carbon_dioxide) @ 1000mb (surface proxy, same convention as CO/SO2/NO2 above) — Overlay: CO2sc."""
+    url = os.environ.get("COPERNICUS_ADS_URL", "https://ads.atmosphere.copernicus.eu/api")
+    key = os.environ.get("COPERNICUS_ADS_KEY")
+    if not key:
+        raise RuntimeError(
+            "COPERNICUS_ADS_KEY not set — register a free account at "
+            "https://ads.atmosphere.copernicus.eu and add it (plus COPERNICUS_ADS_URL "
+            "if different from the default) to server/.env"
+        )
+
+    now = dt.datetime.now(dt.timezone.utc)
+    catalog_date = (now - dt.timedelta(days=CATALOG_LAG_DAYS)).date()
+
+    client = cdsapi.Client(url=url, key=key, timeout=timeout_s)
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        try:
+            netcdf_bytes = _download(
+                client, "carbon_dioxide", catalog_date, 0, tmp_dir, _SURFACE_PROXY_PRESSURE_LEVEL,
+                dataset_id=GHG_DATASET_ID, include_time_type=False,
+            )
+        except Exception as first_error:  # noqa: BLE001 - same "ADS raises requests.HTTPError, not a specific typed exception" reasoning as _fetch_latest_cams_netcdf
+            fallback_date = catalog_date - dt.timedelta(days=1)
+            try:
+                netcdf_bytes = _download(
+                    client, "carbon_dioxide", fallback_date, 0, tmp_dir, _SURFACE_PROXY_PRESSURE_LEVEL,
+                    dataset_id=GHG_DATASET_ID, include_time_type=False,
+                )
+                catalog_date = fallback_date
+            except Exception as second_error:
+                raise RuntimeError(
+                    f"Failed to fetch CAMS CO2 for {catalog_date} ({first_error}) "
+                    f"and fallback {fallback_date} ({second_error})"
+                ) from second_error
+
+    issued_at = dt.datetime(catalog_date.year, catalog_date.month, catalog_date.day, tzinfo=dt.timezone.utc)
+    return netcdf_bytes, issued_at

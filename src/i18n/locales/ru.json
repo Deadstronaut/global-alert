@@ -22,6 +22,7 @@
     "navShelters": "Убежища",
     "navHazards": "Энциклопедия Опасностей",
     "navReport": "Сообщение от Граждан",
+    "navForecast": "Прогноз",
     "overviewTitle": "Обзор",
     "earthquakes24hTitle": "Землетрясения (за 24 часа)",
     "earthquakes24hForCountry": "в {country}",
@@ -39,6 +40,41 @@
       "last24h": "Последние 24 часа",
       "earthquakes": "землетрясений",
       "unknownSource": "Неизвестно"
+    },
+    "forecast": {
+      "panelTitle": "Прогноз",
+      "horizon15d": "15 дней",
+      "horizon1mo": "1 месяц",
+      "horizon3mo": "3 месяца",
+      "variableWindSpeed": "Ветер",
+      "variablePrecipitation": "Осадки",
+      "variableTemperature": "Температура",
+      "variableRelativeHumidity": "Относительная Влажность",
+      "variableMeanSeaLevelPressure": "Давление на Уровне Моря",
+      "variableCape": "CAPE (Потенциал Шторма)",
+      "variableTotalPrecipitableWater": "Общий Осаждаемый Водяной Пар",
+      "variableTotalCloudWater": "Общая Вода в Облаках",
+      "variableDewPoint": "Точка Росы",
+      "variableWetBulbTemp": "Температура Влажного Термометра",
+      "variableWindPowerDensity": "Плотность Ветровой Энергии",
+      "variableMiseryIndex": "Индекс Дискомфорта",
+      "variableSignificantWaveHeight": "Высота Волн",
+      "variableUvIndex": "УФ-Индекс",
+      "regionLabel": "Регион",
+      "regionPlaceholder": "напр. Ankara",
+      "regionRequiredHint": "Введите название провинции, чтобы увидеть прогноз (напр. Ankara).",
+      "validPeriodLabel": "Охватываемый период: {period}",
+      "asOf": "По состоянию на {time}",
+      "unavailable": "Прогноз недоступен для этого выбора.",
+      "notConfigured": "Этот горизонт прогноза не настроен для данного развертывания.",
+      "probabilisticNotice": "Это вероятностный прогноз, а не подневный прогноз.",
+      "seasonalNotice": "Долгосрочные рекомендации для планирования, а не прогноз конкретных событий.",
+      "classificationBelowNormal": "Ниже Нормы",
+      "classificationNearNormal": "Около Нормы",
+      "classificationAboveNormal": "Выше Нормы",
+      "confidenceLabel": "Достоверность: {pct}%",
+      "dayLabel": "День {n}",
+      "loading": "Загрузка прогноза..."
     }
   },
   "common": {
@@ -1150,6 +1186,13 @@
     "send": "Отправить",
     "noCountryContext": "В этом браузере ещё не настроен контекст страны — сначала откройте вкладку «AI Yardımı» в AdminView и включите возможность для страны.",
     "waitingServer": "Ожидание ответа от сервера..."
+  },
+  "flowPanel": {
+    "forecast": {
+      "rowLabel": "Прогноз",
+      "dayLabel": "День {n} · {date}",
+      "noData": "Прогнозных данных за этот день пока нет."
+    }
   },
   "windLayer": {
     "toggleLabel": "Ветер",

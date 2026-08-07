@@ -22,6 +22,7 @@
     "navShelters": "Barınaklar",
     "navHazards": "Tehlike Ansiklopedisi",
     "navReport": "Vatandaş Bildirimi",
+    "navForecast": "Öngörü (Forecast)",
     "overviewTitle": "Genel Bakış",
     "earthquakes24hTitle": "Son 24 Saatte Deprem",
     "earthquakes24hForCountry": "{country} içinde",
@@ -39,6 +40,41 @@
       "last24h": "Son 24 saat",
       "earthquakes": "deprem",
       "unknownSource": "Bilinmeyen"
+    },
+    "forecast": {
+      "panelTitle": "Öngörü",
+      "horizon15d": "15 Gün",
+      "horizon1mo": "1 Ay",
+      "horizon3mo": "3 Ay",
+      "variableWindSpeed": "Rüzgar",
+      "variablePrecipitation": "Yağış",
+      "variableTemperature": "Sıcaklık",
+      "variableRelativeHumidity": "Bağıl Nem",
+      "variableMeanSeaLevelPressure": "Deniz Seviyesi Basıncı",
+      "variableCape": "CAPE (Fırtına Potansiyeli)",
+      "variableTotalPrecipitableWater": "Toplam Yağış Potansiyeli",
+      "variableTotalCloudWater": "Toplam Bulut Suyu",
+      "variableDewPoint": "Çiy Noktası",
+      "variableWetBulbTemp": "Yaş Termometre Sıcaklığı",
+      "variableWindPowerDensity": "Rüzgar Güç Yoğunluğu",
+      "variableMiseryIndex": "Sefalet Endeksi",
+      "variableSignificantWaveHeight": "Dalga Yüksekliği",
+      "variableUvIndex": "UV Endeksi",
+      "regionLabel": "Bölge",
+      "regionPlaceholder": "örn. Ankara",
+      "regionRequiredHint": "Öngörüyü görmek için il adını yazın (örn. Ankara).",
+      "validPeriodLabel": "Kapsadığı dönem: {period}",
+      "asOf": "Güncelleme: {time}",
+      "unavailable": "Bu seçim için öngörü verisi bulunmuyor.",
+      "notConfigured": "Bu öngörü ufku bu kurulum için yapılandırılmamış.",
+      "probabilisticNotice": "Bu olasılıksal bir öngörüdür, gün gün bir tahmin değildir.",
+      "seasonalNotice": "Planlama amaçlı uzun vadeli yönlendirme; belirli olayların tahmini değildir.",
+      "classificationBelowNormal": "Normalin Altında",
+      "classificationNearNormal": "Normale Yakın",
+      "classificationAboveNormal": "Normalin Üstünde",
+      "confidenceLabel": "Güven: %{pct}",
+      "dayLabel": "{n}. Gün",
+      "loading": "Öngörü yükleniyor..."
     }
   },
   "common": {
@@ -1244,6 +1280,13 @@
     "send": "Gönder",
     "noCountryContext": "Bu tarayıcıda henüz bir ülke bağlamı ayarlanmamış — önce AdminView'daki \"AI Yardımı\" sekmesinden bir ülke için bir yetenek aç.",
     "waitingServer": "Sunucudan cevap bekleniyor..."
+  },
+  "flowPanel": {
+    "forecast": {
+      "rowLabel": "Öngörü",
+      "dayLabel": "{n}. Gün · {date}",
+      "noData": "Bu gün için henüz öngörü verisi yok."
+    }
   },
   "windLayer": {
     "toggleLabel": "Rüzgar",

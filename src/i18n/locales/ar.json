@@ -22,6 +22,7 @@
     "navShelters": "الملاجئ",
     "navHazards": "موسوعة المخاطر",
     "navReport": "بلاغ مجتمعي",
+    "navForecast": "التوقعات",
     "overviewTitle": "نظرة عامة",
     "earthquakes24hTitle": "الزلازل (آخر 24 ساعة)",
     "earthquakes24hForCountry": "في {country}",
@@ -39,6 +40,41 @@
       "last24h": "آخر 24 ساعة",
       "earthquakes": "زلازل",
       "unknownSource": "غير معروف"
+    },
+    "forecast": {
+      "panelTitle": "التوقعات",
+      "horizon15d": "15 يومًا",
+      "horizon1mo": "شهر واحد",
+      "horizon3mo": "3 أشهر",
+      "variableWindSpeed": "الرياح",
+      "variablePrecipitation": "الهطول",
+      "variableTemperature": "درجة الحرارة",
+      "variableRelativeHumidity": "الرطوبة النسبية",
+      "variableMeanSeaLevelPressure": "ضغط سطح البحر",
+      "variableCape": "CAPE (احتمال العواصف)",
+      "variableTotalPrecipitableWater": "إجمالي بخار الماء القابل للهطول",
+      "variableTotalCloudWater": "إجمالي ماء السحب",
+      "variableDewPoint": "نقطة الندى",
+      "variableWetBulbTemp": "حرارة المقياس الرطب",
+      "variableWindPowerDensity": "كثافة طاقة الرياح",
+      "variableMiseryIndex": "مؤشر البؤس",
+      "variableSignificantWaveHeight": "ارتفاع الأمواج",
+      "variableUvIndex": "مؤشر الأشعة فوق البنفسجية",
+      "regionLabel": "المنطقة",
+      "regionPlaceholder": "مثال: Ankara",
+      "regionRequiredHint": "اكتب اسم المحافظة لعرض توقعاتها (مثال: Ankara).",
+      "validPeriodLabel": "الفترة المشمولة: {period}",
+      "asOf": "اعتبارًا من {time}",
+      "unavailable": "لا تتوفر توقعات لهذا الاختيار.",
+      "notConfigured": "لم يتم تهيئة نطاق التوقعات هذا لهذا النشر.",
+      "probabilisticNotice": "هذه توقعات احتمالية، وليست توقعات يومية.",
+      "seasonalNotice": "إرشادات طويلة المدى لأغراض التخطيط، وليست تنبؤًا بأحداث محددة.",
+      "classificationBelowNormal": "أقل من المعتاد",
+      "classificationNearNormal": "قريب من المعتاد",
+      "classificationAboveNormal": "أعلى من المعتاد",
+      "confidenceLabel": "الثقة: {pct}%",
+      "dayLabel": "اليوم {n}",
+      "loading": "جارٍ تحميل التوقعات..."
     }
   },
   "common": {
@@ -1150,6 +1186,13 @@
     "send": "إرسال",
     "noCountryContext": "لم يتم تكوين سياق بلد في هذا المتصفح بعد — افتح أولاً علامة التبويب \"AI Yardımı\" في AdminView وفعّل إمكانية لبلد ما.",
     "waitingServer": "بانتظار الرد من الخادم..."
+  },
+  "flowPanel": {
+    "forecast": {
+      "rowLabel": "التوقعات",
+      "dayLabel": "اليوم {n} · {date}",
+      "noData": "لا تتوفر بيانات توقعات لهذا اليوم بعد."
+    }
   },
   "windLayer": {
     "toggleLabel": "الرياح",

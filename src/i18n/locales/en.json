@@ -22,6 +22,7 @@
     "navShelters": "Shelters",
     "navHazards": "Hazard Encyclopedia",
     "navReport": "Community Report",
+    "navForecast": "Forecast",
     "overviewTitle": "Overview",
     "earthquakes24hTitle": "Earthquakes (Last 24h)",
     "earthquakes24hForCountry": "in {country}",
@@ -39,6 +40,41 @@
       "last24h": "Last 24 hours",
       "earthquakes": "earthquakes",
       "unknownSource": "Unknown"
+    },
+    "forecast": {
+      "panelTitle": "Forecast",
+      "horizon15d": "15 Days",
+      "horizon1mo": "1 Month",
+      "horizon3mo": "3 Months",
+      "variableWindSpeed": "Wind",
+      "variablePrecipitation": "Precipitation",
+      "variableTemperature": "Temperature",
+      "variableRelativeHumidity": "Relative Humidity",
+      "variableMeanSeaLevelPressure": "Sea Level Pressure",
+      "variableCape": "CAPE (Storm Potential)",
+      "variableTotalPrecipitableWater": "Total Precipitable Water",
+      "variableTotalCloudWater": "Total Cloud Water",
+      "variableDewPoint": "Dew Point",
+      "variableWetBulbTemp": "Wet Bulb Temperature",
+      "variableWindPowerDensity": "Wind Power Density",
+      "variableMiseryIndex": "Misery Index",
+      "variableSignificantWaveHeight": "Wave Height",
+      "variableUvIndex": "UV Index",
+      "regionLabel": "Region",
+      "regionPlaceholder": "e.g. Ankara",
+      "regionRequiredHint": "Type a province name to see its outlook (e.g. Ankara).",
+      "validPeriodLabel": "Covers: {period}",
+      "asOf": "As of {time}",
+      "unavailable": "Forecast unavailable for this selection.",
+      "notConfigured": "This forecast horizon is not configured for this deployment.",
+      "probabilisticNotice": "This is a probabilistic outlook, not a day-by-day forecast.",
+      "seasonalNotice": "Long-range guidance for planning purposes, not a prediction of specific events.",
+      "classificationBelowNormal": "Below Normal",
+      "classificationNearNormal": "Near Normal",
+      "classificationAboveNormal": "Above Normal",
+      "confidenceLabel": "Confidence: {pct}%",
+      "dayLabel": "Day {n}",
+      "loading": "Loading forecast..."
     }
   },
   "common": {
@@ -1244,6 +1280,13 @@
     "send": "Send",
     "noCountryContext": "No country context is configured in this browser yet — open AdminView's \"AI Yardımı\" tab and enable a capability for a country first.",
     "waitingServer": "Waiting for a response from the server..."
+  },
+  "flowPanel": {
+    "forecast": {
+      "rowLabel": "Forecast",
+      "dayLabel": "Day {n} · {date}",
+      "noData": "No forecast data for this day yet."
+    }
   },
   "windLayer": {
     "toggleLabel": "Wind",

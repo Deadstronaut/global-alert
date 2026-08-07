@@ -1,5 +1,5 @@
 import {defineStore} from 'pinia';
-import {ref, computed, watch} from 'vue';
+import {ref, reactive, computed, watch} from 'vue';
 
 // spec 045: shared range for the manual hex-resolution slider — single
 // source of truth so SidebarPanel.vue (the slider's min/max) and
@@ -115,6 +115,13 @@ export const useUIStore = defineStore('ui', () => {
     const currentsEnabled = computed(() => activeAnimateLayer.value === 'ocean_current');
     function toggleCurrents() {
         toggleAnimateLayer('ocean_current');
+        // Combined "flowing streamlines over a speed heatmap" look, matching
+        // the reference tool's own Ocean/Currents view (live-testing ask,
+        // 2026-08-06: "altında da ısı haritası olmalı" — turning Currents on
+        // should show its heatmap underneath, not require a second click on
+        // the Overlay row). Only sets it on enable — turning Currents back
+        // off leaves whatever Overlay the user has since switched to.
+        if (currentsEnabled.value) activeOverlayKey.value = 'ocean_current';
     }
     const wavesEnabled = computed(() => activeAnimateLayer.value === 'wave');
     function toggleWaves() {
@@ -155,28 +162,81 @@ export const useUIStore = defineStore('ui', () => {
     const activeOverlayKey = ref(null); // null | 'wind' | 'ocean_current' | 'wave' | 'air_quality_pm25' | 'temperature' | ...
     function toggleOverlay(key) {
         activeOverlayKey.value = activeOverlayKey.value === key ? null : key;
+        // Forecast (spec 056) and nowcast Overlay share one visual map slot
+        // — selecting either clears the other (research.md §1: showing both
+        // at once would undermine "never mistaken for real-time data" more
+        // than either alone helps).
+        selectedForecastVariable.value = null;
+    }
+
+    // Forecast row (spec 056) — same flat-ref/single-select-radio convention
+    // as selectedHeight/activeOverlayKey above, so MapView.vue can watch it
+    // directly. null = forecast display off (default, spec.md Edge Cases:
+    // "no forecast overlay is shown by default").
+    const selectedForecastVariable = ref(null);
+    const selectedForecastDayIndex = ref(0);
+    function setSelectedForecastVariable(variable) {
+        selectedForecastVariable.value = variable;
+        selectedForecastDayIndex.value = 0; // a stale index from a variable with more days could be out-of-bounds for one with fewer (data-model.md)
+        if (variable) activeOverlayKey.value = null; // mutual exclusivity, same reasoning as toggleOverlay above
+    }
+    function setSelectedForecastDayIndex(index) {
+        selectedForecastDayIndex.value = index;
     }
 
     // Live-tunable flow-particle rendering (gear icon in FlowControlPanel.vue)
-    // — defaults are the live-testing result, 2026-08-06, tuned via the
-    // sliders themselves to the best-looking flowing-streamline balance
-    // (supersedes the original 2026-08-05 values once trail thickness
-    // became separately tunable).
-    const flowSpeedMultiplier = ref(333.0);
-    const flowTrailLength = ref(100);
-    // Point-sprite size along each trail — live-testing feedback,
-    // 2026-08-05: thin trails read as choppy "tık tık tık" dots instead of
-    // a flowing line (see simple-wind-layer.js's own trailThickness
-    // comment for why bigger points fix this).
-    const flowTrailThickness = ref(2.0);
-    function setFlowSpeedMultiplier(value) {
-        flowSpeedMultiplier.value = value;
+    // — one independent settings slot PER layer_type (2026-08-06, explicit
+    // user instruction after a same-file edit meant for ocean_current broke
+    // wind's own already-approved look: "hepsini ayrı tutman lazım... her
+    // biri için ayrı bir motor yaz" — wind/ocean_current/wave must never
+    // share state, only their own slot, so tuning one can never move
+    // another's sliders). wind's defaults are the 2026-08-06 live-tuned
+    // values from before this split (kept identical so wind's behavior is
+    // byte-for-byte unchanged); ocean_current/wave start from the same
+    // shape but are free to be tuned independently from here on.
+    // particleCount is likewise per-layer — simple-current-layer.js and
+    // simple-wave-layer.js (not wind, which keeps its own fixed constant
+    // for now) read it live via setParticleCount().
+    // opacity (2026-08-06 ask: "her şey için geçerli olsun" — one slider
+    // next to the gear icon that dims both this layer_type's Animate
+    // particles AND its own Overlay heatmap together, since the heatmap's
+    // real colors were "good but hard to read the map underneath" at full
+    // strength). Applied to Overlay for every layer_type (MapView.vue paint
+    // property only, safe for wind too); applied to Animate particles only
+    // for ocean_current/wave (simple-current-layer.js/simple-wave-layer.js
+    // — wind's own engine file stays untouched, same standing rule as
+    // particleCount above).
+    const FLOW_SETTINGS_DEFAULTS = {particleCount: 3000, speedMultiplier: 333.0, trailLength: 100, trailThickness: 2.0, opacity: 0.7};
+    // Live-tuned via the gear-icon sliders, 2026-08-06 — the "dot-like"
+    // look (short, sparse) the user landed on for Waves after the
+    // motion-scale swap (simple-wave-layer.js's own SPEED_FACTOR comment).
+    // trailThickness back down to a thin 2.0px (2026-08-06 follow-up
+    // correction: a first attempt made the point/line itself 8x fatter,
+    // but the user clarified that wasn't the right mechanism — "iz
+    // kalınlığı değil... 1.6 pikselde düşün ama yan yana 20 tane iz
+    // attığını düşün, dalga gibi bir resim oluşuyor" — width should come
+    // from simple-wave-layer.js's own STRAND_COUNT (20 thin parallel
+    // copies of each segment) instead, so this stays thin.
+    const WAVE_SETTINGS_DEFAULTS = {particleCount: 600, speedMultiplier: 166.0, trailLength: 47, trailThickness: 2.0, opacity: 0.7};
+    const flowSettings = reactive({
+        wind: {...FLOW_SETTINGS_DEFAULTS},
+        ocean_current: {...FLOW_SETTINGS_DEFAULTS},
+        wave: {...WAVE_SETTINGS_DEFAULTS},
+    });
+    function setFlowSpeedMultiplier(layerType, value) {
+        flowSettings[layerType].speedMultiplier = value;
     }
-    function setFlowTrailLength(value) {
-        flowTrailLength.value = value;
+    function setFlowTrailLength(layerType, value) {
+        flowSettings[layerType].trailLength = value;
     }
-    function setFlowTrailThickness(value) {
-        flowTrailThickness.value = value;
+    function setFlowOpacity(layerType, value) {
+        flowSettings[layerType].opacity = value;
+    }
+    function setFlowTrailThickness(layerType, value) {
+        flowSettings[layerType].trailThickness = value;
+    }
+    function setFlowParticleCount(layerType, value) {
+        flowSettings[layerType].particleCount = value;
     }
 
     function applyThemeAttrs() {
@@ -317,12 +377,16 @@ export const useUIStore = defineStore('ui', () => {
         toggleFlowPanel,
         activeOverlayKey,
         toggleOverlay,
-        flowSpeedMultiplier,
-        flowTrailLength,
-        flowTrailThickness,
+        selectedForecastVariable,
+        selectedForecastDayIndex,
+        setSelectedForecastVariable,
+        setSelectedForecastDayIndex,
+        flowSettings,
         setFlowSpeedMultiplier,
         setFlowTrailLength,
         setFlowTrailThickness,
+        setFlowParticleCount,
+        setFlowOpacity,
         transitionToMap,
         transitionToGlobe,
         selectDisaster,

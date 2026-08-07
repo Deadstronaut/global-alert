@@ -678,6 +678,158 @@ services:
     networks:
       - mhews
 
+  # Ocean mode's remaining Overlay entries (spec 054 follow-up, 2026-08-06)
+  # — SST/SSTA are CMEMS-native (fetch_sst.py), same COPERNICUS_MARINE_*
+  # credentials currents-importer-scheduled already needs; BAA is NOAA
+  # Coral Reef Watch (fetch_baa.py), a plain public HTTPS fetch like
+  # aurora-importer-scheduled, no extra credentials.
+  sst-importer-scheduled:
+    build:
+      context: ./wind-importer
+      dockerfile: Dockerfile
+    image: mhews-wind-importer:latest
+    container_name: mhews-sst-importer-scheduled
+    restart: unless-stopped
+    command: ["--overlay-type=sea_surface_temperature"]
+    env_file:
+      - ./server/.env
+    networks:
+      - mhews
+
+  ssta-importer-scheduled:
+    build:
+      context: ./wind-importer
+      dockerfile: Dockerfile
+    image: mhews-wind-importer:latest
+    container_name: mhews-ssta-importer-scheduled
+    restart: unless-stopped
+    command: ["--overlay-type=sea_surface_temperature_anomaly"]
+    env_file:
+      - ./server/.env
+    networks:
+      - mhews
+
+  baa-importer-scheduled:
+    build:
+      context: ./wind-importer
+      dockerfile: Dockerfile
+    image: mhews-wind-importer:latest
+    container_name: mhews-baa-importer-scheduled
+    restart: unless-stopped
+    command: ["--overlay-type=coral_bleaching_alert"]
+    env_file:
+      - ./server/.env
+    networks:
+      - mhews
+
+  # Air mode's remaining Overlay entries (spec 054 follow-up, 2026-08-06) —
+  # MI is derived client-side from GFS Temp+RH+wind (no new external
+  # source); UVI is NCEP's own UV Index forecast (fetch_uvi.py), a plain
+  # public HTTPS fetch like aurora/BAA above.
+  misery-index-importer-scheduled:
+    build:
+      context: ./wind-importer
+      dockerfile: Dockerfile
+    image: mhews-wind-importer:latest
+    container_name: mhews-misery-index-importer-scheduled
+    restart: unless-stopped
+    command: ["--overlay-type=misery_index"]
+    env_file:
+      - ./server/.env
+    networks:
+      - mhews
+
+  uvi-importer-scheduled:
+    build:
+      context: ./wind-importer
+      dockerfile: Dockerfile
+    image: mhews-wind-importer:latest
+    container_name: mhews-uvi-importer-scheduled
+    restart: unless-stopped
+    command: ["--overlay-type=uv_index"]
+    env_file:
+      - ./server/.env
+    networks:
+      - mhews
+
+  # Chem mode's CO2sc (spec 054 follow-up, 2026-08-06 — reopened; see
+  # fetch_overlay_cams.py's own fetch_latest_co2_netcdf comment) — CAMS's
+  # separate greenhouse-gas-forecasts product, same image/pattern as
+  # co-importer-scheduled above.
+  co2-importer-scheduled:
+    build:
+      context: ./wind-importer
+      dockerfile: Dockerfile
+    image: mhews-wind-importer:latest
+    container_name: mhews-co2-importer-scheduled
+    restart: unless-stopped
+    command: ["--overlay-type=co2_surface"]
+    env_file:
+      - ./server/.env
+    networks:
+      - mhews
+
+  # ── Forecast: 15-day short-range importer, always-on / 6-hourly-scheduled ───
+  # spec 055 US1 — GFS forecast steps f024...f360 (fetch_gfs.py's
+  # fetch_forecast_field_grib2), same image/pattern as wind-importer-scheduled
+  # above, just a different CLI mode (--forecast-horizon, not --layer-type/
+  # --overlay-type). Same 6-hourly cadence as wind-importer-scheduled since
+  # both key off GFS's own 00/06/12/18 UTC cycle. Set FORECAST_15D_ENABLED=false
+  # in server/.env to disable per-deployment (spec 055 FR-009/FR-010) — the
+  # container exits immediately without writing any row when disabled.
+  #   docker compose run --rm wind-importer --forecast-horizon=15d --once
+  forecast-15d-importer-scheduled:
+    build:
+      context: ./wind-importer
+      dockerfile: Dockerfile
+    image: mhews-wind-importer:latest
+    container_name: mhews-forecast-15d-importer-scheduled
+    restart: unless-stopped
+    command: ["--forecast-horizon=15d"]
+    env_file:
+      - ./server/.env
+    networks:
+      - mhews
+
+  # ── Forecast: 1-month / 3-month medium/long-range importers ─────────────────
+  # spec 055 US2/US3 (NOAA CFSv2 monthly-mean, fetch_cfsv2.py) — classifies
+  # each served region (from country_boundaries, forecast_outlook.py) into
+  # a below/near/above-normal outlook. CFSv2 publishes new initializations
+  # on the same 00/06/12/18 UTC cadence as GFS, but a monthly-mean product
+  # changes far more slowly than that — re-running every 6h just re-fetches
+  # a materially unchanged outlook, harmless but wasteful; kept at 6h anyway
+  # for consistency with every other *-importer-scheduled service's cadence
+  # rather than inventing a slower, one-off schedule for just these two.
+  # Set FORECAST_1MO_ENABLED/FORECAST_3MO_ENABLED=false in server/.env to
+  # disable per-deployment (spec 055 FR-009/FR-010).
+  #   docker compose run --rm wind-importer --forecast-horizon=1mo --once
+  #   docker compose run --rm wind-importer --forecast-horizon=3mo --once
+  forecast-1mo-importer-scheduled:
+    build:
+      context: ./wind-importer
+      dockerfile: Dockerfile
+    image: mhews-wind-importer:latest
+    container_name: mhews-forecast-1mo-importer-scheduled
+    restart: unless-stopped
+    command: ["--forecast-horizon=1mo"]
+    env_file:
+      - ./server/.env
+    networks:
+      - mhews
+
+  forecast-3mo-importer-scheduled:
+    build:
+      context: ./wind-importer
+      dockerfile: Dockerfile
+    image: mhews-wind-importer:latest
+    container_name: mhews-forecast-3mo-importer-scheduled
+    restart: unless-stopped
+    command: ["--forecast-horizon=3mo"]
+    env_file:
+      - ./server/.env
+    networks:
+      - mhews
+
   # ── GDO Soil Moisture + fAPAR Anomaly importer (manual, run-to-completion) ──
   # WCS GeoTIFF (no Python/NetCDF needed, see gdoAnomalyFetch.ts) ->
   # exposure_datasets, for both GDO anomaly sources in one run.

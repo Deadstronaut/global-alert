@@ -52,7 +52,13 @@ import { defaultBufferRadiusKm } from '@/lib/hazardBuffer.js'
 import { buildFeaturePopupHtml } from '@/utils/exposureFeaturePopup.js'
 import { disasterSourceBadges } from '@/utils/disasterSourceBadges.js'
 import { fetchLatestFlowSnapshot, fetchLatestOverlaySnapshot, buildWindSpeedOverlayDataUrl } from '@/utils/windLayerData.js'
+import { fetchForecastDayList, fetchForecastSnapshot } from '@/utils/forecastLayerData.js'
 import { SimpleWindLayer } from '@/vendor/simple-wind-layer.js'
+// Isolated per-layer-type engines (2026-08-06 split — see each file's own
+// header) — wind's own file/behavior stays untouched; currents and waves
+// are now free to be tuned independently without risking wind again.
+import { SimpleCurrentLayer } from '@/vendor/simple-current-layer.js'
+import { SimpleWaveLayer } from '@/vendor/simple-wave-layer.js'
 import { POPUP_CLOSE_BTN_HTML } from '@/utils/popupCloseButton.js'
 import { friendlyDatasetLabel } from '@/utils/exposureLayerLabel.js'
 import { formatPopulationLabel } from '@/utils/formatPopulationLabel.js'
@@ -2356,6 +2362,17 @@ function initMap() {
     attributionControl: false,
     doubleClickZoom: false, // Disable default so we can handle it for zoom-to-fit
     preserveDrawingBuffer: true, // PNG download için gerekli
+    // Overlay/speed-color `image` sources (Overlay: Temp/PM2.5/SST/...,
+    // buildWindSpeedOverlayDataUrl's heatmaps) only ever place ONE copy of
+    // themselves at their real coordinates — MapLibre does not
+    // automatically repeat a plain image source across the repeated base-
+    // map tiles renderWorldCopies draws at low zoom. Left on, that read as
+    // the overlay "stuck in the middle" while the base map (and hex/vector
+    // layers, which DO tile correctly) repeated on both sides (live-
+    // testing screenshot, 2026-08-06). Disabling world-copy repeating
+    // entirely removes the mismatch — one map, not three side by side —
+    // rather than trying to manually clone every image source per copy.
+    renderWorldCopies: false,
   })
 
   // See mapResizeObserver's own declaration for why this exists. ResizeObserver
@@ -2875,17 +2892,25 @@ async function setFlowLayerEnabled(layerType, enabled, level = 'sfc') {
     return
   }
 
-  const layer = new SimpleWindLayer(layerId, {
+  // Each layer_type now has its own isolated engine class (2026-08-06 split
+  // — simple-wind-layer.js/simple-current-layer.js/simple-wave-layer.js are
+  // separate files with zero shared code, so a fix or tuning pass on one
+  // can never change another's behavior again) and its own settings slot
+  // (uiStore.flowSettings[layerType]) instead of one shared set of sliders.
+  const LAYER_CLASSES = { wind: SimpleWindLayer, ocean_current: SimpleCurrentLayer, wave: SimpleWaveLayer }
+  const LayerClass = LAYER_CLASSES[layerType]
+  const settings = uiStore.flowSettings[layerType]
+  const layer = new LayerClass(layerId, {
     textureUrl: snapshot.textureUrl,
     bounds: snapshot.bounds,
     dataRange: snapshot.dataRange,
-    // Live-tuned via FlowControlPanel.vue's gear-icon sliders (uiStore),
-    // 2026-08-05 — at real-world scale, movement was sub-pixel per frame
-    // and looked like static twinkling rather than flow; these defaults
-    // produce the actual nullschool-style flowing-streamline look.
-    speedMultiplier: uiStore.flowSpeedMultiplier,
-    trailLength: uiStore.flowTrailLength,
-    trailThickness: uiStore.flowTrailThickness,
+    // Live-tuned via FlowControlPanel.vue's gear-icon sliders (uiStore) —
+    // read from this layer_type's own settings slot only.
+    particleCount: settings.particleCount,
+    speedMultiplier: settings.speedMultiplier,
+    trailLength: settings.trailLength,
+    trailThickness: settings.trailThickness,
+    opacity: settings.opacity,
   })
   flowLayerInstances[layerType] = layer
   map.addLayer(layer)
@@ -2917,27 +2942,33 @@ watch(
   },
 )
 
-// Gear-icon live tuning (FlowControlPanel.vue) — applied to every currently
-// active particle layer immediately, same as FlowControlPanel's predecessor
-// (FlowVisualizationView.vue's own settings sliders) did on its own map.
-watch(
-  () => uiStore.flowSpeedMultiplier,
-  (value) => {
-    for (const layer of Object.values(flowLayerInstances)) layer?.setSpeedMultiplier(value)
-  },
-)
-watch(
-  () => uiStore.flowTrailLength,
-  (value) => {
-    for (const layer of Object.values(flowLayerInstances)) layer?.setTrailLength(value)
-  },
-)
-watch(
-  () => uiStore.flowTrailThickness,
-  (value) => {
-    for (const layer of Object.values(flowLayerInstances)) layer?.setTrailThickness(value)
-  },
-)
+// Gear-icon live tuning (FlowControlPanel.vue) — each layer_type only ever
+// applies to its OWN instance now (uiStore.flowSettings[layerType], 2026-08-06
+// split), never broadcast to whichever other layers happen to be live —
+// that broadcast was exactly how an ocean_current-only tuning pass used to
+// leak into wind's own already-approved behavior.
+for (const layerType of ['wind', 'ocean_current', 'wave']) {
+  watch(
+    () => uiStore.flowSettings[layerType].particleCount,
+    (value) => flowLayerInstances[layerType]?.setParticleCount?.(value),
+  )
+  watch(
+    () => uiStore.flowSettings[layerType].speedMultiplier,
+    (value) => flowLayerInstances[layerType]?.setSpeedMultiplier(value),
+  )
+  watch(
+    () => uiStore.flowSettings[layerType].trailLength,
+    (value) => flowLayerInstances[layerType]?.setTrailLength(value),
+  )
+  watch(
+    () => uiStore.flowSettings[layerType].trailThickness,
+    (value) => flowLayerInstances[layerType]?.setTrailThickness(value),
+  )
+  watch(
+    () => uiStore.flowSettings[layerType].opacity,
+    (value) => flowLayerInstances[layerType]?.setOpacity?.(value),
+  )
+}
 
 // Every Overlay raster layer below needs to sit ABOVE the base map tiles
 // but BELOW this app's own interactive layers (hex severity fill, region
@@ -2982,10 +3013,28 @@ async function setSpeedOverlayLayerEnabled(layerType, enabled) {
     console.warn(`[MapView] No ${layerType} flow snapshot available yet for speed overlay`)
     return
   }
-  const dataUrl = await buildWindSpeedOverlayDataUrl(snapshot)
+  // ocean_current/wave's real-world speed range is nowhere near wind's own
+  // 40 m/s ceiling — see buildWindSpeedOverlayDataUrl's own param doc for
+  // why passing the wrong one reads as "no heatmap" (near-uniform dim blue).
+  const SPEED_OVERLAY_CEILING = { wind: 40, ocean_current: 2, wave: 12 }
+  const dataUrl = await buildWindSpeedOverlayDataUrl(snapshot, SPEED_OVERLAY_CEILING[layerType])
   map.addSource(sourceId, { type: 'image', url: dataUrl, coordinates: snapshot.coordinates })
-  map.addLayer({ id: layerId, type: 'raster', source: sourceId, paint: { 'raster-opacity': 0.55 } }, overlayBeforeId())
+  // Live-tunable via the gear-row opacity slider (FlowControlPanel.vue,
+  // 2026-08-06 ask: real heatmap colors were "good but hard to read the map
+  // underneath" at a fixed strength) — see the paint-property watcher below.
+  map.addLayer({ id: layerId, type: 'raster', source: sourceId, paint: { 'raster-opacity': uiStore.flowSettings[layerType].opacity } }, overlayBeforeId())
 }
+
+watch(
+  () => ({ wind: uiStore.flowSettings.wind.opacity, ocean_current: uiStore.flowSettings.ocean_current.opacity, wave: uiStore.flowSettings.wave.opacity }),
+  (opacities) => {
+    if (!map) return
+    for (const [layerType, layerId] of Object.entries(speedOverlayLayerIds)) {
+      if (map.getLayer(layerId)) map.setPaintProperty(layerId, 'raster-opacity', opacities[layerType])
+    }
+  },
+  { deep: true },
+)
 
 // Overlay layers (spec 054 US2) — a plain MapLibre `image` source + `raster`
 // layer, NOT SimpleWindLayer: the Overlay is a pre-colored scalar raster
@@ -3013,6 +3062,12 @@ const overlayLayerIds = {
   dew_point: 'overlay-dew-point',
   wind_power_density: 'overlay-wind-power-density',
   significant_wave_height: 'overlay-significant-wave-height',
+  sea_surface_temperature: 'overlay-sea-surface-temperature',
+  coral_bleaching_alert: 'overlay-coral-bleaching-alert',
+  sea_surface_temperature_anomaly: 'overlay-sea-surface-temperature-anomaly',
+  misery_index: 'overlay-misery-index',
+  uv_index: 'overlay-uv-index',
+  co2_surface: 'overlay-co2-surface',
 }
 
 // Height selector (spec 054 follow-up, 2026-08-06) — only Temp/RH have
@@ -3071,6 +3126,8 @@ const OVERLAY_KIND = {
   pm1: 'overlay', pm10: 'overlay', dust_aod: 'overlay', organic_matter_aod: 'overlay', sulfate_aod: 'overlay',
   co_surface: 'overlay', so2_surface: 'overlay', no2_surface: 'overlay', aurora: 'overlay',
   dew_point: 'overlay', wind_power_density: 'overlay', significant_wave_height: 'overlay',
+  sea_surface_temperature: 'overlay', coral_bleaching_alert: 'overlay', sea_surface_temperature_anomaly: 'overlay',
+  misery_index: 'overlay', uv_index: 'overlay', co2_surface: 'overlay',
 }
 function applyOverlayKey(key, enabled) {
   const kind = OVERLAY_KIND[key]
@@ -3098,6 +3155,67 @@ watch(
     if (!key || !LEVEL_AWARE_OVERLAY_KEYS.has(key)) return
     setOverlayLayerEnabled(key, false, heightLabelToLevel(oldHeight))
     setOverlayLayerEnabled(key, true, heightLabelToLevel(newHeight))
+  },
+)
+
+// Forecast overlay (spec 056) — a single fixed layer/source id (research.md
+// §2: only one forecast (variable, day) is ever shown at once, unlike
+// Overlay's per-variable overlayLayerIds table, so no lookup table is
+// needed here). Plain raster image source, same mechanism as
+// setOverlayLayerEnabled — forecast_snapshots textures are the identical
+// pre-colored-PNG-with-bounds shape overlay_snapshots already has (spec
+// 055 data-model.md), so no new rendering code path is warranted.
+const FORECAST_LAYER_ID = 'forecast-overlay'
+const FORECAST_SOURCE_ID = `${FORECAST_LAYER_ID}-source`
+// Incrementing request token (research.md §5) — a rapid slider drag can
+// fire several selections before any one fetch resolves; without this, an
+// earlier request resolving AFTER a later one could leave a stale day
+// rendered (spec.md Edge Cases). Every await checks this hasn't advanced
+// past its own token before touching the map.
+let forecastRequestToken = 0
+
+async function setForecastLayerEnabled(variable, dayIndex) {
+  if (!map || !mapLoaded) return
+  const requestToken = ++forecastRequestToken
+
+  // Always tear down first — FR-006 ("no stale/duplicate overlay may
+  // remain visible") applies on every variable/day change, not just on/off
+  // transitions, unlike setOverlayLayerEnabled's own enabled/disabled gate.
+  if (map.getLayer(FORECAST_LAYER_ID)) map.removeLayer(FORECAST_LAYER_ID)
+  if (map.getSource(FORECAST_SOURCE_ID)) map.removeSource(FORECAST_SOURCE_ID)
+
+  if (!variable) return // forecast selection turned off — nothing more to do
+
+  const dayList = await fetchForecastDayList(variable)
+  if (requestToken !== forecastRequestToken) return // a newer selection has since started
+
+  const entry = dayList[dayIndex]
+  if (!entry) {
+    console.warn(`[MapView] No forecast day at index ${dayIndex} for ${variable}`)
+    return
+  }
+
+  const snapshot = await fetchForecastSnapshot(variable, entry.forecastStepHours)
+  if (requestToken !== forecastRequestToken) return // race guard again, second await
+  if (!snapshot) {
+    // FR-005: explicit no-data state is FlowControlPanel.vue's own concern
+    // (forecastSnapshotStatus === 'unavailable') — here it's simply "add no
+    // layer", never a blank/erroring tile.
+    console.warn(`[MapView] No forecast_snapshots row for ${variable}@f${entry.forecastStepHours}`)
+    return
+  }
+  // Selection may have changed again between this await resolving and now
+  // (belt-and-suspenders alongside the token checks above).
+  if (uiStore.selectedForecastVariable !== variable || uiStore.selectedForecastDayIndex !== dayIndex) return
+
+  map.addSource(FORECAST_SOURCE_ID, { type: 'image', url: snapshot.textureUrl, coordinates: snapshot.coordinates })
+  map.addLayer({ id: FORECAST_LAYER_ID, type: 'raster', source: FORECAST_SOURCE_ID, paint: { 'raster-opacity': 0.65 } }, overlayBeforeId())
+}
+
+watch(
+  () => [uiStore.selectedForecastVariable, uiStore.selectedForecastDayIndex],
+  ([variable, dayIndex]) => {
+    setForecastLayerEnabled(variable, dayIndex)
   },
 )
 

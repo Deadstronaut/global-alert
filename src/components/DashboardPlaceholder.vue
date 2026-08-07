@@ -14,6 +14,7 @@ import EarthquakeDepthChart from '@/components/dashboard/charts/EarthquakeDepthC
 import EarthquakeSourceChart from '@/components/dashboard/charts/EarthquakeSourceChart.vue'
 import EarthquakeMagnitudeTrendChart from '@/components/dashboard/charts/EarthquakeMagnitudeTrendChart.vue'
 import EarthquakeTrendChart from '@/components/dashboard/charts/EarthquakeTrendChart.vue'
+import ForecastPanel from '@/components/dashboard/ForecastPanel.vue'
 import UsersPanel from '@/components/admin/UsersPanel.vue'
 import OrgsPanel from '@/components/admin/OrgsPanel.vue'
 import DrillPanel from '@/components/admin/DrillPanel.vue'
@@ -194,6 +195,7 @@ watch(() => uiStore.dashboardPanelOpen, (open) => {
             </header>
             <div v-if="!activeAdminTab" class="flex flex-1 flex-col gap-4 overflow-auto p-4">
               <h3 class="text-sm font-semibold text-muted-foreground">{{ t('dashboard.overviewTitle') }}</h3>
+              <ForecastPanel />
               <div class="grid auto-rows-min gap-4 md:grid-cols-3">
                 <EarthquakeHourlyChart />
                 <EarthquakeSeverityChart />

@@ -16,7 +16,9 @@
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useUIStore } from '@/stores/ui.js'
+import { Slider } from '@/components/ui/slider'
 import { fetchLatestFlowSnapshot, fetchLatestOverlaySnapshot } from '@/utils/windLayerData.js'
+import { fetchForecastDayList, fetchForecastSnapshot } from '@/utils/forecastLayerData.js'
 import { isFlowSnapshotStale } from '@/utils/flowSnapshotStaleness.js'
 
 const { t } = useI18n()
@@ -26,12 +28,12 @@ const uiStore = useUIStore()
 // modes have at least one real Animate/Overlay entry; the rest render
 // visible-but-disabled with modeDisabledNote.
 const MODES = [
-  { id: 'air', label: 'Air', functional: true },
-  { id: 'ocean', label: 'Ocean', functional: true },
-  { id: 'chem', label: 'Chem', functional: true },
-  { id: 'particulates', label: 'Particulates', functional: true },
-  { id: 'space', label: 'Space', functional: true },
-  { id: 'bio', label: 'Bio', functional: false },
+  { id: 'air', label: 'Air', functional: true, description: 'Atmosfer / hava katmanları' },
+  { id: 'ocean', label: 'Ocean', functional: true, description: 'Okyanus katmanları' },
+  { id: 'chem', label: 'Chem', functional: true, description: 'Atmosferik kimyasal gazlar' },
+  { id: 'particulates', label: 'Particulates', functional: true, description: 'Havadaki partikül madde ve aerosoller' },
+  { id: 'space', label: 'Space', functional: true, description: 'Uzay hava durumu' },
+  { id: 'bio', label: 'Bio', functional: false, description: 'Biyosfer (henüz aktif değil)' },
 ]
 const MODE_SOURCE = {
   air: 'GFS / NCEP / US National Weather Service',
@@ -82,6 +84,19 @@ watch(
   () => uiStore.flowPanelOpen,
   (isOpen) => {
     if (isOpen && !status.value.wind) refreshStatus('wind')
+    // Value-range legend (2026-08-06 ask) — populates overlayStatus for
+    // whatever Overlay is already active when the panel is (re)opened.
+    // Without this, the legend only ever appeared right after clicking an
+    // Overlay chip in THIS session (toggleOverlayOption's own refresh) —
+    // reopening the panel with an Overlay left active from before showed
+    // nothing, since overlayStatus starts empty every mount ("nerede
+    // duruyor, bulamadım" — live-testing finding).
+    if (isOpen && uiStore.activeOverlayKey && !overlayStatus.value[uiStore.activeOverlayKey]) {
+      const activeOption = Object.values(OVERLAY_OPTIONS)
+        .flat()
+        .find((o) => o.key === uiStore.activeOverlayKey)
+      if (activeOption) refreshOverlayStatus(activeOption.key, activeOption.kind)
+    }
   },
 )
 
@@ -118,42 +133,49 @@ const activeAnimateSources = computed(() => {
 // `key` present + one of the two `kind`s below = working; no `key` =
 // visible-but-disabled placeholder (same honesty pattern as Chem/
 // Particulates/Space/Bio elsewhere in this panel).
+// `description` on every real (keyed) entry — same
+// docs/plans/HAVA_OKYANUS_KATMANLARI_SOZLUGU.md wording as FORECAST_VARIABLES'
+// own descriptions, surfaced as a hover title (2026-08-07 ask, applied to
+// the whole panel for consistency, not just the new Forecast row).
 const OVERLAY_OPTIONS = {
   air: [
-    { key: 'wind', kind: 'speed', label: 'Wind' },
-    { key: 'temperature', kind: 'overlay', label: 'Temp' },
-    { key: 'relative_humidity', kind: 'overlay', label: 'RH' },
-    { key: 'dew_point', kind: 'overlay', label: 'Dew' },
-    { key: 'wet_bulb_temp', kind: 'overlay', label: 'WBT' },
-    { key: 'precip_3hr', kind: 'overlay', label: '3HPA' },
-    { key: 'cape', kind: 'overlay', label: 'CAPE' },
-    { key: 'total_precipitable_water', kind: 'overlay', label: 'TPW' },
-    { key: 'total_cloud_water', kind: 'overlay', label: 'TCW' },
-    { key: 'mean_sea_level_pressure', kind: 'overlay', label: 'MSLP' },
-    { label: 'MI' }, { label: 'UVI' },
-    { key: 'wind_power_density', kind: 'overlay', label: 'WPD' },
+    { key: 'wind', kind: 'speed', label: 'Wind', description: 'Rüzgar hızı ısı haritası (10m)' },
+    { key: 'temperature', kind: 'overlay', label: 'Temp', description: 'Sıcaklık (2m, °C)' },
+    { key: 'relative_humidity', kind: 'overlay', label: 'RH', description: 'Bağıl nem (%)' },
+    { key: 'dew_point', kind: 'overlay', label: 'Dew', description: 'Çiy noktası sıcaklığı (°C)' },
+    { key: 'wet_bulb_temp', kind: 'overlay', label: 'WBT', description: 'Yaş termometre sıcaklığı — nem+sıcaklığın birleşik etkisi (°C)' },
+    { key: 'precip_3hr', kind: 'overlay', label: '3HPA', description: '3 saatlik toplam yağış (mm)' },
+    { key: 'cape', kind: 'overlay', label: 'CAPE', description: 'Konvektif kullanılabilir potansiyel enerji — fırtına potansiyeli (J/kg)' },
+    { key: 'total_precipitable_water', kind: 'overlay', label: 'TPW', description: 'Toplam yağabilir su — atmosferdeki toplam nem sütunu (mm)' },
+    { key: 'total_cloud_water', kind: 'overlay', label: 'TCW', description: 'Toplam bulut suyu (kg/m²)' },
+    { key: 'mean_sea_level_pressure', kind: 'overlay', label: 'MSLP', description: 'Deniz seviyesine indirgenmiş basınç (hPa)' },
+    { key: 'misery_index', kind: 'overlay', label: 'MI', description: 'Sıkıntı indeksi (Misery Index) — hissedilen sıcaklık' },
+    { key: 'uv_index', kind: 'overlay', label: 'UVI', description: 'UV indeksi' },
+    { key: 'wind_power_density', kind: 'overlay', label: 'WPD', description: 'Rüzgar güç yoğunluğu (W/m²)' },
   ],
   ocean: [
-    { key: 'ocean_current', kind: 'speed', label: 'Currents' },
-    { key: 'wave', kind: 'speed', label: 'Waves' },
-    { key: 'significant_wave_height', kind: 'overlay', label: 'HTSGW' },
-    { label: 'SST' }, { label: 'SSTA' }, { label: 'BAA' },
+    { key: 'ocean_current', kind: 'speed', label: 'Currents', description: 'Akıntı hızı ısı haritası' },
+    { key: 'wave', kind: 'speed', label: 'Waves', description: 'Dalga hızı/yüksekliği ısı haritası' },
+    { key: 'significant_wave_height', kind: 'overlay', label: 'HTSGW', description: 'Belirgin dalga yüksekliği (m)' },
+    { key: 'sea_surface_temperature', kind: 'overlay', label: 'SST', description: 'Deniz yüzeyi sıcaklığı (°C)' },
+    { key: 'coral_bleaching_alert', kind: 'overlay', label: 'BAA', description: 'Mercan ağarması uyarı alanı — ısı stresi seviyesi (0-8+)' },
+    { key: 'sea_surface_temperature_anomaly', kind: 'overlay', label: 'SSTA', description: 'Deniz yüzeyi sıcaklık anomalisi — 1991-2020 ortalamasından sapma (°C)' },
   ],
   chem: [
-    { key: 'co_surface', kind: 'overlay', label: 'COsc' },
-    { label: 'CO2sc' }, // no CAMS data source for CO2 — see fetch_overlay_cams.py's own comment
-    { key: 'so2_surface', kind: 'overlay', label: 'SO2sm' },
-    { key: 'no2_surface', kind: 'overlay', label: 'NO2' },
+    { key: 'co_surface', kind: 'overlay', label: 'COsc', description: 'Karbon monoksit, yüzey seviyesi (ppb)' },
+    { key: 'co2_surface', kind: 'overlay', label: 'CO2sc', description: 'Karbondioksit, yüzey seviyesi (ppm)' },
+    { key: 'so2_surface', kind: 'overlay', label: 'SO2sm', description: 'Kükürt dioksit (ppb)' },
+    { key: 'no2_surface', kind: 'overlay', label: 'NO2', description: 'Azot dioksit (ppb)' },
   ],
   particulates: [
-    { key: 'dust_aod', kind: 'overlay', label: 'DUex' },
-    { key: 'pm1', kind: 'overlay', label: 'PM1' },
-    { key: 'air_quality_pm25', kind: 'overlay', label: 'PM2.5' },
-    { key: 'pm10', kind: 'overlay', label: 'PM10' },
-    { key: 'organic_matter_aod', kind: 'overlay', label: 'OMaot' },
-    { key: 'sulfate_aod', kind: 'overlay', label: 'SO4ex' },
+    { key: 'dust_aod', kind: 'overlay', label: 'DUex', description: 'Toz aerosol optik derinliği (550nm)' },
+    { key: 'pm1', kind: 'overlay', label: 'PM1', description: 'İnce partikül madde, çap < 1µm (µg/m³)' },
+    { key: 'air_quality_pm25', kind: 'overlay', label: 'PM2.5', description: 'İnce partikül madde, çap < 2.5µm (µg/m³)' },
+    { key: 'pm10', kind: 'overlay', label: 'PM10', description: 'Kaba partikül madde, çap < 10µm (µg/m³)' },
+    { key: 'organic_matter_aod', kind: 'overlay', label: 'OMaot', description: 'Organik madde aerosol optik derinliği (550nm)' },
+    { key: 'sulfate_aod', kind: 'overlay', label: 'SO4ex', description: 'Sülfat aerosol optik derinliği (550nm)' },
   ],
-  space: [{ key: 'aurora', kind: 'overlay', label: 'Aurora' }],
+  space: [{ key: 'aurora', kind: 'overlay', label: 'Aurora', description: 'Kutup ışığı (aurora) görülme olasılığı' }],
   bio: [{ label: 'BAA' }],
 }
 const BIO_ANNOTATIONS = [{ label: 'Fires' }, { label: 'None' }]
@@ -170,6 +192,33 @@ function overlayActive(option) {
   return !!option.key && uiStore.activeOverlayKey === option.key
 }
 
+// Real min/max legend for the active Overlay field (2026-08-06 ask: "renk
+// değerleri var mı... varsa şiddet kartı gibi göster, yoksa hiç çözüm
+// üretmeye çalışma" — only shown where we actually have real fetched
+// numbers, not fabricated). `overlayStatus[key].valueRange` is the exact
+// value_min/value_max the importer measured in that day's real data
+// (fetchLatestOverlaySnapshot, already fetched for the status row above) —
+// only present for 'overlay'-kind fields (pre-colored overlay_snapshots);
+// 'speed'-kind fields (Wind/Currents/Waves Overlay) have no single stored
+// scalar range, so they're deliberately left out here rather than guessed.
+const OVERLAY_UNITS = {
+  temperature: '°C', relative_humidity: '%', dew_point: '°C', wet_bulb_temp: '°C',
+  precip_3hr: 'mm', cape: 'J/kg', total_precipitable_water: 'mm', total_cloud_water: 'kg/m²',
+  mean_sea_level_pressure: 'hPa', misery_index: '°C', wind_power_density: 'W/m²',
+  significant_wave_height: 'm', sea_surface_temperature: '°C', sea_surface_temperature_anomaly: '°C',
+  co_surface: 'ppb', co2_surface: 'ppm', so2_surface: 'ppb', no2_surface: 'ppb',
+  pm1: 'µg/m³', air_quality_pm25: 'µg/m³', pm10: 'µg/m³',
+}
+const activeOverlayLegend = computed(() => {
+  const key = uiStore.activeOverlayKey
+  if (!key) return null
+  const snapshot = overlayStatus.value[key]
+  if (!snapshot || snapshot === 'unavailable' || !snapshot.valueRange) return null
+  const [min, max] = snapshot.valueRange
+  const unit = OVERLAY_UNITS[key] ?? ''
+  return { min: min.toFixed(1), max: max.toFixed(1), unit }
+})
+
 // Single-select "radio button with toggle-off" — corrected 2026-08-05
 // after an earlier independent-multi-toggle attempt let several Overlay
 // layers stack at once ("hiçbiri kapanmadı hepsi üst üste açılıyor").
@@ -185,16 +234,115 @@ function toggleOverlayOption(option) {
   }
 }
 
+// ── Forecast row (spec 056) — reuses the same short-abbreviation label
+// style OVERLAY_OPTIONS already uses (Temp, RH, CAPE, ...) for the fields
+// that overlap; two new ones (Wind, Precip) for the fields the nowcast
+// Overlay row doesn't expose directly (wind speed there is an Animate
+// entry, not an Overlay one; precipitation there is precip_3hr, a
+// different variable than forecast_snapshots' own 'precipitation'). Flat,
+// not per-Mode like OVERLAY_OPTIONS — forecast is a cross-cutting concept,
+// not tied to Air/Ocean/Chem/etc (research.md's own framing).
+// `description` is the exact same wording as docs/plans/HAVA_OKYANUS_KATMANLARI_SOZLUGU.md's
+// "Forecast" section (single source of truth kept in sync manually — that
+// doc is the hand-off glossary for partners, this is the same text surfaced
+// as an in-app hover tooltip, 2026-08-07 ask: "ortaklarımıza verdiğimizde...
+// anlamlarını anlayabilsinler... üzerine gelince hover efekti ile tooltip
+// olsun"). Plain `title` attribute, not the ui/tooltip component — matches
+// this exact row's own pre-existing disabled-chip tooltip convention just
+// below (OVERLAY_OPTIONS' `:title="... : 'Yakında...'"`), native browser
+// hover, no extra markup/dependency.
+const FORECAST_VARIABLES = [
+  { key: 'wind_speed', label: 'Wind', description: 'Rüzgar hızı öngörüsü (10m, m/s) — statik ısı haritası, animasyonlu değil' },
+  { key: 'precipitation', label: 'Precip', description: '6 saatlik birikimli yağış öngörüsü (mm)' },
+  { key: 'temperature', label: 'Temp', description: 'Sıcaklık öngörüsü (2m, °C)' },
+  { key: 'relative_humidity', label: 'RH', description: 'Bağıl nem öngörüsü (%)' },
+  { key: 'mean_sea_level_pressure', label: 'MSLP', description: 'Deniz seviyesine indirgenmiş basınç öngörüsü (hPa)' },
+  { key: 'cape', label: 'CAPE', description: 'Konvektif kullanılabilir potansiyel enerji öngörüsü — fırtına potansiyeli (J/kg)' },
+  { key: 'total_precipitable_water', label: 'TPW', description: 'Toplam yağabilir su öngörüsü (mm)' },
+  { key: 'total_cloud_water', label: 'TCW', description: 'Toplam bulut suyu öngörüsü (kg/m²)' },
+  { key: 'dew_point', label: 'Dew', description: 'Çiy noktası sıcaklığı öngörüsü (°C)' },
+  { key: 'wet_bulb_temp', label: 'WBT', description: 'Yaş termometre sıcaklığı öngörüsü (°C)' },
+  { key: 'wind_power_density', label: 'WPD', description: 'Rüzgar güç yoğunluğu öngörüsü (W/m²)' },
+  { key: 'misery_index', label: 'MI', description: 'Sıkıntı indeksi (Misery Index) öngörüsü — hissedilen sıcaklık (°C)' },
+  { key: 'significant_wave_height', label: 'HTSGW', description: 'Belirgin dalga yüksekliği öngörüsü (m)' },
+  { key: 'uv_index', label: 'UVI', description: 'UV indeksi öngörüsü — yalnızca ilk 5 gün için veri var (kaynağın sınırı)' },
+]
+
+// forecastDayList: the SELECTED variable's own real available days
+// (data-model.md's ForecastDayListEntry[]) — never a hardcoded 1-15 range,
+// since e.g. uv_index has far fewer (research.md §3). forecastSnapshotStatus
+// mirrors overlayStatus's own separate-fetch-for-the-panel's-own-display
+// pattern above (refreshOverlayStatus) rather than reading MapView.vue's
+// internal state — this panel owns no map, same architecture note at the
+// top of this file.
+const forecastDayList = ref([])
+const forecastSnapshotStatus = ref(null) // null | 'unavailable' | snapshot
+
+async function refreshForecastSnapshotStatus() {
+  const variable = uiStore.selectedForecastVariable
+  const entry = forecastDayList.value[uiStore.selectedForecastDayIndex]
+  if (!variable || !entry) {
+    forecastSnapshotStatus.value = null
+    return
+  }
+  const snapshot = await fetchForecastSnapshot(variable, entry.forecastStepHours)
+  forecastSnapshotStatus.value = snapshot ?? 'unavailable'
+}
+
+async function selectForecastVariable(option) {
+  const nextVariable = uiStore.selectedForecastVariable === option.key ? null : option.key
+  uiStore.setSelectedForecastVariable(nextVariable)
+  if (!nextVariable) {
+    forecastDayList.value = []
+    forecastSnapshotStatus.value = null
+    return
+  }
+  forecastDayList.value = await fetchForecastDayList(nextVariable)
+  await refreshForecastSnapshotStatus()
+}
+
+function selectForecastDay(index) {
+  uiStore.setSelectedForecastDayIndex(index)
+  refreshForecastSnapshotStatus()
+}
+
+const selectedForecastDayEntry = computed(() => forecastDayList.value[uiStore.selectedForecastDayIndex] ?? null)
+const selectedForecastDayNumber = computed(() => {
+  const entry = selectedForecastDayEntry.value
+  return entry ? Math.round(entry.forecastStepHours / 24) : null
+})
+const selectedForecastDayDate = computed(() => {
+  const entry = selectedForecastDayEntry.value
+  return entry ? new Date(entry.validAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : ''
+})
+
 // ── Live tuning (gear icon) ─────────────────────────────────────────────
+// Edits whichever layer_type is currently selected in the Animate row
+// (falls back to 'wind' when nothing's animating yet) — each layer_type has
+// its own independent settings slot (uiStore.flowSettings, 2026-08-06 split:
+// tuning one must never move another's sliders, see FlowControlPanel's own
+// header for why).
 const showSettings = ref(false)
+const tuningLayerKey = computed(() => uiStore.activeAnimateLayer || 'wind')
+const tuningSettings = computed(() => uiStore.flowSettings[tuningLayerKey.value])
+function onParticleCountInput(e) {
+  uiStore.setFlowParticleCount(tuningLayerKey.value, Number(e.target.value))
+}
 function onSpeedInput(e) {
-  uiStore.setFlowSpeedMultiplier(Number(e.target.value))
+  uiStore.setFlowSpeedMultiplier(tuningLayerKey.value, Number(e.target.value))
 }
 function onTrailInput(e) {
-  uiStore.setFlowTrailLength(Number(e.target.value))
+  uiStore.setFlowTrailLength(tuningLayerKey.value, Number(e.target.value))
 }
 function onThicknessInput(e) {
-  uiStore.setFlowTrailThickness(Number(e.target.value))
+  uiStore.setFlowTrailThickness(tuningLayerKey.value, Number(e.target.value))
+}
+// 2026-08-06 ask: "her şey için geçerli olsun" — dims both this layer_type's
+// Animate particles and its own Overlay heatmap together (the heatmap's
+// real colors were "good but hard to read the map underneath" at full
+// strength).
+function onOpacityInput(e) {
+  uiStore.setFlowOpacity(tuningLayerKey.value, Number(e.target.value))
 }
 
 const activeModeInfo = computed(() => MODES.find((m) => m.id === uiStore.selectedMode))
@@ -226,7 +374,7 @@ const activeModeInfo = computed(() => MODES.find((m) => m.id === uiStore.selecte
             type="button"
             class="flow-view-chip flow-view-mode-btn"
             :class="{ 'flow-view-mode-btn--active': uiStore.selectedMode === mode.id, 'flow-view-mode-btn--disabled': !mode.functional }"
-            :title="mode.functional ? '' : t('windLayer.modeDisabledNote')"
+            :title="mode.functional ? mode.description : t('windLayer.modeDisabledNote')"
             @click="selectMode(mode)"
           >{{ mode.label }}</button>
         </div>
@@ -236,12 +384,19 @@ const activeModeInfo = computed(() => MODES.find((m) => m.id === uiStore.selecte
 
         <div v-if="uiStore.selectedMode === 'air'" class="flow-view-bar-row">
           <span class="flow-view-bar-label">Animate</span>
-          <button type="button" class="flow-view-chip flow-view-mode-btn" :class="{ 'flow-view-mode-btn--active': uiStore.windEnabled }" @click="toggleWind">{{ t('windLayer.toggleLabel') }}</button>
+          <button type="button" class="flow-view-chip flow-view-mode-btn" :class="{ 'flow-view-mode-btn--active': uiStore.windEnabled }" title="Rüzgar — 10m yükseklikte hava hareketi (yön + hız)" @click="toggleWind">{{ t('windLayer.toggleLabel') }}</button>
         </div>
         <div v-if="uiStore.selectedMode === 'ocean'" class="flow-view-bar-row">
           <span class="flow-view-bar-label">Animate</span>
-          <button type="button" class="flow-view-chip flow-view-mode-btn" :class="{ 'flow-view-mode-btn--active': uiStore.currentsEnabled }" @click="toggleCurrents">{{ t('windLayer.currentsToggleLabel') }}</button>
-          <button type="button" class="flow-view-chip flow-view-mode-btn" :class="{ 'flow-view-mode-btn--active': uiStore.wavesEnabled }" @click="toggleWaves">{{ t('windLayer.wavesToggleLabel') }}</button>
+          <!-- Reference tool's own Ocean mode Animate row includes Wind
+               alongside Currents/Waves (wind blowing over the ocean surface,
+               live-testing ask 2026-08-06: "okyanustan içinde rüzgar şey de
+               var... bizde o da yok") — same toggleWind/windEnabled Air mode
+               already uses, just also exposed here; wind's own engine file
+               is untouched by this, this is purely a UI exposure change. -->
+          <button type="button" class="flow-view-chip flow-view-mode-btn" :class="{ 'flow-view-mode-btn--active': uiStore.windEnabled }" title="Rüzgar — 10m yükseklikte hava hareketi (yön + hız)" @click="toggleWind">{{ t('windLayer.toggleLabel') }}</button>
+          <button type="button" class="flow-view-chip flow-view-mode-btn" :class="{ 'flow-view-mode-btn--active': uiStore.currentsEnabled }" title="Okyanus akıntıları — deniz yüzeyi su hareketi" @click="toggleCurrents">{{ t('windLayer.currentsToggleLabel') }}</button>
+          <button type="button" class="flow-view-chip flow-view-mode-btn" :class="{ 'flow-view-mode-btn--active': uiStore.wavesEnabled }" title="Dalgalar — anlık dalga yönü/yüksekliği" @click="toggleWaves">{{ t('windLayer.wavesToggleLabel') }}</button>
         </div>
 
         <div v-if="uiStore.selectedMode === 'air'" class="flow-view-bar-row">
@@ -252,6 +407,7 @@ const activeModeInfo = computed(() => MODES.find((m) => m.id === uiStore.selecte
             type="button"
             class="flow-view-chip flow-view-mode-btn"
             :class="{ 'flow-view-mode-btn--active': uiStore.selectedHeight === level }"
+            :title="level === 'Sfc' ? 'Yüzey / yakın-yüzey (2m veya 10m)' : `Basınç seviyesi ${level} hPa — sadece Temp ve RH için geçerli`"
             @click="uiStore.setSelectedHeight(level)"
           >{{ level }}</button>
         </div>
@@ -264,9 +420,63 @@ const activeModeInfo = computed(() => MODES.find((m) => m.id === uiStore.selecte
             type="button"
             class="flow-view-chip"
             :class="option.key ? ['flow-view-mode-btn', { 'flow-view-mode-btn--active': overlayActive(option) }] : 'flow-view-chip--disabled'"
-            :title="option.key ? '' : 'Yakında — veri kaynağı henüz eklenmedi'"
+            :title="option.key ? option.description : 'Yakında — veri kaynağı henüz eklenmedi'"
             @click="toggleOverlayOption(option)"
           >{{ option.label }}</button>
+        </div>
+
+        <!-- Real value range for the active Overlay — only rendered when we
+             actually have fetched numbers for it (activeOverlayLegend's own
+             comment), same "şiddet kartı" (severity card) visual language
+             as the map's own left-side legend: a color bar + numeric ends. -->
+        <div v-if="activeOverlayLegend" class="flow-view-legend flow-view-overlay-legend">
+          <span class="flow-view-bar-label">Değer Aralığı</span>
+          <div class="flow-view-legend-gradient"></div>
+          <div class="flow-view-legend-scale">
+            <span>{{ activeOverlayLegend.min }}{{ activeOverlayLegend.unit }}</span>
+            <span>{{ activeOverlayLegend.max }}{{ activeOverlayLegend.unit }}</span>
+          </div>
+        </div>
+
+        <!-- Forecast row (spec 056) — mode-independent, shown regardless of
+             uiStore.selectedMode (unlike Animate/Height/Overlay above, which
+             are per-Air/Ocean/Chem/etc). Mutually exclusive with the Overlay
+             row above at the store level (uiStore.setSelectedForecastVariable/
+             toggleOverlay, research.md §1) — selecting one clears the other. -->
+        <div class="flow-view-bar-row flow-view-forecast-row">
+          <span class="flow-view-bar-label">{{ t('flowPanel.forecast.rowLabel') }}</span>
+          <button
+            v-for="option in FORECAST_VARIABLES"
+            :key="option.key"
+            type="button"
+            class="flow-view-chip flow-view-mode-btn"
+            :class="{ 'flow-view-mode-btn--active': uiStore.selectedForecastVariable === option.key }"
+            :title="option.description"
+            @click="selectForecastVariable(option)"
+          >{{ option.label }}</button>
+        </div>
+
+        <div v-if="uiStore.selectedForecastVariable" class="flow-view-forecast-day">
+          <template v-if="forecastDayList.length">
+            <div class="flow-view-bar-row">
+              <span class="flow-view-bar-label">{{ t('flowPanel.forecast.dayLabel', { n: selectedForecastDayNumber, date: selectedForecastDayDate }) }}</span>
+            </div>
+            <Slider
+              :min="0"
+              :max="forecastDayList.length - 1"
+              :step="1"
+              :model-value="[uiStore.selectedForecastDayIndex]"
+              @update:model-value="(v) => selectForecastDay(v[0])"
+              class="flow-view-forecast-slider"
+            />
+            <p v-if="forecastSnapshotStatus === 'unavailable'" class="flow-view-forecast-nodata">
+              {{ t('flowPanel.forecast.noData') }}
+            </p>
+            <p v-else-if="forecastSnapshotStatus" class="flow-view-forecast-asof">
+              {{ t('windLayer.asOf', { time: formatIssuedAt(forecastSnapshotStatus.issuedAt) }) }}
+            </p>
+          </template>
+          <p v-else class="flow-view-forecast-nodata">{{ t('flowPanel.forecast.noData') }}</p>
         </div>
 
         <div v-if="uiStore.selectedMode === 'bio'" class="flow-view-bar-row">
@@ -281,19 +491,34 @@ const activeModeInfo = computed(() => MODES.find((m) => m.id === uiStore.selecte
           </div>
         </div>
 
-        <button type="button" class="flow-view-gear" @click="showSettings = !showSettings">⚙️</button>
+        <!-- Opacity: kept next to the gear icon itself, always visible (not
+             behind the ⚙️ toggle like the other sliders) — 2026-08-06 ask:
+             this is the one most worth reaching for quickly, to see the map
+             underneath a strong heatmap without opening the full settings. -->
+        <div class="flow-view-gear-row">
+          <button type="button" class="flow-view-gear" @click="showSettings = !showSettings">⚙️</button>
+          <label class="flow-view-opacity-inline">
+            <span>Şeffaflık</span>
+            <input type="range" min="0.05" max="1" step="0.05" :value="tuningSettings.opacity" @input="onOpacityInput" />
+          </label>
+        </div>
         <div v-if="showSettings" class="flow-view-settings">
+          <p class="flow-view-settings-target">{{ ANIMATE_LABELS[tuningLayerKey] || tuningLayerKey }} ayarları</p>
           <label class="flow-view-settings-label">
-            Hız çarpanı: {{ uiStore.flowSpeedMultiplier.toFixed(1) }}x
-            <input type="range" min="0.5" max="1000" step="0.5" :value="uiStore.flowSpeedMultiplier" @input="onSpeedInput" />
+            Parçacık sayısı: {{ tuningSettings.particleCount }}
+            <input type="range" min="200" max="20000" step="100" :value="tuningSettings.particleCount" @input="onParticleCountInput" />
           </label>
           <label class="flow-view-settings-label">
-            İz uzunluğu: {{ uiStore.flowTrailLength }}
-            <input type="range" min="2" max="2000" step="1" :value="uiStore.flowTrailLength" @input="onTrailInput" />
+            Hız çarpanı: {{ tuningSettings.speedMultiplier.toFixed(1) }}x
+            <input type="range" min="0.5" max="1000" step="0.5" :value="tuningSettings.speedMultiplier" @input="onSpeedInput" />
           </label>
           <label class="flow-view-settings-label">
-            İz kalınlığı: {{ uiStore.flowTrailThickness.toFixed(1) }}px
-            <input type="range" min="0.1" max="5" step="0.1" :value="uiStore.flowTrailThickness" @input="onThicknessInput" />
+            İz uzunluğu: {{ tuningSettings.trailLength }}
+            <input type="range" min="2" max="2000" step="1" :value="tuningSettings.trailLength" @input="onTrailInput" />
+          </label>
+          <label class="flow-view-settings-label">
+            İz kalınlığı: {{ tuningSettings.trailThickness.toFixed(1) }}px
+            <input type="range" min="0.1" max="40" step="0.5" :value="tuningSettings.trailThickness" @input="onThicknessInput" />
           </label>
         </div>
       </div>
@@ -367,6 +592,13 @@ const activeModeInfo = computed(() => MODES.find((m) => m.id === uiStore.selecte
   border-radius: 4px;
   background: linear-gradient(90deg, rgb(64, 140, 242), rgb(242, 89, 38));
 }
+.flow-view-legend-scale {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.65rem;
+  color: #8c97a8;
+  margin-top: 2px;
+}
 
 .flow-view-bar-row {
   display: flex;
@@ -421,6 +653,29 @@ const activeModeInfo = computed(() => MODES.find((m) => m.id === uiStore.selecte
   cursor: not-allowed;
 }
 
+.flow-view-forecast-row {
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  padding-top: 8px;
+  margin-top: 4px;
+}
+.flow-view-forecast-day {
+  margin-bottom: 8px;
+}
+.flow-view-forecast-slider {
+  width: 100%;
+  margin: 4px 0 6px;
+}
+.flow-view-forecast-nodata {
+  font-size: 0.7rem;
+  color: rgba(255, 255, 255, 0.45);
+  margin: 0;
+}
+.flow-view-forecast-asof {
+  font-size: 0.65rem;
+  color: rgba(255, 255, 255, 0.4);
+  margin: 0;
+}
+
 .flow-view-source-block {
   margin-bottom: 8px;
   padding: 8px 0;
@@ -441,10 +696,16 @@ const activeModeInfo = computed(() => MODES.find((m) => m.id === uiStore.selecte
   color: #8c97a8;
 }
 
-.flow-view-gear {
+.flow-view-gear-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
   margin-top: 8px;
+}
+.flow-view-gear {
   width: 28px;
   height: 28px;
+  flex-shrink: 0;
   border-radius: 6px;
   border: 1px solid rgba(255, 255, 255, 0.18);
   background: rgba(255, 255, 255, 0.06);
@@ -454,11 +715,30 @@ const activeModeInfo = computed(() => MODES.find((m) => m.id === uiStore.selecte
 .flow-view-gear:hover {
   background: rgba(255, 255, 255, 0.14);
 }
+.flow-view-opacity-inline {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  font-size: 0.68rem;
+  color: rgba(255, 255, 255, 0.6);
+}
+.flow-view-opacity-inline input[type='range'] {
+  flex: 1;
+}
 
 .flow-view-settings {
   margin-top: 10px;
   padding-top: 10px;
   border-top: 1px solid rgba(255, 255, 255, 0.12);
+}
+.flow-view-settings-target {
+  margin: 0 0 8px;
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: rgba(255, 255, 255, 0.5);
 }
 .flow-view-settings-label {
   display: block;

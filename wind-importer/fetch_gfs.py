@@ -204,6 +204,27 @@ def fetch_latest_wet_bulb_inputs_grib2(timeout_s: int = 60) -> tuple[bytes, dt.d
     )
 
 
+def fetch_latest_misery_index_inputs_grib2(timeout_s: int = 60) -> tuple[bytes, dt.datetime]:
+    """
+    Returns (grib2_bytes, issued_at) — GFS 2m Temp + RH + 10m UGRD/VGRD in
+    one request, Overlay: MI (Misery Index — perceived/"feels like"
+    temperature, combining NWS Heat Index for hot conditions and NWS Wind
+    Chill for cold ones; see overlay_texture.py's grib2_misery_index_to_
+    overlay_texture for the actual formulas). Not a GFS output field
+    itself, same "derive client-side from existing fields, fetch them
+    together so they're guaranteed the same cycle" shape as
+    fetch_latest_wet_bulb_inputs_grib2 above — just three fields instead
+    of two, and 10m (not 2m) for wind to match Animate: Wind's own level.
+    """
+    return _fetch_latest_field(
+        {
+            "var_TMP": "on", "var_RH": "on", "lev_2_m_above_ground": "on",
+            "var_UGRD": "on", "var_VGRD": "on", "lev_10_m_above_ground": "on",
+        },
+        "misery_index inputs", timeout_s,
+    )
+
+
 def fetch_latest_cwat_grib2(timeout_s: int = 60) -> tuple[bytes, dt.datetime]:
     """Returns (grib2_bytes, issued_at) — GFS total column cloud water (CWAT, kg/m^2), Overlay: TCW."""
     return _fetch_latest_field(
@@ -223,4 +244,67 @@ def fetch_latest_precip_3hr_grib2(timeout_s: int = 60) -> tuple[bytes, dt.dateti
     """
     return _fetch_latest_field(
         {"var_APCP": "on", "lev_surface": "on"}, "precip_3hr", timeout_s, forecast_hour="f003",
+    )
+
+
+# Short-range (15-day) forecast horizon — spec 055 US1. One point roughly
+# per day out to 15 days, thinning GFS's native 3-hourly output rather than
+# storing every step (research.md §1): the panel shows a day-by-day view,
+# not an hour-by-hour one, so intermediate steps would just be unused rows.
+FORECAST_STEP_HOURS = (24, 72, 120, 168, 216, 264, 312, 360)
+
+# var_*/lev_* filter params per forecast variable — same shape as
+# fetch_latest_wind_grib2/fetch_latest_temperature_grib2/
+# fetch_latest_precip_3hr_grib2 above, just parameterized by forecast_step_hours
+# instead of always using FORECAST_HOUR ('f000') or a single fixed step
+# ('f003' for precip_3hr).
+_FORECAST_FIELD_PARAMS = {
+    "wind_speed": {"var_UGRD": "on", "var_VGRD": "on", "lev_10_m_above_ground": "on"},
+    "temperature": {"var_TMP": "on", "lev_2_m_above_ground": "on"},
+    # Same APCP field as fetch_latest_precip_3hr_grib2 — at forecast steps
+    # beyond f240, GFS's 0.25 deg output switches from 3-hourly to 6-hourly
+    # APCP accumulation windows; this is surfaced to the panel as "roughly
+    # the preceding accumulation window", not treated as a precise 3h value
+    # for every step (a documented simplification, not a bug).
+    "precipitation": {"var_APCP": "on", "lev_surface": "on"},
+    # Full overlay-variable expansion (spec 055 follow-up, 2026-08-06 —
+    # user requested all GFS-native GFS_OVERLAY_FIELDS entries, not just
+    # the original 3). Each entry's var_*/lev_* params are copy-identical
+    # to the matching fetch_latest_*_grib2 function above/in this file —
+    # same field, just requested at an arbitrary forecast_step_hours
+    # instead of FORECAST_HOUR ('f000'). Multi-field entries (wet_bulb_temp,
+    # misery_index) fetch every input field in one request, same rationale
+    # as fetch_latest_wet_bulb_inputs_grib2/fetch_latest_misery_index_
+    # inputs_grib2's own docstrings (guarantees they're the same cycle).
+    "relative_humidity": {"var_RH": "on", "lev_2_m_above_ground": "on"},
+    "mean_sea_level_pressure": {"var_PRMSL": "on", "lev_mean_sea_level": "on"},
+    "cape": {"var_CAPE": "on", "lev_surface": "on"},
+    "total_precipitable_water": {"var_PWAT": "on", "lev_entire_atmosphere_(considered_as_a_single_layer)": "on"},
+    "total_cloud_water": {"var_CWAT": "on", "lev_entire_atmosphere_(considered_as_a_single_layer)": "on"},
+    "dew_point": {"var_DPT": "on", "lev_2_m_above_ground": "on"},
+    "wet_bulb_temp": {"var_TMP": "on", "var_RH": "on", "lev_2_m_above_ground": "on"},
+    "wind_power_density": {"var_UGRD": "on", "var_VGRD": "on", "lev_10_m_above_ground": "on"},
+    "misery_index": {
+        "var_TMP": "on", "var_RH": "on", "lev_2_m_above_ground": "on",
+        "var_UGRD": "on", "var_VGRD": "on", "lev_10_m_above_ground": "on",
+    },
+}
+
+
+def fetch_forecast_field_grib2(variable: str, forecast_step_hours: int, timeout_s: int = 60) -> tuple[bytes, dt.datetime]:
+    """
+    Returns (grib2_bytes, issued_at) for one 15-day-horizon forecast step of
+    `variable` (one of _FORECAST_FIELD_PARAMS' keys). `issued_at` here is
+    the GFS *cycle* issuance time (matches every other fetch_latest_*
+    function's meaning), NOT the time this forecast step is valid for —
+    callers compute valid_at as issued_at + forecast_step_hours
+    (data-model.md's ForecastSnapshot.valid_at).
+    """
+    if variable not in _FORECAST_FIELD_PARAMS:
+        expected = ", ".join(repr(k) for k in _FORECAST_FIELD_PARAMS)
+        raise ValueError(f"Unknown forecast variable {variable!r} (expected one of: {expected})")
+    forecast_hour = f"f{forecast_step_hours:03d}"
+    return _fetch_latest_field(
+        _FORECAST_FIELD_PARAMS[variable], f"forecast/{variable}@{forecast_hour}", timeout_s,
+        forecast_hour=forecast_hour,
     )

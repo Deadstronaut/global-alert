@@ -77,13 +77,32 @@ function warpEquirectImageDataToWebMercator(src, sourceSouth, sourceNorth) {
   return out
 }
 
+/**
+ * north/south are ALWAYS placed at exactly ±WEB_MERCATOR_MAX_LAT — not
+ * "clamped only if the real bounds exceed it" — because the warped image
+ * CONTENT this is paired with (warpEquirectImageDataToWebMercator above,
+ * and overlay_texture.py's server-side twin for pre-colored Overlay
+ * textures) always outputs rows spanning exactly that range by
+ * construction, regardless of the source data's own real coverage
+ * (padding/clamping edge rows when the source doesn't reach that far —
+ * see that function's own comments). A dataset whose real bounds are
+ * narrower than ±85.05 on one side only — e.g. ocean_current's CMEMS
+ * request, -80..90 lat, not wind's near-symmetric ~-90.125..90.125 — used
+ * to keep its own (unclamped, since -80 is "within range") south value
+ * here while the warped image content still assumed -85.05, stretching
+ * the image's placement corners out of sync with its own pixel content
+ * (live-testing finding, 2026-08-06: "harita tam oturmuyor... daha
+ * aşağıda durması gerekiyor" — the same class of bug wind itself had
+ * before its own fix, this time triggered by ocean_current's asymmetric
+ * bounds specifically). wind's bounds happened to exceed ±85.05 on BOTH
+ * sides, so this bug was invisible there by coincidence.
+ */
 export function boundsToImageCoordinates([west, south, east, north]) {
-  const clampLat = (lat) => Math.max(-WEB_MERCATOR_MAX_LAT, Math.min(WEB_MERCATOR_MAX_LAT, lat))
   const clampLng = (lng) => Math.max(-180, Math.min(180, lng))
   const w = clampLng(west)
   const e = clampLng(east)
-  const n = clampLat(north)
-  const s = clampLat(south)
+  const n = WEB_MERCATOR_MAX_LAT
+  const s = -WEB_MERCATOR_MAX_LAT
   return [
     [w, n],
     [e, n],
@@ -203,10 +222,20 @@ function speedToColor(t) {
  * animated flow lines) — reuses the already-fetched flow_snapshots wind
  * texture and decodes it client-side, no new backend importer needed.
  * @param {{ textureUrl: string, dataRange: [[number,number],[number,number]] }} flowSnapshot
+ * @param {number} [speedCeiling] Normalization ceiling for the color ramp
+ *   below — defaults to wind's own 40 m/s. Callers rendering ocean_current
+ *   or wave must pass their own real-world ceiling (2026-08-06 live-testing
+ *   finding: reusing 40 for ocean currents, whose real speeds rarely exceed
+ *   ~1-2 m/s, normalized nearly every pixel to ~0 — the same dim blue
+ *   everywhere, no visible heatmap gradient). Kept as a plain optional
+ *   param (not a layerType lookup table) so this file has no knowledge of
+ *   which layer_types exist — that's simple-current-layer.js/
+ *   simple-wave-layer.js's own concern now that each layer is its own
+ *   isolated engine.
  * @returns {Promise<string>} a PNG data URL, same shape overlay_snapshots'
  *   pre-colored textures have, so it can be used as a plain image source.
  */
-export async function buildWindSpeedOverlayDataUrl(flowSnapshot) {
+export async function buildWindSpeedOverlayDataUrl(flowSnapshot, speedCeiling = 40) {
   const image = new Image()
   image.crossOrigin = 'anonymous'
   await new Promise((resolve, reject) => {
@@ -233,7 +262,7 @@ export async function buildWindSpeedOverlayDataUrl(flowSnapshot) {
     const u = uMin + (src.data[i] / 255) * (uMax - uMin)
     const v = vMin + (src.data[i + 1] / 255) * (vMax - vMin)
     const speed = Math.sqrt(u * u + v * v)
-    const [r, g, bb] = speedToColor(speed / 40) // same 40 m/s ceiling as SimpleWindLayer's own particle color
+    const [r, g, bb] = speedToColor(speed / speedCeiling)
     out.data[i] = r
     out.data[i + 1] = g
     out.data[i + 2] = bb

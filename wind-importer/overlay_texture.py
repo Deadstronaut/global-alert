@@ -17,7 +17,7 @@ import numpy as np
 from osgeo import gdal
 from PIL import Image
 
-from flow_texture_common import resample_band_to_grid
+from flow_texture_common import TEXTURE_HEIGHT, TEXTURE_WIDTH, resample_band_to_grid
 from grib_to_texture import _band_by_grib_element
 
 gdal.UseExceptions()
@@ -273,6 +273,44 @@ def colorize_quantile(values: np.ndarray, ramp: list[tuple[int, int, int]]) -> n
     return rgba
 
 
+def _unwrap_0_360_lon(values: np.ndarray, west: float, east: float) -> tuple[np.ndarray, float, float]:
+    """
+    CAMS's own NetCDF exports (via cdsapi's netcdf_zip format) use a 0..360
+    longitude grid, NOT -180..180 like every other source in this pipeline
+    (CMEMS, GFS, WAVEWATCH III, NOAA CRW) — confirmed 2026-08-06 (a known,
+    documented CDS/ADS behavior, not guessed). Left unhandled, `west`/`east`
+    stay 0/360, which the frontend's boundsToImageCoordinates() clamps to
+    0/180 (its own longitude clamp is ±180) — squeezing the whole-globe
+    image into just the map's eastern half at the wrong scale, with the
+    western hemisphere missing entirely (live-testing finding: "kimyasalların
+    harita resmi olarak oturmuyor").
+
+    Only unwraps when the source actually looks like 0..360 (west roughly
+    >= 0, east > 180) — every other converter in this module already uses
+    -180..180 sources, so this is a no-op for them if ever reused. The
+    tolerance on `west` is deliberately wide (-10, not -1e-3): live-verified
+    2026-08-06 that a real downloaded CAMS grid's west edge was -0.2, not
+    exactly 0 — a half-pixel-edge artifact of the same kind already
+    documented elsewhere in this codebase (e.g. wind-importer's north=
+    90.125). The original tight -1e-3 tolerance missed that by a wide
+    margin and silently no-op'd on every CAMS overlay — the exact bug this
+    whole function exists to fix, still showing up unfixed in the live
+    "kimyasalların harita resmi olarak oturmuyor" report. A -180..180
+    source's west is never anywhere close to -10 (that range only makes
+    sense for the 0..360 case's own small negative edge slop), so this
+    stays safe for both conventions.
+    Rolling by exactly half the array's width converts 0..360 ordering to
+    -180..180 ordering directly (self-inverse for an even width — see the
+    call site's own reasoning), which is why this needs no separate GDAL
+    reprojection step.
+    """
+    if west >= -10.0 and east > 180.0 + 1e-3:
+        width = values.shape[1]
+        values = np.roll(values, width // 2, axis=1)
+        return values, -180.0, 180.0
+    return values, west, east
+
+
 def netcdf_pm_mass_to_overlay_texture(netcdf_bytes: bytes, subdataset_var: str) -> OverlayTexture:
     """
     Shared PM1/PM2.5/PM10 mass-concentration converter (spec 054 US2 +
@@ -298,15 +336,16 @@ def netcdf_pm_mass_to_overlay_texture(netcdf_bytes: bytes, subdataset_var: str) 
         band = dataset.GetRasterBand(1)
         values = resample_band_to_grid(band, dataset) * 1e9  # kg/m^3 -> ug/m^3
 
-        value_min = float(np.nanmin(values))
-        value_max = float(np.nanmax(values))
-        rgba = colorize_quantile(values, PM25_RAMP)
-
         gt = dataset.GetGeoTransform()
         width, height = dataset.RasterXSize, dataset.RasterYSize
         west, north = gt[0], gt[3]
         east = west + width * gt[1]
         south = north + height * gt[5]
+        values, west, east = _unwrap_0_360_lon(values, west, east)
+
+        value_min = float(np.nanmin(values))
+        value_max = float(np.nanmax(values))
+        rgba = colorize_quantile(values, PM25_RAMP)
         rgba = warp_equirect_rgba_to_web_mercator(rgba, south, north)
 
         buffer = io.BytesIO()
@@ -380,15 +419,16 @@ def netcdf_aod_to_overlay_texture(
         band = dataset.GetRasterBand(1)
         values = resample_band_to_grid(band, dataset)
 
-        value_min = float(np.nanmin(values))
-        value_max = float(np.nanmax(values))
-        rgba = colorize_linear(values, ramp, *domain)
-
         gt = dataset.GetGeoTransform()
         width, height = dataset.RasterXSize, dataset.RasterYSize
         west, north = gt[0], gt[3]
         east = west + width * gt[1]
         south = north + height * gt[5]
+        values, west, east = _unwrap_0_360_lon(values, west, east)
+
+        value_min = float(np.nanmin(values))
+        value_max = float(np.nanmax(values))
+        rgba = colorize_linear(values, ramp, *domain)
         rgba = warp_equirect_rgba_to_web_mercator(rgba, south, north)
 
         buffer = io.BytesIO()
@@ -428,10 +468,19 @@ M_AIR_G_MOL = 28.9644
 M_CO_G_MOL = 28.01
 M_SO2_G_MOL = 64.066
 M_NO2_G_MOL = 46.0055
+M_CO2_G_MOL = 44.01
 
 
 def mixing_ratio_to_ppb(values: np.ndarray, molar_mass_g_mol: float) -> np.ndarray:
     return values * (M_AIR_G_MOL / molar_mass_g_mol) * 1e9
+
+
+def mixing_ratio_to_ppm(values: np.ndarray, molar_mass_g_mol: float) -> np.ndarray:
+    """Same mixing-ratio -> volume-ratio conversion as mixing_ratio_to_ppb,
+    just scaled to parts-per-MILLION — CO2's ~420ppm atmospheric background
+    would be a meaningless 420,000 on CO/SO2/NO2's own ppb scale, so CO2sc
+    uses the unit it's actually conventionally reported in instead."""
+    return values * (M_AIR_G_MOL / molar_mass_g_mol) * 1e6
 
 
 CO_RAMP = [
@@ -464,9 +513,12 @@ NO2_DOMAIN_PPB = (0.0, 70.0)
 def netcdf_gas_to_overlay_texture(
     netcdf_bytes: bytes, subdataset_var: str, molar_mass_g_mol: float,
     ramp: list[tuple[int, int, int]], domain: tuple[float, float],
+    unit_fn=mixing_ratio_to_ppb,
 ) -> OverlayTexture:
-    """Shared CO/SO2/NO2 converter — same shape as netcdf_aod_to_overlay_texture
-    but with the kg/kg -> ppb conversion applied before colorizing."""
+    """Shared CO/SO2/NO2/CO2 converter — same shape as netcdf_aod_to_overlay_texture
+    but with a kg/kg -> volume-ratio conversion applied before colorizing.
+    `unit_fn` defaults to ppb (CO/SO2/NO2's own convention); CO2sc passes
+    mixing_ratio_to_ppm instead (see that function's own comment for why)."""
     source_path = "/vsimem/gas_overlay_source.nc"
     gdal.FileFromMemBuffer(source_path, netcdf_bytes)
     try:
@@ -475,17 +527,18 @@ def netcdf_gas_to_overlay_texture(
             raise RuntimeError(f"GDAL could not open the fetched CAMS NetCDF (expected a {subdataset_var!r} subdataset)")
 
         band = dataset.GetRasterBand(1)
-        values_ppb = mixing_ratio_to_ppb(resample_band_to_grid(band, dataset), molar_mass_g_mol)
-
-        value_min = float(np.nanmin(values_ppb))
-        value_max = float(np.nanmax(values_ppb))
-        rgba = colorize_linear(values_ppb, ramp, *domain)
+        values_converted = unit_fn(resample_band_to_grid(band, dataset), molar_mass_g_mol)
 
         gt = dataset.GetGeoTransform()
         width, height = dataset.RasterXSize, dataset.RasterYSize
         west, north = gt[0], gt[3]
         east = west + width * gt[1]
         south = north + height * gt[5]
+        values_converted, west, east = _unwrap_0_360_lon(values_converted, west, east)
+
+        value_min = float(np.nanmin(values_converted))
+        value_max = float(np.nanmax(values_converted))
+        rgba = colorize_linear(values_converted, ramp, *domain)
         rgba = warp_equirect_rgba_to_web_mercator(rgba, south, north)
 
         buffer = io.BytesIO()
@@ -510,6 +563,27 @@ def netcdf_so2_to_overlay_texture(netcdf_bytes: bytes) -> OverlayTexture:
 
 def netcdf_no2_to_overlay_texture(netcdf_bytes: bytes) -> OverlayTexture:
     return netcdf_gas_to_overlay_texture(netcdf_bytes, "no2", M_NO2_G_MOL, NO2_RAMP, NO2_DOMAIN_PPB)
+
+
+# CO2sc (spec 054 follow-up, 2026-08-06 — see fetch_overlay_cams.py's own
+# fetch_latest_co2_netcdf comment for the "this is the least-verified
+# integration" caveat: NetCDF subdataset name assumed 'co2', not confirmed
+# against a real downloaded file the way co/so2/no2's own subdataset names
+# were). Background atmospheric CO2 is ~420ppm — domain widened a bit
+# either side of that to show real variation (biogenic sources/sinks,
+# combustion plumes) without the whole map reading as one flat color.
+CO2_RAMP = [
+    (0x08, 0x30, 0x6b), (0x2c, 0x7f, 0xb8), (0x74, 0xad, 0xd1), (0xd1, 0xe5, 0xf0),
+    (0xf7, 0xf7, 0xf7), (0xfd, 0xe0, 0xc4), (0xf9, 0xb9, 0x82), (0xef, 0x8a, 0x62),
+    (0xd6, 0x60, 0x4d), (0xb2, 0x18, 0x2b), (0x8b, 0x0f, 0x1c), (0x5c, 0x08, 0x10),
+]
+CO2_DOMAIN_PPM = (380.0, 460.0)
+
+
+def netcdf_co2_to_overlay_texture(netcdf_bytes: bytes) -> OverlayTexture:
+    return netcdf_gas_to_overlay_texture(
+        netcdf_bytes, "co2", M_CO2_G_MOL, CO2_RAMP, CO2_DOMAIN_PPM, unit_fn=mixing_ratio_to_ppm,
+    )
 
 
 # Space mode (spec 054 follow-up, 2026-08-06) — earth.nullschool.net's own
@@ -699,6 +773,54 @@ def grib2_wpd_to_overlay_texture(grib2_bytes: bytes) -> OverlayTexture:
         gdal.Unlink(source_path)
 
 
+# Wind speed magnitude (spec 055 US1 — Forecast: 15-day wind view). Same
+# ramp shape as WPD_RAMP (both are wind-derived) but a plain m/s domain
+# instead of WPD's cubed W/m^2 one, since the Forecast panel shows raw
+# speed, not power density.
+WIND_SPEED_RAMP = WPD_RAMP
+WIND_SPEED_DOMAIN_MS = (0.0, 40.0)  # ~144 km/h ceiling; genuine storm-force gusts clip to the top color, same "reads as extreme" tradeoff as WPD_DOMAIN_WM2
+
+
+def grib2_wind_speed_to_overlay_texture(grib2_bytes: bytes) -> OverlayTexture:
+    """GFS 10m wind (UGRD/VGRD) -> plain wind speed magnitude, the Forecast
+    panel's 15-day wind_speed variable. Same band-reading shape as
+    grib2_wpd_to_overlay_texture, minus the cubing/air-density step."""
+    source_path = "/vsimem/wind_speed_overlay_source.grib2"
+    gdal.FileFromMemBuffer(source_path, grib2_bytes)
+    try:
+        dataset = gdal.Open(source_path)
+        if dataset is None:
+            raise RuntimeError("GDAL could not open the fetched GFS wind GRIB2 data")
+
+        u_band = _band_by_grib_element(dataset, "UGRD")
+        v_band = _band_by_grib_element(dataset, "VGRD")
+        u = resample_band_to_grid(u_band, dataset)
+        v = resample_band_to_grid(v_band, dataset)
+        speed = np.sqrt(u**2 + v**2)
+
+        value_min = float(np.nanmin(speed))
+        value_max = float(np.nanmax(speed))
+        rgba = colorize_linear(speed, WIND_SPEED_RAMP, *WIND_SPEED_DOMAIN_MS)
+
+        gt = dataset.GetGeoTransform()
+        width, height = dataset.RasterXSize, dataset.RasterYSize
+        west, north = gt[0], gt[3]
+        east = west + width * gt[1]
+        south = north + height * gt[5]
+        rgba = warp_equirect_rgba_to_web_mercator(rgba, south, north)
+
+        buffer = io.BytesIO()
+        Image.fromarray(rgba, mode="RGBA").save(buffer, format="PNG")
+
+        return OverlayTexture(
+            png_bytes=buffer.getvalue(),
+            value_min=value_min, value_max=value_max,
+            bounds=(west, -WEB_MERCATOR_MAX_LAT, east, WEB_MERCATOR_MAX_LAT),
+        )
+    finally:
+        gdal.Unlink(source_path)
+
+
 HTSGW_RAMP = [
     (0x08, 0x1d, 0x58), (0x24, 0x43, 0x9b), (0x1e, 0x84, 0xba), (0x47, 0xb8, 0xc3),
     (0x9e, 0xd9, 0xb8), (0xe6, 0xf5, 0xb2), (0xfe, 0xc6, 0x59), (0xfd, 0x9b, 0x43),
@@ -716,6 +838,290 @@ def grib2_htsgw_to_overlay_texture(grib2_bytes: bytes) -> OverlayTexture:
     needed, just a different band read out of data already being fetched.
     """
     return grib2_scalar_to_overlay_texture(grib2_bytes, "HTSGW", HTSGW_RAMP, HTSGW_DOMAIN_M)
+
+
+# Ocean mode's SST field (spec 054 follow-up, 2026-08-06) — reuses TEMP_RAMP
+# (same "cold -> warm" language as Air mode's Temp) rather than a dedicated
+# ramp, since this hasn't been live-extracted from the reference tool's own
+# SST colorbar the way TEMP_RAMP itself was (no live browser access when
+# this was written — see fetch_sst.py's own NOTE). Domain is real seawater's
+# own physical range: -1.8°C is the approximate freezing point of seawater
+# (salinity depresses it below 0°C), 34°C comfortably covers the warmest
+# tropical warm-pool surface waters.
+SST_DOMAIN_C = (-1.8, 34.0)
+
+
+def netcdf_sst_to_overlay_texture(netcdf_bytes: bytes) -> OverlayTexture:
+    """CMEMS sea water potential temperature (thetao, shallowest depth,
+    assumed °C per CMEMS's documented convention for this variable) -> the
+    Overlay: SST field. Same NetCDF subdataset access pattern as
+    netcdf_uv_to_flow_texture (simple-current-layer.js's own data source),
+    just a single scalar band instead of a vector pair."""
+    source_path = "/vsimem/sst_overlay_source.nc"
+    gdal.FileFromMemBuffer(source_path, netcdf_bytes)
+    try:
+        dataset = gdal.Open(f'NETCDF:"{source_path}":thetao')
+        if dataset is None:
+            raise RuntimeError("GDAL could not open the fetched CMEMS NetCDF (expected a 'thetao' subdataset)")
+
+        band = dataset.GetRasterBand(1)
+        values = resample_band_to_grid(band, dataset)
+
+        value_min = float(np.nanmin(values))
+        value_max = float(np.nanmax(values))
+        rgba = colorize_linear(values, TEMP_RAMP, *SST_DOMAIN_C)
+
+        gt = dataset.GetGeoTransform()
+        width, height = dataset.RasterXSize, dataset.RasterYSize
+        west, north = gt[0], gt[3]
+        east = west + width * gt[1]
+        south = north + height * gt[5]
+        rgba = warp_equirect_rgba_to_web_mercator(rgba, south, north)
+
+        buffer = io.BytesIO()
+        Image.fromarray(rgba, mode="RGBA").save(buffer, format="PNG")
+
+        return OverlayTexture(
+            png_bytes=buffer.getvalue(),
+            value_min=value_min, value_max=value_max,
+            bounds=(west, -WEB_MERCATOR_MAX_LAT, east, WEB_MERCATOR_MAX_LAT),
+        )
+    finally:
+        gdal.Unlink(source_path)
+
+
+def _resample_to_common_grid(band: "gdal.Band", src_dataset: "gdal.Dataset", ulx: float, uly: float, lrx: float, lry: float, width: int, height: int) -> np.ndarray:
+    """
+    gdal.Translate with an EXPLICIT target window (projWin) — unlike
+    resample_band_to_grid (which resamples to a fixed pixel COUNT but
+    preserves whatever geographic extent the source dataset itself
+    covers), this forces the output onto an exact caller-chosen
+    geographic box. Needed for SSTA: two different-source rasters (CMEMS
+    current SST, -180..180 native; NOAA's climatology, 0..360 native) only
+    become pixel-aligned — safe to subtract one from the other — once both
+    are resampled onto the identical box, not just the same width/height.
+    """
+    out_path = "/vsimem/common_grid_resampled.tif"
+    single_band_path = "/vsimem/common_grid_source.tif"
+    try:
+        gdal.Translate(single_band_path, src_dataset, bandList=[band.GetBand()], format="GTiff")
+        gdal.Translate(
+            out_path, single_band_path,
+            projWin=[ulx, uly, lrx, lry],
+            width=width, height=height,
+            resampleAlg="bilinear", format="GTiff",
+        )
+        resampled = gdal.Open(out_path)
+        resampled_band = resampled.GetRasterBand(1)
+        array = resampled_band.ReadAsArray().astype(np.float64)
+        nodata = resampled_band.GetNoDataValue()
+        if nodata is not None:
+            array[np.isclose(array, nodata, rtol=1e-6)] = np.nan
+        return array
+    finally:
+        gdal.Unlink(single_band_path)
+        gdal.Unlink(out_path)
+
+
+SSTA_RAMP = [
+    (0x05, 0x30, 0x61), (0x21, 0x66, 0xac), (0x67, 0xa9, 0xcf), (0xd1, 0xe5, 0xf0),
+    (0xf7, 0xf7, 0xf7), (0xfd, 0xdb, 0xc7), (0xf4, 0xa5, 0x82), (0xd6, 0x60, 0x4d),
+    (0xb2, 0x18, 0x2b), (0x67, 0x00, 0x1f), (0x40, 0x00, 0x13), (0x20, 0x00, 0x09),
+]
+# Marine heatwaves rarely exceed +3 to +5°C above the 1991-2020 normal;
+# widened a little past that on both ends so a genuinely extreme event
+# still leaves headroom instead of pinning to the ramp's very end.
+SSTA_DOMAIN_C = (-6.0, 6.0)
+
+
+def netcdf_sst_anomaly_to_overlay_texture(netcdf_bytes_pair: tuple[bytes, bytes]) -> OverlayTexture:
+    """
+    Current SST (fetch_latest_sst_netcdf, same CMEMS thetao source as
+    netcdf_sst_to_overlay_texture) minus the day-of-year climatological
+    normal (fetch_latest_sst_climatology_netcdf, NOAA's public 1991-2020
+    baseline) -> the Overlay: SSTA field. See fetch_sst.py's own
+    CLIMATOLOGY_* comments for why this — not a ready-made CMEMS anomaly
+    variable — is the data source, and _resample_to_common_grid's docstring
+    for why a plain resample_band_to_grid call on each side independently
+    would NOT be safe to subtract (different native extents/lon
+    conventions between the two sources).
+
+    `netcdf_bytes_pair` is (sst_netcdf_bytes, climatology_netcdf_bytes) —
+    packed into one tuple by fetch_sst.py's own fetch_latest_ssta_inputs()
+    so this fits run_once_overlay's one-fetch-fn-one-convert-fn-per-
+    overlay-type dispatch shape (main.py) without a special case there.
+
+    NOT live-verified end to end (no live access to either source here) —
+    if the resulting overlay reads as implausible (e.g. suspiciously
+    uniform, or clearly offset), the climatology fetch's day-of-year
+    indexing (fetch_latest_sst_climatology_netcdf's own docstring) or the
+    thetao/sst unit assumption are the first things to check.
+    """
+    sst_netcdf_bytes, climatology_netcdf_bytes = netcdf_bytes_pair
+    lat_hi = WEB_MERCATOR_MAX_LAT
+    lat_lo = -WEB_MERCATOR_MAX_LAT
+    width, height = TEXTURE_WIDTH, TEXTURE_HEIGHT
+
+    sst_source_path = "/vsimem/ssta_sst_source.nc"
+    gdal.FileFromMemBuffer(sst_source_path, sst_netcdf_bytes)
+    try:
+        sst_dataset = gdal.Open(f'NETCDF:"{sst_source_path}":thetao')
+        if sst_dataset is None:
+            raise RuntimeError("GDAL could not open the fetched CMEMS SST NetCDF (expected a 'thetao' subdataset)")
+        current = _resample_to_common_grid(sst_dataset.GetRasterBand(1), sst_dataset, -180, lat_hi, 180, lat_lo, width, height)
+    finally:
+        gdal.Unlink(sst_source_path)
+
+    climo_source_path = "/vsimem/ssta_climatology_source.nc"
+    gdal.FileFromMemBuffer(climo_source_path, climatology_netcdf_bytes)
+    try:
+        climo_dataset = gdal.Open(f'NETCDF:"{climo_source_path}":sst')
+        if climo_dataset is None:
+            climo_dataset = gdal.Open(climo_source_path)  # ERDDAP's single-timestep subset response may not expose a named subdataset at all
+        if climo_dataset is None:
+            raise RuntimeError("GDAL could not open the fetched NOAA climatology NetCDF (expected an 'sst' subdataset)")
+        climo_band = climo_dataset.GetRasterBand(1)
+        # Native lon convention is 0..360 (fetch_sst.py's own
+        # CLIMATOLOGY_LON_RANGE comment) — resampled as two separate
+        # halves (source 180..360 -> target -180..0, source 0..180 ->
+        # target 0..180) and concatenated, rather than resampling the
+        # whole thing then rolling — avoids a single projWin request that
+        # would need to cross the antimeridian in the SOURCE's own 0..360
+        # coordinate system, which gdal.Translate's projWin does not wrap.
+        west_half = _resample_to_common_grid(climo_band, climo_dataset, 180, lat_hi, 360, lat_lo, width // 2, height)
+        east_half = _resample_to_common_grid(climo_band, climo_dataset, 0, lat_hi, 180, lat_lo, width // 2, height)
+        climatology = np.concatenate([west_half, east_half], axis=1)
+    finally:
+        gdal.Unlink(climo_source_path)
+
+    anomaly = current - climatology  # NaN (land/nodata in either source) propagates naturally
+
+    value_min = float(np.nanmin(anomaly))
+    value_max = float(np.nanmax(anomaly))
+    rgba = colorize_linear(anomaly, SSTA_RAMP, *SSTA_DOMAIN_C)
+    rgba = warp_equirect_rgba_to_web_mercator(rgba, lat_lo, lat_hi)
+
+    buffer = io.BytesIO()
+    Image.fromarray(rgba, mode="RGBA").save(buffer, format="PNG")
+
+    return OverlayTexture(
+        png_bytes=buffer.getvalue(),
+        value_min=value_min, value_max=value_max,
+        bounds=(-180.0, lat_lo, 180.0, lat_hi),
+    )
+
+
+# NOAA Coral Reef Watch's own Bleaching Alert Area color scheme (blue/no
+# stress -> yellow/watch -> orange/warning -> red/alert -> deep maroon for
+# the most extreme levels) — approximated with colorize_linear rather than
+# a hard per-category step function, so adjacent categories blend a little
+# at their boundaries instead of a crisp cutoff; acceptable for this app's
+# purpose (a readable heatmap, not an exact category legend).
+# NOTE (2026-08-06, no live access to confirm the exact current max): NOAA
+# extended the original 0 ("No Stress") .. 4 ("Alert Level 2") scale with
+# three more levels above the old open-ended top end after 2023's
+# unprecedented heat stress event (up to "Alert Level 5", ~near-total
+# mortality risk) — this domain is set generously to 0..8 to comfortably
+# fit that extended top end without needing the exact new maximum confirmed.
+BAA_RAMP = [
+    (0x08, 0x30, 0x6b), (0x2c, 0x7f, 0xb8), (0xa6, 0xd9, 0x6a), (0xff, 0xff, 0x8c),
+    (0xff, 0xd9, 0x2e), (0xff, 0xa5, 0x00), (0xff, 0x4d, 0x00), (0xd7, 0x30, 0x1f),
+    (0xa8, 0x1a, 0x1a), (0x7a, 0x0a, 0x2e), (0x4a, 0x04, 0x2a), (0x1a, 0x00, 0x1a),
+]
+BAA_DOMAIN = (0.0, 8.0)
+
+
+def netcdf_baa_to_overlay_texture(netcdf_bytes: bytes) -> OverlayTexture:
+    """NOAA CRW Bleaching Alert Area (bleaching_alert_area, integer
+    category 0-N) -> the Overlay: BAA field."""
+    source_path = "/vsimem/baa_overlay_source.nc"
+    gdal.FileFromMemBuffer(source_path, netcdf_bytes)
+    try:
+        dataset = gdal.Open(f'NETCDF:"{source_path}":bleaching_alert_area')
+        if dataset is None:
+            raise RuntimeError("GDAL could not open the fetched NOAA CRW NetCDF (expected a 'bleaching_alert_area' subdataset)")
+
+        band = dataset.GetRasterBand(1)
+        values = resample_band_to_grid(band, dataset)
+
+        value_min = float(np.nanmin(values))
+        value_max = float(np.nanmax(values))
+        rgba = colorize_linear(values, BAA_RAMP, *BAA_DOMAIN)
+
+        gt = dataset.GetGeoTransform()
+        width, height = dataset.RasterXSize, dataset.RasterYSize
+        west, north = gt[0], gt[3]
+        east = west + width * gt[1]
+        south = north + height * gt[5]
+        rgba = warp_equirect_rgba_to_web_mercator(rgba, south, north)
+
+        buffer = io.BytesIO()
+        Image.fromarray(rgba, mode="RGBA").save(buffer, format="PNG")
+
+        return OverlayTexture(
+            png_bytes=buffer.getvalue(),
+            value_min=value_min, value_max=value_max,
+            bounds=(west, -WEB_MERCATOR_MAX_LAT, east, WEB_MERCATOR_MAX_LAT),
+        )
+    finally:
+        gdal.Unlink(source_path)
+
+
+# WHO/standard UV Index color scale — green (low) -> yellow (moderate) ->
+# orange (high) -> red (very high) -> purple (extreme), the conventional
+# public-facing UV Index language (same family of scale as PM25_RAMP's air
+# quality convention, just UV's own standard stops/colors).
+UVI_RAMP = [
+    (0x55, 0x9c, 0x30), (0x8b, 0xc3, 0x4a), (0xf5, 0xd7, 0x1c), (0xf5, 0xa6, 0x23),
+    (0xf2, 0x7e, 0x1e), (0xe8, 0x50, 0x1e), (0xd7, 0x2b, 0x2b), (0xb5, 0x1f, 0x3e),
+    (0x95, 0x2e, 0x8e), (0x77, 0x2f, 0xb5), (0x5a, 0x2c, 0xa0), (0x3f, 0x22, 0x7a),
+]
+# 0-11+ is the standard public UV Index scale (11+ = "extreme") — domain
+# widened a little past 11 so an extreme reading doesn't pin exactly at the
+# ramp's last stop.
+UVI_DOMAIN = (0.0, 12.0)
+# NCEP's own file reports UV irradiance in W/m^2, not the UV Index itself —
+# confirmed 2026-08-06 via NOAA CPC's UV forecast documentation page (see
+# fetch_uvi.py's own header).
+UVI_WM2_TO_INDEX = 40.0
+
+
+def grib2_uvi_to_overlay_texture(grib2_bytes: bytes) -> OverlayTexture:
+    """NCEP Global UV Index Forecast (W/m^2 -> UV Index via x40.0) -> the
+    Overlay: UVI field. Single-band file (no GRIB_ELEMENT band-selection
+    needed, unlike the multi-field GFS pgrb2 files elsewhere in this
+    module) — reads band 1 directly."""
+    source_path = "/vsimem/uvi_overlay_source.grib2"
+    gdal.FileFromMemBuffer(source_path, grib2_bytes)
+    try:
+        dataset = gdal.Open(source_path)
+        if dataset is None:
+            raise RuntimeError("GDAL could not open the fetched NCEP UV Index GRIB2 data")
+
+        band = dataset.GetRasterBand(1)
+        values = resample_band_to_grid(band, dataset) * UVI_WM2_TO_INDEX
+
+        value_min = float(np.nanmin(values))
+        value_max = float(np.nanmax(values))
+        rgba = colorize_linear(values, UVI_RAMP, *UVI_DOMAIN)
+
+        gt = dataset.GetGeoTransform()
+        width, height = dataset.RasterXSize, dataset.RasterYSize
+        west, north = gt[0], gt[3]
+        east = west + width * gt[1]
+        south = north + height * gt[5]
+        rgba = warp_equirect_rgba_to_web_mercator(rgba, south, north)
+
+        buffer = io.BytesIO()
+        Image.fromarray(rgba, mode="RGBA").save(buffer, format="PNG")
+
+        return OverlayTexture(
+            png_bytes=buffer.getvalue(),
+            value_min=value_min, value_max=value_max,
+            bounds=(west, -WEB_MERCATOR_MAX_LAT, east, WEB_MERCATOR_MAX_LAT),
+        )
+    finally:
+        gdal.Unlink(source_path)
 
 
 def grib2_mslp_to_overlay_texture(grib2_bytes: bytes) -> OverlayTexture:
@@ -769,6 +1175,91 @@ def _stull_wet_bulb_c(temp_c: np.ndarray, rh_pct: np.ndarray) -> np.ndarray:
         + 0.00391838 * rh_pct**1.5 * np.arctan(0.023101 * rh_pct)
         - 4.686035
     )
+
+
+# Misery Index (Overlay: MI) — "feels like" temperature, standard NWS
+# formulas: Rothfusz regression for Heat Index (hot+humid conditions) and
+# the NWS/JAG/TI-2001 Wind Chill formula (cold+windy conditions); actual
+# air temperature everywhere in between. Both formulas are textbook/
+# standard (not data-source-dependent like the ramps elsewhere in this
+# module that needed live extraction from a real colorbar), same
+# confidence level as _stull_wet_bulb_c's own Stull approximation below.
+def _heat_index_f(temp_f: np.ndarray, rh_pct: np.ndarray) -> np.ndarray:
+    """Rothfusz regression, valid roughly >= 80°F / >= 40% RH (NWS's own
+    documented applicability range) — used here everywhere hot enough to
+    matter, since outside that range the result should be overridden by
+    the plain actual-temperature branch anyway (see the masking below)."""
+    T, R = temp_f, rh_pct
+    return (
+        -42.379 + 2.04901523 * T + 10.14333127 * R - 0.22475541 * T * R
+        - 0.00683783 * T**2 - 0.05481717 * R**2 + 0.00122874 * T**2 * R
+        + 0.00085282 * T * R**2 - 0.00000199 * T**2 * R**2
+    )
+
+
+def _wind_chill_f(temp_f: np.ndarray, wind_mph: np.ndarray) -> np.ndarray:
+    """NWS/JAG/TI-2001 wind chill formula, valid roughly <= 50°F / >= 3mph wind."""
+    v16 = np.power(np.maximum(wind_mph, 0.0), 0.16)
+    return 35.74 + 0.6215 * temp_f - 35.75 * v16 + 0.4275 * temp_f * v16
+
+
+MI_DOMAIN_C = TEMP_DOMAIN_C  # same "feels like" units/range as the plain Temp overlay
+
+
+def grib2_misery_index_to_overlay_texture(grib2_bytes: bytes) -> OverlayTexture:
+    """
+    GFS 2m Temp+RH + 10m UGRD/VGRD (fetch_latest_misery_index_inputs_grib2)
+    -> "feels like" temperature -> the Overlay: MI field. Heat Index where
+    hot+humid enough for it to apply, Wind Chill where cold+windy enough,
+    plain actual temperature everywhere else — matches how the NWS itself
+    presents a single blended "feels like" field (their own apparent-
+    temperature products switch between the same two formulas the same
+    way), reusing TEMP_RAMP so MI reads as a variant of the Temp overlay
+    rather than an unrelated color language.
+    """
+    source_path = "/vsimem/mi_overlay_source.grib2"
+    gdal.FileFromMemBuffer(source_path, grib2_bytes)
+    try:
+        dataset = gdal.Open(source_path)
+        if dataset is None:
+            raise RuntimeError("GDAL could not open the fetched GFS Temp+RH+wind GRIB2 data")
+
+        temp_c = resample_band_to_grid(_band_by_grib_element(dataset, "TMP"), dataset)
+        rh_pct = resample_band_to_grid(_band_by_grib_element(dataset, "RH"), dataset)
+        u = resample_band_to_grid(_band_by_grib_element(dataset, "UGRD"), dataset)
+        v = resample_band_to_grid(_band_by_grib_element(dataset, "VGRD"), dataset)
+        wind_mph = np.sqrt(u**2 + v**2) * 2.236936  # m/s -> mph, both formulas' own native unit
+
+        temp_f = temp_c * 9.0 / 5.0 + 32.0
+        heat_index_f = _heat_index_f(temp_f, rh_pct)
+        wind_chill_f = _wind_chill_f(temp_f, wind_mph)
+
+        hot_enough = (temp_f >= 80.0) & (rh_pct >= 40.0)
+        cold_enough = (temp_f <= 50.0) & (wind_mph >= 3.0)
+        feels_like_f = np.where(hot_enough, heat_index_f, np.where(cold_enough, wind_chill_f, temp_f))
+        feels_like_c = (feels_like_f - 32.0) * 5.0 / 9.0
+
+        value_min = float(np.nanmin(feels_like_c))
+        value_max = float(np.nanmax(feels_like_c))
+        rgba = colorize_linear(feels_like_c, TEMP_RAMP, *MI_DOMAIN_C)
+
+        gt = dataset.GetGeoTransform()
+        width, height = dataset.RasterXSize, dataset.RasterYSize
+        west, north = gt[0], gt[3]
+        east = west + width * gt[1]
+        south = north + height * gt[5]
+        rgba = warp_equirect_rgba_to_web_mercator(rgba, south, north)
+
+        buffer = io.BytesIO()
+        Image.fromarray(rgba, mode="RGBA").save(buffer, format="PNG")
+
+        return OverlayTexture(
+            png_bytes=buffer.getvalue(),
+            value_min=value_min, value_max=value_max,
+            bounds=(west, -WEB_MERCATOR_MAX_LAT, east, WEB_MERCATOR_MAX_LAT),
+        )
+    finally:
+        gdal.Unlink(source_path)
 
 
 def grib2_wet_bulb_to_overlay_texture(grib2_bytes: bytes) -> OverlayTexture:

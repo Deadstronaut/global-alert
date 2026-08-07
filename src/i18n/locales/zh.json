@@ -22,6 +22,7 @@
     "navShelters": "避难所",
     "navHazards": "灾害百科",
     "navReport": "社区报告",
+    "navForecast": "天气预报",
     "overviewTitle": "概览",
     "earthquakes24hTitle": "过去24小时地震",
     "earthquakes24hForCountry": "在{country}",
@@ -39,6 +40,41 @@
       "last24h": "过去24小时",
       "earthquakes": "地震",
       "unknownSource": "未知"
+    },
+    "forecast": {
+      "panelTitle": "预报",
+      "horizon15d": "15 天",
+      "horizon1mo": "1 个月",
+      "horizon3mo": "3 个月",
+      "variableWindSpeed": "风速",
+      "variablePrecipitation": "降水",
+      "variableTemperature": "温度",
+      "variableRelativeHumidity": "相对湿度",
+      "variableMeanSeaLevelPressure": "海平面气压",
+      "variableCape": "CAPE（风暴潜力）",
+      "variableTotalPrecipitableWater": "总可降水量",
+      "variableTotalCloudWater": "总云水量",
+      "variableDewPoint": "露点",
+      "variableWetBulbTemp": "湿球温度",
+      "variableWindPowerDensity": "风能密度",
+      "variableMiseryIndex": "痛苦指数",
+      "variableSignificantWaveHeight": "浪高",
+      "variableUvIndex": "紫外线指数",
+      "regionLabel": "区域",
+      "regionPlaceholder": "例如 Ankara",
+      "regionRequiredHint": "输入省份名称以查看其展望（例如 Ankara）。",
+      "validPeriodLabel": "覆盖时段：{period}",
+      "asOf": "更新于 {time}",
+      "unavailable": "该选择暂无预报数据。",
+      "notConfigured": "此部署尚未配置该预报时间范围。",
+      "probabilisticNotice": "这是概率性展望，不是逐日预报。",
+      "seasonalNotice": "用于规划的长期指导，并非对具体事件的预测。",
+      "classificationBelowNormal": "低于正常",
+      "classificationNearNormal": "接近正常",
+      "classificationAboveNormal": "高于正常",
+      "confidenceLabel": "置信度：{pct}%",
+      "dayLabel": "第 {n} 天",
+      "loading": "正在加载预报..."
     }
   },
   "common": {
@@ -1150,6 +1186,13 @@
     "send": "发送",
     "noCountryContext": "此浏览器中尚未配置国家上下文 — 请先在 AdminView 的“AI Yardımı”标签页中为某个国家启用一项功能。",
     "waitingServer": "正在等待服务器响应..."
+  },
+  "flowPanel": {
+    "forecast": {
+      "rowLabel": "预报",
+      "dayLabel": "第 {n} 天 · {date}",
+      "noData": "该日期暂无预报数据。"
+    }
   },
   "windLayer": {
     "toggleLabel": "风",

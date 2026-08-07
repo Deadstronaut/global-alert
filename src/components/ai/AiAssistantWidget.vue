@@ -33,7 +33,14 @@ const summarizeEnabled = ref(false)
 // Yardımı" panel (AiCapabilityTogglePanel.vue writes the same key), so
 // enabling a capability there actually makes the chat button light up
 // instead of silently finding nothing enabled.
-const effectiveCountryCode = computed(() => auth.countryCode || localStorage.getItem('aiAssistantCountryCode') || null)
+// super_admin bypasses the actual enabled-check server-side regardless of
+// which country_code is sent (it's a required field, not a real permission
+// check for that role) — so a fixed default removes the friction of
+// localStorage being per-origin (a value set on one host/port doesn't
+// carry over to another) for the one role where the value barely matters.
+const effectiveCountryCode = computed(
+  () => auth.countryCode || localStorage.getItem('aiAssistantCountryCode') || (auth.isSuperAdmin ? 'tr' : null),
+)
 
 async function loadCapabilities() {
   // Rule: super_admin always has everything open, regardless of any
@@ -138,6 +145,122 @@ function pushBubble(role, text, extra = {}) {
   return bubble
 }
 
+// The free NVIDIA endpoint can genuinely take anywhere from a couple
+// seconds up to ~30-40s to answer (confirmed live: 11s, 26s, 32s across
+// three back-to-back requests) — long enough that a single static "loading"
+// state reads as broken. Three stages instead: 0-3s the animated rune
+// "thinking" loader, 3-7s a plain "waiting on the server" line, 7s+ a
+// rotating pool of silly waiting-room messages — each one plays the SAME
+// scramble/unscramble effect as the stage-1 loader (letters glitching into
+// rune glyphs and back), sağa-sola (forward then backward) twice, settles
+// as plain readable text for a beat, then swaps to the next message.
+const FUN_WAIT_MESSAGES = [
+  '☕ Kahve demleniyor...', '🧘 Yoga yapılıyor...', '🎵 Müzik dinleniyor...', '🌸 Çiçekler sulanıyor...',
+  '🥁 Bateri çalınıyor...', '🍕 Pizza ısıtılıyor...', '🐌 Salyangozlar yarıştırılıyor...', '🛰️ Uydularla konuşuluyor...',
+  '🧩 Bulmaca çözülüyor...', '🐢 Kaplumbağa hızlandırılmaya çalışılıyor...', '🎨 Tuvale renk sürülüyor...', '📚 Kitap okunuyor...',
+  '🍜 Çorba karıştırılıyor...', '🧵 İğneden iplik geçiriliyor...', '🚀 Roketler ısıtılıyor...', '🐝 Arılar toplanıyor...',
+  '🎲 Zar atılıyor...', '🧠 Beyin fırtınası yapılıyor...', '🐙 Ahtapot 8 koldan birden yazıyor...', '🔋 Piller şarj ediliyor...',
+  '🌙 Ay\'a bakılıyor...', '🪄 Sihir yapılıyor...', '🦄 Tek boynuzlu at aranıyor...', '🎯 Hedef tahtası hazırlanıyor...',
+  '🧊 Buzlar eritiliyor...', '🐧 Penguenler sıraya diziliyor...', '🎈 Balonlar şişiriliyor...', '📡 Anten ayarlanıyor...',
+  '🧶 Yün yumağı çözülüyor...', '🍳 Yumurta kırılıyor...', '🚲 Bisiklet pompalanıyor...', '🧃 Meyve suyu sıkılıyor...',
+  '🎻 Keman akort ediliyor...', '🐿️ Sincap fındık topluyor...', '🛸 UFO\'lar taranıyor...', '🧦 Çorap eşleştiriliyor...',
+  '🌊 Dalgalar sayılıyor...', '🕰️ Saat kuruluyor...', '🍄 Mantar aranıyor...', '🦋 Kelebekler kovalanıyor...',
+]
+const RUNE_POOL = ['⌰', '⍜', '⏃', '⎅', '⟟', '⋏', '☌', '⟒', '⏁', '⋔', '⎍', '⏚', '⚍', '⟁']
+const SCRAMBLE_LEAD_CHARS = 10 // only the first N chars glitch, keeps the beat short regardless of message length
+const SCRAMBLE_STEP_MS = 80
+const SCRAMBLE_SWEEPS = 2 // "iki kere sağa sola" — 2 full there-and-back sweeps
+const READ_HOLD_MS = 1100 // how long the fully-unscrambled message sits still before the next one starts
+const STAGE2_AT_MS = 3000 // "düşünüyor" -> "sunucudan cevap bekleniyor"
+const STAGE3_AT_MS = 7000 // "sunucudan cevap bekleniyor" -> rotating fun messages
+const activeLoadingCleanups = new Set()
+
+function pickFunMessage(exclude) {
+  let msg = FUN_WAIT_MESSAGES[Math.floor(Math.random() * FUN_WAIT_MESSAGES.length)]
+  if (FUN_WAIT_MESSAGES.length > 1) {
+    while (msg === exclude) msg = FUN_WAIT_MESSAGES[Math.floor(Math.random() * FUN_WAIT_MESSAGES.length)]
+  }
+  return msg
+}
+
+// frames[0] = fully readable text ... frames[N] = first SCRAMBLE_LEAD_CHARS
+// replaced with rune glyphs, one more character corrupted per frame.
+function buildScrambleFrames(text) {
+  const chars = [...text]
+  const leadCount = Math.min(SCRAMBLE_LEAD_CHARS, chars.length)
+  const frames = [text]
+  for (let k = 1; k <= leadCount; k++) {
+    frames.push(chars.map((c, i) => (i < k ? RUNE_POOL[i % RUNE_POOL.length] : c)).join(''))
+  }
+  return frames
+}
+
+// Starts the staged waiting UI on a bubble and returns a stop() function —
+// call stop() as soon as the real result arrives (success OR failure) to
+// cancel any pending timers/loops and clear the transient waiting state.
+// bubble.stage: 'thinking' | 'waiting' | 'fun'
+function startLoadingSequence(bubble) {
+  bubble.stage = 'thinking'
+  bubble.waitText = null
+  let stopped = false
+  let activeTimer = null
+
+  const stage2Timer = setTimeout(() => {
+    bubble.stage = 'waiting'
+    bubble.waitText = t('aiAssistant.waitingServer')
+  }, STAGE2_AT_MS)
+
+  function runFunCycle() {
+    if (stopped) return
+    bubble.stage = 'fun'
+    const message = pickFunMessage(bubble.waitText)
+    const frames = buildScrambleFrames(message)
+    const lastIdx = frames.length - 1
+    let sweep = 0
+    let idx = 0
+    let direction = 1
+    bubble.waitText = frames[0]
+
+    activeTimer = setInterval(() => {
+      idx += direction
+      if (idx >= lastIdx) {
+        direction = -1
+        idx = lastIdx
+      } else if (idx <= 0) {
+        idx = 0
+        direction = 1
+        sweep += 1
+        if (sweep >= SCRAMBLE_SWEEPS) {
+          clearInterval(activeTimer)
+          bubble.waitText = message
+          activeTimer = setTimeout(runFunCycle, READ_HOLD_MS)
+          return
+        }
+      }
+      bubble.waitText = frames[idx]
+    }, SCRAMBLE_STEP_MS)
+  }
+
+  const stage3Timer = setTimeout(runFunCycle, STAGE3_AT_MS)
+
+  const stop = () => {
+    stopped = true
+    clearTimeout(stage2Timer)
+    clearTimeout(stage3Timer)
+    clearTimeout(activeTimer)
+    clearInterval(activeTimer)
+    bubble.stage = null
+    bubble.waitText = null
+    activeLoadingCleanups.delete(stop)
+  }
+  activeLoadingCleanups.add(stop)
+  return stop
+}
+
+onUnmounted(() => {
+  activeLoadingCleanups.forEach((stop) => stop())
+})
+
 const activeTask = ref(null)
 const targetLocale = ref(null)
 const draftMessage = ref('')
@@ -192,7 +315,8 @@ function chooseLocale(code) {
 }
 
 async function askForItem() {
-  const loadingBubble = pushBubble('assistant', t('ai.loading'))
+  const loadingBubble = pushBubble('assistant', '')
+  const stopLoading = startLoadingSequence(loadingBubble)
   scrollToBottom()
   const task = activeTask.value
   const { data } = await supabase
@@ -202,6 +326,7 @@ async function askForItem() {
     .not('description', 'is', null)
     .limit(10)
   const rows = (data || []).filter((row) => (row.description || '').trim())
+  stopLoading()
   loadingBubble.text = rows.length ? t('aiAssistant.askItem') : t('aiAssistant.noItems')
   if (rows.length) {
     loadingBubble.options = rows.map((row) => ({ label: row.title || row.id, action: () => chooseItem(row) }))
@@ -212,7 +337,13 @@ async function askForItem() {
 async function chooseItem(item) {
   clearLastOptions()
   pushBubble('user', item.title || item.id)
-  const workingBubble = pushBubble('assistant', t('ai.loading'))
+  if (!effectiveCountryCode.value) {
+    pushBubble('assistant', t('aiAssistant.noCountryContext'))
+    scrollToBottom()
+    return
+  }
+  const workingBubble = pushBubble('assistant', '')
+  const stopLoading = startLoadingSequence(workingBubble)
   scrollToBottom()
 
   const task = activeTask.value
@@ -228,6 +359,7 @@ async function chooseItem(item) {
         )
       : await aiAssistance.requestSummary(task.table, item.id, item.description, effectiveCountryCode.value)
 
+  stopLoading()
   if (!result.success) {
     workingBubble.text = t('ai.unavailable')
     scrollToBottom()
@@ -264,14 +396,27 @@ async function sendFreeText() {
   if (!text || sending.value || !chatAvailable.value) return
   draftMessage.value = ''
   pushBubble('user', text)
+  if (!effectiveCountryCode.value) {
+    // country_code is a required field server-side (ai-chat/index.ts) — a
+    // missing value here means neither this account's own country nor an
+    // admin-configured country was ever found in THIS browser (localStorage
+    // is per-origin, so a value set while testing on another host/port
+    // won't carry over). Surface it as a clear chat message instead of
+    // letting the request 400 silently.
+    pushBubble('assistant', t('aiAssistant.noCountryContext'))
+    scrollToBottom()
+    return
+  }
   const history = log.value
     .filter((b) => !b.options || b.role === 'user')
     .map((b) => ({ role: b.role, content: b.text }))
-  const workingBubble = pushBubble('assistant', t('ai.loading'))
+  const workingBubble = pushBubble('assistant', '')
+  const stopLoading = startLoadingSequence(workingBubble)
   sending.value = true
   scrollToBottom()
   const result = await aiAssistance.sendChatMessage(history, effectiveCountryCode.value)
   sending.value = false
+  stopLoading()
   workingBubble.text = result.success ? result.reply : t('ai.unavailable')
   scrollToBottom()
 }
@@ -311,64 +456,69 @@ watch(() => route.name, () => {
       <img src="/deadstro1.png" alt="" class="ai-assistant-widget__icon" />
     </button>
 
-    <div
-      v-if="open"
-      class="ai-assistant-widget__panel"
-      :class="{ 'ai-assistant-widget__panel--top': isTopCorner, 'ai-assistant-widget__panel--left': isLeftCorner }"
-    >
-      <div class="ai-assistant-widget__header">
-        <Avatar class="ai-assistant-widget__headerAvatar">
-          <AvatarImage src="/deadstro1.png" alt="" class="object-cover" />
-          <AvatarFallback>AI</AvatarFallback>
-        </Avatar>
-        <button type="button" class="ai-assistant-widget__close" @click="open = false">✕</button>
-      </div>
-
-      <div ref="scrollEl" class="ai-assistant-widget__messages">
-        <div
-          v-for="bubble in log"
-          :key="bubble.id"
-          class="ai-assistant-widget__row"
-          :class="bubble.role === 'user' ? 'ai-assistant-widget__row--user' : 'ai-assistant-widget__row--assistant'"
-        >
-          <Avatar v-if="bubble.role === 'assistant'" class="size-6 shrink-0">
-            <AvatarImage src="/deadstro1.png" alt="" />
+    <Transition name="flow-panel-expand">
+      <div
+        v-if="open"
+        class="ai-assistant-widget__panel"
+        :class="{ 'ai-assistant-widget__panel--top': isTopCorner, 'ai-assistant-widget__panel--left': isLeftCorner }"
+      >
+        <div class="ai-assistant-widget__header">
+          <Avatar class="ai-assistant-widget__headerAvatar">
+            <AvatarImage src="/deadstro1.png" alt="" class="object-cover" />
             <AvatarFallback>AI</AvatarFallback>
           </Avatar>
-          <div class="ai-assistant-widget__col">
-            <div
-              class="ai-assistant-widget__bubble"
-              :class="bubble.role === 'user' ? 'ai-assistant-widget__bubble--user' : 'ai-assistant-widget__bubble--assistant'"
-            >
-              {{ bubble.text }}
-            </div>
-            <div v-if="bubble.options?.length" class="ai-assistant-widget__chips">
-              <Button
-                v-for="(opt, idx) in bubble.options"
-                :key="idx"
-                type="button"
-                size="sm"
-                :variant="opt.variant || 'secondary'"
-                @click="opt.action"
+          <button type="button" class="ai-assistant-widget__close" @click="open = false">✕</button>
+        </div>
+
+        <div ref="scrollEl" class="ai-assistant-widget__messages">
+          <div
+            v-for="bubble in log"
+            :key="bubble.id"
+            class="ai-assistant-widget__row"
+            :class="bubble.role === 'user' ? 'ai-assistant-widget__row--user' : 'ai-assistant-widget__row--assistant'"
+          >
+            <Avatar v-if="bubble.role === 'assistant'" class="size-6 shrink-0">
+              <AvatarImage src="/deadstro1.png" alt="" />
+              <AvatarFallback>AI</AvatarFallback>
+            </Avatar>
+            <div class="ai-assistant-widget__col">
+              <div
+                class="ai-assistant-widget__bubble"
+                :class="bubble.role === 'user' ? 'ai-assistant-widget__bubble--user' : 'ai-assistant-widget__bubble--assistant'"
               >
-                {{ opt.label }}
-              </Button>
+                <span v-if="bubble.stage === 'thinking'" class="ai-loader" aria-label="Loading"></span>
+                <span v-else-if="bubble.stage === 'fun'" class="ai-assistant-widget__scramble">{{ bubble.waitText }}</span>
+                <span v-else-if="bubble.waitText" class="ai-assistant-widget__waitText">{{ bubble.waitText }}</span>
+                <template v-else>{{ bubble.text }}</template>
+              </div>
+              <div v-if="bubble.options?.length" class="ai-assistant-widget__chips">
+                <Button
+                  v-for="(opt, idx) in bubble.options"
+                  :key="idx"
+                  type="button"
+                  size="sm"
+                  :variant="opt.variant || 'secondary'"
+                  @click="opt.action"
+                >
+                  {{ opt.label }}
+                </Button>
+              </div>
             </div>
           </div>
         </div>
-      </div>
 
-      <form class="ai-assistant-widget__inputRow" @submit.prevent="sendFreeText">
-        <Input
-          v-model="draftMessage"
-          :disabled="!chatAvailable || sending"
-          :placeholder="chatAvailable ? t('aiAssistant.typePlaceholder') : t('ai.capabilityDisabled')"
-        />
-        <Button type="submit" size="sm" :disabled="!chatAvailable || sending || !draftMessage.trim()">
-          {{ t('aiAssistant.send') }}
-        </Button>
-      </form>
-    </div>
+        <form class="ai-assistant-widget__inputRow" @submit.prevent="sendFreeText">
+          <Input
+            v-model="draftMessage"
+            :disabled="!chatAvailable || sending"
+            :placeholder="chatAvailable ? t('aiAssistant.typePlaceholder') : t('ai.capabilityDisabled')"
+          />
+          <Button type="submit" size="sm" :disabled="!chatAvailable || sending || !draftMessage.trim()">
+            {{ t('aiAssistant.send') }}
+          </Button>
+        </form>
+      </div>
+    </Transition>
   </div>
 </template>
 
@@ -474,9 +624,27 @@ watch(() => route.name, () => {
   display: flex; flex-direction: column;
   background: #161b26; border: 1px solid rgba(255,255,255,.12); border-radius: 14px;
   box-shadow: 0 8px 32px rgba(0,0,0,.5); color: #e2e8f0; overflow: hidden;
+  transform-origin: bottom right;
 }
-.ai-assistant-widget__panel--top { bottom: auto; top: calc(100% + 10px); }
+.ai-assistant-widget__panel--top { bottom: auto; top: calc(100% + 10px); transform-origin: top right; }
 .ai-assistant-widget__panel--left { right: auto; left: 0; }
+.ai-assistant-widget__panel--top.ai-assistant-widget__panel--left { transform-origin: top left; }
+.ai-assistant-widget__panel--left:not(.ai-assistant-widget__panel--top) { transform-origin: bottom left; }
+
+/* Same calm fade+scale expand used across the app's other flyout panels
+   (FlowControlPanel.vue's wind/currents panel, MapView.vue's shelters and
+   exposure-layers panels) — duplicated here since Vue's scoped CSS doesn't
+   cross component boundaries (live-testing ask, 2026-08-05: "asistanın
+   chat box'ının açılışını da aynı şekilde yap"). */
+.flow-panel-expand-enter-active,
+.flow-panel-expand-leave-active {
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+.flow-panel-expand-enter-from,
+.flow-panel-expand-leave-to {
+  opacity: 0;
+  transform: scale(0.92);
+}
 
 .ai-assistant-widget__header {
   display: flex; align-items: center; justify-content: center; position: relative;
@@ -502,9 +670,49 @@ watch(() => route.name, () => {
 .ai-assistant-widget__bubble--assistant { background: rgba(255,255,255,.06); border-bottom-left-radius: 4px; }
 .ai-assistant-widget__bubble--user { background: #6a5cf0; color: #fff; border-bottom-right-radius: 4px; }
 
+/* Stage 2 (plain "waiting on server") / stage 3 (rotating fun messages) of
+   startLoadingSequence() — a soft pulse instead of a static line, so a long
+   wait still visibly reads as "alive". */
+.ai-assistant-widget__waitText { display: inline-block; animation: ai-wait-pulse 1.6s ease-in-out infinite; }
+@keyframes ai-wait-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: .55; }
+}
+
+/* Stage 3's fun messages — same monospace look as .ai-loader since the
+   leading characters glitch through RUNE_POOL glyphs the same way (driven
+   from JS via bubble.waitText, see buildScrambleFrames/runFunCycle). */
+.ai-assistant-widget__scramble { font-family: monospace; font-weight: bold; white-space: pre-wrap; }
+
 .ai-assistant-widget__chips { display: flex; flex-wrap: wrap; gap: 6px; }
 
 .ai-assistant-widget__inputRow {
   flex: 0 0 auto; display: flex; gap: 6px; padding: 10px; border-top: 1px solid rgba(255,255,255,.1);
+}
+
+/* "Thinking" indicator — Uiverse.io loader (by doniaskima), adapted: Turkish
+   "Düşünüyor..." instead of "Loading...", and scaled down ~10% further from
+   the already-shrunk 15px chat-bubble size. Cycles through the word
+   glitching progressively into runic-looking glyphs, one animated
+   pseudo-element, no JS. */
+.ai-loader {
+  width: fit-content;
+  font-weight: bold;
+  font-family: monospace;
+  white-space: pre;
+  font-size: 13.5px;
+  line-height: 1.2em;
+  height: 1.2em;
+  overflow: hidden;
+  display: inline-block;
+}
+.ai-loader::before {
+  content: "Düşünüyor...\A⌰üşünüyor...\A⌰⍜şünüyor...\A⌰⍜⏃ünüyor...\A⌰⍜⏃⎅nüyor...\A⌰⍜⏃⎅⟟üyor...\A⌰⍜⏃⎅⟟⋏yor...\A⌰⍜⏃⎅⟟⋏☌or...\A⌰⍜⏃⎅⟟⋏☌⟒r...\A⌰⍜⏃⎅⟟⋏☌⟒⏁...\A⌰⍜⏃⎅⟟⋏☌⟒⏁⋔..\A⌰⍜⏃⎅⟟⋏☌⟒⏁⋔⎍.\A⌰⍜⏃⎅⟟⋏☌⟒⏁⋔⎍⏚";
+  white-space: pre;
+  display: inline-block;
+  animation: ai-loader-cycle 1.3s infinite steps(13) alternate;
+}
+@keyframes ai-loader-cycle {
+  100% { transform: translateY(-100%); }
 }
 </style>

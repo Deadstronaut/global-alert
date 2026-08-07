@@ -39,9 +39,8 @@ class WaveCycle:
     def dir_param(self) -> str:
         return f"/gfs.{self.date:%Y%m%d}/{self.hour:02d}/wave/gridded"
 
-    @property
-    def filename(self) -> str:
-        return f"gfswave.t{self.hour:02d}z.{GRID}.{FORECAST_HOUR}.grib2"
+    def filename(self, forecast_hour: str = FORECAST_HOUR) -> str:
+        return f"gfswave.t{self.hour:02d}z.{GRID}.{forecast_hour}.grib2"
 
 
 def latest_available_cycle(now: dt.datetime | None = None) -> WaveCycle:
@@ -60,10 +59,10 @@ def previous_cycle(cycle: WaveCycle) -> WaveCycle:
     return WaveCycle(date=cycle.date - dt.timedelta(days=1), hour=CYCLE_HOURS[-1])
 
 
-def _download(cycle: WaveCycle, timeout_s: int) -> bytes:
+def _download(cycle: WaveCycle, timeout_s: int, forecast_hour: str = FORECAST_HOUR) -> bytes:
     params = {
         "dir": cycle.dir_param,
-        "file": cycle.filename,
+        "file": cycle.filename(forecast_hour),
         "var_HTSGW": "on",
         "var_DIRPW": "on",
         "lev_surface": "on",
@@ -75,7 +74,7 @@ def _download(cycle: WaveCycle, timeout_s: int) -> bytes:
     # HTTP 200 with an HTML error page, not a 404 — a real GRIB2 file always
     # starts with the 4-byte "GRIB" magic.
     if body[:4] != b"GRIB":
-        raise RuntimeError(f"NOMADS did not return a GRIB2 file for {cycle.dir_param}/{cycle.filename}")
+        raise RuntimeError(f"NOMADS did not return a GRIB2 file for {cycle.dir_param}/{cycle.filename(forecast_hour)}")
     return body
 
 
@@ -94,4 +93,24 @@ def fetch_latest_wave_grib2(timeout_s: int = 60) -> tuple[bytes, dt.datetime]:
             raise RuntimeError(
                 f"Failed to fetch wave data for {cycle.dir_param} "
                 f"({first_error}) and fallback {fallback.dir_param} ({second_error})"
+            ) from second_error
+
+
+def fetch_forecast_wave_grib2(forecast_step_hours: int, timeout_s: int = 60) -> tuple[bytes, dt.datetime]:
+    """Returns (grib2_bytes, issued_at) for one 15-day-horizon forecast step
+    (spec 055 follow-up, significant_wave_height) — same shape as
+    fetch_gfs.py's fetch_forecast_field_grib2, just against the wave
+    filter service/grid instead of the atmospheric one."""
+    forecast_hour = f"f{forecast_step_hours:03d}"
+    cycle = latest_available_cycle()
+    try:
+        return _download(cycle, timeout_s, forecast_hour), cycle.issued_at
+    except (requests.RequestException, RuntimeError) as first_error:
+        fallback = previous_cycle(cycle)
+        try:
+            return _download(fallback, timeout_s, forecast_hour), fallback.issued_at
+        except (requests.RequestException, RuntimeError) as second_error:
+            raise RuntimeError(
+                f"Failed to fetch forecast wave data for {cycle.dir_param}@{forecast_hour} "
+                f"({first_error}) and fallback {fallback.dir_param}@{forecast_hour} ({second_error})"
             ) from second_error

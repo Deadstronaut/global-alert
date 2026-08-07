@@ -22,6 +22,7 @@
     "navShelters": "Abris",
     "navHazards": "Encyclopédie des Risques",
     "navReport": "Signalement Communautaire",
+    "navForecast": "Prévision",
     "overviewTitle": "Aperçu",
     "earthquakes24hTitle": "Séismes (24 dernières heures)",
     "earthquakes24hForCountry": "en {country}",
@@ -39,6 +40,41 @@
       "last24h": "Dernières 24 heures",
       "earthquakes": "séismes",
       "unknownSource": "Inconnu"
+    },
+    "forecast": {
+      "panelTitle": "Prévision",
+      "horizon15d": "15 Jours",
+      "horizon1mo": "1 Mois",
+      "horizon3mo": "3 Mois",
+      "variableWindSpeed": "Vent",
+      "variablePrecipitation": "Précipitations",
+      "variableTemperature": "Température",
+      "variableRelativeHumidity": "Humidité Relative",
+      "variableMeanSeaLevelPressure": "Pression au Niveau de la Mer",
+      "variableCape": "CAPE (Potentiel d'Orage)",
+      "variableTotalPrecipitableWater": "Eau Précipitable Totale",
+      "variableTotalCloudWater": "Eau Nuageuse Totale",
+      "variableDewPoint": "Point de Rosée",
+      "variableWetBulbTemp": "Température du Thermomètre Mouillé",
+      "variableWindPowerDensity": "Densité de Puissance Éolienne",
+      "variableMiseryIndex": "Indice de Misère",
+      "variableSignificantWaveHeight": "Hauteur des Vagues",
+      "variableUvIndex": "Indice UV",
+      "regionLabel": "Région",
+      "regionPlaceholder": "ex. Ankara",
+      "regionRequiredHint": "Saisissez le nom d'une province pour voir sa perspective (ex. Ankara).",
+      "validPeriodLabel": "Période couverte : {period}",
+      "asOf": "Mise à jour : {time}",
+      "unavailable": "Aucune prévision disponible pour cette sélection.",
+      "notConfigured": "Cet horizon de prévision n'est pas configuré pour ce déploiement.",
+      "probabilisticNotice": "Ceci est une perspective probabiliste, pas une prévision jour par jour.",
+      "seasonalNotice": "Orientation à long terme pour la planification, pas une prédiction d'événements précis.",
+      "classificationBelowNormal": "Inférieur à la Normale",
+      "classificationNearNormal": "Proche de la Normale",
+      "classificationAboveNormal": "Supérieur à la Normale",
+      "confidenceLabel": "Confiance : {pct}%",
+      "dayLabel": "Jour {n}",
+      "loading": "Chargement de la prévision..."
     }
   },
   "common": {
@@ -1150,6 +1186,13 @@
     "send": "Envoyer",
     "noCountryContext": "Aucun contexte pays n'est configuré dans ce navigateur — ouvrez d'abord l'onglet « AI Yardımı » d'AdminView et activez une capacité pour un pays.",
     "waitingServer": "En attente d'une réponse du serveur..."
+  },
+  "flowPanel": {
+    "forecast": {
+      "rowLabel": "Prévision",
+      "dayLabel": "Jour {n} · {date}",
+      "noData": "Pas encore de données de prévision pour ce jour."
+    }
   },
   "windLayer": {
     "toggleLabel": "Vent",

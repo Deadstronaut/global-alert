@@ -202,6 +202,12 @@ const CHAT_SYSTEM_PROMPT =
   'any alert, or take any action; you can only reply with text. If asked to do something that requires taking ' +
   'an action, explain that you can only talk, not act, and suggest the operator use the appropriate screen in ' +
   'the app instead.\n\n' +
+  'Place names in the user\'s message may contain typos or be garbled speech-to-text transcriptions (this chat ' +
+  'is also used via voice input) — if a place name doesn\'t immediately match anything you know or anything the ' +
+  'lookup tool returns, do not flatly conclude "no such place" before considering nearby-spelling or ' +
+  'similar-sounding alternatives (e.g. a one- or two-letter difference, a swapped vowel) for a real, well-known ' +
+  'place in the relevant region, and quietly answer using that likely intended place — you do not need to ask ' +
+  'the user to confirm the correction, just note briefly what you assumed.\n\n' +
   PROJECT_BRIEFING
 
 // Fixed role reference so the model can reason about what's actually

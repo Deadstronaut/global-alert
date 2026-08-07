@@ -3498,7 +3498,17 @@ function updateMarkers() {
 
     // Impact Analysis (spec 008): drive the split-view side panel independently
     // of the existing popup toggle behavior.
-    el.addEventListener('click', () => {
+    // stopPropagation is required, not cosmetic: MapLibre Markers are
+    // appended into getCanvasContainer() itself, so a click here also
+    // bubbles into the map's own 'click' handlers underneath (selectCountry
+    // / clearCountrySelection below). Without it, clicking an event marker
+    // that isn't over the currently-selected country's polygon (e.g. a
+    // marker outside the selected country's own dimmed/filtered fill) fell
+    // through to the empty-click handler and flew the camera back to
+    // defaultCameraState — reported 2026-08-07 as an unwanted zoom-out
+    // whenever clicking a marker outside the selected country.
+    el.addEventListener('click', (ev) => {
+      ev.stopPropagation()
       selectedImpactEvent.value = event
     })
 

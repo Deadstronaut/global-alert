@@ -109,10 +109,10 @@ export const useAiAssistanceStore = defineStore('aiAssistance', () => {
   // onay/red gerekmiyor (FR-004 zaten "kalıcı etkisi olan" önerilere
   // uygulanıyor, sohbetin kalıcı etkisi yok).
   // ─────────────────────────────────────────
-  async function sendChatMessage(history, countryCode) {
+  async function sendChatMessage(history, countryCode, uiLocale) {
     error.value = null;
     const { data, error: err } = await supabase.functions.invoke('ai-chat', {
-      body: { messages: history, country_code: countryCode },
+      body: { messages: history, country_code: countryCode, ui_locale: uiLocale },
     });
     if (err || data?.ok === false) {
       error.value = err?.message ?? data?.reason ?? 'provider_unavailable';

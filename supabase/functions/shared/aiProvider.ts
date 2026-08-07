@@ -247,6 +247,31 @@ export function buildUserContext(profile: {
   )
 }
 
+// Maps the app's vue-i18n locale codes (AiAssistantWidget.vue's LOCALES) to
+// a plain-English name the model reliably follows — locale codes alone
+// ("ar", "zh") are ambiguous/unreliable as a language directive, but a named
+// language in the instruction is not.
+const LOCALE_NAMES: Record<string, string> = {
+  en: 'English',
+  tr: 'Turkish',
+  es: 'Spanish',
+  fr: 'French',
+  ru: 'Russian',
+  ar: 'Arabic',
+  zh: 'Chinese',
+}
+
+// The UI's current display language, so the assistant answers in whatever
+// language the operator has the app set to right now rather than defaulting
+// to one language regardless of locale (live-testing ask: "ana dili
+// değiştirdiğimizde... asistanın da dili değişmesi lazım").
+export function buildLanguageInstruction(uiLocale: string | null | undefined): string | null {
+  if (!uiLocale) return null
+  const languageName = LOCALE_NAMES[uiLocale]
+  if (!languageName) return null
+  return `Always reply in ${languageName} (the app's current display language is "${uiLocale}"), regardless of what language the user's message is written in, unless they explicitly ask you to use a different language.`
+}
+
 export interface ChatTurn {
   role: 'user' | 'assistant'
   content: string

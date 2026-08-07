@@ -128,6 +128,25 @@ export const useUIStore = defineStore('ui', () => {
         toggleAnimateLayer('wave');
     }
     const selectedMode = ref('air');
+    // Switching Mode (Air/Ocean/Chem/...) must clear whatever Animate/Overlay/
+    // Forecast selection was active — each Mode has its own option list, and
+    // leaving a prior selection "on" made its chip look active in the new
+    // Mode even though it no longer applies there (2026-08-07 bug report:
+    // switching Air -> Ocean kept Air's Animate/Overlay chips highlighted).
+    function setMode(modeId) {
+        if (selectedMode.value === modeId) return;
+        selectedMode.value = modeId;
+        resetFlowSelections();
+    }
+    // Shared by setMode above and the 2D/3D transition actions below —
+    // any switch that changes which Animate/Overlay/Forecast options are
+    // even valid to show should drop the prior selection rather than leave
+    // a stale chip highlighted.
+    function resetFlowSelections() {
+        activeAnimateLayer.value = null;
+        activeOverlayKey.value = null;
+        selectedForecastVariable.value = null;
+    }
 
     // Height selector (spec 054 follow-up, 2026-08-06) — 'Sfc' or a GFS
     // pressure-level string ('1000'|'850'|'700'|'500'|'250'|'70'|'10').
@@ -273,6 +292,7 @@ export const useUIStore = defineStore('ui', () => {
             // follow-up correction).
             mapMode.value = null;
             transitionState.value = 'complete';
+            resetFlowSelections();
         }, 800);
     }
 
@@ -293,6 +313,7 @@ export const useUIStore = defineStore('ui', () => {
             mapMode.value = 'hexagon';
             selectedRegion.value = null;
             transitionState.value = 'idle';
+            resetFlowSelections();
         }, 800);
     }
 
@@ -371,6 +392,7 @@ export const useUIStore = defineStore('ui', () => {
         wavesEnabled,
         toggleWaves,
         selectedMode,
+        setMode,
         selectedHeight,
         setSelectedHeight,
         flowPanelOpen,

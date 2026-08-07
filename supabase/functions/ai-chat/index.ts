@@ -25,7 +25,7 @@
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3'
 import { corsHeaders } from '../shared/cors.ts'
-import { chatReplyWithTools, buildUserContext, type ChatTurn } from '../shared/aiProvider.ts'
+import { chatReplyWithTools, buildUserContext, buildLanguageInstruction, type ChatTurn } from '../shared/aiProvider.ts'
 import { HAZARD_QUERY_TOOL_DEFINITION, resolveHazardQuery, MAX_ROWS } from '../shared/aiHazardQueryTool.ts'
 
 const MAX_HISTORY_TURNS = 20
@@ -72,14 +72,14 @@ Deno.serve(async (req) => {
   const { data: callerAuth, error: callerAuthError } = await admin.auth.getUser(authHeader.replace('Bearer ', ''))
   if (callerAuthError || !callerAuth.user) return json({ error: 'Invalid session' }, 401)
 
-  let body: { messages?: ChatTurn[]; country_code?: string }
+  let body: { messages?: ChatTurn[]; country_code?: string; ui_locale?: string }
   try {
     body = await req.json()
   } catch {
     return json({ error: 'Invalid JSON body' }, 400)
   }
 
-  const { messages, country_code } = body
+  const { messages, country_code, ui_locale } = body
   if (!Array.isArray(messages) || messages.length === 0 || !country_code) {
     return json({ error: 'messages (non-empty array) and country_code are required' }, 400)
   }
@@ -110,7 +110,8 @@ Deno.serve(async (req) => {
   // Identity/role context is always built from the caller's OWN
   // authenticated profile (never from anything in the request body) so it
   // cannot be spoofed by a client claiming to be someone else.
-  const userContext = buildUserContext(profile)
+  const languageInstruction = buildLanguageInstruction(ui_locale)
+  const userContext = [buildUserContext(profile), languageInstruction].filter(Boolean).join('\n\n')
 
   const trimmedHistory = messages.slice(-MAX_HISTORY_TURNS)
   const result = await chatReplyWithTools(

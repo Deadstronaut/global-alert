@@ -49,7 +49,10 @@ const MODE_SOURCE = {
 const FIRE_SOURCE_SUFFIX = ' + VIIRS NRT / FIRMS / EOSDIS / NASA'
 
 function selectMode(mode) {
-  uiStore.selectedMode = mode.id
+  // uiStore.setMode (not a raw assignment) — clears the prior Mode's
+  // Animate/Overlay/Forecast selection so its chip doesn't read as still
+  // active after switching to a Mode where it no longer applies.
+  uiStore.setMode(mode.id)
 }
 
 // Air mode's pressure-level selector — real for Temp/RH (spec 054

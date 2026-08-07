@@ -414,7 +414,7 @@ async function sendFreeText() {
   const stopLoading = startLoadingSequence(workingBubble)
   sending.value = true
   scrollToBottom()
-  const result = await aiAssistance.sendChatMessage(history, effectiveCountryCode.value)
+  const result = await aiAssistance.sendChatMessage(history, effectiveCountryCode.value, uiLocale.value)
   sending.value = false
   stopLoading()
   workingBubble.text = result.success ? result.reply : t('ai.unavailable')

@@ -912,6 +912,12 @@ function applyCriticalInfraCategoryFilter() {
 
 function onLocationSelected(location) {
   if (!map) return
+  // Live-testing finding, 2026-08-07: searching a new location while an
+  // event's Etki Analizi panel is open left the panel showing the PREVIOUS
+  // event's analysis (wrong country's exposure datasets alongside it) —
+  // nothing ever cleared selectedImpactEvent when the map's focus moved
+  // elsewhere. A fresh search is a clear signal the operator has moved on.
+  selectedImpactEvent.value = null
   map.flyTo({ center: [location.lng, location.lat], zoom: location.zoom || 10 })
 }
 
@@ -2244,6 +2250,12 @@ function selectCountry(f) {
   // a no-op past this point (including no repeat flyTo below).
   if (alreadySelected) return
 
+  // Switching to a genuinely different country must not leave the Etki
+  // Analizi panel showing the PREVIOUS country's event/analysis (see
+  // clearCountrySelection's and onLocationSelected's matching fix,
+  // live-testing finding 2026-08-07).
+  selectedImpactEvent.value = null
+
   // Only capture on the very first selection (nothing selected yet) —
   // re-selecting a different country while one is already focused must not
   // overwrite this with 'hexagon' (its own forced value), which would lose
@@ -2307,6 +2319,10 @@ function selectCountry(f) {
 function clearCountrySelection() {
   selectedCountryName.value = null
   selectedCountryCode.value = null
+  // Same staleness fix as onLocationSelected: the deselected country's
+  // Etki Analizi panel must not keep showing an analysis scoped to a
+  // country that's no longer selected.
+  selectedImpactEvent.value = null
   hideExposureLayersNotForCountry(null)
   selectedCountryBounds = null
   disasterStore.activeBbox = null

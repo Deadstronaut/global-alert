@@ -206,6 +206,16 @@ const HAZARD_RELEVANT_SOURCES = {
 const DEFAULT_RELEVANT_SOURCES = ['worldpop', 'osm-buildings']
 
 const relevantDatasets = computed(() => {
+  // Unlike filteredDatasets' "show everything" fallback (deliberate, for a
+  // superadmin manually browsing with no country in focus), the AUTOMATIC
+  // summary must never silently run every served country's datasets against
+  // an event whose own country couldn't even be resolved (e.g. a location
+  // outside every served country, like a Greece earthquake) — that produced
+  // a confusing list of unrelated countries' datasets, each correctly
+  // reporting no overlap. Same "unresolvable area" outcome as
+  // resolveCascadeBoundary's cascadeBoundaryUnresolvable, applied here too
+  // (live-testing finding, 2026-08-07).
+  if (!effectiveCountryCode.value) return []
   const sources = HAZARD_RELEVANT_SOURCES[props.selectedEvent?.type] ?? DEFAULT_RELEVANT_SOURCES
   return filteredDatasets.value.filter((d) => sources.includes(d.source_name))
 })

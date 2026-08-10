@@ -30,6 +30,9 @@ import HazardTaxonomyPanel from '@/components/admin/HazardTaxonomyPanel.vue'
 import SopRepositoryPanel from '@/components/admin/SopRepositoryPanel.vue'
 import MapLayerRegistryPanel from '@/components/admin/MapLayerRegistryPanel.vue'
 import ExposureDatasetManager from '@/components/impact/ExposureDatasetManager.vue'
+import SatelliteImageryPanel from '@/components/admin/SatelliteImageryPanel.vue'
+import ResourceInventoryPanel from '@/components/admin/ResourceInventoryPanel.vue'
+import CapInboundPanel from '@/components/admin/CapInboundPanel.vue'
 import CommunityReportsPanel from '@/components/admin/CommunityReportsPanel.vue'
 import AssignedCommunityReportsPanel from '@/components/admin/AssignedCommunityReportsPanel.vue'
 import AiCapabilityTogglePanel from '@/components/admin/AiCapabilityTogglePanel.vue'
@@ -58,6 +61,9 @@ const ADMIN_TAB_PANELS = {
   orgs: OrgsPanel,
   drill: DrillPanel,
   sources: SourcesPanel,
+  satelliteImagery: SatelliteImageryPanel,
+  resourceInventory: ResourceInventoryPanel,
+  capInbound: CapInboundPanel,
   manual: ManualEntryForm,
   csv: FileImportForm,
   boundaries: BoundaryUploadForm,
@@ -87,6 +93,9 @@ const ADMIN_TAB_LABEL_KEYS = {
   orgs: 'admin.tabs.orgs',
   drill: 'admin.tabs.drill',
   sources: 'admin.tabs.sources',
+  satelliteImagery: 'satelliteImagery.tabLabel',
+  resourceInventory: 'resourceInventory.tabLabel',
+  capInbound: 'capInbound.tabLabel',
   manual: 'admin.tabs.manual',
   csv: 'admin.tabs.csv',
   boundaries: 'admin.tabs.boundaries',
@@ -126,6 +135,9 @@ const ADMIN_TAB_GATES = {
   aiAssistance: () => canAdmin.value,
   risk: () => canAdmin.value,
   exposure: () => canAdmin.value,
+  satelliteImagery: () => canAdmin.value,
+  resourceInventory: () => canAdmin.value,
+  capInbound: () => canAdmin.value,
   communityReports: () => canAdmin.value,
   assignedCommunityReports: () => isOrgAdmin.value,
   audit: () => hasCapability('audit'),

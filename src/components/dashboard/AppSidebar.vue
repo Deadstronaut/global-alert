@@ -46,9 +46,9 @@ const emit = defineEmits(['select-admin-tab'])
 // Anything not in this set still falls back to the old /admin?tab=<id>
 // navigation until it's been extracted too.
 const INLINE_ADMIN_TABS = new Set([
-  'users', 'orgs', 'drill', 'sources', 'manual', 'csv', 'boundaries', 'contacts', 'dispatch', 'integrations',
+  'users', 'orgs', 'drill', 'sources', 'satelliteImagery', 'manual', 'csv', 'boundaries', 'contacts', 'dispatch', 'integrations',
   'hazardTaxonomy', 'sopRepository', 'mapLayers', 'exposure', 'communityReports',
-  'assignedCommunityReports', 'aiAssistance', 'risk', 'audit',
+  'assignedCommunityReports', 'aiAssistance', 'risk', 'audit', 'resourceInventory', 'capInbound',
 ])
 
 const router = useRouter()
@@ -88,6 +88,7 @@ const adminCategories = [
   {
     id: 'data', icon: '📡', labelKey: 'admin.categories.data',
     tabs: [
+      { id: 'satelliteImagery', icon: '🛰️', labelKey: 'satelliteImagery.tabLabel' },
       { id: 'sources', icon: '📡', labelKey: 'admin.tabs.sources' },
       { id: 'csv', icon: '📁', labelKey: 'admin.tabs.csv' },
       { id: 'manual', icon: '✍️', labelKey: 'admin.tabs.manual' },
@@ -103,6 +104,7 @@ const adminCategories = [
       { id: 'dispatch', icon: '📨', labelKey: 'dispatch.panelTitle' },
       { id: 'communityReports', icon: '📢', labelKey: 'communityReport.moderation.tabLabel' },
       { id: 'risk', icon: '🧭', labelKey: 'risk.tabLabel' },
+      { id: 'resourceInventory', icon: '🧰', labelKey: 'resourceInventory.tabLabel' },
     ],
   },
   {
@@ -110,6 +112,7 @@ const adminCategories = [
     tabs: [
       { id: 'hazardTaxonomy', icon: '🌋', labelKey: 'hazardTaxonomy.tabLabel' },
       { id: 'sopRepository', icon: '📋', labelKey: 'incidentTracking.sopTabLabel' },
+      { id: 'capInbound', icon: '📥', labelKey: 'capInbound.tabLabel' },
       { id: 'aiAssistance', icon: '🤖', labelKey: 'ai.panelTitle' },
       { id: 'integrations', icon: '🔌', labelKey: 'integrations.tabLabel' },
     ],

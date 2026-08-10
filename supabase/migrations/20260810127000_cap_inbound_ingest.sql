@@ -14,6 +14,11 @@
 -- whichever external system it trusts to push to it.
 -- =====================================================
 
+-- gen_random_bytes() (used below for ingest_token) lives in pgcrypto, not
+-- Postgres core (unlike gen_random_uuid(), which is core since PG13) —
+-- enable it defensively in case this project hasn't already.
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
+
 CREATE TABLE IF NOT EXISTS cap_inbound_sources (
   id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   country_code  VARCHAR(2) NOT NULL,

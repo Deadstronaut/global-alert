@@ -14,16 +14,15 @@
 -- whichever external system it trusts to push to it.
 -- =====================================================
 
--- gen_random_bytes() (used below for ingest_token) lives in pgcrypto, not
--- Postgres core (unlike gen_random_uuid(), which is core since PG13) —
--- enable it defensively in case this project hasn't already.
-CREATE EXTENSION IF NOT EXISTS pgcrypto;
-
 CREATE TABLE IF NOT EXISTS cap_inbound_sources (
   id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   country_code  VARCHAR(2) NOT NULL,
   name          TEXT NOT NULL,
-  ingest_token  TEXT NOT NULL UNIQUE DEFAULT encode(gen_random_bytes(24), 'hex'),
+  -- Two concatenated gen_random_uuid()s (core Postgres since PG13, no
+  -- pgcrypto dependency — this project's pgcrypto isn't resolvable on its
+  -- default search_path) gives a 64-hex-char token with well over enough
+  -- entropy (2x UUIDv4) for a bearer-token-style secret.
+  ingest_token  TEXT NOT NULL UNIQUE DEFAULT (replace(gen_random_uuid()::text, '-', '') || replace(gen_random_uuid()::text, '-', '')),
   is_active     BOOLEAN NOT NULL DEFAULT true,
   created_by    UUID REFERENCES auth.users(id) ON DELETE SET NULL,
   created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()

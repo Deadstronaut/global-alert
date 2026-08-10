@@ -33,6 +33,7 @@ import SourcesPanel from '@/components/admin/SourcesPanel.vue'
 import AuditPanel from '@/components/admin/AuditPanel.vue'
 import ResourceInventoryPanel from '@/components/admin/ResourceInventoryPanel.vue'
 import CapInboundPanel from '@/components/admin/CapInboundPanel.vue'
+import SatelliteImageryPanel from '@/components/admin/SatelliteImageryPanel.vue'
 
 const router = useRouter()
 const route = useRoute()
@@ -152,6 +153,7 @@ const ADMIN_TABS = [
   { id: 'boundaries', category: 'data', icon: '🗺️', labelKey: 'admin.tabs.boundaries', visible: () => canAdmin.value },
   { id: 'mapLayers', category: 'data', icon: '🗺️', labelKey: 'mapLayers.tabLabel', visible: () => hasCapability('map_layers') },
   { id: 'exposure', category: 'data', icon: '📊', labelKey: 'impact.exposure.tabLabel', visible: () => canAdmin.value },
+  { id: 'satelliteImagery', category: 'data', icon: '🛰️', labelKey: 'satelliteImagery.tabLabel', visible: () => canAdmin.value },
   { id: 'drill', category: 'operations', icon: '🎯', labelKey: 'admin.tabs.drill', visible: () => true },
   { id: 'dispatch', category: 'operations', icon: '📨', labelKey: 'dispatch.panelTitle', visible: () => canCreateUsers.value },
   { id: 'communityReports', category: 'operations', icon: '📢', labelKey: 'communityReport.moderation.tabLabel', visible: () => canAdmin.value },
@@ -367,6 +369,11 @@ onUnmounted(() => {
     <!-- ── Exposure Datasets tab (spec 008) ─────────────────────────────────── -->
     <div v-if="tab === 'exposure' && canAdmin" class="tab-content">
       <ExposureDatasetManager />
+    </div>
+
+    <!-- ── Satellite Imagery tab (spec 066, unblocked) ──────────────────────── -->
+    <div v-if="tab === 'satelliteImagery' && canAdmin" class="tab-content">
+      <SatelliteImageryPanel />
     </div>
 
     <!-- ── Risk & Scenario Modeling tab (spec 039) ──────────────────────────── -->

@@ -868,6 +868,21 @@
     "saveSettings": "Save settings",
     "lastRun": "Last run: {status} — {message}"
   },
+  "satelliteImagery": {
+    "tabLabel": "Satellite Imagery",
+    "title": "Satellite Imagery (Sentinel-2, Copernicus)",
+    "hint": "Request a true-color Sentinel-2 image for a bounding box (typically an active incident's area) — pulled on demand from Copernicus Data Space Ecosystem's free Sentinel Hub Process API.",
+    "country": "Country",
+    "west": "West",
+    "south": "South",
+    "east": "East",
+    "north": "North",
+    "request": "Request image",
+    "requesting": "Requesting...",
+    "countryRequired": "Country code must be 2 letters.",
+    "bboxRequired": "West/South/East/North must all be valid numbers.",
+    "empty": "No satellite imagery requested yet."
+  },
   "capInbound": {
     "tabLabel": "CAP Inbound",
     "sourcesTitle": "Inbound Sources",

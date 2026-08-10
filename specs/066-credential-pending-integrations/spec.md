@@ -22,6 +22,16 @@ new integration type there, and a country_admin/org_admin fills in its fields, w
 required for the common case. What's parked here is the actual data-fetching/sending code behind
 each integration, which cannot be built and verified without real credentials to test against.
 
+## Update 2026-08-10: satellite imagery unblocked
+
+Item 2 below (satellite imagery) is **no longer parked**. The project owner registered a free
+Copernicus Data Space Ecosystem (CDSE) account — the official ESA portal that hosts the same
+Sentinel Hub API stack Sentinel Hub's commercial offering charges for, at no cost within a
+generous free processing-unit quota — and generated an OAuth client. Implemented as **spec
+067-satellite-imagery**; see that spec for the working implementation. Kept here only as a record
+of why it was originally parked (the paid Sentinel Hub reseller pricing looked prohibitive before
+the free CDSE path was found).
+
 ## Parked Items
 
 ### 1. NMHS / official risk data source adapter (Disaster Risk Knowledge pillar)
@@ -36,13 +46,10 @@ each integration, which cannot be built and verified without real credentials to
   country's NMHS provides access; build a dedicated `import-<nmhs-name>` Edge Function following
   the existing `import-*` pattern.
 
-### 2. Satellite imagery ingestion (Observations & Forecasting pillar)
+### 2. ~~Satellite imagery ingestion~~ — DONE, see spec 067
 
-- **What's needed**: A Sentinel Hub, Planet, or similar satellite-imagery API account and key.
-- **Why parked**: These are commercial (or quota-limited free-tier) services requiring account
-  signup; no such account exists for this project yet.
-- **When unblocked**: Register the provider via spec 025, then add an `import-satellite-imagery`
-  Edge Function mirroring `import-worldpop`'s raster-ingestion shape (spec 043).
+Unblocked 2026-08-10 via the free Copernicus Data Space Ecosystem, not the paid Sentinel Hub
+reseller originally assumed here. See `specs/067-satellite-imagery/spec.md`.
 
 ### 3. SMS / Cell Broadcast dispatch channel (Warning Dissemination pillar)
 

@@ -868,6 +868,21 @@
     "saveSettings": "Ayarları kaydet",
     "lastRun": "Son çalıştırma: {status} — {message}"
   },
+  "satelliteImagery": {
+    "tabLabel": "Uydu Görüntüsü",
+    "title": "Uydu Görüntüsü (Sentinel-2, Copernicus)",
+    "hint": "Bir bölge (genelde aktif bir olayın alanı) için gerçek renkli Sentinel-2 görüntüsü iste — Copernicus Data Space Ecosystem'in ücretsiz Sentinel Hub Process API'sinden anlık olarak çekilir.",
+    "country": "Ülke",
+    "west": "Batı",
+    "south": "Güney",
+    "east": "Doğu",
+    "north": "Kuzey",
+    "request": "Görüntü iste",
+    "requesting": "İsteniyor...",
+    "countryRequired": "Ülke kodu 2 harf olmalı.",
+    "bboxRequired": "Batı/Güney/Doğu/Kuzey değerlerinin hepsi geçerli sayı olmalı.",
+    "empty": "Henüz uydu görüntüsü istenmedi."
+  },
   "capInbound": {
     "tabLabel": "Gelen CAP",
     "sourcesTitle": "Gelen Kaynaklar",

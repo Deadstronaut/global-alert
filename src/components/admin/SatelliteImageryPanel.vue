@@ -75,7 +75,9 @@ async function requestImagery() {
     <div v-if="loading" class="tab-loading">...</div>
     <div v-else class="image-grid">
       <div v-for="img in images" :key="img.id" class="image-card">
-        <img :src="publicUrl(img.storage_path)" :alt="img.country_code" loading="lazy" />
+        <a :href="publicUrl(img.storage_path)" target="_blank" rel="noopener">
+          <img :src="publicUrl(img.storage_path)" :alt="img.country_code" loading="lazy" />
+        </a>
         <div class="image-meta">
           <span>{{ img.country_code?.toUpperCase() }}</span>
           <span>{{ new Date(img.created_at).toLocaleString() }}</span>
@@ -101,8 +103,9 @@ async function requestImagery() {
 .btn-submit:disabled { opacity: .45; cursor: not-allowed; }
 .form-error { color: #ef4444; font-size: .8rem; margin: 8px 0; }
 .tab-loading, .empty-row { font-size: .82rem; color: var(--color-text-muted,#94a3b8); }
-.image-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 14px; }
+.image-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(420px, 1fr)); gap: 18px; max-width: 1100px; }
 .image-card { background: rgba(255,255,255,.03); border: 1px solid rgba(255,255,255,.08); border-radius: 10px; overflow: hidden; }
+.image-card a { display: block; cursor: zoom-in; }
 .image-card img { width: 100%; display: block; aspect-ratio: 1; object-fit: cover; }
 .image-meta { display: flex; justify-content: space-between; padding: 6px 10px; font-size: .72rem; color: var(--color-text-muted,#94a3b8); }
 </style>

@@ -124,8 +124,8 @@ Deno.serve(async (req) => {
         }],
       },
       output: {
-        width: 512,
-        height: 512,
+        width: 768,
+        height: 768,
         responses: [{ identifier: 'default', format: { type: 'image/png' } }],
       },
       evalscript: TRUE_COLOR_EVALSCRIPT,

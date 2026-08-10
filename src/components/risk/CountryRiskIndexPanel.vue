@@ -125,6 +125,56 @@ async function remove(row) {
 function fmt(value) {
   return value === null || value === undefined ? '—' : value
 }
+
+// ── Automated import settings (spec 058, Super Admin only) ────────────────
+const importSettings = ref(null)
+const importSettingsLoading = ref(false)
+const importSettingsError = ref(null)
+const importSettingsSaving = ref(false)
+const importRunning = ref(false)
+const importRunResult = ref(null)
+
+async function fetchImportSettings() {
+  if (!auth.isSuperAdmin) return
+  importSettingsLoading.value = true
+  const { data, error: err } = await supabase
+    .from('country_risk_index_import_settings')
+    .select('*')
+    .eq('id', '00000000-0000-0000-0000-000000000001')
+    .single()
+  if (err) importSettingsError.value = err.message
+  else importSettings.value = data
+  importSettingsLoading.value = false
+}
+
+async function saveImportSettings() {
+  if (!importSettings.value) return
+  importSettingsSaving.value = true
+  importSettingsError.value = null
+  const { error: err } = await supabase
+    .from('country_risk_index_import_settings')
+    .update({
+      source_url: importSettings.value.source_url?.trim() || null,
+      source_label: importSettings.value.source_label?.trim() || 'INFORM Index',
+      is_active: importSettings.value.is_active,
+    })
+    .eq('id', '00000000-0000-0000-0000-000000000001')
+  if (err) importSettingsError.value = err.message
+  importSettingsSaving.value = false
+}
+
+async function runImportNow() {
+  importRunning.value = true
+  importRunResult.value = null
+  const { data, error: err } = await supabase.functions.invoke('import-country-risk-index', { body: {} })
+  importRunning.value = false
+  if (err) importRunResult.value = { error: err.message }
+  else importRunResult.value = data
+  await fetchImportSettings()
+  await fetchRows()
+}
+
+onMounted(fetchImportSettings)
 </script>
 
 <template>
@@ -168,6 +218,36 @@ function fmt(value) {
         <tr v-if="!rows.length"><td colspan="8" class="empty-row">{{ t('countryRiskIndex.empty') }}</td></tr>
       </tbody>
     </table>
+
+    <div v-if="auth.isSuperAdmin && importSettings" class="import-settings-box">
+      <h4>{{ t('countryRiskIndex.autoImportTitle') }}</h4>
+      <p class="panel-hint">{{ t('countryRiskIndex.autoImportHint') }}</p>
+      <div class="form-grid">
+        <label class="form-field span-2"><span>{{ t('countryRiskIndex.sourceUrl') }}</span>
+          <input v-model="importSettings.source_url" placeholder="https://.../inform-index.csv" />
+        </label>
+        <label class="form-field"><span>{{ t('countryRiskIndex.sourceLabel') }}</span>
+          <input v-model="importSettings.source_label" />
+        </label>
+        <label class="form-field checkbox-field">
+          <input type="checkbox" v-model="importSettings.is_active" />
+          <span>{{ t('countryRiskIndex.autoImportActive') }}</span>
+        </label>
+      </div>
+      <div v-if="importSettingsError" class="form-error">{{ importSettingsError }}</div>
+      <div class="modal-actions">
+        <button class="btn-cancel" :disabled="importRunning" @click="runImportNow">
+          {{ importRunning ? '...' : t('countryRiskIndex.importNow') }}
+        </button>
+        <button class="btn-submit" :disabled="importSettingsSaving" @click="saveImportSettings">
+          {{ importSettingsSaving ? '...' : t('countryRiskIndex.saveSettings') }}
+        </button>
+      </div>
+      <p v-if="importSettings.last_run_at" class="panel-hint">
+        {{ t('countryRiskIndex.lastRun', { status: importSettings.last_run_status, message: importSettings.last_run_message }) }}
+      </p>
+      <p v-if="importRunResult" class="panel-hint">{{ JSON.stringify(importRunResult) }}</p>
+    </div>
 
     <div v-if="showForm" class="modal-overlay" @click.self="showForm = false">
       <div class="modal-card">
@@ -240,4 +320,7 @@ function fmt(value) {
 .modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 18px; }
 .btn-cancel { padding: 9px 18px; background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.15); border-radius: 8px; color: #cbd5e1; cursor: pointer; font-size: .85rem; }
 .btn-cancel:disabled { opacity: .5; cursor: not-allowed; }
+.import-settings-box { margin-top: 18px; padding: 14px; border: 1px solid rgba(255,255,255,.1); border-radius: 10px; background: rgba(255,255,255,.03); }
+.import-settings-box h4 { margin: 0 0 4px; color: #e2e8f0; font-size: .9rem; }
+.checkbox-field { flex-direction: row; align-items: center; gap: 8px; }
 </style>

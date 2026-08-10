@@ -14,6 +14,27 @@ enabled = true
 verify_jwt = false
 entrypoint = "./functions/unsubscribe/index.ts"
 
+# spec 063: an anonymous PublicPortalView visitor opting into browser push
+# has no account/bearer token, same rationale as ack-dispatch/unsubscribe.
+[functions.subscribe-push]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/subscribe-push/index.ts"
+
+# spec 064: external siren/radio/CAP-hub consumers pull this feed directly,
+# with no bearer token of their own — same rationale as ack-dispatch.
+[functions.public-cap-feed]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/public-cap-feed/index.ts"
+
+# spec 065: an external CAP source authenticates with its own per-source
+# ingest_token (cap_inbound_sources), not a platform bearer token.
+[functions.cap-inbound-ingest]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/cap-inbound-ingest/index.ts"
+
 [functions.generate-compliance-report]
 enabled = true
 verify_jwt = true

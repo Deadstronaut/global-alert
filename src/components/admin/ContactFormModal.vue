@@ -28,6 +28,11 @@ const regionCode = ref('')
 const lat = ref('')
 const lng = ref('')
 const hazardTypeFilter = ref('')
+// spec 060: fixed vocabulary matching the IFRC pillar's own targeting
+// language (elderly, youth, disability, etc.) — free-form tags would drift
+// from what dispatchMatching.ts's overlap check can meaningfully compare.
+const DEMOGRAPHIC_TAGS = ['elderly', 'youth', 'women', 'disability', 'low_income', 'displaced', 'minority']
+const demographicTags = ref([])
 const emailOptIn = ref(true)
 const whatsappOptIn = ref(true)
 const saving = ref(false)
@@ -51,6 +56,7 @@ watch(
     lat.value = c?.lat != null ? String(c.lat) : ''
     lng.value = c?.lng != null ? String(c.lng) : ''
     hazardTypeFilter.value = c?.hazard_type_filter ?? ''
+    demographicTags.value = c?.demographic_tags ?? []
     emailOptIn.value = c?.email_opt_in ?? true
     whatsappOptIn.value = c?.whatsapp_opt_in ?? true
     error.value = null
@@ -84,6 +90,7 @@ function save() {
     lat: lat.value !== '' ? Number(lat.value) : null,
     lng: lng.value !== '' ? Number(lng.value) : null,
     hazard_type_filter: hazardTypeFilter.value || null,
+    demographic_tags: demographicTags.value,
     email_opt_in: emailOptIn.value,
     whatsapp_opt_in: whatsappOptIn.value,
   })
@@ -135,6 +142,15 @@ function save() {
         </label>
         <label class="form-checkbox"><input type="checkbox" v-model="emailOptIn" /> {{ t('contacts.emailOptIn') }}</label>
         <label class="form-checkbox"><input type="checkbox" v-model="whatsappOptIn" /> {{ t('contacts.whatsappOptIn') }}</label>
+        <div class="form-field span-2">
+          <span>{{ t('contacts.demographicTags') }}</span>
+          <div class="tag-checkbox-group">
+            <label v-for="tag in DEMOGRAPHIC_TAGS" :key="tag" class="tag-checkbox">
+              <input type="checkbox" :value="tag" v-model="demographicTags" />
+              {{ t(`contacts.demographicTag.${tag}`) }}
+            </label>
+          </div>
+        </div>
       </div>
 
       <div v-if="error" class="form-error">{{ error }}</div>
@@ -162,6 +178,8 @@ function save() {
 .form-field select option { background: #1e2330; color: #e2e8f0; }
 .form-field input:focus, .form-field select:focus { outline: none; border-color: rgba(77,163,255,.5); }
 .form-checkbox { display: flex; align-items: center; gap: 8px; font-size: .82rem; color: #cbd5e1; }
+.tag-checkbox-group { display: flex; flex-wrap: wrap; gap: 10px 16px; }
+.tag-checkbox { display: flex; align-items: center; gap: 6px; font-size: .8rem; color: #cbd5e1; }
 .form-error { color: #ef4444; font-size: .8rem; margin-top: 12px; }
 .modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 18px; }
 .btn-cancel { padding: 9px 18px; background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.15); border-radius: 8px; color: #cbd5e1; cursor: pointer; font-size: .85rem; }

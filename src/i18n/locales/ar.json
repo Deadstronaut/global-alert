@@ -74,6 +74,7 @@
       "classificationAboveNormal": "أعلى من المعتاد",
       "confidenceLabel": "الثقة: {pct}%",
       "dayLabel": "اليوم {n}",
+      "modelVersion": "النموذج: {version}",
       "loading": "جارٍ تحميل التوقعات..."
     }
   },
@@ -287,6 +288,8 @@
       "submit": "حفظ المسودة",
       "submitting": "جارٍ الحفظ...",
       "regionCode": "المنطقة (اختياري)",
+      "targetDemographics": "الفئة المستهدفة (اختياري)",
+      "targetDemographicsHint": "اتركه فارغًا للوصول إلى الجميع. حدد وسومًا للوصول فقط إلى جهات الاتصال التي تحمل واحدًا منها على الأقل.",
       "regionCodePlaceholder": "إسطنبول، قاضي كوي..."
     },
     "status": {
@@ -552,6 +555,7 @@
       "vulnerability": "الضعف",
       "copingCapacity": "القدرة على التكيف",
       "composite": "درجة المخاطر المركبة",
+      "confidenceRange": "النطاق: {low}–{high} (استنادًا إلى {n} سجلاً)",
       "notAvailable": "غير متوفر",
       "exceedanceCurveTitle": "منحنى التجاوز الاحتمالي",
       "loadCurve": "تحميل المنحنى",
@@ -608,6 +612,16 @@
     "language": "اللغة",
     "hazardFilter": "تصفية نوع الخطر",
     "allHazards": "— الكل —",
+    "demographicTags": "الفئات الديموغرافية (اختياري)",
+    "demographicTag": {
+      "elderly": "كبار السن",
+      "youth": "الشباب",
+      "women": "النساء",
+      "disability": "ذوو الإعاقة",
+      "low_income": "محدودو الدخل",
+      "displaced": "النازحون",
+      "minority": "الأقليات"
+    },
     "country": "الدولة",
     "region": "رمز المنطقة",
     "lat": "خط العرض (اختياري، لاستهداف جغرافي دقيق)",
@@ -663,7 +677,12 @@
     "subtitle": "بوابة التنبيهات العامة",
     "empty": "لا توجد تنبيهات نشطة حاليًا.",
     "issuedLabel": "تاريخ الإصدار",
-    "expiresLabel": "تاريخ الانتهاء"
+    "expiresLabel": "تاريخ الانتهاء",
+    "pushSelectCountry": "اختر دولتك",
+    "pushSubscribe": "الاشتراك في الإشعارات الفورية",
+    "pushUnsubscribe": "إلغاء الاشتراك",
+    "pushSubscribed": "الإشعارات الفورية مفعّلة",
+    "pushCountryRequired": "اختر دولتك أولاً."
   },
   "hazardTaxonomy": {
     "tabLabel": "تصنيف الأخطار",
@@ -744,7 +763,15 @@
     "save": "حفظ",
     "countryCodeInvalid": "يجب أن يتكون رمز الدولة من حرفين.",
     "yearInvalid": "يجب أن تكون السنة رقمًا صالحًا.",
-    "duplicateYear": "يوجد بالفعل إدخال لهذه الدولة/السنة/المصدر."
+    "duplicateYear": "يوجد بالفعل إدخال لهذه الدولة/السنة/المصدر.",
+    "autoImportTitle": "استيراد تلقائي",
+    "autoImportHint": "أدخل رابط ملف CSV قابل للتنزيل علنًا (مثل إصدار INFORM Index) لإبقاء هذا الجدول محدثًا تلقائيًا دون إدخال يدوي كل عام.",
+    "sourceUrl": "رابط مصدر CSV",
+    "sourceLabel": "تسمية المصدر",
+    "autoImportActive": "الاستيراد التلقائي مفعّل",
+    "importNow": "استيراد الآن",
+    "saveSettings": "حفظ الإعدادات",
+    "lastRun": "آخر تشغيل: {status} — {message}"
   },
   "incidentTracking": {
     "aarLabel": "ملاحظات ما بعد الإجراء",

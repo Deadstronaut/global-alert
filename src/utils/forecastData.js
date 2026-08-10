@@ -67,6 +67,8 @@ export function toDailySeries(rows) {
       valueMin: row.value_min,
       valueMax: row.value_max,
       textureStoragePath: row.texture_storage_path,
+      modelVersion: row.model_version,
+      confidenceScore: row.confidence_score,
     }))
     .sort((a, b) => a.forecastStepHours - b.forecastStepHours)
 }
@@ -75,7 +77,7 @@ export function toDailySeries(rows) {
 export async function fetchForecastSnapshots(variable) {
   const { data, error } = await supabase
     .from('forecast_snapshots')
-    .select('variable, forecast_step_hours, valid_at, issued_at, texture_storage_path, value_min, value_max, bounds, source_name')
+    .select('variable, forecast_step_hours, valid_at, issued_at, texture_storage_path, value_min, value_max, bounds, source_name, model_version, confidence_score')
     .eq('variable', variable)
     .order('forecast_step_hours', { ascending: true })
   if (error) throw error

@@ -2,8 +2,44 @@
 import { ref, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { supabase } from '@/services/api/config.js'
+import { isPushSupported, subscribeToPush, unsubscribeFromPush, getExistingPushSubscription } from '@/utils/webPush.js'
+import countries from '@/configs/countries.json'
 
 const { t } = useI18n()
+
+// ── Web Push opt-in (spec 063) — no account needed, browser-level only ────
+const pushSupported = isPushSupported()
+const pushCountryCode = ref('')
+const pushSubscribed = ref(false)
+const pushBusy = ref(false)
+const pushError = ref(null)
+const countryOptions = Object.entries(countries)
+  .map(([code, c]) => ({ code, name: c.nameEn }))
+  .sort((a, b) => a.name.localeCompare(b.name))
+
+async function refreshPushState() {
+  if (!pushSupported) return
+  pushSubscribed.value = !!(await getExistingPushSubscription())
+}
+
+async function togglePush() {
+  pushError.value = null
+  pushBusy.value = true
+  try {
+    if (pushSubscribed.value) {
+      await unsubscribeFromPush()
+      pushSubscribed.value = false
+    } else {
+      if (!pushCountryCode.value) { pushError.value = t('portal.pushCountryRequired'); return }
+      await subscribeToPush({ countryCode: pushCountryCode.value })
+      pushSubscribed.value = true
+    }
+  } catch (err) {
+    pushError.value = err.message
+  } finally {
+    pushBusy.value = false
+  }
+}
 
 // Unauthenticated route (spec 009 US4). The existing viewer_cap_read_public
 // RLS policy on cap_drafts already permits anon SELECT on 'broadcast' (and
@@ -36,7 +72,10 @@ function formatDate(iso) {
   return iso ? new Date(iso).toLocaleString() : '—'
 }
 
-onMounted(loadAlerts)
+onMounted(() => {
+  loadAlerts()
+  refreshPushState()
+})
 </script>
 
 <template>
@@ -45,6 +84,25 @@ onMounted(loadAlerts)
       <h1>{{ t('portal.title') }}</h1>
       <p class="portal-subtitle">{{ t('portal.subtitle') }}</p>
     </header>
+
+    <div v-if="pushSupported" class="push-optin">
+      <template v-if="pushSubscribed">
+        <span class="push-status">{{ t('portal.pushSubscribed') }}</span>
+        <button class="push-btn push-btn-secondary" :disabled="pushBusy" @click="togglePush">
+          {{ pushBusy ? '...' : t('portal.pushUnsubscribe') }}
+        </button>
+      </template>
+      <template v-else>
+        <select v-model="pushCountryCode" class="push-country-select">
+          <option value="">{{ t('portal.pushSelectCountry') }}</option>
+          <option v-for="c in countryOptions" :key="c.code" :value="c.code">{{ c.name }}</option>
+        </select>
+        <button class="push-btn" :disabled="pushBusy" @click="togglePush">
+          {{ pushBusy ? '...' : t('portal.pushSubscribe') }}
+        </button>
+      </template>
+      <p v-if="pushError" class="portal-error">{{ pushError }}</p>
+    </div>
 
     <div v-if="error" class="portal-error">{{ error }}</div>
     <div v-if="loading" class="portal-loading">...</div>
@@ -74,6 +132,22 @@ onMounted(loadAlerts)
 .portal-header h1 { margin: 0; font-size: 1.6rem; }
 .portal-subtitle { color: #94a3b8; font-size: .85rem; margin-top: 4px; }
 .portal-error { color: #ef4444; text-align: center; }
+.push-optin {
+  display: flex; align-items: center; justify-content: center; gap: 10px; flex-wrap: wrap;
+  margin: 0 0 24px; padding: 12px 16px; background: rgba(255,255,255,.04);
+  border: 1px solid rgba(255,255,255,.1); border-radius: 10px;
+}
+.push-country-select {
+  background: #1e2330; border: 1px solid rgba(255,255,255,.15); border-radius: 8px;
+  padding: 8px 10px; color: #e2e8f0; font-size: .85rem; color-scheme: dark;
+}
+.push-btn {
+  padding: 8px 16px; background: rgba(34,197,94,.2); border: 1px solid rgba(34,197,94,.4);
+  border-radius: 8px; color: #22c55e; font-weight: 600; cursor: pointer; font-size: .85rem;
+}
+.push-btn:disabled { opacity: .5; cursor: not-allowed; }
+.push-btn-secondary { background: rgba(255,255,255,.06); border-color: rgba(255,255,255,.15); color: #cbd5e1; }
+.push-status { font-size: .85rem; color: #22c55e; }
 .portal-loading, .portal-empty { text-align: center; color: #94a3b8; padding: 30px 0; }
 .alert-list { display: flex; flex-direction: column; gap: 14px; }
 .alert-card {

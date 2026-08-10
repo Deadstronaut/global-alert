@@ -271,6 +271,24 @@ def _upload_forecast_texture(variable: str, forecast_step_hours: int, issued_at:
     return path
 
 
+def _forecast_model_version(issued_at: dt.datetime) -> str:
+    """GFS issuance cycles run every 6h (00/06/12/18Z) — this identifies
+    exactly which cycle a snapshot came from (spec 059)."""
+    return f"GFS {issued_at.strftime('%Y%m%d%HZ')}"
+
+
+def _forecast_confidence_score(forecast_step_hours: int) -> float:
+    """Lead-time heuristic, not a model-native ensemble spread (the
+    deterministic GFS run this importer consumes carries none): confidence
+    falls linearly from 1.0 at issuance to 0.3 at the 15-day (360h) horizon,
+    floored at 0.3 so a far-out forecast is never shown as "no confidence"
+    (spec 059)."""
+    horizon_hours = 360
+    floor = 0.3
+    fraction = min(1.0, max(0.0, forecast_step_hours / horizon_hours))
+    return round(1.0 - fraction * (1.0 - floor), 3)
+
+
 def _insert_forecast_snapshot_row(
     variable: str, forecast_step_hours: int, valid_at: dt.datetime, issued_at: dt.datetime,
     texture: OverlayTexture, storage_path: str,
@@ -287,6 +305,8 @@ def _insert_forecast_snapshot_row(
         "value_min": texture.value_min, "value_max": texture.value_max,
         "bounds": [west, south, east, north],
         "source_name": SOURCE_NAME_BY_FORECAST_VARIABLE[variable],
+        "model_version": _forecast_model_version(issued_at),
+        "confidence_score": _forecast_confidence_score(forecast_step_hours),
     }
     response = requests.post(
         url,

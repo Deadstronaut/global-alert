@@ -162,6 +162,16 @@ async function loadExceedanceCurve() {
         <span class="risk-composite-value">
           {{ score.composite_score !== null ? score.composite_score.toFixed(1) : t('risk.dashboard.notAvailable') }}
         </span>
+        <span
+          v-if="score.composite_score_low !== null && score.composite_score_low !== undefined"
+          class="risk-confidence-range"
+        >
+          {{ t('risk.dashboard.confidenceRange', {
+            low: score.composite_score_low.toFixed(1),
+            high: score.composite_score_high.toFixed(1),
+            n: score.confidence_sample_size
+          }) }}
+        </span>
       </div>
     </div>
 
@@ -253,6 +263,7 @@ async function loadExceedanceCurve() {
 .risk-factor-value { font-size: 1.2rem; font-weight: 600; }
 .risk-composite { grid-column: 1 / -1; border-top: 1px solid rgba(255,255,255,.1); padding-top: 10px; }
 .risk-composite-value { font-size: 1.6rem; font-weight: 700; color: #22c55e; }
+.risk-confidence-range { font-size: 0.8rem; color: rgba(255,255,255,.55); }
 .risk-curve-table { margin-top: 10px; display: flex; flex-direction: column; gap: 6px; font-size: .82rem; }
 .risk-curve-row { display: flex; justify-content: space-between; }
 .risk-meta { color: var(--color-text-muted, #94a3b8); font-size: .75rem; margin-top: 6px; }

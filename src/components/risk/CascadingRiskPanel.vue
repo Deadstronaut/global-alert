@@ -138,6 +138,9 @@ defineExpose({ evaluate })
             {{ t('risk.cascade.affectedPopulation') }}:
             {{ a.affected_population !== null && a.affected_population !== undefined ? Math.round(a.affected_population).toLocaleString() : t('risk.dashboard.notAvailable') }}
           </p>
+          <p v-if="a.sop_title" class="risk-linked-sop">
+            {{ t('risk.cascade.linkedSop', { title: a.sop_title }) }}
+          </p>
           <details class="risk-why">
             <summary>{{ t('risk.cascade.whyLabel') }}</summary>
             <ul class="risk-why-list">
@@ -189,6 +192,7 @@ defineExpose({ evaluate })
 }
 .risk-row-block { flex-direction: column; align-items: flex-start; gap: 4px; }
 .risk-recommendation { font-size: .82rem; margin: 2px 0; }
+.risk-linked-sop { font-size: .78rem; color: #4aa3ff; margin: 2px 0; }
 .risk-why { font-size: .72rem; color: var(--color-text-muted, #94a3b8); cursor: pointer; }
 .risk-why-list { list-style: none; margin: 6px 0 0; padding: 0; font-size: .75rem; display: flex; flex-direction: column; gap: 3px; }
 .risk-why-list span { color: var(--color-text-muted, #94a3b8); }

@@ -74,6 +74,7 @@
       "classificationAboveNormal": "高于正常",
       "confidenceLabel": "置信度：{pct}%",
       "dayLabel": "第 {n} 天",
+      "modelVersion": "模型: {version}",
       "loading": "正在加载预报..."
     }
   },
@@ -287,6 +288,8 @@
       "submit": "保存草稿",
       "submitting": "保存中...",
       "regionCode": "地区（可选）",
+      "targetDemographics": "目标人群（可选）",
+      "targetDemographicsHint": "留空则通知所有人。选择标签后,仅通知至少具有其中一个标签的联系人。",
       "regionCodePlaceholder": "伊斯坦布尔，卡德柯伊..."
     },
     "status": {
@@ -552,6 +555,7 @@
       "vulnerability": "脆弱性",
       "copingCapacity": "应对能力",
       "composite": "综合风险评分",
+      "confidenceRange": "范围: {low}–{high}(基于 {n} 条记录)",
       "notAvailable": "不可用",
       "exceedanceCurveTitle": "概率超越曲线",
       "loadCurve": "加载曲线",
@@ -608,6 +612,16 @@
     "language": "语言",
     "hazardFilter": "灾害类型筛选",
     "allHazards": "— 全部 —",
+    "demographicTags": "人口特征标签(可选)",
+    "demographicTag": {
+      "elderly": "老年人",
+      "youth": "青年",
+      "women": "妇女",
+      "disability": "残障人士",
+      "low_income": "低收入群体",
+      "displaced": "流离失所者",
+      "minority": "少数群体"
+    },
     "country": "国家",
     "region": "地区代码",
     "lat": "纬度（可选，用于精确地理定位）",
@@ -663,7 +677,12 @@
     "subtitle": "公共警报门户",
     "empty": "目前没有活动警报。",
     "issuedLabel": "发布时间",
-    "expiresLabel": "到期时间"
+    "expiresLabel": "到期时间",
+    "pushSelectCountry": "选择您的国家",
+    "pushSubscribe": "订阅推送通知",
+    "pushUnsubscribe": "取消订阅",
+    "pushSubscribed": "推送通知已启用",
+    "pushCountryRequired": "请先选择您的国家。"
   },
   "hazardTaxonomy": {
     "tabLabel": "灾害分类",
@@ -744,7 +763,15 @@
     "save": "保存",
     "countryCodeInvalid": "国家代码必须为2个字母。",
     "yearInvalid": "年份必须是有效数字。",
-    "duplicateYear": "该国家/年份/来源的记录已存在。"
+    "duplicateYear": "该国家/年份/来源的记录已存在。",
+    "autoImportTitle": "自动导入",
+    "autoImportHint": "填写一个可公开下载的 CSV 链接(例如 INFORM Index 的发布文件),即可让该表自动保持更新,无需每年手动录入。",
+    "sourceUrl": "CSV 来源 URL",
+    "sourceLabel": "来源标签",
+    "autoImportActive": "启用自动导入",
+    "importNow": "立即导入",
+    "saveSettings": "保存设置",
+    "lastRun": "上次运行: {status} — {message}"
   },
   "incidentTracking": {
     "aarLabel": "事后总结",

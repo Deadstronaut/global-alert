@@ -74,6 +74,7 @@
       "classificationAboveNormal": "Por Encima de lo Normal",
       "confidenceLabel": "Confianza: {pct}%",
       "dayLabel": "Día {n}",
+      "modelVersion": "Modelo: {version}",
       "loading": "Cargando pronóstico..."
     }
   },
@@ -287,6 +288,8 @@
       "submit": "Guardar Borrador",
       "submitting": "Guardando...",
       "regionCode": "Región (opcional)",
+      "targetDemographics": "Grupo objetivo (opcional)",
+      "targetDemographicsHint": "Déjelo vacío para llegar a todos. Seleccione etiquetas para notificar solo a contactos con al menos una de ellas.",
       "regionCodePlaceholder": "Estambul, Kadıköy..."
     },
     "status": {
@@ -552,6 +555,7 @@
       "vulnerability": "Vulnerabilidad",
       "copingCapacity": "Capacidad de Afrontamiento",
       "composite": "Puntuación de Riesgo Compuesta",
+      "confidenceRange": "Rango: {low}–{high} (basado en {n} registros)",
       "notAvailable": "No disponible",
       "exceedanceCurveTitle": "Curva de Excedencia Probabilística",
       "loadCurve": "Cargar Curva",
@@ -608,6 +612,16 @@
     "language": "Idioma",
     "hazardFilter": "Filtro de Tipo de Peligro",
     "allHazards": "— todos —",
+    "demographicTags": "Etiquetas demográficas (opcional)",
+    "demographicTag": {
+      "elderly": "Personas mayores",
+      "youth": "Jóvenes",
+      "women": "Mujeres",
+      "disability": "Discapacidad",
+      "low_income": "Bajos ingresos",
+      "displaced": "Desplazados",
+      "minority": "Minoría"
+    },
     "country": "País",
     "region": "Código de Región",
     "lat": "Latitud (opcional, para geolocalización precisa)",
@@ -663,7 +677,12 @@
     "subtitle": "Portal Público de Alertas",
     "empty": "No hay alertas activas en este momento.",
     "issuedLabel": "Emitido",
-    "expiresLabel": "Expira"
+    "expiresLabel": "Expira",
+    "pushSelectCountry": "Seleccione su país",
+    "pushSubscribe": "Suscribirse a notificaciones push",
+    "pushUnsubscribe": "Cancelar suscripción",
+    "pushSubscribed": "Notificaciones push activadas",
+    "pushCountryRequired": "Seleccione primero su país."
   },
   "hazardTaxonomy": {
     "tabLabel": "Taxonomía de Peligros",
@@ -744,7 +763,15 @@
     "save": "Guardar",
     "countryCodeInvalid": "El código de país debe tener 2 letras.",
     "yearInvalid": "El año debe ser un número válido.",
-    "duplicateYear": "Ya existe una entrada para este país/año/fuente."
+    "duplicateYear": "Ya existe una entrada para este país/año/fuente.",
+    "autoImportTitle": "Importación automática",
+    "autoImportHint": "Indique una URL de CSV descargable públicamente (p. ej. una publicación del INFORM Index) para mantener esta tabla actualizada automáticamente, sin entrada manual cada año.",
+    "sourceUrl": "URL de origen CSV",
+    "sourceLabel": "Etiqueta de la fuente",
+    "autoImportActive": "Importación automática activa",
+    "importNow": "Importar ahora",
+    "saveSettings": "Guardar ajustes",
+    "lastRun": "Última ejecución: {status} — {message}"
   },
   "incidentTracking": {
     "aarLabel": "Notas post-acción",

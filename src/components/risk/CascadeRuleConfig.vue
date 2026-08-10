@@ -11,6 +11,13 @@ const rules = ref([])
 const loading = ref(false)
 const saving = ref(false)
 const error = ref(null)
+// spec 061: SOPs to link a rule to, so a fired rule can surface "what to
+// actually do about it" directly on the assessment.
+const sopDocuments = ref([])
+async function loadSopDocuments() {
+  const { data } = await supabase.from('sop_documents').select('id, title').eq('is_active', true).order('title')
+  sopDocuments.value = data || []
+}
 
 const countryCode = ref(auth.session?.countryCode ?? '')
 
@@ -74,6 +81,7 @@ const emptyForm = () => ({
   secondaryRiskCategory: '',
   recommendationTemplate: '',
   isActive: true,
+  linkedSopDocumentId: '',
 })
 const form = ref(emptyForm())
 
@@ -117,6 +125,7 @@ async function saveRule() {
     p_secondary_risk_category: form.value.secondaryRiskCategory,
     p_recommendation_template: form.value.recommendationTemplate,
     p_is_active: form.value.isActive,
+    p_linked_sop_document_id: form.value.linkedSopDocumentId || null,
   })
   if (err) {
     // Surfaces save_cascade_rule's specific validation message (missing
@@ -140,6 +149,7 @@ function editRule(rule) {
     secondaryRiskCategory: rule.secondary_risk_category,
     recommendationTemplate: rule.recommendation_template,
     isActive: rule.is_active,
+    linkedSopDocumentId: rule.linked_sop_document_id ?? '',
   }
 }
 
@@ -159,6 +169,7 @@ onMounted(() => {
   loadRules()
   loadAutoEvaluateSetting()
   loadUnacknowledged()
+  loadSopDocuments()
 })
 </script>
 
@@ -229,6 +240,14 @@ onMounted(() => {
         <textarea v-model="form.recommendationTemplate" rows="3" :placeholder="t('risk.cascadeRules.recommendationTemplatePlaceholder')"></textarea>
         <span class="risk-hint">{{ t('risk.cascadeRules.recommendationTemplateHint') }}</span>
       </label>
+      <label class="risk-field">
+        <span>{{ t('risk.cascadeRules.linkedSop') }}</span>
+        <select v-model="form.linkedSopDocumentId">
+          <option value="">{{ t('risk.cascadeRules.noSop') }}</option>
+          <option v-for="s in sopDocuments" :key="s.id" :value="s.id">{{ s.title }}</option>
+        </select>
+        <span class="risk-hint">{{ t('risk.cascadeRules.linkedSopHint') }}</span>
+      </label>
       <label class="risk-checkbox-row">
         <input type="checkbox" v-model="form.isActive" />
         <span>{{ t('risk.cascadeRules.isActive') }}</span>
@@ -270,10 +289,11 @@ onMounted(() => {
 .risk-form h4, .risk-list h4 { margin: 0 0 12px; font-size: .95rem; }
 .risk-intro { font-size: .8rem; color: var(--color-text-muted, #94a3b8); margin: 0 0 14px; line-height: 1.4; }
 .risk-field { display: flex; flex-direction: column; gap: 4px; font-size: .78rem; color: var(--color-text-muted, #94a3b8); margin-bottom: 10px; }
-.risk-field input, .risk-field textarea {
+.risk-field input, .risk-field textarea, .risk-field select {
   background: #1e2330; border: 1px solid rgba(255,255,255,.15); border-radius: 8px;
   padding: 6px 10px; color: #e2e8f0; font-size: .82rem; font-family: inherit;
 }
+.risk-field select { color-scheme: dark; }
 .risk-hint { font-size: .72rem; color: var(--color-text-muted, #94a3b8); opacity: .8; line-height: 1.35; }
 .risk-condition-group { border: 1px dashed rgba(255,255,255,.15); border-radius: 8px; padding: 10px 12px; margin-bottom: 10px; }
 .risk-condition-group legend { font-size: .75rem; color: var(--color-text-muted, #94a3b8); padding: 0 4px; }

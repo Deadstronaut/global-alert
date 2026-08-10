@@ -115,6 +115,9 @@ function selectDetailVariable(v) {
   detailVariable.value = v
 }
 const detailSeries = computed(() => seriesFor(detailVariable.value))
+// spec 059: which model cycle produced the currently-shown detail series,
+// so an analyst can tell one GFS run's data apart from the next.
+const detailModelVersion = computed(() => detailSeries.value.find((d) => d.modelVersion)?.modelVersion ?? null)
 const detailChartConfig = computed(() => ({
   valueMax: { label: variableLabel(detailVariable.value), color: '#42a5f5' },
 }))
@@ -317,10 +320,18 @@ const confidencePct = computed(() =>
               :grid-line="false"
               :domain-line="false"
             />
-            <VisCrosshair :template="(d) => `${t('dashboard.forecast.dayLabel', { n: d.day })}: ${d.valueMin.toFixed(1)}–${d.valueMax.toFixed(1)}`" />
+            <VisCrosshair
+              :template="(d) => `${t('dashboard.forecast.dayLabel', { n: d.day })}: ${d.valueMin.toFixed(1)}–${d.valueMax.toFixed(1)}` +
+                (d.confidenceScore !== null && d.confidenceScore !== undefined
+                  ? ` · ${t('dashboard.forecast.confidenceLabel', { pct: Math.round(d.confidenceScore * 100) })}`
+                  : '')"
+            />
             <VisTooltip />
           </VisXYContainer>
         </ChartContainer>
+        <p v-if="detailModelVersion" class="forecast-model-version">
+          {{ t('dashboard.forecast.modelVersion', { version: detailModelVersion }) }}
+        </p>
       </template>
 
       <template v-else>
@@ -473,6 +484,11 @@ const confidencePct = computed(() =>
 .forecast-probabilistic-notice {
   font-size: 0.75rem;
   color: var(--muted-foreground);
+}
+.forecast-model-version {
+  font-size: 0.75rem;
+  color: var(--muted-foreground);
+  margin-top: 4px;
 }
 .forecast-valid-period {
   font-size: 0.8125rem;

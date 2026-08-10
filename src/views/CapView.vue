@@ -56,6 +56,8 @@ const STATUS_COLORS = {
 }
 
 const selectedSourceEventId = ref(null)
+// spec 060: same fixed vocabulary as ContactFormModal.vue's demographic_tags
+const DEMOGRAPHIC_TAGS = ['elderly', 'youth', 'women', 'disability', 'low_income', 'displaced', 'minority']
 
 const form = ref({
   hazard_type: 'earthquake',
@@ -67,6 +69,7 @@ const form = ref({
   instructions: '',
   area_desc: '',
   region_code: '',
+  target_demographic_tags: [],
   lang: 'en',
   effective_at: new Date().toISOString().slice(0,16),
   expires_at:   new Date(Date.now() + 86400000).toISOString().slice(0,16),
@@ -153,6 +156,7 @@ async function submitDraft() {
   form.value.description = ''
   form.value.instructions = ''
   form.value.region_code = ''
+  form.value.target_demographic_tags = []
   await loadDrafts()
 }
 
@@ -448,6 +452,16 @@ onMounted(() => {
             <span>{{ t('cap.form.regionCode') }}</span>
             <input v-model="form.region_code" :placeholder="t('cap.form.regionCodePlaceholder')" />
           </label>
+          <label class="form-field span-2">
+            <span>{{ t('cap.form.targetDemographics') }}</span>
+            <div class="tag-checkbox-group">
+              <label v-for="tag in DEMOGRAPHIC_TAGS" :key="tag" class="tag-checkbox">
+                <input type="checkbox" :value="tag" v-model="form.target_demographic_tags" />
+                {{ t(`contacts.demographicTag.${tag}`) }}
+              </label>
+            </div>
+            <span class="form-hint">{{ t('cap.form.targetDemographicsHint') }}</span>
+          </label>
           <label class="form-field">
             <span>{{ t('cap.form.lang') }}</span>
             <select v-model="form.lang">
@@ -625,6 +639,9 @@ onMounted(() => {
   font-size: .78rem;
   color: var(--color-text-muted, #94a3b8);
 }
+.tag-checkbox-group { display: flex; flex-wrap: wrap; gap: 10px 16px; }
+.tag-checkbox { display: flex; align-items: center; gap: 6px; font-size: .8rem; color: #cbd5e1; }
+.form-hint { font-size: .72rem; color: var(--color-text-muted, #94a3b8); }
 .form-field input,
 .form-field select,
 .form-field textarea {

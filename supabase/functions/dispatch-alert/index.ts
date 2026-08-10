@@ -159,6 +159,7 @@ async function handleAutoDispatch(admin: ReturnType<typeof adminClient>, draftId
     country_code: draft.country_code,
     region_code: draft.region_code,
     hazard_type: draft.hazard_type,
+    target_demographic_tags: draft.target_demographic_tags ?? null,
   }
   const textMatched = (contacts ?? []).filter(
     (c: DispatchableContact) => matchesContact(c, draftForMatching, 'email') || matchesContact(c, draftForMatching, 'whatsapp'),

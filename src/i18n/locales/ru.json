@@ -74,6 +74,7 @@
       "classificationAboveNormal": "Выше Нормы",
       "confidenceLabel": "Достоверность: {pct}%",
       "dayLabel": "День {n}",
+      "modelVersion": "Модель: {version}",
       "loading": "Загрузка прогноза..."
     }
   },
@@ -287,6 +288,8 @@
       "submit": "Сохранить черновик",
       "submitting": "Сохранение...",
       "regionCode": "Регион (необязательно)",
+      "targetDemographics": "Целевая группа (необязательно)",
+      "targetDemographicsHint": "Оставьте пустым, чтобы охватить всех. Выберите теги, чтобы уведомить только контакты хотя бы с одним из них.",
       "regionCodePlaceholder": "Стамбул, Кадыкёй..."
     },
     "status": {
@@ -552,6 +555,7 @@
       "vulnerability": "Уязвимость",
       "copingCapacity": "Потенциал реагирования",
       "composite": "Совокупный показатель риска",
+      "confidenceRange": "Диапазон: {low}–{high} (на основе {n} записей)",
       "notAvailable": "Недоступно",
       "exceedanceCurveTitle": "Вероятностная кривая превышения",
       "loadCurve": "Загрузить кривую",
@@ -608,6 +612,16 @@
     "language": "Язык",
     "hazardFilter": "Фильтр по Типу Угрозы",
     "allHazards": "— все —",
+    "demographicTags": "Демографические теги (необязательно)",
+    "demographicTag": {
+      "elderly": "Пожилые",
+      "youth": "Молодёжь",
+      "women": "Женщины",
+      "disability": "Инвалидность",
+      "low_income": "Низкий доход",
+      "displaced": "Перемещённые лица",
+      "minority": "Меньшинства"
+    },
     "country": "Страна",
     "region": "Код Региона",
     "lat": "Широта (необязательно, для точного геотаргетинга)",
@@ -663,7 +677,12 @@
     "subtitle": "Публичный Портал Оповещений",
     "empty": "Сейчас нет активных оповещений.",
     "issuedLabel": "Выпущено",
-    "expiresLabel": "Истекает"
+    "expiresLabel": "Истекает",
+    "pushSelectCountry": "Выберите вашу страну",
+    "pushSubscribe": "Подписаться на push-уведомления",
+    "pushUnsubscribe": "Отписаться",
+    "pushSubscribed": "Push-уведомления включены",
+    "pushCountryRequired": "Сначала выберите страну."
   },
   "hazardTaxonomy": {
     "tabLabel": "Таксономия Угроз",
@@ -744,7 +763,15 @@
     "save": "Сохранить",
     "countryCodeInvalid": "Код страны должен состоять из 2 букв.",
     "yearInvalid": "Год должен быть корректным числом.",
-    "duplicateYear": "Запись для этой страны/года/источника уже существует."
+    "duplicateYear": "Запись для этой страны/года/источника уже существует.",
+    "autoImportTitle": "Автоматический импорт",
+    "autoImportHint": "Укажите общедоступную ссылку на CSV (например, публикацию INFORM Index), чтобы таблица обновлялась автоматически, без ручного ввода каждый год.",
+    "sourceUrl": "URL источника CSV",
+    "sourceLabel": "Метка источника",
+    "autoImportActive": "Автоматический импорт активен",
+    "importNow": "Импортировать сейчас",
+    "saveSettings": "Сохранить настройки",
+    "lastRun": "Последний запуск: {status} — {message}"
   },
   "incidentTracking": {
     "aarLabel": "Заметки после действия",

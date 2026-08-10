@@ -31,6 +31,8 @@ import { useHazardTypesStore } from '@/stores/hazardTypes.js'
 import DrillPanel from '@/components/admin/DrillPanel.vue'
 import SourcesPanel from '@/components/admin/SourcesPanel.vue'
 import AuditPanel from '@/components/admin/AuditPanel.vue'
+import ResourceInventoryPanel from '@/components/admin/ResourceInventoryPanel.vue'
+import CapInboundPanel from '@/components/admin/CapInboundPanel.vue'
 
 const router = useRouter()
 const route = useRoute()
@@ -155,8 +157,10 @@ const ADMIN_TABS = [
   { id: 'communityReports', category: 'operations', icon: '📢', labelKey: 'communityReport.moderation.tabLabel', visible: () => canAdmin.value },
   { id: 'assignedCommunityReports', category: 'operations', icon: '📢', labelKey: 'communityReport.assigned.tabLabel', visible: () => isOrgAdmin.value },
   { id: 'risk', category: 'operations', icon: '🧭', labelKey: 'risk.tabLabel', visible: () => canAdmin.value },
+  { id: 'resourceInventory', category: 'operations', icon: '🧰', labelKey: 'resourceInventory.tabLabel', visible: () => canAdmin.value },
   { id: 'hazardTaxonomy', category: 'config', icon: '🌋', labelKey: 'hazardTaxonomy.tabLabel', visible: () => hasCapability('hazard_taxonomy') },
   { id: 'sopRepository', category: 'config', icon: '📋', labelKey: 'incidentTracking.sopTabLabel', visible: () => hasCapability('sop_repository') },
+  { id: 'capInbound', category: 'config', icon: '📥', labelKey: 'capInbound.tabLabel', visible: () => canAdmin.value },
   { id: 'aiAssistance', category: 'config', icon: '🤖', labelKey: 'ai.panelTitle', visible: () => canAdmin.value },
   { id: 'integrations', category: 'config', icon: '🔌', labelKey: 'integrations.tabLabel', visible: () => canCreateUsers.value },
   { id: 'audit', category: 'audit', icon: '🛡️', labelKey: 'audit.tabLabel', visible: () => hasCapability('audit'), onClick: openAuditTab },
@@ -333,6 +337,16 @@ onUnmounted(() => {
     <!-- ── SOP Repository tab (spec 011, super_admin or spec 018 capability grant) ─── -->
     <div v-if="tab === 'sopRepository' && hasCapability('sop_repository')" class="tab-content">
       <SopRepositoryPanel />
+    </div>
+
+    <!-- ── Resource / Capacity Inventory tab (spec 062) ─────────────────────────── -->
+    <div v-if="tab === 'resourceInventory' && canAdmin" class="tab-content">
+      <ResourceInventoryPanel />
+    </div>
+
+    <!-- ── CAP Inbound Ingest tab (spec 065) ────────────────────────────────────── -->
+    <div v-if="tab === 'capInbound' && canAdmin" class="tab-content">
+      <CapInboundPanel />
     </div>
 
     <!-- ── Sandboxed AI Assistance tab (spec 051) ────────────────────────────────── -->

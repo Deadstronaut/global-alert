@@ -69,6 +69,7 @@ const form = ref({
   instructions: '',
   area_desc: '',
   region_code: '',
+  radius_km: null,
   target_demographic_tags: [],
   lang: 'en',
   effective_at: new Date().toISOString().slice(0,16),
@@ -135,12 +136,22 @@ function startFromEvent(event) {
   showForm.value = true
 }
 
+function isRadiusValid() {
+  const r = form.value.radius_km
+  if (r === null || r === '' || r === undefined) return true // optional field
+  const n = Number(r)
+  return Number.isFinite(n) && n > 0
+}
+
 async function submitDraft() {
   if (!form.value.title.trim()) return
+  if (!isRadiusValid()) { error.value = t('cap.form.radiusInvalid'); return }
   submitting.value = true
   error.value = null
+  const radiusValue = form.value.radius_km === '' ? null : form.value.radius_km
   const { error: err } = await supabase.from('cap_drafts').insert({
     ...form.value,
+    radius_km: radiusValue !== null ? Number(radiusValue) : null,
     effective_at: new Date(form.value.effective_at).toISOString(),
     expires_at:   new Date(form.value.expires_at).toISOString(),
     country_code: auth.countryCode,
@@ -156,6 +167,7 @@ async function submitDraft() {
   form.value.description = ''
   form.value.instructions = ''
   form.value.region_code = ''
+  form.value.radius_km = null
   form.value.target_demographic_tags = []
   await loadDrafts()
 }
@@ -452,6 +464,11 @@ onMounted(() => {
             <span>{{ t('cap.form.regionCode') }}</span>
             <input v-model="form.region_code" :placeholder="t('cap.form.regionCodePlaceholder')" />
           </label>
+          <label class="form-field">
+            <span>{{ t('cap.form.radiusKm') }}</span>
+            <input type="number" min="0" step="0.1" v-model="form.radius_km" :placeholder="t('cap.form.radiusKmPlaceholder')" />
+            <span v-if="!isRadiusValid()" class="form-hint form-hint--error">{{ t('cap.form.radiusInvalid') }}</span>
+          </label>
           <label class="form-field span-2">
             <span>{{ t('cap.form.targetDemographics') }}</span>
             <div class="tag-checkbox-group">
@@ -534,6 +551,7 @@ onMounted(() => {
         <p v-if="draft.description" class="draft-desc">{{ draft.description }}</p>
         <div v-if="draft.area_desc" class="draft-area">📍 {{ draft.area_desc }}</div>
         <div v-if="draft.region_code" class="draft-region">🎯 {{ t('cap.form.regionCode') }}: {{ draft.region_code }}</div>
+        <div v-if="draft.radius_km" class="draft-radius">📏 {{ t('cap.form.radiusKm') }}: {{ draft.radius_km }} km</div>
         <div class="draft-validity">
           {{ formatDate(draft.effective_at) }} → {{ formatDate(draft.expires_at) }}
         </div>
@@ -642,6 +660,7 @@ onMounted(() => {
 .tag-checkbox-group { display: flex; flex-wrap: wrap; gap: 10px 16px; }
 .tag-checkbox { display: flex; align-items: center; gap: 6px; font-size: .8rem; color: #cbd5e1; }
 .form-hint { font-size: .72rem; color: var(--color-text-muted, #94a3b8); }
+.form-hint--error { color: #ef4444; }
 .form-field input,
 .form-field select,
 .form-field textarea {

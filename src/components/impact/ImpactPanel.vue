@@ -11,6 +11,7 @@ import { rowsToCsv, rowsToJson, triggerDownload } from '@/lib/auditExport.js'
 import { loadRegionBoundaries } from '@/data/boundaries/index.js'
 import { findRegion } from '@/utils/pointInPolygon.js'
 import CascadingRiskPanel from '@/components/risk/CascadingRiskPanel.vue'
+import ScenarioBuilder from '@/components/risk/ScenarioBuilder.vue'
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
 import { Button } from '@/components/ui/button'
 
@@ -76,6 +77,15 @@ const completeness = ref(null) // null | { ratio: number|null } | 'error'
 
 const canAnalyze = computed(() => auth.isSuperAdmin || ['country_admin', 'org_admin'].includes(auth.session?.role))
 
+// spec 068 US7: Scenario Modeling relocation is navigation-only — this MUST
+// match AdminView.vue's existing `canAdmin` gate exactly (super_admin or
+// country_admin only, NOT org_admin, unlike this panel's broader
+// `canAnalyze`) so access level is frozen as-is by the move. Role-based
+// restriction beyond today's existing gate is explicitly deferred to a
+// future spec (User Story 7b) once the partner's role taxonomy is decided.
+const canAccessScenarioModeling = computed(() => auth.isSuperAdmin || auth.session?.role === 'country_admin')
+const panelMode = ref('standard') // 'standard' | 'advanced'
+
 // spec 049 US1: resolves the selected event's administrative boundary via
 // this project's existing client-side point-in-polygon utilities (same
 // ones used elsewhere for country/province tagging) rather than inventing
@@ -84,10 +94,17 @@ const canAnalyze = computed(() => auth.isSuperAdmin || ['country_admin', 'org_ad
 const cascadeBoundaryCode = ref(null)
 const cascadeBoundaryResolving = ref(false)
 const cascadeBoundaryUnresolvable = ref(false)
+// spec 068 US5: analyst-selectable admin level for boundary-scoped analysis.
+// 'district' (ADM2) reuses the same loadRegionBoundaries() data path already
+// used for 'province' (ADM1) elsewhere in this codebase (e.g. SheltersPanel)
+// — no new data source, just a level parameter.
+const cascadeBoundaryLevel = ref('province') // 'province' | 'district'
+const cascadeBoundaryLevelUnavailable = ref(false)
 
 async function resolveCascadeBoundary() {
   cascadeBoundaryCode.value = null
   cascadeBoundaryUnresolvable.value = false
+  cascadeBoundaryLevelUnavailable.value = false
   if (!props.selectedEvent) return
   // No country in focus at all (e.g. an event outside every served
   // country) is itself an "unresolvable area" outcome — must be shown
@@ -98,7 +115,16 @@ async function resolveCascadeBoundary() {
     return
   }
   cascadeBoundaryResolving.value = true
-  const boundary = await loadRegionBoundaries(effectiveCountryCode.value, 'province')
+  const boundary = await loadRegionBoundaries(effectiveCountryCode.value, cascadeBoundaryLevel.value)
+  if (!boundary && cascadeBoundaryLevel.value === 'district') {
+    // District data isn't available for every country (only tr/mg/my
+    // bundled today, per research.md) — surface this distinctly instead of
+    // silently returning province/country-level results mislabeled as
+    // district (spec 068 FR-014).
+    cascadeBoundaryLevelUnavailable.value = true
+    cascadeBoundaryResolving.value = false
+    return
+  }
   if (boundary) {
     cascadeBoundaryCode.value = findRegion(
       props.selectedEvent.lat, props.selectedEvent.lng, boundary.featureCollection, boundary.nameProperty,
@@ -106,6 +132,11 @@ async function resolveCascadeBoundary() {
   }
   cascadeBoundaryUnresolvable.value = !cascadeBoundaryCode.value
   cascadeBoundaryResolving.value = false
+}
+
+function setCascadeBoundaryLevel(level) {
+  cascadeBoundaryLevel.value = level
+  resolveCascadeBoundary()
 }
 
 // Hazard types with a real, dedicated magnitude-based radius formula
@@ -466,6 +497,27 @@ onMounted(async () => {
 
 <template>
   <div class="impact-panel">
+    <!-- spec 068 US7: Scenario Modeling relocated here from AdminView's
+         top-level admin tab as an Advanced mode — navigation-only move,
+         access level unchanged (see canAccessScenarioModeling above). -->
+    <div v-if="canAccessScenarioModeling" class="impact-mode-toggle" role="tablist">
+      <button
+        type="button"
+        class="impact-mode-btn"
+        :class="{ active: panelMode === 'standard' }"
+        @click="panelMode = 'standard'"
+      >{{ t('impact.panel.modeStandard') }}</button>
+      <button
+        type="button"
+        class="impact-mode-btn"
+        :class="{ active: panelMode === 'advanced' }"
+        @click="panelMode = 'advanced'"
+      >{{ t('impact.panel.modeAdvanced') }}</button>
+    </div>
+
+    <ScenarioBuilder v-if="panelMode === 'advanced' && canAccessScenarioModeling" />
+
+    <template v-else>
     <div v-if="!selectedEvent" class="impact-empty">{{ t('impact.panel.selectPrompt') }}</div>
 
     <template v-else>
@@ -504,7 +556,22 @@ onMounted(async () => {
       <!-- ── Cascading Risks (spec 049 — map integration of spec 048) ─────── -->
       <div v-if="canAnalyze" class="impact-cascade-section">
         <h4>{{ t('risk.cascade.title') }}</h4>
+        <div class="impact-admin-level-selector" role="radiogroup" :aria-label="t('impact.panel.adminLevel')">
+          <button
+            type="button"
+            class="admin-level-btn"
+            :class="{ active: cascadeBoundaryLevel === 'province' }"
+            @click="setCascadeBoundaryLevel('province')"
+          >{{ t('impact.panel.adminLevelProvince') }}</button>
+          <button
+            type="button"
+            class="admin-level-btn"
+            :class="{ active: cascadeBoundaryLevel === 'district' }"
+            @click="setCascadeBoundaryLevel('district')"
+          >{{ t('impact.panel.adminLevelDistrict') }}</button>
+        </div>
         <p v-if="cascadeBoundaryResolving" class="risk-meta">{{ t('impact.loading') }}</p>
+        <p v-else-if="cascadeBoundaryLevelUnavailable" class="impact-notice">{{ t('impact.panel.adminLevelUnavailable') }}</p>
         <p v-else-if="cascadeBoundaryUnresolvable" class="impact-notice">{{ t('risk.cascade.boundaryUnresolvable') }}</p>
         <CascadingRiskPanel
           v-else-if="cascadeBoundaryCode"
@@ -650,6 +717,7 @@ onMounted(async () => {
         />
       </div>
     </template>
+    </template>
   </div>
 </template>
 
@@ -703,6 +771,12 @@ onMounted(async () => {
 .impact-cascade-section h4 { margin: 0 0 8px; font-size: .85rem; }
 .impact-notice { padding: 8px 10px; border-radius: 8px; background: rgba(255,255,255,.06); font-size: .78rem; margin-bottom: 10px; }
 .impact-notice-error { background: rgba(239,68,68,.12); color: #ef4444; }
+.impact-admin-level-selector { display: flex; gap: 6px; margin-bottom: 8px; }
+.admin-level-btn { flex: 1; padding: 4px 8px; font-size: .72rem; border-radius: 6px; border: 1px solid rgba(255,255,255,.12); background: transparent; color: inherit; cursor: pointer; }
+.admin-level-btn.active { background: rgba(59,130,246,.25); border-color: rgba(59,130,246,.5); }
+.impact-mode-toggle { display: flex; gap: 6px; margin-bottom: 12px; }
+.impact-mode-btn { flex: 1; padding: 6px 10px; font-size: .8rem; font-weight: 600; border-radius: 8px; border: 1px solid rgba(255,255,255,.12); background: transparent; color: inherit; cursor: pointer; }
+.impact-mode-btn.active { background: rgba(59,130,246,.25); border-color: rgba(59,130,246,.5); }
 .impact-result { text-align: center; padding: 10px; background: rgba(34,197,94,.08); border-radius: 8px; margin-bottom: 10px; }
 .impact-result-value { font-size: 1.6rem; font-weight: 800; color: #22c55e; }
 .impact-result-label { font-size: .72rem; color: var(--color-text-muted, #94a3b8); }

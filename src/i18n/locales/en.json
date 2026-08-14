@@ -121,6 +121,7 @@
     "hideLayer": "Hide Layer",
     "showLayer": "Show Layer",
     "noDataYet": "No data yet",
+    "layerInactiveHint": "Turn this layer on to see its details.",
     "loadingEllipsis": "Loading…",
     "calendar": "Calendar",
     "view2D": "View 2D",
@@ -299,7 +300,10 @@
       "regionCode": "Region (optional)",
       "targetDemographics": "Target Demographics (optional)",
       "targetDemographicsHint": "Leave empty to reach everyone. Select tags to only notify contacts marked with at least one of them.",
-      "regionCodePlaceholder": "Istanbul, Kadikoy..."
+      "regionCodePlaceholder": "Istanbul, Kadikoy...",
+      "radiusKm": "Warning Radius (km)",
+      "radiusKmPlaceholder": "e.g. 25",
+      "radiusInvalid": "Warning radius must be a positive number."
     },
     "status": {
       "draft": "Draft",
@@ -519,6 +523,12 @@
       "detailedTitle": "Detailed Analysis",
       "haloIntensity": "Impact Halo Intensity",
       "haloIntensityHint": "Drag up to intensify the map's impact halo, drag down to fade it out.",
+      "adminLevel": "Administrative Level",
+      "adminLevelProvince": "Province",
+      "adminLevelDistrict": "District",
+      "adminLevelUnavailable": "District-level boundary data is not available for this country yet.",
+      "modeStandard": "Standard",
+      "modeAdvanced": "Advanced: Risk & Scenario Modeling",
       "magnitudeOverride": "Magnitude (simulation)",
       "magnitudeReset": "Reset to real magnitude"
     },
@@ -697,7 +707,8 @@
     }
   },
   "contacts": {
-    "tabLabel": "Contact Directory",
+    "tabLabel": "Alert Recipients",
+    "description": "Recipients used for alert dissemination (email / WhatsApp), not a general public directory.",
     "addButton": "+ Add Contact",
     "editTitle": "Edit Contact",
     "createTitle": "Add Contact",
@@ -968,6 +979,15 @@
     "sopHazardType": "Hazard Type",
     "sopBodyContent": "Procedure Text",
     "sopBodyContentPlaceholder": "Step-by-step procedure text...",
+    "sopEntryMode": "Entry Mode",
+    "sopEntryModeTyped": "Type Text",
+    "sopEntryModeUpload": "Upload File",
+    "sopAttachment": "Document (PDF or Word)",
+    "sopAttachmentCurrent": "Current file",
+    "sopAttachmentTypeError": "Only PDF and Word (.docx) files are supported.",
+    "sopAttachmentSizeError": "File is too large (max 20MB).",
+    "sopAttachmentRequired": "Please select a file to upload.",
+    "sopBodyContentOptionalForAi": "optional, used for AI summary",
     "sopReferenceUrl": "Reference URL",
     "save": "Save",
     "sopTabLabel": "SOP Repository",

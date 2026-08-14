@@ -121,6 +121,7 @@
     "hideLayer": "Masquer la Couche",
     "showLayer": "Afficher la Couche",
     "noDataYet": "Pas encore de données",
+    "layerInactiveHint": "Activez cette couche pour voir ses détails.",
     "loadingEllipsis": "Chargement…",
     "calendar": "Calendrier",
     "view2D": "Vue 2D",
@@ -290,7 +291,10 @@
       "regionCode": "Région (optionnel)",
       "targetDemographics": "Groupe ciblé (optionnel)",
       "targetDemographicsHint": "Laissez vide pour toucher tout le monde. Sélectionnez des étiquettes pour ne notifier que les contacts en ayant au moins une.",
-      "regionCodePlaceholder": "Istanbul, Kadıköy..."
+      "regionCodePlaceholder": "Istanbul, Kadıköy...",
+      "radiusKm": "Rayon d'Alerte (km)",
+      "radiusKmPlaceholder": "ex. 25",
+      "radiusInvalid": "Le rayon d'alerte doit être un nombre positif."
     },
     "status": {
       "draft": "Brouillon",
@@ -602,7 +606,8 @@
     }
   },
   "contacts": {
-    "tabLabel": "Répertoire des Contacts",
+    "tabLabel": "Destinataires des Alertes",
+    "description": "Liste des destinataires utilisée pour la diffusion des alertes (e-mail / WhatsApp) — pas un répertoire public général.",
     "addButton": "+ Ajouter un Contact",
     "editTitle": "Modifier le Contact",
     "createTitle": "Ajouter un Contact",
@@ -818,6 +823,15 @@
     "sopNoVersionHistory": "Aucune version précédente pour l'instant.",
     "sopTitlePlaceholder": "ex. Procédure d'Intervention en cas de Séisme",
     "sopBodyContentPlaceholder": "Texte de la procédure étape par étape...",
+    "sopEntryMode": "Mode de Saisie",
+    "sopEntryModeTyped": "Saisir le Texte",
+    "sopEntryModeUpload": "Téléverser un Fichier",
+    "sopAttachment": "Document (PDF ou Word)",
+    "sopAttachmentCurrent": "Fichier actuel",
+    "sopAttachmentTypeError": "Seuls les fichiers PDF et Word (.docx) sont pris en charge.",
+    "sopAttachmentSizeError": "Fichier trop volumineux (max 20MB).",
+    "sopAttachmentRequired": "Veuillez sélectionner un fichier à téléverser.",
+    "sopBodyContentOptionalForAi": "optionnel, utilisé pour le résumé IA",
     "sopCategoryPlaceholder": "ex. Intervention, Évacuation",
     "aiSummarizeAction": "Résumer avec l'IA",
     "aiTranslateAction": "Traduire avec l'IA"

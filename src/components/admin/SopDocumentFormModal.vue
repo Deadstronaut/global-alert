@@ -4,7 +4,17 @@ import { useI18n } from 'vue-i18n'
 import { useHazardTypesStore } from '@/stores/hazardTypes.js'
 import { useAuthStore } from '@/stores/auth.js'
 import { useAiAssistanceStore } from '@/stores/aiAssistance.js'
+import { supabase } from '@/services/api/config.js'
 import AiSuggestionBadge from '@/components/ai/AiSuggestionBadge.vue'
+
+// spec 068 US3: SOP file upload — allowlist + max size enforced client-side
+// before any network call, mirroring the storage bucket's own allowlist
+// (see supabase/migrations/20260814090000_sop_documents_attachment.sql).
+const ATTACHMENT_ALLOWED_TYPES = [
+  'application/pdf',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+]
+const ATTACHMENT_MAX_BYTES = 20 * 1024 * 1024 // 20MB
 
 const props = defineProps({
   sopDocument: { type: Object, default: null }, // null = create mode
@@ -24,6 +34,32 @@ const bodyContent = ref('')
 const referenceUrl = ref('')
 const saving = ref(false)
 const error = ref(null)
+
+// spec 068 US3
+const entryMode = ref('typed') // 'typed' | 'upload'
+const attachmentFile = ref(null) // pending File object, not yet uploaded
+const attachmentError = ref(null)
+const existingAttachmentName = ref(null) // from a previously-saved upload, for display
+const uploading = ref(false)
+
+function onAttachmentSelected(event) {
+  attachmentError.value = null
+  const file = event.target.files?.[0]
+  if (!file) { attachmentFile.value = null; return }
+  if (!ATTACHMENT_ALLOWED_TYPES.includes(file.type)) {
+    attachmentError.value = t('incidentTracking.sopAttachmentTypeError')
+    attachmentFile.value = null
+    event.target.value = ''
+    return
+  }
+  if (file.size > ATTACHMENT_MAX_BYTES) {
+    attachmentError.value = t('incidentTracking.sopAttachmentSizeError')
+    attachmentFile.value = null
+    event.target.value = ''
+    return
+  }
+  attachmentFile.value = file
+}
 
 // Spec 051 — AI ile özetle/çevir: yalnızca zaten kaydedilmiş (id'si olan) bir
 // SOP dokümanı için anlamlı, çünkü ai_suggestions.source_id NOT NULL'dır.
@@ -126,27 +162,66 @@ watch(
     error.value = null
     translateSuggestion.value = null
     summarySuggestion.value = null
+    existingAttachmentName.value = s?.attachment_name ?? null
+    entryMode.value = s?.attachment_path ? 'upload' : 'typed'
+    attachmentFile.value = null
+    attachmentError.value = null
   },
   { immediate: true },
 )
 
-function save() {
+async function save() {
   error.value = null
   if (!title.value.trim()) { error.value = t('incidentTracking.sopTitleRequired'); return }
   if (!hazardTypeCode.value) { error.value = t('incidentTracking.sopHazardTypeRequired'); return }
-  if (!bodyContent.value.trim() && !referenceUrl.value.trim()) {
+
+  const hasExistingAttachment = entryMode.value === 'upload' && existingAttachmentName.value && !attachmentFile.value
+  const hasNewAttachment = entryMode.value === 'upload' && attachmentFile.value
+  if (!bodyContent.value.trim() && !referenceUrl.value.trim() && !hasExistingAttachment && !hasNewAttachment) {
     error.value = t('incidentTracking.sopContentRequired')
+    return
+  }
+  if (entryMode.value === 'upload' && !hasExistingAttachment && !hasNewAttachment) {
+    error.value = t('incidentTracking.sopAttachmentRequired')
     return
   }
 
   saving.value = true
-  emit('save', {
+  const payload = {
     title: title.value.trim(),
     hazard_type_code: hazardTypeCode.value,
     category: category.value.trim() || null,
     body_content: bodyContent.value.trim() || null,
     reference_url: referenceUrl.value.trim() || null,
-  })
+  }
+
+  if (hasNewAttachment) {
+    uploading.value = true
+    const countryCode = auth.countryCode || 'global'
+    const sopId = props.sopDocument?.id || crypto.randomUUID()
+    const safeName = attachmentFile.value.name.replace(/[^a-zA-Z0-9._-]/g, '_')
+    const storagePath = `${countryCode}/${sopId}/${safeName}`
+    const { error: uploadErr } = await supabase.storage
+      .from('sop-documents')
+      .upload(storagePath, attachmentFile.value, { upsert: true, contentType: attachmentFile.value.type })
+    uploading.value = false
+    if (uploadErr) {
+      error.value = uploadErr.message
+      saving.value = false
+      return
+    }
+    payload.attachment_path = storagePath
+    payload.attachment_name = attachmentFile.value.name
+    payload.attachment_type = attachmentFile.value.type
+    if (!props.sopDocument?.id) payload.id = sopId
+  } else if (entryMode.value === 'typed') {
+    // switching back to typed content clears any previously-saved attachment reference
+    payload.attachment_path = null
+    payload.attachment_name = null
+    payload.attachment_type = null
+  }
+
+  emit('save', payload)
   saving.value = false
 }
 </script>
@@ -171,7 +246,27 @@ function save() {
             <option v-for="c in existingCategories" :key="c" :value="c" />
           </datalist>
         </label>
-        <label class="form-field span-2"><span>{{ t('incidentTracking.sopBodyContent') }}</span>
+        <div class="form-field span-2 entry-mode-toggle" role="radiogroup" :aria-label="t('incidentTracking.sopEntryMode')">
+          <button type="button" class="entry-mode-btn" :class="{ active: entryMode === 'typed' }" @click="entryMode = 'typed'">
+            {{ t('incidentTracking.sopEntryModeTyped') }}
+          </button>
+          <button type="button" class="entry-mode-btn" :class="{ active: entryMode === 'upload' }" @click="entryMode = 'upload'">
+            {{ t('incidentTracking.sopEntryModeUpload') }}
+          </button>
+        </div>
+
+        <label v-if="entryMode === 'upload'" class="form-field span-2">
+          <span>{{ t('incidentTracking.sopAttachment') }}</span>
+          <input type="file" accept=".pdf,.docx" @change="onAttachmentSelected" />
+          <span v-if="existingAttachmentName && !attachmentFile" class="form-hint">
+            {{ t('incidentTracking.sopAttachmentCurrent') }}: {{ existingAttachmentName }}
+          </span>
+          <span v-if="attachmentFile" class="form-hint">{{ attachmentFile.name }}</span>
+          <span v-if="attachmentError" class="form-hint form-hint--error">{{ attachmentError }}</span>
+        </label>
+
+        <label class="form-field span-2">
+          <span>{{ t('incidentTracking.sopBodyContent') }}<template v-if="entryMode === 'upload'"> ({{ t('incidentTracking.sopBodyContentOptionalForAi') }})</template></span>
           <textarea v-model="bodyContent" rows="4" :placeholder="t('incidentTracking.sopBodyContentPlaceholder')" />
         </label>
 
@@ -228,7 +323,7 @@ function save() {
 
       <div class="modal-actions">
         <button class="btn-cancel" @click="emit('cancel')">{{ t('incidentTracking.cancel') }}</button>
-        <button class="btn-submit" :disabled="saving" @click="save">{{ saving ? '...' : t('incidentTracking.save') }}</button>
+        <button class="btn-submit" :disabled="saving || uploading" @click="save">{{ (saving || uploading) ? '...' : t('incidentTracking.save') }}</button>
       </div>
     </div>
   </div>
@@ -262,4 +357,9 @@ function save() {
 .btn-ai:not(:disabled):hover { background: rgba(138,125,250,.25); }
 .ai-preview { font-size: .82rem; color: #e2e8f0; margin: 0; white-space: pre-wrap; }
 .ai-unavailable { font-size: .78rem; color: #f59e0b; margin: 0; }
+.entry-mode-toggle { flex-direction: row; gap: 8px; }
+.entry-mode-btn { flex: 1; padding: 7px 10px; font-size: .8rem; font-weight: 600; border-radius: 8px; border: 1px solid rgba(255,255,255,.15); background: transparent; color: #cbd5e1; cursor: pointer; }
+.entry-mode-btn.active { background: rgba(77,163,255,.2); border-color: rgba(77,163,255,.5); color: #e2e8f0; }
+.form-hint { font-size: .72rem; color: var(--color-text-muted,#94a3b8); }
+.form-hint--error { color: #ef4444; }
 </style>

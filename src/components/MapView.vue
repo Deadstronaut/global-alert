@@ -34,6 +34,7 @@ import GeocodingSearch from '@/components/impact/GeocodingSearch.vue'
 import SettingsPanel from '@/components/SettingsPanel.vue'
 import PanelCollapseToggle from '@/components/PanelCollapseToggle.vue'
 import FlowControlPanel from '@/components/FlowControlPanel.vue'
+import LayerPanelGroup from '@/components/map/LayerPanelGroup.vue'
 import RadarScanBadge from '@/components/RadarScanBadge.vue'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -1071,12 +1072,16 @@ const currentZoom = ref(3)
 // Collapses the exposure-layers panel down to a small layers-icon square
 // anchored at its own top-right corner — current full size is the max, it
 // never grows past that.
-const exposureLayersPanelCollapsed = ref(false)
+// spec 068 US2: defaults to collapsed (partner review FR — layer panels
+// should not cover the map on load); the existing hint system below already
+// anticipates a collapsed initial state.
+const exposureLayersPanelCollapsed = ref(true)
 
 // Same collapse behavior as exposureLayersPanelCollapsed above, but for the
 // shelters/community-reports toggle panel on the left — collapses down to a
 // small pin-icon square anchored at its own top-left corner.
-const sheltersLayerPanelCollapsed = ref(false)
+// spec 068 US2: defaults to collapsed, same rationale as above.
+const sheltersLayerPanelCollapsed = ref(true)
 
 // Briefly simulates a hover on the (now auto-collapsed) shelters/exposure
 // panels right after a double-click zoom lands, so their collapsed icons
@@ -1116,7 +1121,10 @@ watch(showCollapsedPanelHints, (visible) => {
     }
     if (exposureHintAnchorEl.value) {
       const r = anchorElement(exposureHintAnchorEl.value).getBoundingClientRect()
-      exposureHintPos.value = { top: r.top + r.height / 2, right: window.innerWidth - r.left + 10 }
+      // spec 068 US2: exposure panel moved from the right column to the left
+      // column (now opens down-and-right, see .exposure-layers-panel-body) —
+      // hint now anchors to the button's right edge, matching sheltersHintPos.
+      exposureHintPos.value = { top: r.top + r.height / 2, left: r.right + 10 }
     }
   })
 })
@@ -4179,6 +4187,14 @@ onBeforeUnmount(() => {
          definition, regardless of how wide the shelters panel or layer
          stack currently are (collapsed vs. expanded). -->
     <div class="top-controls-row" :class="{ 'legend-sidebar-collapsed': uiStore.sidebarCollapsed }">
+      <!-- spec 068 US2: Shelters + WMS/WFS + Exposure now share one left-hand
+           column (previously shelters sat on the left while WMS/WFS+Exposure
+           sat on the far right, "organized in different places" per partner
+           review). FlowControlPanel (Wind & Current) is deliberately left in
+           its existing severity-legend-stack anchor point — its expand-
+           upward positioning is explicitly fragile per the comment at its
+           own mount point, out of scope to relocate in this pass. -->
+      <div class="top-controls-left-column">
       <!-- Shelter map layer toggle (spec 027) — always visible, independent of WMS/WFS layers.
            Persistent icon button + Transition-driven flyout body, matching the wind/currents
            flow-control panel's calm fade+scale expand (live-testing ask, 2026-08-05: "aynı
@@ -4218,14 +4234,20 @@ onBeforeUnmount(() => {
         </Transition>
       </div>
 
-      <GeocodingSearch @location-selected="onLocationSelected" />
-
       <!-- Layer panel stack: WMS/WFS (spec 012) + Exposure layers (spec 042) share one
-           positioned column so neither overlaps the other when both are present. -->
+           positioned column so neither overlaps the other when both are present.
+           spec 068 US2: moved into the same left-hand column as the shelters
+           panel above (previously the far-right column). -->
       <div class="layer-panel-stack">
-        <!-- OGC WMS/WFS Map Layers (spec 012): toggle + opacity, session-only state -->
-        <div v-if="mapLayersStore.activeMapLayers.length" class="map-layers-panel">
-          <h4 class="map-layers-title">{{ t('mapLayers.panelTitle') }}</h4>
+        <!-- OGC WMS/WFS Map Layers (spec 012): toggle + opacity, session-only state.
+             spec 068 US2: now wrapped in the shared collapsed-by-default
+             LayerPanelGroup accordion (previously always fully expanded
+             with no collapse control at all). -->
+        <LayerPanelGroup
+          v-if="mapLayersStore.activeMapLayers.length"
+          :title="t('mapLayers.panelTitle')"
+          class="map-layers-panel"
+        >
           <div v-for="layer in mapLayersStore.activeMapLayers" :key="layer.id" class="map-layer-row">
             <label class="map-layer-toggle">
               <Checkbox :model-value="isLayerVisible(layer.id)" @update:model-value="toggleMapLayer(layer)" />
@@ -4240,7 +4262,7 @@ onBeforeUnmount(() => {
               class="map-layer-opacity"
             />
           </div>
-        </div>
+        </LayerPanelGroup>
 
         <!-- Exposure layers (spec 042): roads/population/rivers/basins etc, generic
              geometry-driven rendering + click-to-inspect. Toggle + opacity share the
@@ -4351,6 +4373,9 @@ onBeforeUnmount(() => {
           </Transition>
         </div>
       </div>
+      </div>
+
+      <GeocodingSearch @location-selected="onLocationSelected" />
     </div>
 
     <!-- Collapsed shelters/exposure-layers panel hints (see
@@ -4369,7 +4394,7 @@ onBeforeUnmount(() => {
         <span
           v-if="exposureLayersPanelCollapsed && showCollapsedPanelHints && exposureHintPos"
           class="collapsed-panel-hint"
-          :style="{ top: exposureHintPos.top + 'px', right: exposureHintPos.right + 'px' }"
+          :style="{ top: exposureHintPos.top + 'px', left: exposureHintPos.left + 'px' }"
         >{{ t('exposureLayers.expand') }}</span>
       </Transition>
     </Teleport>
@@ -4488,19 +4513,30 @@ onBeforeUnmount(() => {
   left: calc(var(--sidebar-collapsed, 56px) + 12px);
 }
 
+.top-controls-left-column {
+  /* spec 068 US2: shared left-hand column for Shelters + WMS/WFS + Exposure
+     (previously shelters was alone here while WMS/WFS+Exposure sat in the
+     grid's far-right column). Occupies .top-controls-row's first (1fr)
+     grid track by DOM/auto-placement order; the row's grid-template-columns
+     still reserves the now-empty third track, keeping the search bar
+     centered exactly as before. */
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+}
 .layer-panel-stack {
-  /* Right-hand column of .top-controls-row's 3-col grid — hugs the row's
-     right edge via justify-self, doesn't position itself independently.
+  /* No longer right-hand-column-specific (spec 068 US2) — just stacks
+     below the shelters panel in the shared left column above.
      No max-height/overflow here (unlike before): both children are now
      small persistent icon buttons with their expanded content flown out
      via position:absolute (see .exposure-layers-panel-body) rather than
      stacked in-flow, and an overflow:auto ancestor would clip that
      absolutely-positioned flyout exactly like the collapsed-hint bubble
      bug described on showCollapsedPanelHints above. */
-  justify-self: end;
   display: flex;
   flex-direction: column;
-  align-items: flex-end;
+  align-items: flex-start;
   gap: 10px;
 }
 .map-layers-panel {
@@ -4517,7 +4553,8 @@ onBeforeUnmount(() => {
   /* Persistent icon button + Transition-driven flyout body — same calm
      fade+scale expand as the wind/currents flow-control panel
      (FlowControlPanel.vue's .flow-panel-expand-*), not a width/height
-     resize. Right-hand column, so the flyout opens down-and-left. */
+     resize. spec 068 US2: now in the left column, so the flyout opens
+     down-and-right (see .exposure-layers-panel-body). */
   position: relative;
   z-index: 40;
 }
@@ -4548,12 +4585,12 @@ onBeforeUnmount(() => {
 .exposure-layers-panel-body {
   position: absolute;
   top: calc(100% + 10px);
-  right: 0;
+  left: 0;
   max-width: 420px;
   min-width: 280px;
   max-height: calc(100vh - 140px);
   overflow-y: auto;
-  transform-origin: top right;
+  transform-origin: top left;
   z-index: 40;
 }
 .map-layers-title { margin: 0 0 10px; font-size: .8rem; font-weight: 700; }

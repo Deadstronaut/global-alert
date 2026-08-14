@@ -121,6 +121,7 @@
     "hideLayer": "隐藏图层",
     "showLayer": "显示图层",
     "noDataYet": "暂无数据",
+    "layerInactiveHint": "打开此图层以查看详情。",
     "loadingEllipsis": "加载中…",
     "calendar": "日历",
     "view2D": "2D 视图",
@@ -290,7 +291,10 @@
       "regionCode": "地区（可选）",
       "targetDemographics": "目标人群（可选）",
       "targetDemographicsHint": "留空则通知所有人。选择标签后,仅通知至少具有其中一个标签的联系人。",
-      "regionCodePlaceholder": "伊斯坦布尔，卡德柯伊..."
+      "regionCodePlaceholder": "伊斯坦布尔，卡德柯伊...",
+      "radiusKm": "预警半径 (公里)",
+      "radiusKmPlaceholder": "例如 25",
+      "radiusInvalid": "预警半径必须为正数。"
     },
     "status": {
       "draft": "草稿",
@@ -602,7 +606,8 @@
     }
   },
   "contacts": {
-    "tabLabel": "联系人目录",
+    "tabLabel": "预警接收人",
+    "description": "用于预警发布的接收人列表(邮箱 / WhatsApp),并非公开通讯录。",
     "addButton": "+ 添加联系人",
     "editTitle": "编辑联系人",
     "createTitle": "添加联系人",
@@ -818,6 +823,15 @@
     "sopNoVersionHistory": "尚无历史版本。",
     "sopTitlePlaceholder": "例如：地震响应程序",
     "sopBodyContentPlaceholder": "分步操作说明……",
+    "sopEntryMode": "录入方式",
+    "sopEntryModeTyped": "输入文本",
+    "sopEntryModeUpload": "上传文件",
+    "sopAttachment": "文档 (PDF 或 Word)",
+    "sopAttachmentCurrent": "当前文件",
+    "sopAttachmentTypeError": "仅支持 PDF 和 Word (.docx) 文件。",
+    "sopAttachmentSizeError": "文件过大 (最大 20MB)。",
+    "sopAttachmentRequired": "请选择要上传的文件。",
+    "sopBodyContentOptionalForAi": "可选，用于 AI 摘要",
     "sopCategoryPlaceholder": "例如：响应、疏散",
     "aiSummarizeAction": "使用 AI 总结",
     "aiTranslateAction": "使用 AI 翻译"

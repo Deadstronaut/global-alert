@@ -121,6 +121,7 @@
     "hideLayer": "Katmanı Gizle",
     "showLayer": "Katmanı Göster",
     "noDataYet": "Henüz veri yok",
+    "layerInactiveHint": "Detayları görmek için bu katmanı açın.",
     "loadingEllipsis": "Yükleniyor…",
     "calendar": "Takvim",
     "view2D": "2B Görünüm",
@@ -299,7 +300,10 @@
       "regionCode": "Bölge (opsiyonel)",
       "targetDemographics": "Hedef Demografi (opsiyonel)",
       "targetDemographicsHint": "Boş bırakılırsa herkese ulaşır. Sadece bu etiketlerden en az birine sahip kişilere ulaşmak için seçim yapın.",
-      "regionCodePlaceholder": "İstanbul, Kadıköy..."
+      "regionCodePlaceholder": "İstanbul, Kadıköy...",
+      "radiusKm": "Alarm Yarıçapı (km)",
+      "radiusKmPlaceholder": "örn. 25",
+      "radiusInvalid": "Alarm yarıçapı pozitif bir sayı olmalıdır."
     },
     "status": {
       "draft": "Taslak",
@@ -519,6 +523,12 @@
       "detailedTitle": "Detaylı Analiz",
       "haloIntensity": "Etki Halkası Yoğunluğu",
       "haloIntensityHint": "Yukarı çekince haritadaki etki halkası belirginleşir, aşağı çekince kaybolur.",
+      "adminLevel": "İdari Seviye",
+      "adminLevelProvince": "İl",
+      "adminLevelDistrict": "İlçe",
+      "adminLevelUnavailable": "Bu ülke için henüz ilçe seviyesinde sınır verisi mevcut değil.",
+      "modeStandard": "Standart",
+      "modeAdvanced": "Gelişmiş: Risk ve Senaryo Modelleme",
       "magnitudeOverride": "Büyüklük (simülasyon)",
       "magnitudeReset": "Gerçek büyüklüğe dön"
     },
@@ -697,7 +707,8 @@
     }
   },
   "contacts": {
-    "tabLabel": "İletişim Rehberi",
+    "tabLabel": "Alarm Alıcıları",
+    "description": "Alarm dağıtımında kullanılan alıcı listesi (e-posta / WhatsApp) — genel bir kamu rehberi değildir.",
     "addButton": "+ Kişi Ekle",
     "editTitle": "Kişiyi Düzenle",
     "createTitle": "Yeni Kişi Ekle",
@@ -968,6 +979,15 @@
     "sopHazardType": "Afet Tipi",
     "sopBodyContent": "Prosedür Metni",
     "sopBodyContentPlaceholder": "Adım adım prosedür metni...",
+    "sopEntryMode": "Giriş Yöntemi",
+    "sopEntryModeTyped": "Metin Yaz",
+    "sopEntryModeUpload": "Dosya Yükle",
+    "sopAttachment": "Doküman (PDF veya Word)",
+    "sopAttachmentCurrent": "Mevcut dosya",
+    "sopAttachmentTypeError": "Sadece PDF ve Word (.docx) dosyaları desteklenir.",
+    "sopAttachmentSizeError": "Dosya çok büyük (maks. 20MB).",
+    "sopAttachmentRequired": "Lütfen yüklenecek bir dosya seçin.",
+    "sopBodyContentOptionalForAi": "opsiyonel, AI özeti için kullanılır",
     "sopReferenceUrl": "Referans URL",
     "save": "Kaydet",
     "sopTabLabel": "SOP Deposu",

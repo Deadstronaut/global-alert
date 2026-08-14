@@ -205,7 +205,10 @@ async function runImport() {
 <template>
   <div class="contacts-panel">
     <div class="panel-header">
-      <h3>{{ t('contacts.tabLabel') }}</h3>
+      <div>
+        <h3>{{ t('contacts.tabLabel') }}</h3>
+        <p class="panel-description">{{ t('contacts.description') }}</p>
+      </div>
       <button class="btn-submit" @click="openCreate">{{ t('contacts.addButton') }}</button>
     </div>
 
@@ -299,6 +302,7 @@ async function runImport() {
 .contacts-panel { padding: 4px 0; }
 .panel-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; }
 .panel-header h3 { margin: 0; color: #e2e8f0; }
+.panel-description { margin: 4px 0 0; font-size: 0.8rem; color: #94a3b8; }
 .contacts-table { width: 100%; border-collapse: collapse; font-size: .82rem; }
 .contacts-table th { text-align: left; color: var(--color-text-muted,#94a3b8); padding: 8px 10px; border-bottom: 1px solid rgba(255,255,255,.1); }
 .contacts-table td { padding: 8px 10px; border-bottom: 1px solid rgba(255,255,255,.05); color: #e2e8f0; }

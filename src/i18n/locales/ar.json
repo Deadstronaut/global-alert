@@ -121,6 +121,7 @@
     "hideLayer": "إخفاء الطبقة",
     "showLayer": "إظهار الطبقة",
     "noDataYet": "لا توجد بيانات بعد",
+    "layerInactiveHint": "قم بتفعيل هذه الطبقة لرؤية التفاصيل.",
     "loadingEllipsis": "جارٍ التحميل…",
     "calendar": "التقويم",
     "view2D": "عرض ثنائي الأبعاد",
@@ -290,7 +291,10 @@
       "regionCode": "المنطقة (اختياري)",
       "targetDemographics": "الفئة المستهدفة (اختياري)",
       "targetDemographicsHint": "اتركه فارغًا للوصول إلى الجميع. حدد وسومًا للوصول فقط إلى جهات الاتصال التي تحمل واحدًا منها على الأقل.",
-      "regionCodePlaceholder": "إسطنبول، قاضي كوي..."
+      "regionCodePlaceholder": "إسطنبول، قاضي كوي...",
+      "radiusKm": "نطاق التحذير (كم)",
+      "radiusKmPlaceholder": "مثال: 25",
+      "radiusInvalid": "يجب أن يكون نطاق التحذير رقمًا موجبًا."
     },
     "status": {
       "draft": "مسودة",
@@ -602,7 +606,8 @@
     }
   },
   "contacts": {
-    "tabLabel": "دليل جهات الاتصال",
+    "tabLabel": "مستلمو التنبيهات",
+    "description": "قائمة المستلمين المستخدمة لتوزيع التنبيهات (البريد الإلكتروني / واتساب) — ليست دليلاً عاماً للجمهور.",
     "addButton": "+ إضافة جهة اتصال",
     "editTitle": "تعديل جهة الاتصال",
     "createTitle": "إضافة جهة اتصال",
@@ -818,6 +823,15 @@
     "sopNoVersionHistory": "لا توجد إصدارات سابقة بعد.",
     "sopTitlePlaceholder": "مثال: إجراء الاستجابة للزلازل",
     "sopBodyContentPlaceholder": "نص الإجراء خطوة بخطوة...",
+    "sopEntryMode": "طريقة الإدخال",
+    "sopEntryModeTyped": "كتابة نص",
+    "sopEntryModeUpload": "رفع ملف",
+    "sopAttachment": "مستند (PDF أو Word)",
+    "sopAttachmentCurrent": "الملف الحالي",
+    "sopAttachmentTypeError": "يُدعم فقط ملفات PDF وWord (.docx).",
+    "sopAttachmentSizeError": "الملف كبير جدًا (الحد الأقصى 20 ميجابايت).",
+    "sopAttachmentRequired": "يرجى اختيار ملف للرفع.",
+    "sopBodyContentOptionalForAi": "اختياري، يُستخدم لتلخيص الذكاء الاصطناعي",
     "sopCategoryPlaceholder": "مثال: الاستجابة، الإخلاء",
     "aiSummarizeAction": "تلخيص باستخدام الذكاء الاصطناعي",
     "aiTranslateAction": "ترجمة باستخدام الذكاء الاصطناعي"

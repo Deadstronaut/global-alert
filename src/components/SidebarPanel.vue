@@ -77,7 +77,11 @@ const disasterTypes = [
 const openAccordions = ref(new Set())
 const disasterTypeView = ref('active')
 const openSections = ref({
-  disasterFilters: true,
+  // spec 068 US2: Disaster Filters is one of the four consolidated layer
+  // groups and defaults to collapsed per the partner review's request; the
+  // other sections here (legend/filters/view mode/location) are unrelated
+  // sidebar sections, left untouched.
+  disasterFilters: false,
   severityLegend: true,
   magnitudeDepth: true,
   viewMode: true,
@@ -447,7 +451,14 @@ const selectedRangeLabel = computed(() => {
 
               <Transition name="accordion">
                 <div class="accordion-body" v-if="openAccordions.has(dtype.key)">
-                  <div class="severity-row" v-if="severityBreakdown[dtype.key]">
+                  <!-- spec 068 US1: severity breakdown (this hazard type's
+                       legend/info) only shown while the layer itself is
+                       toggled active — matches partner review's "legend
+                       displayed only if the layer is activated". -->
+                  <p v-if="!disasterStore.isLayerActive(dtype.key)" class="accordion-layer-inactive-hint">
+                    {{ t('sidebar.layerInactiveHint') }}
+                  </p>
+                  <div class="severity-row" v-else-if="severityBreakdown[dtype.key]">
                     <span
                       class="sev-chip critical"
                       v-if="severityBreakdown[dtype.key].critical > 0"
@@ -2207,6 +2218,13 @@ html[data-theme='light'] .footer-sources {
 
 .sev-chip.none {
   background: rgba(255, 255, 255, 0.07);
+  color: var(--color-text-muted);
+}
+
+.accordion-layer-inactive-hint {
+  margin: 4px 0 0;
+  font-size: 0.7rem;
+  font-style: italic;
   color: var(--color-text-muted);
 }
 

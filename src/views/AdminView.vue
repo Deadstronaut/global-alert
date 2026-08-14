@@ -15,7 +15,6 @@ import ExposureDatasetManager from '@/components/impact/ExposureDatasetManager.v
 import RiskIndicatorConfig from '@/components/risk/RiskIndicatorConfig.vue'
 import CountryRiskIndexPanel from '@/components/risk/CountryRiskIndexPanel.vue'
 import RiskScoreDashboard from '@/components/risk/RiskScoreDashboard.vue'
-import ScenarioBuilder from '@/components/risk/ScenarioBuilder.vue'
 import CascadeRuleConfig from '@/components/risk/CascadeRuleConfig.vue'
 import ContactsPanel from '@/components/admin/ContactsPanel.vue'
 import DispatchPanel from '@/components/admin/DispatchPanel.vue'
@@ -380,7 +379,9 @@ onUnmounted(() => {
     <div v-if="tab === 'risk' && canAdmin" class="tab-content risk-tab-content">
       <RiskIndicatorConfig />
       <RiskScoreDashboard />
-      <ScenarioBuilder />
+      <!-- spec 068 US7: Scenario Modeling moved into Impact Analyzer's
+           Advanced mode (src/components/impact/ImpactPanel.vue) — no
+           longer mounted here. -->
       <CountryRiskIndexPanel />
       <!-- ── Cascading Hazard Risk (spec 048) ───────────────────────────── -->
       <CascadeRuleConfig />

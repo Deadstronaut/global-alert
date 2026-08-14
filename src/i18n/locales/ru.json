@@ -121,6 +121,7 @@
     "hideLayer": "Скрыть слой",
     "showLayer": "Показать слой",
     "noDataYet": "Данных пока нет",
+    "layerInactiveHint": "Включите этот слой, чтобы увидеть детали.",
     "loadingEllipsis": "Загрузка…",
     "calendar": "Календарь",
     "view2D": "Вид 2D",
@@ -290,7 +291,10 @@
       "regionCode": "Регион (необязательно)",
       "targetDemographics": "Целевая группа (необязательно)",
       "targetDemographicsHint": "Оставьте пустым, чтобы охватить всех. Выберите теги, чтобы уведомить только контакты хотя бы с одним из них.",
-      "regionCodePlaceholder": "Стамбул, Кадыкёй..."
+      "regionCodePlaceholder": "Стамбул, Кадыкёй...",
+      "radiusKm": "Радиус Оповещения (км)",
+      "radiusKmPlaceholder": "напр. 25",
+      "radiusInvalid": "Радиус оповещения должен быть положительным числом."
     },
     "status": {
       "draft": "Черновик",
@@ -602,7 +606,8 @@
     }
   },
   "contacts": {
-    "tabLabel": "Справочник Контактов",
+    "tabLabel": "Получатели Оповещений",
+    "description": "Список получателей для рассылки оповещений (email / WhatsApp) — не общедоступный справочник.",
     "addButton": "+ Добавить Контакт",
     "editTitle": "Редактировать Контакт",
     "createTitle": "Добавить Контакт",
@@ -818,6 +823,15 @@
     "sopNoVersionHistory": "Предыдущих версий пока нет.",
     "sopTitlePlaceholder": "напр. Порядок действий при землетрясении",
     "sopBodyContentPlaceholder": "Пошаговый текст процедуры...",
+    "sopEntryMode": "Способ Ввода",
+    "sopEntryModeTyped": "Ввести Текст",
+    "sopEntryModeUpload": "Загрузить Файл",
+    "sopAttachment": "Документ (PDF или Word)",
+    "sopAttachmentCurrent": "Текущий файл",
+    "sopAttachmentTypeError": "Поддерживаются только файлы PDF и Word (.docx).",
+    "sopAttachmentSizeError": "Файл слишком большой (макс. 20MB).",
+    "sopAttachmentRequired": "Выберите файл для загрузки.",
+    "sopBodyContentOptionalForAi": "необязательно, используется для ИИ-резюме",
     "sopCategoryPlaceholder": "напр. Реагирование, Эвакуация",
     "aiSummarizeAction": "Обобщить с помощью ИИ",
     "aiTranslateAction": "Перевести с помощью ИИ"

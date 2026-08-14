@@ -121,6 +121,7 @@
     "hideLayer": "Ocultar Capa",
     "showLayer": "Mostrar Capa",
     "noDataYet": "Aún no hay datos",
+    "layerInactiveHint": "Active esta capa para ver sus detalles.",
     "loadingEllipsis": "Cargando…",
     "calendar": "Calendario",
     "view2D": "Vista 2D",
@@ -290,7 +291,10 @@
       "regionCode": "Región (opcional)",
       "targetDemographics": "Grupo objetivo (opcional)",
       "targetDemographicsHint": "Déjelo vacío para llegar a todos. Seleccione etiquetas para notificar solo a contactos con al menos una de ellas.",
-      "regionCodePlaceholder": "Estambul, Kadıköy..."
+      "regionCodePlaceholder": "Estambul, Kadıköy...",
+      "radiusKm": "Radio de Alerta (km)",
+      "radiusKmPlaceholder": "ej. 25",
+      "radiusInvalid": "El radio de alerta debe ser un número positivo."
     },
     "status": {
       "draft": "Borrador",
@@ -602,7 +606,8 @@
     }
   },
   "contacts": {
-    "tabLabel": "Directorio de Contactos",
+    "tabLabel": "Destinatarios de Alertas",
+    "description": "Lista de destinatarios usada para la difusión de alertas (correo / WhatsApp) — no es un directorio público general.",
     "addButton": "+ Añadir Contacto",
     "editTitle": "Editar Contacto",
     "createTitle": "Añadir Contacto",
@@ -818,6 +823,15 @@
     "sopNoVersionHistory": "Aún no hay versiones anteriores.",
     "sopTitlePlaceholder": "ej. Procedimiento de Respuesta a Terremotos",
     "sopBodyContentPlaceholder": "Texto del procedimiento paso a paso...",
+    "sopEntryMode": "Modo de Entrada",
+    "sopEntryModeTyped": "Escribir Texto",
+    "sopEntryModeUpload": "Subir Archivo",
+    "sopAttachment": "Documento (PDF o Word)",
+    "sopAttachmentCurrent": "Archivo actual",
+    "sopAttachmentTypeError": "Solo se admiten archivos PDF y Word (.docx).",
+    "sopAttachmentSizeError": "El archivo es demasiado grande (máx. 20MB).",
+    "sopAttachmentRequired": "Seleccione un archivo para subir.",
+    "sopBodyContentOptionalForAi": "opcional, usado para el resumen de IA",
     "sopCategoryPlaceholder": "ej. Respuesta, Evacuación",
     "aiSummarizeAction": "Resumir con IA",
     "aiTranslateAction": "Traducir con IA"

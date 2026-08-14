@@ -171,6 +171,18 @@ export const useUIStore = defineStore('ui', () => {
         flowPanelOpen.value = !flowPanelOpen.value;
     }
 
+    // spec 068 follow-up (partner review): Forecast ("Foresight") was
+    // previously a row buried inside the Wind & Current panel above —
+    // partner review asked for it as its own separate place, not stacked
+    // inside Wind & Current. Same shared-open-state pattern as
+    // flowPanelOpen above: a new standalone trigger button (MapView.vue,
+    // next to the existing radar/flow trigger) and ForecastPanel.vue both
+    // read/write this.
+    const forecastPanelOpen = ref(false);
+    function toggleForecastPanel() {
+        forecastPanelOpen.value = !forecastPanelOpen.value;
+    }
+
     // Overlay row — same single-select-with-toggle-off correction as
     // Animate above, and for the same reason (nullschool's own Overlay row
     // is also `role="radiogroup"`): one shared key across BOTH overlay
@@ -397,6 +409,8 @@ export const useUIStore = defineStore('ui', () => {
         setSelectedHeight,
         flowPanelOpen,
         toggleFlowPanel,
+        forecastPanelOpen,
+        toggleForecastPanel,
         activeOverlayKey,
         toggleOverlay,
         selectedForecastVariable,

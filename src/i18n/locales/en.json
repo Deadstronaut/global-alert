@@ -213,6 +213,8 @@
     "zoomOut": "Zoom Out",
     "terrain3D": "Show 3D terrain (raised mountains)",
     "terrain2D": "Switch back to flat 2D view",
+    "basemapPicker": "Basemap style",
+    "resetNorth": "Reset map to north",
     "terrain3DShort": "3D",
     "terrain2DShort": "2D",
     "terrain3DWarningTitle": "3D terrain performance warning",
@@ -1416,7 +1418,9 @@
     "forecast": {
       "rowLabel": "Forecast",
       "dayLabel": "Day {n} · {date}",
-      "noData": "No forecast data for this day yet."
+      "noData": "No forecast data for this day yet.",
+      "panelExpand": "Open forecast panel",
+      "panelCollapse": "Close forecast panel"
     }
   },
   "windLayer": {

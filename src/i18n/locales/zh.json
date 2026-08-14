@@ -206,6 +206,8 @@
     "zoomOut": "缩小",
     "terrain3D": "显示3D地形（凸起的山脉）",
     "terrain2D": "切换回平面2D视图",
+    "basemapPicker": "底图样式",
+    "resetNorth": "重置地图朝北",
     "terrain3DShort": "3D",
     "terrain2DShort": "2D",
     "terrain3DWarningTitle": "3D地形性能警告",
@@ -1232,7 +1234,9 @@
     "forecast": {
       "rowLabel": "预报",
       "dayLabel": "第 {n} 天 · {date}",
-      "noData": "该日期暂无预报数据。"
+      "noData": "该日期暂无预报数据。",
+      "panelExpand": "打开预报面板",
+      "panelCollapse": "关闭预报面板"
     }
   },
   "windLayer": {

@@ -206,6 +206,8 @@
     "zoomOut": "Dézoomer",
     "terrain3D": "Afficher le relief 3D (montagnes surélevées)",
     "terrain2D": "Revenir à la vue plate 2D",
+    "basemapPicker": "Style de fond de carte",
+    "resetNorth": "Réinitialiser la carte vers le nord",
     "terrain3DShort": "3D",
     "terrain2DShort": "2D",
     "terrain3DWarningTitle": "Avertissement de performance du relief 3D",
@@ -1232,7 +1234,9 @@
     "forecast": {
       "rowLabel": "Prévision",
       "dayLabel": "Jour {n} · {date}",
-      "noData": "Pas encore de données de prévision pour ce jour."
+      "noData": "Pas encore de données de prévision pour ce jour.",
+      "panelExpand": "Ouvrir le panneau de prévision",
+      "panelCollapse": "Fermer le panneau de prévision"
     }
   },
   "windLayer": {

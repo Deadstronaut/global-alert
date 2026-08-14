@@ -18,11 +18,17 @@ import { useI18n } from 'vue-i18n'
 import { useUIStore } from '@/stores/ui.js'
 import { Slider } from '@/components/ui/slider'
 import { fetchLatestFlowSnapshot, fetchLatestOverlaySnapshot } from '@/utils/windLayerData.js'
-import { fetchForecastDayList, fetchForecastSnapshot } from '@/utils/forecastLayerData.js'
 import { isFlowSnapshotStale } from '@/utils/flowSnapshotStaleness.js'
 
 const { t } = useI18n()
 const uiStore = useUIStore()
+
+// spec 068 follow-up: this panel can now mount in two places — its
+// original spot near the left-side severity legend (opens rightward, the
+// default), or the new radar-trigger-anchor near the bottom-right basemap
+// picker (opens leftward, via this prop) — see MapView.vue's two mount
+// points and .flow-control-panel--opens-leftward below.
+defineProps({ opensLeftward: { type: Boolean, default: false } })
 
 // Every Mode the reference tool shows (spec 054 FR-007) — `functional`
 // modes have at least one real Animate/Overlay entry; the rest render
@@ -237,87 +243,8 @@ function toggleOverlayOption(option) {
   }
 }
 
-// ── Forecast row (spec 056) — reuses the same short-abbreviation label
-// style OVERLAY_OPTIONS already uses (Temp, RH, CAPE, ...) for the fields
-// that overlap; two new ones (Wind, Precip) for the fields the nowcast
-// Overlay row doesn't expose directly (wind speed there is an Animate
-// entry, not an Overlay one; precipitation there is precip_3hr, a
-// different variable than forecast_snapshots' own 'precipitation'). Flat,
-// not per-Mode like OVERLAY_OPTIONS — forecast is a cross-cutting concept,
-// not tied to Air/Ocean/Chem/etc (research.md's own framing).
-// `description` is the exact same wording as docs/plans/HAVA_OKYANUS_KATMANLARI_SOZLUGU.md's
-// "Forecast" section (single source of truth kept in sync manually — that
-// doc is the hand-off glossary for partners, this is the same text surfaced
-// as an in-app hover tooltip, 2026-08-07 ask: "ortaklarımıza verdiğimizde...
-// anlamlarını anlayabilsinler... üzerine gelince hover efekti ile tooltip
-// olsun"). Plain `title` attribute, not the ui/tooltip component — matches
-// this exact row's own pre-existing disabled-chip tooltip convention just
-// below (OVERLAY_OPTIONS' `:title="... : 'Yakında...'"`), native browser
-// hover, no extra markup/dependency.
-const FORECAST_VARIABLES = [
-  { key: 'wind_speed', label: 'Wind', description: 'Rüzgar hızı öngörüsü (10m, m/s) — statik ısı haritası, animasyonlu değil' },
-  { key: 'precipitation', label: 'Precip', description: '6 saatlik birikimli yağış öngörüsü (mm)' },
-  { key: 'temperature', label: 'Temp', description: 'Sıcaklık öngörüsü (2m, °C)' },
-  { key: 'relative_humidity', label: 'RH', description: 'Bağıl nem öngörüsü (%)' },
-  { key: 'mean_sea_level_pressure', label: 'MSLP', description: 'Deniz seviyesine indirgenmiş basınç öngörüsü (hPa)' },
-  { key: 'cape', label: 'CAPE', description: 'Konvektif kullanılabilir potansiyel enerji öngörüsü — fırtına potansiyeli (J/kg)' },
-  { key: 'total_precipitable_water', label: 'TPW', description: 'Toplam yağabilir su öngörüsü (mm)' },
-  { key: 'total_cloud_water', label: 'TCW', description: 'Toplam bulut suyu öngörüsü (kg/m²)' },
-  { key: 'dew_point', label: 'Dew', description: 'Çiy noktası sıcaklığı öngörüsü (°C)' },
-  { key: 'wet_bulb_temp', label: 'WBT', description: 'Yaş termometre sıcaklığı öngörüsü (°C)' },
-  { key: 'wind_power_density', label: 'WPD', description: 'Rüzgar güç yoğunluğu öngörüsü (W/m²)' },
-  { key: 'misery_index', label: 'MI', description: 'Sıkıntı indeksi (Misery Index) öngörüsü — hissedilen sıcaklık (°C)' },
-  { key: 'significant_wave_height', label: 'HTSGW', description: 'Belirgin dalga yüksekliği öngörüsü (m)' },
-  { key: 'uv_index', label: 'UVI', description: 'UV indeksi öngörüsü — yalnızca ilk 5 gün için veri var (kaynağın sınırı)' },
-]
-
-// forecastDayList: the SELECTED variable's own real available days
-// (data-model.md's ForecastDayListEntry[]) — never a hardcoded 1-15 range,
-// since e.g. uv_index has far fewer (research.md §3). forecastSnapshotStatus
-// mirrors overlayStatus's own separate-fetch-for-the-panel's-own-display
-// pattern above (refreshOverlayStatus) rather than reading MapView.vue's
-// internal state — this panel owns no map, same architecture note at the
-// top of this file.
-const forecastDayList = ref([])
-const forecastSnapshotStatus = ref(null) // null | 'unavailable' | snapshot
-
-async function refreshForecastSnapshotStatus() {
-  const variable = uiStore.selectedForecastVariable
-  const entry = forecastDayList.value[uiStore.selectedForecastDayIndex]
-  if (!variable || !entry) {
-    forecastSnapshotStatus.value = null
-    return
-  }
-  const snapshot = await fetchForecastSnapshot(variable, entry.forecastStepHours)
-  forecastSnapshotStatus.value = snapshot ?? 'unavailable'
-}
-
-async function selectForecastVariable(option) {
-  const nextVariable = uiStore.selectedForecastVariable === option.key ? null : option.key
-  uiStore.setSelectedForecastVariable(nextVariable)
-  if (!nextVariable) {
-    forecastDayList.value = []
-    forecastSnapshotStatus.value = null
-    return
-  }
-  forecastDayList.value = await fetchForecastDayList(nextVariable)
-  await refreshForecastSnapshotStatus()
-}
-
-function selectForecastDay(index) {
-  uiStore.setSelectedForecastDayIndex(index)
-  refreshForecastSnapshotStatus()
-}
-
-const selectedForecastDayEntry = computed(() => forecastDayList.value[uiStore.selectedForecastDayIndex] ?? null)
-const selectedForecastDayNumber = computed(() => {
-  const entry = selectedForecastDayEntry.value
-  return entry ? Math.round(entry.forecastStepHours / 24) : null
-})
-const selectedForecastDayDate = computed(() => {
-  const entry = selectedForecastDayEntry.value
-  return entry ? new Date(entry.validAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : ''
-})
+// Forecast row (spec 056) moved out to ForecastPanel.vue — see that
+// component for FORECAST_VARIABLES, forecastDayList, and related state.
 
 // ── Live tuning (gear icon) ─────────────────────────────────────────────
 // Edits whichever layer_type is currently selected in the Animate row
@@ -352,7 +279,10 @@ const activeModeInfo = computed(() => MODES.find((m) => m.id === uiStore.selecte
 </script>
 
 <template>
-  <div class="flow-control-panel" :class="{ 'flow-control-panel--open': uiStore.flowPanelOpen }">
+  <div
+    class="flow-control-panel"
+    :class="{ 'flow-control-panel--open': uiStore.flowPanelOpen, 'flow-control-panel--opens-leftward': opensLeftward }"
+  >
     <Transition name="flow-panel-expand">
       <div v-if="uiStore.flowPanelOpen" class="flow-control-panel-body">
         <div class="flow-control-panel-header">
@@ -441,46 +371,10 @@ const activeModeInfo = computed(() => MODES.find((m) => m.id === uiStore.selecte
           </div>
         </div>
 
-        <!-- Forecast row (spec 056) — mode-independent, shown regardless of
-             uiStore.selectedMode (unlike Animate/Height/Overlay above, which
-             are per-Air/Ocean/Chem/etc). Mutually exclusive with the Overlay
-             row above at the store level (uiStore.setSelectedForecastVariable/
-             toggleOverlay, research.md §1) — selecting one clears the other. -->
-        <div class="flow-view-bar-row flow-view-forecast-row">
-          <span class="flow-view-bar-label">{{ t('flowPanel.forecast.rowLabel') }}</span>
-          <button
-            v-for="option in FORECAST_VARIABLES"
-            :key="option.key"
-            type="button"
-            class="flow-view-chip flow-view-mode-btn"
-            :class="{ 'flow-view-mode-btn--active': uiStore.selectedForecastVariable === option.key }"
-            :title="option.description"
-            @click="selectForecastVariable(option)"
-          >{{ option.label }}</button>
-        </div>
-
-        <div v-if="uiStore.selectedForecastVariable" class="flow-view-forecast-day">
-          <template v-if="forecastDayList.length">
-            <div class="flow-view-bar-row">
-              <span class="flow-view-bar-label">{{ t('flowPanel.forecast.dayLabel', { n: selectedForecastDayNumber, date: selectedForecastDayDate }) }}</span>
-            </div>
-            <Slider
-              :min="0"
-              :max="forecastDayList.length - 1"
-              :step="1"
-              :model-value="[uiStore.selectedForecastDayIndex]"
-              @update:model-value="(v) => selectForecastDay(v[0])"
-              class="flow-view-forecast-slider"
-            />
-            <p v-if="forecastSnapshotStatus === 'unavailable'" class="flow-view-forecast-nodata">
-              {{ t('flowPanel.forecast.noData') }}
-            </p>
-            <p v-else-if="forecastSnapshotStatus" class="flow-view-forecast-asof">
-              {{ t('windLayer.asOf', { time: formatIssuedAt(forecastSnapshotStatus.issuedAt) }) }}
-            </p>
-          </template>
-          <p v-else class="flow-view-forecast-nodata">{{ t('flowPanel.forecast.noData') }}</p>
-        </div>
+        <!-- Forecast row (spec 056) moved out to ForecastPanel.vue as its
+             own standalone panel/trigger, per partner review (page 3
+             annotation: "Foresight ... can be allocated in Dashboard /
+             Monitoring page" — flagged for not having its own place). -->
 
         <div v-if="uiStore.selectedMode === 'bio'" class="flow-view-bar-row">
           <span class="flow-view-bar-label">Annotation</span>
@@ -564,6 +458,15 @@ const activeModeInfo = computed(() => MODES.find((m) => m.id === uiStore.selecte
   z-index: 40;
   max-height: 78vh;
   overflow-y: auto;
+}
+
+/* spec 068 follow-up: when mounted near the right edge (radar-trigger-anchor
+   in MapView.vue, above the basemap picker), open leftward instead so the
+   panel doesn't run off the right edge of the screen. */
+.flow-control-panel--opens-leftward .flow-control-panel-body {
+  left: auto;
+  right: -8px;
+  transform-origin: bottom right;
 }
 
 .flow-control-panel-header {

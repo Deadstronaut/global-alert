@@ -34,6 +34,7 @@ import GeocodingSearch from '@/components/impact/GeocodingSearch.vue'
 import SettingsPanel from '@/components/SettingsPanel.vue'
 import PanelCollapseToggle from '@/components/PanelCollapseToggle.vue'
 import FlowControlPanel from '@/components/FlowControlPanel.vue'
+import ForecastPanel from '@/components/ForecastPanel.vue'
 import LayerPanelGroup from '@/components/map/LayerPanelGroup.vue'
 import RadarScanBadge from '@/components/RadarScanBadge.vue'
 import { Button } from '@/components/ui/button'
@@ -1083,6 +1084,44 @@ const exposureLayersPanelCollapsed = ref(true)
 // spec 068 US2: defaults to collapsed, same rationale as above.
 const sheltersLayerPanelCollapsed = ref(true)
 
+// spec 068 follow-up: WMS/WFS LayerPanelGroup's open state, lifted up here
+// (via v-model:open) so it can be mutually exclusive with Shelters/Exposure
+// below — only one of the three should be open at a time, so opening any
+// one closes the other two (avoids two flyouts overlapping on top of each
+// other, live-testing concern).
+const mapLayersPanelOpen = ref(false)
+
+function openShelters() {
+  sheltersLayerPanelCollapsed.value = false
+  exposureLayersPanelCollapsed.value = true
+  mapLayersPanelOpen.value = false
+}
+function closeShelters() {
+  sheltersLayerPanelCollapsed.value = true
+}
+function toggleShelters() {
+  if (sheltersLayerPanelCollapsed.value) openShelters()
+  else closeShelters()
+}
+function openExposure() {
+  exposureLayersPanelCollapsed.value = false
+  sheltersLayerPanelCollapsed.value = true
+  mapLayersPanelOpen.value = false
+}
+function closeExposure() {
+  exposureLayersPanelCollapsed.value = true
+}
+function toggleExposurePanelOpen() {
+  if (exposureLayersPanelCollapsed.value) openExposure()
+  else closeExposure()
+}
+watch(mapLayersPanelOpen, (nextOpen) => {
+  if (nextOpen) {
+    sheltersLayerPanelCollapsed.value = true
+    exposureLayersPanelCollapsed.value = true
+  }
+})
+
 // Briefly simulates a hover on the (now auto-collapsed) shelters/exposure
 // panels right after a double-click zoom lands, so their collapsed icons
 // don't just silently sit there unexplained — see zoomToCountry()'s
@@ -1445,6 +1484,16 @@ function zoomOut() {
   map.zoomOut()
 }
 
+// spec 068 follow-up (partner review page 5: "Map items (tilt, north
+// arrow, zoom, etc)") — resets rotation to true north; dragRotate/
+// touchZoomRotate are MapLibre defaults we never disabled, so the map can
+// already be rotated off-north with no on-screen way back before this.
+const mapBearing = ref(0)
+function resetNorth() {
+  if (!map) return
+  map.easeTo({ bearing: 0, duration: 300 })
+}
+
 // Draping satellite imagery over an actively-reshaping 3D mesh is
 // expensive in WebGL regardless of pitch angle — live-tested to drop as
 // low as 6-7 FPS while rotating. Not something a tile-count/pitch tweak
@@ -1534,8 +1583,12 @@ function updateTerrainDetail(value) {
   map.setTerrain({ source: DEM_TERRAIN_SOURCE_ID, exaggeration: 1.5 })
 }
 
-function cycleMapStyle() {
-  mapStyleIndex.value = (mapStyleIndex.value + 1) % MAP_STYLES.length
+// spec 068 follow-up (partner review map layout reference, page 5): direct
+// basemap selection (a row of light/dark/satellite thumbnails you click
+// into) replaces the old single cycle-to-next-style button.
+function selectMapStyle(index) {
+  if (mapStyleIndex.value === index) return
+  mapStyleIndex.value = index
   if (!map) return
   map.setMaxZoom(isSatellite.value ? 17.4 : 20)
   // Leaving satellite: map.setStyle() (inside applyBaseStyle) wipes all
@@ -2427,6 +2480,10 @@ function initMap() {
   map.on('error', (e) => {
     console.error('[MapLibre] Error:', e.error)
   })
+
+  // spec 068 follow-up: drives the north-reset button's rotated arrow icon
+  // and disabled-when-already-north state.
+  map.on('rotate', () => { mapBearing.value = map.getBearing() })
 
   // "İki kart üst üste oluyor" (user-reported, 2026-07-30): every marker
   // (disaster event, drill event, community report...) binds its own
@@ -3781,17 +3838,29 @@ function flyToRegion(lat, lng, zoom) {
   map.flyTo({ center: [lng, lat], zoom, duration: 1500, essential: true })
 }
 
+// spec 068 follow-up (bug report: downloaded PNG sometimes comes out blank).
+// preserveDrawingBuffer:true (map init options above) keeps the WebGL
+// buffer readable between frames, but MapLibre still schedules its actual
+// draw calls async on its own render loop — if this fires between frames
+// (e.g. right as continuous wind-particle animation redraws), the canvas
+// can be mid-clear when toBlob() reads it. Forcing one synchronous repaint
+// and reading the canvas from inside that render event's callback (a
+// well-known MapLibre/Mapbox GL pattern) guarantees a freshly-drawn frame
+// is what gets captured, instead of racing the animation loop.
 function downloadMap() {
   if (!map || !mapLoaded) return
-  map.getCanvas().toBlob((blob) => {
-    if (!blob) return
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `gews-map-${new Date().toISOString().slice(0,19).replace(/[:T]/g, '-')}.png`
-    a.click()
-    URL.revokeObjectURL(url)
+  map.once('render', () => {
+    map.getCanvas().toBlob((blob) => {
+      if (!blob) return
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `gews-map-${new Date().toISOString().slice(0,19).replace(/[:T]/g, '-')}.png`
+      a.click()
+      URL.revokeObjectURL(url)
+    })
   })
+  map.triggerRepaint()
 }
 
 watch(
@@ -3992,11 +4061,82 @@ onBeforeUnmount(() => {
     :class="{ 'impact-panel-collapsed': uiStore.impactPanelCollapsed }"
   >
     <div ref="mapContainer" class="map-leaflet"></div>
-    <div class="zoom-control-bar">
+
+    <!-- spec 068 follow-up (partner review map layout reference, page 5):
+         print/export button top-left. -->
+    <button
+      class="map-download-btn map-download-btn--top-left"
+      :class="{ 'legend-sidebar-collapsed': uiStore.sidebarCollapsed }"
+      type="button"
+      :title="t('impact.downloadMap')"
+      :aria-label="t('impact.downloadMap')"
+      @click="downloadMap"
+    >
+      <svg class="map-download-icon" viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M12 3v12m0 0 5-5m-5 5-5-5M5 21h14a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2" />
+      </svg>
+      <span class="sr-only">{{ t('impact.downloadMap') }}</span>
+    </button>
+
+    <!-- spec 068 follow-up: basemap picker as a row of directly-selectable
+         thumbnails (dark/satellite/street), top-right — replaces the old
+         single cycle-to-next-style button (previously `.layer-switcher`,
+         bottom-right; removed, its CSS rules below are now dead/unused). -->
+    <div class="basemap-picker" role="radiogroup" :aria-label="t('map.basemapPicker')">
+      <button
+        v-for="(style, idx) in MAP_STYLES"
+        :key="style.label"
+        type="button"
+        class="basemap-picker-thumb"
+        :class="[style.preview, { active: mapStyleIndex === idx }]"
+        :aria-pressed="mapStyleIndex === idx"
+        :title="style.label"
+        @click="selectMapStyle(idx)"
+      >
+        <span class="basemap-picker-label">{{ style.label }}</span>
+      </button>
+    </div>
+
+    <!-- spec 068 follow-up: Wind & Current (radar) trigger, relocated here
+         right above the basemap picker per follow-up request ("radarı
+         haritaların üstüne yerleştir") — opens LEFTWARD now (was rightward
+         when it lived on the left side, in .severity-legend-stack), since
+         it sits near the map's right edge here. -->
+    <div class="radar-trigger-anchor">
+      <FlowControlPanel opens-leftward />
+      <button
+        type="button"
+        class="radar-trigger-btn"
+        :aria-label="uiStore.flowPanelOpen ? t('windLayer.panelCollapse') : t('windLayer.panelExpand')"
+        :title="uiStore.flowPanelOpen ? t('windLayer.panelCollapse') : t('windLayer.panelExpand')"
+        @click="uiStore.toggleFlowPanel()"
+      >
+        <RadarScanBadge class="radar-trigger-icon" />
+      </button>
+    </div>
+
+    <!-- spec 068 follow-up: zoom control top-right, stacked below the
+         basemap picker. -->
+    <div class="zoom-control-bar zoom-control-bar--top-right">
       <button class="zoom-btn" :disabled="currentZoom >= (isSatellite ? 17.4 : 20)" @click="zoomIn">+</button>
       <span class="zoom-value">x {{ currentZoom }}</span>
       <button class="zoom-btn" :disabled="currentZoom <= 0" @click="zoomOut">−</button>
     </div>
+
+    <!-- spec 068 follow-up: north-reset (compass), right below the zoom bar. -->
+    <button
+      type="button"
+      class="north-reset-btn"
+      :disabled="mapBearing === 0"
+      :title="t('map.resetNorth')"
+      :aria-label="t('map.resetNorth')"
+      @click="resetNorth"
+    >
+      <svg class="north-reset-icon" viewBox="0 0 24 24" :style="{ transform: `rotate(${-mapBearing}deg)` }" aria-hidden="true">
+        <path d="M12 2 L15.5 12 L12 10 L8.5 12 Z" fill="currentColor" />
+        <path d="M12 10 L15.5 12 L12 22 L8.5 12 Z" fill="rgba(255,255,255,.25)" />
+      </svg>
+    </button>
 
     <LoadingOverlay
       :visible="!!loadingExposureLayer"
@@ -4033,29 +4173,26 @@ onBeforeUnmount(() => {
 
       <!-- Hexbin / marker severity legend -->
       <div v-else-if="uiStore.showHexbins || (!uiStore.showHeatmap && !uiStore.showHexbins)" class="severity-legend-stack">
-        <!-- Rendered FIRST (not after the radar/card below) — live-testing
-             correction, 2026-08-06: with FlowControlPanel positioned
-             after them, its expand-upward anchor point sat below both,
-             so the opened panel grew up *through* them, covering the
-             very radar button that triggers it (couldn't even click it
-             to close). As a 0-size element (no visible content when
-             closed) it doesn't affect the radar/card's own visual order
-             below it — only where the panel's "bottom: 100%" anchor
-             ends up, which now needs to clear both of them, not just
-             sit right under the card. -->
-        <FlowControlPanel />
+        <!-- spec 068 follow-up: Forecast/"Foresight" panel stands alone here
+             now — Wind & Current (radar) moved out to its own spot near the
+             basemap picker (bottom-right), per follow-up request: "radarı
+             haritaların üstüne yerleştir, paneli sola doğru açılsın,
+             Forecast burada tek başına dursun". Same 0-size-when-closed
+             flyout pattern as before. -->
+        <ForecastPanel />
 
-        <!-- The flow/overlay menu's own trigger (live-testing ask,
-             2026-08-06: moved FlowControlPanel's separate small toggle
-             button here) — clicking the radar opens that panel. -->
         <button
           type="button"
-          class="severity-legend-stack-radar-btn"
-          :aria-label="uiStore.flowPanelOpen ? t('windLayer.panelCollapse') : t('windLayer.panelExpand')"
-          :title="uiStore.flowPanelOpen ? t('windLayer.panelCollapse') : t('windLayer.panelExpand')"
-          @click="uiStore.toggleFlowPanel()"
+          class="severity-legend-stack-forecast-btn"
+          :class="{ active: uiStore.forecastPanelOpen }"
+          :aria-label="uiStore.forecastPanelOpen ? t('flowPanel.forecast.panelCollapse') : t('flowPanel.forecast.panelExpand')"
+          :title="uiStore.forecastPanelOpen ? t('flowPanel.forecast.panelCollapse') : t('flowPanel.forecast.panelExpand')"
+          @click="uiStore.toggleForecastPanel()"
         >
-          <RadarScanBadge class="severity-legend-stack-radar" />
+          <svg class="severity-legend-stack-forecast-icon" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M6 14a4 4 0 0 1 .5-7.94 5 5 0 0 1 9.53-1.4A4.5 4.5 0 0 1 18.5 14H6z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" />
+            <path d="M8 17v2M12 17v3M16 17v2" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" />
+          </svg>
         </button>
         <div class="map-legend">
           <div class="legend-title">Şiddet</div>
@@ -4135,30 +4272,6 @@ onBeforeUnmount(() => {
       {{ terrain3DEnabled ? t('map.terrain2DShort') : t('map.terrain3DShort') }}
     </button>
 
-    <button
-      class="map-download-btn"
-      type="button"
-      :title="t('impact.downloadMap')"
-      :aria-label="t('impact.downloadMap')"
-      @click="downloadMap"
-    >
-      <svg class="map-download-icon" viewBox="0 0 24 24" aria-hidden="true">
-        <path d="M12 3v12m0 0 5-5m-5 5-5-5M5 21h14a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2" />
-      </svg>
-      <span class="sr-only">{{ t('impact.downloadMap') }}</span>
-    </button>
-
-    <div class="layer-switcher" @click="cycleMapStyle">
-      <div
-        class="layer-preview"
-        :class="MAP_STYLES[(mapStyleIndex + 1) % MAP_STYLES.length].preview"
-      >
-        <span class="layer-label">{{
-          MAP_STYLES[(mapStyleIndex + 1) % MAP_STYLES.length].label
-        }}</span>
-      </div>
-    </div>
-
     <!-- Country hover tooltip -->
     <Transition name="hover-label">
       <div
@@ -4195,49 +4308,13 @@ onBeforeUnmount(() => {
            upward positioning is explicitly fragile per the comment at its
            own mount point, out of scope to relocate in this pass. -->
       <div class="top-controls-left-column">
-      <!-- Shelter map layer toggle (spec 027) — always visible, independent of WMS/WFS layers.
-           Persistent icon button + Transition-driven flyout body, matching the wind/currents
-           flow-control panel's calm fade+scale expand (live-testing ask, 2026-08-05: "aynı
-           geçiş efektini sığınak ve etki alanı katmanlarında da kullan"). -->
-      <div class="shelters-layer-panel">
-        <Button
-          ref="sheltersHintAnchorEl"
-          type="button"
-          variant="ghost"
-          size="icon"
-          class="shelters-layer-collapse-btn"
-          :aria-label="sheltersLayerPanelCollapsed ? t('shelters.map.panelExpand') : t('shelters.map.panelCollapse')"
-          :title="sheltersLayerPanelCollapsed ? t('shelters.map.panelExpand') : t('shelters.map.panelCollapse')"
-          @click="sheltersLayerPanelCollapsed = !sheltersLayerPanelCollapsed"
-        >
-          <svg class="shelters-layer-icon" viewBox="0 0 24 24" aria-hidden="true">
-            <path d="M12 2a7 7 0 0 0-7 7c0 5.25 7 13 7 13s7-7.75 7-13a7 7 0 0 0-7-7z" />
-            <circle cx="12" cy="9" r="2.6" fill="rgba(0,0,0,.35)" />
-          </svg>
-        </Button>
-
-        <Transition name="flow-panel-expand">
-          <div v-if="!sheltersLayerPanelCollapsed" class="shelters-layer-panel-body">
-            <h4 class="map-layers-title">{{ t('shelters.map.panelTitle') }}</h4>
-            <label class="map-layer-toggle">
-              <Checkbox :model-value="uiStore.showShelters" @update:model-value="uiStore.toggleShelters()" />
-              <span>{{ t('shelters.map.toggleLabel') }}</span>
-            </label>
-            <label class="map-layer-toggle">
-              <Checkbox
-                :model-value="uiStore.showCommunityReports"
-                @update:model-value="uiStore.toggleCommunityReports()"
-              />
-              <span>{{ t('communityReport.map.toggleLabel') }}</span>
-            </label>
-          </div>
-        </Transition>
-      </div>
-
       <!-- Layer panel stack: WMS/WFS (spec 012) + Exposure layers (spec 042) share one
            positioned column so neither overlaps the other when both are present.
-           spec 068 US2: moved into the same left-hand column as the shelters
-           panel above (previously the far-right column). -->
+           spec 068 follow-up: reordered to the LEFT of Shelters (was above
+           it in a vertical stack) — "layers" left, "shelters" right, side
+           by side, mutually exclusive (see toggleShelters/
+           toggleExposurePanelOpen/mapLayersPanelOpen watcher above: opening
+           one closes the other two so they never overlap). -->
       <div class="layer-panel-stack">
         <!-- OGC WMS/WFS Map Layers (spec 012): toggle + opacity, session-only state.
              spec 068 US2: now wrapped in the shared collapsed-by-default
@@ -4245,6 +4322,7 @@ onBeforeUnmount(() => {
              with no collapse control at all). -->
         <LayerPanelGroup
           v-if="mapLayersStore.activeMapLayers.length"
+          v-model:open="mapLayersPanelOpen"
           :title="t('mapLayers.panelTitle')"
           class="map-layers-panel"
         >
@@ -4279,7 +4357,7 @@ onBeforeUnmount(() => {
             class="exposure-layers-collapse-btn"
             :aria-label="exposureLayersPanelCollapsed ? t('exposureLayers.expand') : t('exposureLayers.collapse')"
             :title="exposureLayersPanelCollapsed ? t('exposureLayers.expand') : t('exposureLayers.collapse')"
-            @click="exposureLayersPanelCollapsed = !exposureLayersPanelCollapsed"
+            @click="toggleExposurePanelOpen()"
           >
             <svg class="exposure-layers-icon" viewBox="0 0 24 24" aria-hidden="true">
               <path d="M12 2 L2 7 L12 12 L22 7 Z" />
@@ -4372,6 +4450,47 @@ onBeforeUnmount(() => {
           </div>
           </Transition>
         </div>
+      </div>
+
+      <!-- Shelter map layer toggle (spec 027) — always visible, independent of WMS/WFS layers.
+           Persistent icon button + Transition-driven flyout body, matching the wind/currents
+           flow-control panel's calm fade+scale expand (live-testing ask, 2026-08-05: "aynı
+           geçiş efektini sığınak ve etki alanı katmanlarında da kullan").
+           spec 068 follow-up: now to the RIGHT of the layer stack above
+           (was above it) — see .top-controls-left-column's own comment. -->
+      <div class="shelters-layer-panel">
+        <Button
+          ref="sheltersHintAnchorEl"
+          type="button"
+          variant="ghost"
+          size="icon"
+          class="shelters-layer-collapse-btn"
+          :aria-label="sheltersLayerPanelCollapsed ? t('shelters.map.panelExpand') : t('shelters.map.panelCollapse')"
+          :title="sheltersLayerPanelCollapsed ? t('shelters.map.panelExpand') : t('shelters.map.panelCollapse')"
+          @click="toggleShelters()"
+        >
+          <svg class="shelters-layer-icon" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M12 2a7 7 0 0 0-7 7c0 5.25 7 13 7 13s7-7.75 7-13a7 7 0 0 0-7-7z" />
+            <circle cx="12" cy="9" r="2.6" fill="rgba(0,0,0,.35)" />
+          </svg>
+        </Button>
+
+        <Transition name="flow-panel-expand">
+          <div v-if="!sheltersLayerPanelCollapsed" class="shelters-layer-panel-body">
+            <h4 class="map-layers-title">{{ t('shelters.map.panelTitle') }}</h4>
+            <label class="map-layer-toggle">
+              <Checkbox :model-value="uiStore.showShelters" @update:model-value="uiStore.toggleShelters()" />
+              <span>{{ t('shelters.map.toggleLabel') }}</span>
+            </label>
+            <label class="map-layer-toggle">
+              <Checkbox
+                :model-value="uiStore.showCommunityReports"
+                @update:model-value="uiStore.toggleCommunityReports()"
+              />
+              <span>{{ t('communityReport.map.toggleLabel') }}</span>
+            </label>
+          </div>
+        </Transition>
       </div>
       </div>
 
@@ -4484,7 +4603,10 @@ onBeforeUnmount(() => {
      centered in the row regardless of how wide the two side panels
      currently are — collapsed vs. expanded, sidebar open vs. closed. */
   position: absolute;
-  top: 16px;
+  /* spec 068 follow-up: pushed down from 16px so it clears the print/export
+     button (.map-download-btn--top-left, 22px tall + 16px top) now pinned
+     just above it at the same left edge — see that class's own comment. */
+  top: 56px;
   left: calc(var(--sidebar-width, 280px) + 12px);
   right: calc(var(--map-control-offset) + 12px);
   z-index: 20;
@@ -4514,14 +4636,17 @@ onBeforeUnmount(() => {
 }
 
 .top-controls-left-column {
-  /* spec 068 US2: shared left-hand column for Shelters + WMS/WFS + Exposure
-     (previously shelters was alone here while WMS/WFS+Exposure sat in the
-     grid's far-right column). Occupies .top-controls-row's first (1fr)
-     grid track by DOM/auto-placement order; the row's grid-template-columns
-     still reserves the now-empty third track, keeping the search bar
-     centered exactly as before. */
+  /* spec 068 US2 + follow-up: shared left-hand group for the layer stack
+     (WMS/WFS + Exposure) and Shelters, side by side — layers on the left,
+     shelters on the right (partner review ask), mutually exclusive so only
+     one flyout is ever open at a time (see toggleShelters/
+     toggleExposurePanelOpen/mapLayersPanelOpen watcher in <script>).
+     Occupies .top-controls-row's first (1fr) grid track by DOM/auto-
+     placement order; the row's grid-template-columns still reserves the
+     now-empty third track, keeping the search bar centered exactly as
+     before. */
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   align-items: flex-start;
   gap: 10px;
 }
@@ -4781,18 +4906,11 @@ onBeforeUnmount(() => {
    dark, satellite, or light base styles without needing per-style
    conditional colors. */
 .zoom-control-bar {
-  position: absolute;
-  bottom: 20px; /* aligns with .layer-switcher's own bottom offset */
-  right: calc(var(--map-control-offset) + 74px); /* 64px thumbnail + 10px gap */
-  z-index: 10;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: space-between;
   width: 40px;
-  /* Matches the stacked download-btn + layer-switcher column's total height
-     (64px + 12px gap + 22px) so its top edge lines up with .map-download-btn's
-     top edge and its bottom edge lines up with .layer-switcher's bottom edge. */
   height: 98px;
   background: rgba(20, 24, 33, 0.88);
   border: 1px solid rgba(255, 255, 255, 0.12);
@@ -4801,6 +4919,118 @@ onBeforeUnmount(() => {
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
   overflow: hidden;
+}
+/* spec 068 follow-up (partner review map layout reference, page 5): zoom
+   control moved from bottom-right to top-right, stacked directly below the
+   basemap picker (same right offset, so the two read as one column). */
+.zoom-control-bar--top-right {
+  position: absolute;
+  top: 16px;
+  right: var(--map-control-offset);
+  z-index: 10;
+}
+
+/* spec 068 follow-up: north-reset button, directly below the zoom bar
+   (16px top + 98px height + 10px gap). */
+.north-reset-btn {
+  position: absolute;
+  top: 124px;
+  right: var(--map-control-offset);
+  z-index: 10;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(20, 24, 33, 0.88);
+  color: #e2e8f0;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.28);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  transition: background 0.15s;
+}
+.north-reset-btn:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.08);
+}
+.north-reset-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.north-reset-icon {
+  width: 20px;
+  height: 20px;
+  transition: transform 0.2s ease;
+}
+
+/* spec 068 follow-up (partner review map layout reference, page 5):
+   basemap picker as a row of directly-clickable thumbnails, BOTTOM-right
+   (corrected — not top-right; the reference shows it low, near the
+   coordinate readout, separate from the top-right zoom cluster). */
+.basemap-picker {
+  position: absolute;
+  bottom: 20px;
+  right: var(--map-control-offset);
+  z-index: 10;
+  display: flex;
+  gap: 8px;
+}
+.basemap-picker-thumb {
+  width: 48px;
+  height: 48px;
+  padding: 0;
+  border-radius: 8px;
+  border: 2px solid rgba(255, 255, 255, 0.35);
+  cursor: pointer;
+  background-size: cover;
+  background-position: center;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.45);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding-bottom: 3px;
+  transition: border-color 0.15s;
+}
+.basemap-picker-thumb.active {
+  border-color: #4da3ff;
+}
+/* spec 068 follow-up: Wind & Current radar trigger, above the basemap
+   picker (right-anchored, opens leftward via FlowControlPanel's
+   opens-leftward prop — see that component's own CSS for the flyout). */
+.radar-trigger-anchor {
+  position: absolute;
+  bottom: 80px; /* .basemap-picker's bottom(20) + height(48) + 12px gap */
+  right: var(--map-control-offset);
+  z-index: 30;
+  display: flex;
+  justify-content: flex-end;
+}
+.radar-trigger-btn {
+  border: none;
+  background: none;
+  padding: 0;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.15s ease;
+}
+.radar-trigger-btn:hover {
+  transform: scale(1.08);
+}
+.radar-trigger-icon {
+  transform: scale(1.3);
+}
+
+.basemap-picker-label {
+  font-size: 9px;
+  font-weight: 700;
+  color: white;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8);
+  letter-spacing: 0.3px;
 }
 
 .zoom-btn {
@@ -4914,14 +5144,7 @@ onBeforeUnmount(() => {
   outline-offset: 2px;
 }
 
-/* Wide, short bar sitting above the satellite thumbnail (.layer-switcher):
-   same 64px width, about a third of its height — reads as a header strip
-   for the square below it rather than a separate floating icon. */
 .map-download-btn {
-  position: absolute;
-  bottom: 96px;
-  right: var(--map-control-offset);
-  z-index: 10;
   width: 64px;
   height: 22px;
   padding: 0;
@@ -4935,6 +5158,23 @@ onBeforeUnmount(() => {
   justify-content: center;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
   transition: background 0.15s, border-color 0.15s;
+}
+/* spec 068 follow-up (partner review map layout reference, page 5): print/
+   export button moved from the bottom-right satellite-thumbnail column to
+   the top-left corner, standing alone (no longer stacked above anything).
+   left offset matches .top-controls-row's own left edge (just right of
+   SidebarPanel.vue's fixed, full-height, z-index:92 column) — NOT a raw
+   16px from the viewport edge, which would render underneath the sidebar
+   and be invisible. */
+.map-download-btn--top-left {
+  position: absolute;
+  top: 16px;
+  left: calc(var(--sidebar-width, 280px) + 12px);
+  z-index: 10;
+  transition: left 0.35s ease;
+}
+.map-download-btn--top-left.legend-sidebar-collapsed {
+  left: calc(var(--sidebar-collapsed, 56px) + 12px);
 }
 .map-download-btn:hover {
   background: #164f7a;
@@ -4966,31 +5206,6 @@ onBeforeUnmount(() => {
   border: 0;
 }
 
-.layer-switcher {
-  position: absolute;
-  bottom: 20px;
-  right: var(--map-control-offset);
-  z-index: 10;
-  cursor: pointer;
-  border-radius: 8px;
-  overflow: hidden;
-  border: 2px solid white;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.45);
-  width: 64px;
-  height: 64px;
-}
-
-.layer-preview {
-  width: 100%;
-  height: 100%;
-  background-size: cover;
-  background-position: center;
-  display: flex;
-  align-items: flex-end;
-  justify-content: center;
-  padding-bottom: 4px;
-}
-
 .preview-satellite {
   background-image: url('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/3/3/4');
 }
@@ -5001,14 +5216,6 @@ onBeforeUnmount(() => {
 
 .preview-dark {
   background: linear-gradient(135deg, #1a2030 0%, #252d3a 50%, #1e2535 100%);
-}
-
-.layer-label {
-  font-size: 10px;
-  font-weight: 700;
-  color: white;
-  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8);
-  letter-spacing: 0.3px;
 }
 
 /* ── Map Legend ── */
@@ -5061,22 +5268,32 @@ onBeforeUnmount(() => {
   align-items: center;
   gap: 8px;
 }
-.severity-legend-stack-radar-btn {
-  border: none;
-  background: none;
-  padding: 0;
+/* spec 068 follow-up: Forecast trigger — deliberately a plain icon button
+   (not RadarScanBadge's animated look) so the two are visually distinct at
+   a glance, per partner review's "Foresight needs its own place" ask. */
+.severity-legend-stack-forecast-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  background: rgba(20, 24, 33, 0.85);
+  color: #e2e8f0;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: transform 0.15s ease;
+  transition: transform 0.15s ease, border-color 0.15s ease, color 0.15s ease;
 }
-.severity-legend-stack-radar-btn:hover {
+.severity-legend-stack-forecast-btn:hover {
   transform: scale(1.08);
 }
-.severity-legend-stack-radar {
-  transform: scale(1.3);
-  margin-bottom: 4px; /* compensates for the scaled-up badge's extra visual footprint so it doesn't crowd the card below */
+.severity-legend-stack-forecast-btn.active {
+  border-color: #d4a94a;
+  color: #d4a94a;
+}
+.severity-legend-stack-forecast-icon {
+  width: 20px;
+  height: 20px;
 }
 
 .marker-truncation-note {
@@ -5453,24 +5670,18 @@ onBeforeUnmount(() => {
     left: 50%;
   }
 
-  .zoom-control-bar {
+  /* spec 068 follow-up: zoom-control-bar/map-download-btn are now
+     top-anchored (see their --top-right/--top-left modifier classes), no
+     longer bottom-anchored above the mobile impact-panel dock, so their old
+     bottom-clearance overrides here were removed as dead/inert.
+     .layer-switcher no longer exists (replaced by .basemap-picker, also
+     top-anchored, no mobile override needed for the same reason). */
+  .terrain-toggle-btn {
     bottom: calc(var(--impact-panel-mobile-height) + 16px);
   }
 
-  .layer-switcher {
-    bottom: calc(var(--impact-panel-mobile-height) + 100px);
-  }
-
-  .map-download-btn {
-    bottom: calc(var(--impact-panel-mobile-height) + 176px);
-  }
-
-  .terrain-toggle-btn {
-    bottom: calc(var(--impact-panel-mobile-height) + 206px);
-  }
-
   .terrain-tuning-panel {
-    bottom: calc(var(--impact-panel-mobile-height) + 238px);
+    bottom: calc(var(--impact-panel-mobile-height) + 48px);
   }
 
   .country-badge {

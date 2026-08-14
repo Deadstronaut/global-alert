@@ -1,5 +1,4 @@
 <script setup>
-import { ref } from 'vue'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 
 const props = defineProps({
@@ -9,7 +8,12 @@ const props = defineProps({
   badge: { type: [String, Number], default: '' },
 })
 
-const open = ref(props.defaultOpen)
+// spec 068 follow-up: optional v-model:open so a parent can drive/observe
+// this group's expand state externally (e.g. to close a sibling group when
+// this one opens) — falls back to defaultOpen when the parent doesn't bind
+// it, so existing uncontrolled usages are unaffected.
+const open = defineModel('open', { default: undefined })
+if (open.value === undefined) open.value = props.defaultOpen
 </script>
 
 <template>

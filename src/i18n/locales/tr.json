@@ -213,6 +213,8 @@
     "zoomOut": "Uzaklaştır",
     "terrain3D": "3B araziyi göster (dağlar kabartmalı)",
     "terrain2D": "2B düz görünüme dön",
+    "basemapPicker": "Harita stili",
+    "resetNorth": "Haritayı kuzeye sabitle",
     "terrain3DShort": "3B",
     "terrain2DShort": "2B",
     "terrain3DWarningTitle": "3B arazi performans uyarısı",
@@ -1416,7 +1418,9 @@
     "forecast": {
       "rowLabel": "Öngörü",
       "dayLabel": "{n}. Gün · {date}",
-      "noData": "Bu gün için henüz öngörü verisi yok."
+      "noData": "Bu gün için henüz öngörü verisi yok.",
+      "panelExpand": "Öngörü panelini aç",
+      "panelCollapse": "Öngörü panelini kapat"
     }
   },
   "windLayer": {

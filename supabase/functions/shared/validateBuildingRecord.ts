@@ -11,6 +11,11 @@ const VALID_CATEGORIES = new Set([
   'critical_infrastructure_health',
   'critical_infrastructure_education',
   'critical_infrastructure_emergency',
+  'critical_infrastructure_transport',
+  'critical_infrastructure_industrial',
+  'critical_infrastructure_military',
+  'critical_infrastructure_fuel',
+  'critical_infrastructure_cemetery',
 ])
 
 export type ValidationResult =

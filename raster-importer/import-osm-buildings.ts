@@ -64,20 +64,32 @@ export async function runOsmBuildingsImport(): Promise<void> {
       continue
     }
 
-    const { datasetId, featureCount } = await writeExposureDataset(
-      'osm-buildings',
-      countryCode,
-      'count',
-      validRecords.map((record) => ({
-        geometry: record.geometry,
-        metricValue: 1,
-        properties: record.properties,
-        assetCategory: record.assetCategory,
-      })),
-    )
-    console.log(`[${countryCode}] wrote dataset ${datasetId} (${featureCount} features)`)
-    countriesProcessed += 1
-    featuresImported += featureCount
+    // writeExposureDataset throws on a failed insert (e.g. a DB statement
+    // timeout) — catch it per-country rather than letting it propagate and
+    // abort every remaining country in this loop. Live-verified 2026-08-19:
+    // an uncaught statement timeout for one country crashed the whole run
+    // before any dataset was written, even though other countries' fetches
+    // had already succeeded. Same "skip, don't fail the batch" convention
+    // as a fetch failure just above.
+    try {
+      const { datasetId, featureCount } = await writeExposureDataset(
+        'osm-buildings',
+        countryCode,
+        'count',
+        validRecords.map((record) => ({
+          geometry: record.geometry,
+          metricValue: 1,
+          properties: record.properties,
+          assetCategory: record.assetCategory,
+        })),
+      )
+      console.log(`[${countryCode}] wrote dataset ${datasetId} (${featureCount} features)`)
+      countriesProcessed += 1
+      featuresImported += featureCount
+    } catch (e) {
+      console.error(`[${countryCode}] writeExposureDataset failed, skipping: ${e instanceof Error ? e.message : e}`)
+      countriesSkipped.push(countryCode)
+    }
   }
 
   // Same "a completed run is a success even with zero features" convention

@@ -21,3 +21,9 @@ h5py
 # Data Store (ADS) account required, see fetch_overlay_cams.py's module
 # docstring. Unpinned, same rationale as copernicusmarine above.
 cdsapi
+# hazard_detector.py (2026-08-18) — same h3-js library/resolution-7
+# convention as server/src/processors/normalizer.js's Node-side h3Id
+# computation, Python binding instead of JS. Computed at write time here
+# (not left null for a later backfillH3.js sweep) so get_aggregated_disasters'
+# `WHERE h3_id IS NOT NULL` hex/"Petek" mode sees these events immediately.
+h3==4.1.2

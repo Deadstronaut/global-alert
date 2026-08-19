@@ -372,7 +372,11 @@ function clearQuery() {
         {{ searching ? t('impact.geocoding.searching') : t('impact.geocoding.search') }}
       </Button>
     </div>
-    <p class="geocoding-help">{{ t('impact.geocoding.help') }}</p>
+    <!-- spec 069 follow-up: dropped now that it's in the header — the
+         example text moved into the placeholder itself (see i18n
+         geocoding.placeholder), so this extra line no longer adds
+         anything, and keeping the header's height compact was the point of
+         removing it. -->
     <p v-if="noResults" class="geocoding-notice">{{ t('impact.geocoding.noResults') }}</p>
     <p v-if="error" class="geocoding-notice geocoding-error">{{ error }}</p>
   </div>

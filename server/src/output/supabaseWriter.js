@@ -230,6 +230,7 @@ function mapToRow(event) {
     time: event.time,
     source: event.source,
     source_url: event.sourceUrl,
+    h3_id: event.h3Id ?? null,
     country_code: event.countryCode ?? null,
     extra: JSON.stringify(event.extra || {}),
     received_at: event.receivedAt,

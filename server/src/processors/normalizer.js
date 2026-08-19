@@ -3,7 +3,17 @@
  * Vue tarafındaki DisasterEvent.js ile birebir uyumlu
  */
 
+import { latLngToCell } from 'h3-js';
 import { getCachedBreakpoints } from './hazardThresholdsCache.js';
+
+// spec 069 follow-up: live-ingested events never got an h3_id — only
+// src/scripts/backfillH3.js's one-off historical backfill populated it
+// (same library, same resolution 7), so every row inserted since then
+// (confirmed live 2026-08-18: 215K+ recent wildfire rows, ALL null h3_id)
+// was invisible to get_aggregated_disasters' `WHERE h3_id IS NOT NULL`
+// server-side aggregation. Computing it here means every future insert is
+// covered without needing a recurring backfill.
+const H3_RESOLUTION = 7;
 
 /**
  * Pure evaluation of an ordered (ascending min_value) breakpoints array
@@ -89,11 +99,21 @@ export function normalize({
   const customBreakpoints = getCachedBreakpoints(type);
   const severity = customBreakpoints ? evaluateBreakpoints(customBreakpoints, mag) : severityFn(mag);
 
+  const numLat = Number(lat);
+  const numLng = Number(lng);
+  let h3Id = null;
+  try {
+    h3Id = latLngToCell(numLat, numLng, H3_RESOLUTION);
+  } catch {
+    h3Id = null; // out-of-range/invalid coords — leave null rather than fail the whole event
+  }
+
   return {
     id: String(id),
     type,
-    lat: Number(lat),
-    lng: Number(lng),
+    lat: numLat,
+    lng: numLng,
+    h3Id,
     severity,
     magnitude: magnitude !== null ? Number(magnitude) : null,
     depth: depth !== null ? Number(depth) : null,

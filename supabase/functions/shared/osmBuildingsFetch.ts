@@ -7,14 +7,26 @@
  * didn't.
  *
  * Scope is deliberately narrow: hospitals/clinics, schools/universities,
- * and emergency services (fire/police/government), not "every OSM
- * building". osmRoadsFetch.ts's own comment documents how even a narrowed
- * road-class filter (motorway|trunk|primary) still risked the deployed Edge
- * Function's WORKER_RESOURCE_LIMIT — an unscoped building=* query would be
- * 1-2 orders of magnitude larger than that. This tag set matches the
- * asset_category taxonomy already used by get_critical_infrastructure_
- * features() (20260707195000_impact_analysis_gaps.sql) rather than
- * inventing a new one.
+ * emergency services (fire/police/government), airports, cemeteries, fuel
+ * stations, organized industrial zones (OSB), and military/security
+ * facilities — not "every OSM building". osmRoadsFetch.ts's own comment
+ * documents how even a narrowed road-class filter (motorway|trunk|primary)
+ * still risked the deployed Edge Function's WORKER_RESOURCE_LIMIT — an
+ * unscoped building=* query would be 1-2 orders of magnitude larger than
+ * that. This tag set matches the asset_category taxonomy already used by
+ * get_critical_infrastructure_features() (20260707195000_impact_analysis_
+ * gaps.sql) rather than inventing a new one.
+ *
+ * Deliberately NOT included, live-verified against Overpass for Turkey
+ * (2026-08-19): cold storage depots (0 results for building/man_made=
+ * cold_storage), disaster-logistics or pharmaceutical-wholesale depots (no
+ * OSM tag distinguishes them from a generic building=warehouse or a retail
+ * amenity=pharmacy), and CBRN-specific capability (no OSM tag exists —
+ * military=* is the closest proxy but means "a military facility", not "has
+ * CBRN capability", so labeling it that way would misrepresent what the
+ * data actually shows). Adding decorative/mislabeled categories with no
+ * real backing data is out of scope — see "no decorative fake data viz" in
+ * project memory.
  */
 
 import type { BuildingRecord } from './buildingRecord.ts'
@@ -30,7 +42,25 @@ const AMENITY_CATEGORY: Record<string, BuildingRecord['assetCategory']> = {
   fire_station: 'critical_infrastructure_emergency',
   police: 'critical_infrastructure_emergency',
   townhall: 'critical_infrastructure_emergency',
+  fuel: 'critical_infrastructure_fuel',
 }
+
+// Non-amenity tag/value pairs, each their own Overpass query branch (see
+// buildQuery) since they don't share amenity's single-key regex filter.
+const AEROWAY_CATEGORY: Record<string, BuildingRecord['assetCategory']> = {
+  aerodrome: 'critical_infrastructure_transport',
+}
+
+const LANDUSE_CATEGORY: Record<string, BuildingRecord['assetCategory']> = {
+  cemetery: 'critical_infrastructure_cemetery',
+}
+
+// landuse=industrial alone is too broad to be a useful "strategic point"
+// (8,879 results in Turkey — every industrial-zoned parcel, not just
+// organized industrial zones/OSB) so this branch is name-filtered in
+// buildQuery to "Organize Sanayi" specifically (167 results, live-verified
+// 2026-08-19).
+const OSB_LANDUSE_CATEGORY: BuildingRecord['assetCategory'] = 'critical_infrastructure_industrial'
 
 // Maps the same critical_infrastructure_* taxonomy above to
 // BuildingRecord.sector's coarser categories — one lookup instead of two
@@ -39,6 +69,11 @@ const SECTOR_FOR_CATEGORY: Record<BuildingRecord['assetCategory'], BuildingRecor
   critical_infrastructure_health: 'health',
   critical_infrastructure_education: 'education',
   critical_infrastructure_emergency: 'emergency',
+  critical_infrastructure_transport: 'transport',
+  critical_infrastructure_industrial: 'industrial',
+  critical_infrastructure_military: 'military',
+  critical_infrastructure_fuel: 'fuel',
+  critical_infrastructure_cemetery: 'cemetery',
 }
 
 interface OverpassNode {
@@ -53,6 +88,12 @@ interface OverpassElement {
   lon?: number
   tags?: Record<string, string>
   geometry?: (OverpassNode | null)[]
+  // Present on way/relation elements from an `out center;` query (the
+  // extended-category queries below) instead of `geometry` — a single
+  // representative point rather than the full ring. Cheap for Overpass to
+  // compute vs. full geometry, which is what makes those queries fast
+  // enough to stay under fetchOverpass's timeout (see buildExtendedQueries).
+  center?: OverpassNode
 }
 
 interface OverpassResponse {
@@ -62,7 +103,9 @@ interface OverpassResponse {
 export function buildQuery(countryCode: string): string {
   // Same uppercase-for-Overpass / lowercase-for-this-system split as
   // osmRoadsFetch.ts's buildQuery() — see its comment for why.
-  const amenityFilter = Object.keys(AMENITY_CATEGORY).join('|')
+  const amenityFilter = Object.keys(AMENITY_CATEGORY)
+    .filter((k) => AMENITY_CATEGORY[k] !== 'critical_infrastructure_fuel')
+    .join('|')
   return `[out:json][timeout:180];
 area["ISO3166-1"="${countryCode.toUpperCase()}"][admin_level=2]->.searchArea;
 (
@@ -72,14 +115,86 @@ area["ISO3166-1"="${countryCode.toUpperCase()}"][admin_level=2]->.searchArea;
 out geom;`
 }
 
+// One query per extended category, not one combined query, and `out
+// center;` (a single representative point) instead of `out geom;` (full
+// ring) — live-verified 2026-08-19 against overpass-api.de for Turkey:
+// the original combined query (all 5 categories, `out geom`) never
+// completed inside fetchOverpass's 130s budget; landuse=cemetery alone
+// with `out geom` took >190s (cemetery boundaries are large, node-heavy
+// ways) but 39s with `out center`; even combining all 5 categories with
+// `out center` in one query still took >130s (~92s just for
+// fuel+aeroway+OSB+military, before cemetery). Splitting by category
+// keeps each individual call in the 30-40s range with real margin, and a
+// slow/failed category no longer costs the others (see fetchOsmBuildings).
+function areaHeader(countryCode: string): string {
+  return `area["ISO3166-1"="${countryCode.toUpperCase()}"][admin_level=2]->.searchArea;`
+}
+
+export function buildFuelQuery(countryCode: string): string {
+  return `[out:json][timeout:120];
+${areaHeader(countryCode)}
+nwr["amenity"="fuel"](area.searchArea);
+out center;`
+}
+
+export function buildAerowayQuery(countryCode: string): string {
+  const aerowayFilter = Object.keys(AEROWAY_CATEGORY).join('|')
+  return `[out:json][timeout:120];
+${areaHeader(countryCode)}
+nwr["aeroway"~"^(${aerowayFilter})$"](area.searchArea);
+out center;`
+}
+
+export function buildCemeteryQuery(countryCode: string): string {
+  const landuseFilter = Object.keys(LANDUSE_CATEGORY).join('|')
+  return `[out:json][timeout:120];
+${areaHeader(countryCode)}
+nwr["landuse"~"^(${landuseFilter})$"](area.searchArea);
+out center;`
+}
+
+export function buildOsbQuery(countryCode: string): string {
+  return `[out:json][timeout:120];
+${areaHeader(countryCode)}
+nwr["landuse"="industrial"]["name"~"Organize Sanayi",i](area.searchArea);
+out center;`
+}
+
+export function buildMilitaryQuery(countryCode: string): string {
+  return `[out:json][timeout:120];
+${areaHeader(countryCode)}
+nwr["military"](area.searchArea);
+out center;`
+}
+
+export function buildExtendedQueries(countryCode: string): { label: string; query: string }[] {
+  return [
+    { label: 'fuel', query: buildFuelQuery(countryCode) },
+    { label: 'aeroway', query: buildAerowayQuery(countryCode) },
+    { label: 'cemetery', query: buildCemeteryQuery(countryCode) },
+    { label: 'osb', query: buildOsbQuery(countryCode) },
+    { label: 'military', query: buildMilitaryQuery(countryCode) },
+  ]
+}
+
 function categoryFor(tags: Record<string, string>): BuildingRecord['assetCategory'] | null {
   if (tags.amenity && AMENITY_CATEGORY[tags.amenity]) return AMENITY_CATEGORY[tags.amenity]
   if (tags.office === 'government') return 'critical_infrastructure_emergency'
+  if (tags.aeroway && AEROWAY_CATEGORY[tags.aeroway]) return AEROWAY_CATEGORY[tags.aeroway]
+  if (tags.landuse && LANDUSE_CATEGORY[tags.landuse]) return LANDUSE_CATEGORY[tags.landuse]
+  if (tags.landuse === 'industrial' && /Organize Sanayi/i.test(tags.name ?? '')) return OSB_LANDUSE_CATEGORY
+  if (tags.military) return 'critical_infrastructure_military'
   return null
 }
 
 function facilityTypeFor(tags: Record<string, string>): string {
-  return tags.amenity ?? (tags.office === 'government' ? 'government_office' : 'unknown')
+  if (tags.amenity) return tags.amenity
+  if (tags.office === 'government') return 'government_office'
+  if (tags.aeroway) return tags.aeroway
+  if (tags.landuse === 'cemetery') return 'cemetery'
+  if (tags.landuse === 'industrial') return 'organized_industrial_zone'
+  if (tags.military) return `military_${tags.military}`
+  return 'unknown'
 }
 
 // OSM has two competing conventions for a phone number — plain `phone` and
@@ -91,10 +206,8 @@ function phoneFor(tags: Record<string, string>): string | undefined {
 
 /**
  * Maps one Overpass response's elements into BuildingRecord[] for a given
- * country. Nodes with no tags, ways with incomplete/missing geometry, and
- * relations (out geom doesn't reliably resolve multipolygon relations —
- * same "skip, don't guess" convention as osmRoadsFetch.ts's null-geometry
- * ways) are omitted, not thrown.
+ * country. Nodes with no tags and ways with incomplete/missing geometry are
+ * omitted, not thrown.
  */
 export function mapOverpassResponseToBuildingRecords(
   response: OverpassResponse,
@@ -109,6 +222,14 @@ export function mapOverpassResponseToBuildingRecords(
     const sector = SECTOR_FOR_CATEGORY[assetCategory]
     const facilityType = facilityTypeFor(el.tags)
     const phone = phoneFor(el.tags)
+    const baseProperties = {
+      facilityType,
+      name: el.tags.name,
+      osmId: el.id,
+      capacity: el.tags.capacity,
+      beds: el.tags.beds,
+      phone,
+    }
 
     if (el.type === 'node') {
       if (typeof el.lat !== 'number' || typeof el.lon !== 'number') continue
@@ -117,15 +238,23 @@ export function mapOverpassResponseToBuildingRecords(
         countryCode,
         assetCategory,
         sector,
-        properties: {
-          facilityType,
-          name: el.tags.name,
-          osmId: el.id,
-          osmType: 'node',
-          capacity: el.tags.capacity,
-          beds: el.tags.beds,
-          phone,
-        },
+        properties: { ...baseProperties, osmType: 'node' },
+      })
+      continue
+    }
+
+    // A `center` (from `out center;` — the extended-category queries) means
+    // no full geometry was requested at all; use it as-is regardless of
+    // way/relation, rather than trying to reconstruct a ring or polygon
+    // from unrelated fields. Checked before the way-specific `geometry`
+    // branch since a response never carries both for the same element.
+    if (el.center) {
+      records.push({
+        geometry: { type: 'Point', coordinates: [el.center.lon, el.center.lat] },
+        countryCode,
+        assetCategory,
+        sector,
+        properties: { ...baseProperties, osmType: el.type },
       })
       continue
     }
@@ -146,27 +275,22 @@ export function mapOverpassResponseToBuildingRecords(
         countryCode,
         assetCategory,
         sector,
-        properties: {
-          facilityType,
-          name: el.tags.name,
-          osmId: el.id,
-          osmType: 'way',
-          capacity: el.tags.capacity,
-          beds: el.tags.beds,
-          phone,
-        },
+        properties: { ...baseProperties, osmType: 'way' },
       })
     }
-    // relation: intentionally skipped (see function comment).
+    // relation with neither geometry nor center: intentionally skipped —
+    // out geom doesn't reliably resolve multipolygon relations, same
+    // "skip, don't guess" convention as osmRoadsFetch.ts's null-geometry
+    // ways.
   }
 
   return records
 }
 
 // Same rate-limiting / timeout-budget rationale as osmRoadsFetch.ts's
-// fetchOverpass(): single attempt, one country per invocation, a failed
-// country is skipped (not a failure) and retried on the next cron cycle.
-async function fetchOverpass(countryCode: string): Promise<OverpassResponse | null> {
+// fetchOverpass(): single attempt, one query per invocation, a failed
+// query is skipped (not a failure) and retried on the next cron cycle.
+async function fetchOverpass(query: string, label: string): Promise<OverpassResponse | null> {
   try {
     const response = await fetch(OVERPASS_ENDPOINT, {
       method: 'POST',
@@ -175,16 +299,16 @@ async function fetchOverpass(countryCode: string): Promise<OverpassResponse | nu
         'User-Agent': 'MHEWS-GlobalAlert/1.0 (critical-facility-exposure-import)',
         Accept: 'application/json',
       },
-      body: buildQuery(countryCode),
+      body: query,
       signal: AbortSignal.timeout(130_000),
     })
     if (!response.ok) {
-      console.warn(`[osmBuildingsFetch] Overpass HTTP ${response.status} for ${countryCode}, skipping`)
+      console.warn(`[osmBuildingsFetch] Overpass HTTP ${response.status} for ${label}, skipping`)
       return null
     }
     return (await response.json()) as OverpassResponse
   } catch (err) {
-    console.warn(`[osmBuildingsFetch] failed for ${countryCode}: ${err instanceof Error ? err.message : err}`)
+    console.warn(`[osmBuildingsFetch] failed for ${label}: ${err instanceof Error ? err.message : err}`)
     return null
   }
 }
@@ -193,9 +317,41 @@ export async function fetchOsmBuildings(countryCodes: string[]): Promise<Map<str
   const results = new Map<string, BuildingRecord[]>()
 
   for (const countryCode of countryCodes) {
-    const body = await fetchOverpass(countryCode)
-    if (!body) continue
-    results.set(countryCode, mapOverpassResponseToBuildingRecords(body, countryCode))
+    const records: BuildingRecord[] = []
+    let allQueriesSucceeded = true
+
+    const coreBody = await fetchOverpass(buildQuery(countryCode), `${countryCode} (core)`)
+    if (coreBody) {
+      records.push(...mapOverpassResponseToBuildingRecords(coreBody, countryCode))
+    } else {
+      allQueriesSucceeded = false
+    }
+
+    // One call per extended category (see buildExtendedQueries's comment).
+    for (const { label, query } of buildExtendedQueries(countryCode)) {
+      const body = await fetchOverpass(query, `${countryCode} (${label})`)
+      if (body) {
+        records.push(...mapOverpassResponseToBuildingRecords(body, countryCode))
+      } else {
+        allQueriesSucceeded = false
+      }
+    }
+
+    // writeExposureDataset supersedes (deletes) this country's PREVIOUS
+    // osm-buildings dataset once the new one commits — so writing a
+    // partial result (some of the 6 queries above failed) doesn't just
+    // under-report this run, it silently deletes categories that were
+    // already correctly populated from an earlier successful run. Live-
+    // verified 2026-08-19: a core-query timeout on an otherwise-successful
+    // run wiped Turkey's health/education facilities down to 0 rows this
+    // way. A failed country is skipped entirely (old dataset stays
+    // intact, exactly as when a single query used to fail) rather than
+    // ever writing a known-incomplete replacement.
+    if (allQueriesSucceeded && records.length > 0) {
+      results.set(countryCode, records)
+    } else if (!allQueriesSucceeded) {
+      console.warn(`[osmBuildingsFetch] ${countryCode}: one or more queries failed, skipping write to avoid superseding the existing dataset with incomplete data`)
+    }
   }
 
   return results

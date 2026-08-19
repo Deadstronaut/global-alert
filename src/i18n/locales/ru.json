@@ -1,4 +1,18 @@
 {
+  "mainLayout": {
+    "header": {
+      "location": "Местоположение"
+    },
+    "hazardNav": {
+      "label": "Типы опасностей"
+    },
+    "hazardSummary": {
+      "label": "Сводка по выбранным опасностям",
+      "activeCount": "Активные события",
+      "topSeverity": "Наивысшая степень",
+      "noSeverity": "Нет"
+    }
+  },
   "app": {
     "title": "Multi-Hazard Early Warning Systems",
     "subtitle": "Multi-Hazard Early Warning Systems",
@@ -93,7 +107,10 @@
     "cyclone": "Циклон",
     "volcano": "Вулкан",
     "epidemic": "Эпидемия",
-    "landslide": "Оползень"
+    "landslide": "Оползень",
+    "dust_storm": "Пыльная буря",
+    "heatwave": "Волна жары",
+    "coldwave": "Волна холода"
   },
   "severity": {
     "critical": "Критическая",
@@ -124,8 +141,8 @@
     "layerInactiveHint": "Включите этот слой, чтобы увидеть детали.",
     "loadingEllipsis": "Загрузка…",
     "calendar": "Календарь",
-    "view2D": "Вид 2D",
-    "view3D": "Вид 3D",
+    "view2D": "2D",
+    "view3D": "3D",
     "toggle3DAria": "Переключить 3D-режим глобуса",
     "filters": "Фильтры",
     "magnitude": "МАГНИТУДА",
@@ -138,6 +155,15 @@
     "viewModeSection": "Режим просмотра",
     "modeNormal": "Статус",
     "modeHexagon": "Соты",
+    "modeChoropleth": "Риск по странам",
+    "modeTerminator": "Линия дня/ночи",
+    "modeNightLights": "Ночные огни",
+    "modeTimeline": "Хронология",
+    "modeDynamicAtmosphere": "Динамическая атмосфера",
+    "modeHoverCards": "Информационные карточки",
+    "modeFlights": "Полёты в реальном времени",
+    "globeLayersGroup": "Слои глобуса",
+    "modeFlightsStale": "Полёты в реальном времени (данные недоступны — показаны последние известные)",
     "modeHeatmap": "Тепловая карта",
     "locationAlertSection": "Местоположение и оповещения",
     "wholeCountry": "Вся страна",
@@ -171,11 +197,12 @@
     "activeDroughts": "Зоны засухи",
     "totalEvents": "Всего событий",
     "sourcesOnline": "Источники онлайн",
+    "sourcesOnlineDetails": "Просмотреть отчёт о состоянии источников данных",
     "activeFoodSecurity": "Оповещения о прод. безопасности"
   },
   "settings": {
     "title": "Настройки",
-    "appearance": "Внешний вид и доступность",
+    "appearance": "Доступность",
     "quickAccess": "Быстрый доступ",
     "capAlerts": "CAP-оповещения",
     "incidentTracking": "Отслеживание инцидентов",
@@ -233,6 +260,10 @@
     "minutesAgo": "{count} мин. назад",
     "hoursAgo": "{count} ч. назад",
     "daysAgo": "{count} дн. назад"
+  },
+  "accountMenu": {
+    "clearCache": "Очистить кэш",
+    "clearCacheConfirm": "Все локально сохранённые данные о бедствиях на этом устройстве будут удалены, страница перезагрузится. Продолжить?"
   },
   "accountSecurity": {
     "title": "Безопасность аккаунта",
@@ -296,7 +327,8 @@
       "regionCodePlaceholder": "Стамбул, Кадыкёй...",
       "radiusKm": "Радиус Оповещения (км)",
       "radiusKmPlaceholder": "напр. 25",
-      "radiusInvalid": "Радиус оповещения должен быть положительным числом."
+      "radiusInvalid": "Радиус оповещения должен быть положительным числом.",
+      "titleRequired": "Требуется заголовок."
     },
     "status": {
       "draft": "Черновик",
@@ -510,11 +542,13 @@
       "breakdownEmpty": "Нет данных разбивки.",
       "unclassified": "без категории",
       "collapse": "Свернуть анализ воздействия",
-      "expand": "Развернуть анализ воздействия"
+      "expand": "Развернуть анализ воздействия",
+      "expandWide": "Расширить панель",
+      "contract": "Сузить панель"
     },
     "geocoding": {
       "label": "Поиск страны, региона, адреса или координат на карте",
-      "placeholder": "Страна, регион, адрес или координаты...",
+      "placeholder": "Например Turkey, Istanbul, Ankara, 39.92, 32.85",
       "help": "Поиск места: например Turkey, Istanbul, Ankara, 39.92, 32.85",
       "search": "Поиск",
       "searching": "Поиск...",
@@ -680,7 +714,7 @@
     "impactSnapshotUnavailable": "Данные о воздействии были недоступны на момент трансляции."
   },
   "portal": {
-    "title": "🌍 GEWS — Активные Оповещения",
+    "title": "🌍 MHEWS — Активные Оповещения",
     "subtitle": "Публичный Портал Оповещений",
     "empty": "Сейчас нет активных оповещений.",
     "issuedLabel": "Выпущено",
@@ -1171,7 +1205,12 @@
   "assetCategory": {
     "critical_infrastructure_health": "Медицинское Учреждение",
     "critical_infrastructure_education": "Образовательное Учреждение",
-    "critical_infrastructure_emergency": "Экстренная Служба"
+    "critical_infrastructure_emergency": "Экстренная Служба",
+    "critical_infrastructure_transport": "Аэропорт",
+    "critical_infrastructure_industrial": "Организованная Промышленная Зона",
+    "critical_infrastructure_military": "Военный/Охраняемый Объект",
+    "critical_infrastructure_fuel": "Заправочная Станция",
+    "critical_infrastructure_cemetery": "Кладбище"
   },
   "facilityType": {
     "hospital": "Больница",
@@ -1183,6 +1222,10 @@
     "police": "Полицейский участок",
     "townhall": "Ратуша",
     "government_office": "Государственное учреждение",
+    "aerodrome": "Аэропорт",
+    "cemetery": "Кладбище",
+    "organized_industrial_zone": "Организованная Промышленная Зона",
+    "fuel": "Заправочная Станция",
     "unknown": "Неизвестно"
   },
   "ai": {
@@ -1227,13 +1270,17 @@
     "greetingChatOnly": "Привет, я Deadstro! На этой странице нет доступных задач, но вы можете пообщаться со мной ниже.",
     "typePlaceholder": "Введите сообщение...",
     "send": "Отправить",
-    "noCountryContext": "В этом браузере ещё не настроен контекст страны — сначала откройте вкладку «AI Yardımı» в AdminView и включите возможность для страны.",
+    "noCountryContext": "В этом браузере ещё не настроен контекст страны — сначала откройте вкладку «AI Yardımı» в панели и включите возможность для страны.",
     "waitingServer": "Ожидание ответа от сервера..."
   },
   "flowPanel": {
     "forecast": {
       "rowLabel": "Прогноз",
       "dayLabel": "День {n} · {date}",
+      "rangeLabel": "Диапазон: {min}–{max} {unit}",
+      "play": "Воспроизвести дни прогноза",
+      "pause": "Пауза",
+      "loadingFrames": "Загрузка кадров прогноза…",
       "noData": "Прогнозных данных за этот день пока нет.",
       "panelExpand": "Открыть панель прогноза",
       "panelCollapse": "Закрыть панель прогноза"
@@ -1243,6 +1290,14 @@
     "toggleLabel": "Ветер",
     "currentsToggleLabel": "Океанские течения",
     "panelTitle": "Ветер и течения",
+    "masterToggleOff": "Выключить всё",
+    "masterToggleAllOff": "Ничего не выбрано",
+    "masterClearLabel": "Очистить",
+    "directionLabel": "Направление",
+    "spreadNoDirection": "Сейчас нет чёткого направления распространения",
+    "spreadAreaTitle": "Возможная зона поражения (из-за ветра)",
+    "spreadAsOf": "По состоянию на: {time}",
+    "spreadAnalyzeButton": "Анализировать в Анализе воздействия",
     "panelExpand": "Открыть панель управления ветром",
     "panelCollapse": "Закрыть панель управления ветром",
     "unavailable": "Данные недоступны",
@@ -1264,5 +1319,58 @@
     "pm25ToggleLabel": "PM2.5 (качество воздуха)",
     "modeDisabledNote": "Пока нет источника данных для этого режима",
     "waveHeightLegendLabel": "Высота волн"
+  },
+  "lateralRisk": {
+    "sectionTitle": "Возможные вторичные риски",
+    "noFindings": "Значимых вторичных рисков не обнаружено",
+    "finding": {
+      "fire_spread_potential": {
+        "title": "Потенциальный риск возникновения/распространения пожара",
+        "description": "Активная засуха или волна жары поблизости могут повысить риск пожара."
+      },
+      "epidemic_risk_potential": {
+        "title": "Потенциальный риск эпидемии",
+        "description": "Стоячая вода и нарушение санитарии после наводнения могут повысить риск заболеваний."
+      },
+      "access_capacity_risk_potential": {
+        "title": "Потенциальный риск доступа/пропускной способности",
+        "description": "Низкая плотность дорог рядом с важным объектом может ограничить экстренный доступ."
+      },
+      "wind_spread_potential": {
+        "title": "Потенциал распространения под влиянием ветра",
+        "description": "Ветер дует в направлении {deg}° со скоростью {speed} м/с — распространение может пойти в этом направлении."
+      },
+      "tsunami_risk_potential": {
+        "title": "Потенциальный риск цунами",
+        "description": "Лишь грубая оценка близости к побережью — не настоящая симуляция волн."
+      }
+    },
+    "institution": {
+      "fireDepartment": "Пожарная служба",
+      "health": "Служба здравоохранения",
+      "disasterManagement": "Управление по чрезвычайным ситуациям",
+      "waterInfrastructure": "Водные/инфраструктурные службы"
+    },
+    "triggerLabel": "Обнаружен критический перекрёстный риск — посмотреть прогнозный отчёт",
+    "viewReportButton": "Посмотреть прогнозный отчёт",
+    "menu": {
+      "title": "Критические события — {country}"
+    },
+    "report": {
+      "title": "Отчёт о перекрёстном прогнозе",
+      "disclaimer": "ЭВРИСТИЧЕСКИЙ ПРОГНОЗ — не является реальной физической симуляцией, не проверен, пилотная/тестовая функция.",
+      "loading": "Формирование отчёта…",
+      "sectionRegions": "Затронутые города/посёлки",
+      "sectionFacilities": "Затронутые критические объекты",
+      "sectionFindings": "Возможные вторичные риски",
+      "sectionInstitutions": "Типы учреждений, которые может потребоваться уведомить",
+      "noRegions": "Не удалось определить затронутый город/посёлок",
+      "noFacilities": "Поблизости не найдено критических объектов",
+      "noInstitutions": "Тип учреждения не предложен",
+      "summaryFindings": "Находки",
+      "summaryRegions": "Регионы",
+      "summaryFacilities": "Объекты",
+      "summaryPopulation": "Население"
+    }
   }
 }

@@ -27,6 +27,20 @@ function extractTag(xml: string, tag: string): string | null {
   return match ? match[1].trim() : null
 }
 
+// Deliberately minimal (not full XML-schema validation, matching this
+// function's existing regex-extraction philosophy — see file header): a
+// payload that isn't even shaped like a CAP alert (no <alert> root, or
+// missing every field a human reviewer needs to triage it) is rejected
+// outright rather than silently landing in the review queue as an empty
+// row. Anything that clears this bar still goes through full human review
+// before promote_cap_inbound_alert() — this only catches garbage input.
+function findStructuralIssue(xml: string): string | null {
+  if (!/<alert[\s>]/i.test(xml)) return 'missing <alert> root element'
+  if (!extractTag(xml, 'identifier')) return 'missing <identifier>'
+  if (!extractTag(xml, 'info') && !extractTag(xml, 'event')) return 'missing <info>/<event>'
+  return null
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
 
@@ -56,6 +70,7 @@ Deno.serve(async (req) => {
 
   const effectiveRaw = extractTag(rawPayload, 'effective')
   const expiresRaw = extractTag(rawPayload, 'expires')
+  const structuralIssue = findStructuralIssue(rawPayload)
 
   const { data: inserted, error } = await supabase.from('cap_inbound_alerts').insert({
     source_id: source.id,
@@ -69,8 +84,15 @@ Deno.serve(async (req) => {
     parsed_area_desc: extractTag(rawPayload, 'areaDesc'),
     parsed_effective_at: effectiveRaw && !Number.isNaN(Date.parse(effectiveRaw)) ? new Date(effectiveRaw).toISOString() : null,
     parsed_expires_at: expiresRaw && !Number.isNaN(Date.parse(expiresRaw)) ? new Date(expiresRaw).toISOString() : null,
+    // Structurally invalid payloads (not shaped like a CAP alert at all)
+    // are still stored — for audit visibility (FR-005's audit trail applies
+    // here too) — but pre-marked 'rejected' instead of entering the
+    // 'received' review queue as an empty/junk row a human would have to
+    // manually dismiss.
+    status: structuralIssue ? 'rejected' : 'received',
   }).select('id').single()
 
   if (error) return json({ error: error.message }, 500)
+  if (structuralIssue) return json({ received: true, id: inserted.id, rejected: true, reason: structuralIssue }, 400)
   return json({ received: true, id: inserted.id })
 })

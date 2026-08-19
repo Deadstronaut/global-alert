@@ -6,7 +6,7 @@ import { useDisasterStore } from '@/stores/disaster.js'
 import { supabase } from '@/services/api/config.js'
 import { defaultBufferRadiusKm } from '@/lib/hazardBuffer.js'
 import { friendlyDatasetLabel } from '@/utils/exposureLayerLabel.js'
-import { classifyTrend } from '@/lib/trendSparkline.js'
+import { classifyTrend, buildSmoothSparklinePath } from '@/lib/trendSparkline.js'
 import { rowsToCsv, rowsToJson, triggerDownload } from '@/lib/auditExport.js'
 import { loadRegionBoundaries } from '@/data/boundaries/index.js'
 import { findRegion } from '@/utils/pointInPolygon.js'
@@ -29,6 +29,18 @@ const props = defineProps({
   // up via update:haloOpacity so the two stay in sync without duplicating
   // halo state here.
   haloOpacity: { type: Number, default: 0.6 },
+  // Spec 070 (US3/T015) — MapView's "Etki Analizi ile incele" button on a
+  // wind-spread projection writes a km number here; this panel just feeds
+  // it into its own existing radiusOverride, the same manual-km path the
+  // user's own input box already uses (spec 050) — no separate analysis
+  // path for wind-projection-derived radii.
+  radiusOverrideRequestKm: { type: Number, default: null },
+  // MapView's critical-infrastructure category chips (Sağlık/Eğitim/...)
+  // are a client-side map filter — the user also wants that same active-
+  // category set to narrow this panel's critical-infrastructure count/list,
+  // not just what's drawn on the map. null means "no filter active yet"
+  // (all categories), matching MapView's own all-true default.
+  activeCriticalInfraCategories: { type: Array, default: null },
 })
 
 const emit = defineEmits(['update:haloOpacity', 'update:haloRadiusKm'])
@@ -40,6 +52,19 @@ const disaster = useDisasterStore()
 const datasets = ref([])
 const selectedDatasetId = ref(null)
 const radiusOverride = ref(null)
+// Spec 070 (US3/T015) — each new (non-null) request value overwrites the
+// manual override, same "one control wins" rule as magnitudeOverride below;
+// mirrors props.selectedEvent's own click-to-open flow instead of adding a
+// second parallel radius state.
+watch(
+  () => props.radiusOverrideRequestKm,
+  (km) => {
+    if (km != null) {
+      radiusOverride.value = km
+      magnitudeOverride.value = null
+    }
+  },
+)
 // spec 050 follow-up: earthquake-only magnitude slider — the halo/analysis
 // radius already comes from defaultBufferRadiusKm() (2^magnitude km for
 // earthquakes), so dragging THIS should recompute the radius through that
@@ -63,10 +88,21 @@ const criticalInfrastructure = ref(null) // null | [] | array | 'error'
 // times for a large campus/city) is unreadable — grouped into a per-
 // category count instead ("14 Eğitim Kurumu" etc.), matching how the user
 // actually wants to read this ("14 okul, 22 hastane" style).
+// MapView's own asset_category values (LIKE 'critical_infrastructure_%' —
+// no hardcoded list on that end either) already flow through unfiltered
+// from get_critical_infrastructure_features, so a newly added category
+// (e.g. fuel/cemetery) shows up here automatically; this only narrows by
+// what's currently *active* in MapView's chip row.
+const filteredCriticalInfrastructure = computed(() => {
+  if (!Array.isArray(criticalInfrastructure.value)) return criticalInfrastructure.value
+  if (!props.activeCriticalInfraCategories) return criticalInfrastructure.value
+  const active = new Set(props.activeCriticalInfraCategories)
+  return criticalInfrastructure.value.filter((f) => active.has(f.asset_category))
+})
 const criticalInfrastructureSummary = computed(() => {
-  if (!Array.isArray(criticalInfrastructure.value)) return []
+  if (!Array.isArray(filteredCriticalInfrastructure.value)) return []
   const counts = new Map()
-  for (const f of criticalInfrastructure.value) {
+  for (const f of filteredCriticalInfrastructure.value) {
     counts.set(f.asset_category, (counts.get(f.asset_category) ?? 0) + 1)
   }
   return [...counts.entries()].sort((a, b) => b[1] - a[1])
@@ -84,7 +120,13 @@ const canAnalyze = computed(() => auth.isSuperAdmin || ['country_admin', 'org_ad
 // restriction beyond today's existing gate is explicitly deferred to a
 // future spec (User Story 7b) once the partner's role taxonomy is decided.
 const canAccessScenarioModeling = computed(() => auth.isSuperAdmin || auth.session?.role === 'country_admin')
-const panelMode = ref('standard') // 'standard' | 'advanced'
+// spec 069 follow-up: "Gelişmiş: Risk ve Senaryo Modelleme" used to swap in
+// place of the whole standard panel body inside this same narrow map dock —
+// user feedback: that content needs real width (charts/tables/comparisons),
+// so it now opens as a separate wide dialog instead, while the standard
+// panel stays permanently visible in the dock (no more mode switch to lose
+// your place in). See scenarioDialogOpen below.
+const scenarioDialogOpen = ref(false)
 
 // spec 049 US1: resolves the selected event's administrative boundary via
 // this project's existing client-side point-in-polygon utilities (same
@@ -196,6 +238,19 @@ const trend = computed(() => {
     buckets[bucketIndex] += 1
   }
   return classifyTrend(buckets)
+})
+
+// 2026-08-19 ask: the old straight-segment <polyline> read as a flat/
+// broken line even when there WAS real variance — swapped for a smooth
+// Catmull-Rom curve + gradient area fill (buildSmoothSparklinePath, pure/
+// tested in trendSparkline.js) plus an end-point dot marking the current
+// value. Same underlying 6-bucket data, no data removed — purely a
+// rendering upgrade.
+const SPARKLINE_WIDTH = 100
+const SPARKLINE_HEIGHT = 30
+const trendPath = computed(() => {
+  if (!trend.value) return null
+  return buildSmoothSparklinePath(trend.value.points, { width: SPARKLINE_WIDTH, height: SPARKLINE_HEIGHT, padding: 4 })
 })
 
 async function loadDatasets() {
@@ -499,25 +554,36 @@ onMounted(async () => {
   <div class="impact-panel">
     <!-- spec 068 US7: Scenario Modeling relocated here from AdminView's
          top-level admin tab as an Advanced mode — navigation-only move,
-         access level unchanged (see canAccessScenarioModeling above). -->
-    <div v-if="canAccessScenarioModeling" class="impact-mode-toggle" role="tablist">
-      <button
-        type="button"
-        class="impact-mode-btn"
-        :class="{ active: panelMode === 'standard' }"
-        @click="panelMode = 'standard'"
-      >{{ t('impact.panel.modeStandard') }}</button>
-      <button
-        type="button"
-        class="impact-mode-btn"
-        :class="{ active: panelMode === 'advanced' }"
-        @click="panelMode = 'advanced'"
-      >{{ t('impact.panel.modeAdvanced') }}</button>
-    </div>
+         access level unchanged (see canAccessScenarioModeling above).
+         spec 069 follow-up: no longer a mode SWITCH (which replaced this
+         whole panel's body) — the standard panel stays put, this just opens
+         a wide dialog on top of it (see scenarioDialogOpen).
+         spec 069 follow-up (second pass): was squeezed into a flex row next
+         to a "Standart" label ("oraya sığmamış"), then tried at the very
+         bottom of the panel — moved back up here, right under the dock's
+         header line, as its own full-width row so it has room without
+         being squeezed either way. -->
+    <button
+      v-if="canAccessScenarioModeling"
+      type="button"
+      class="impact-mode-btn impact-mode-btn-advanced"
+      @click="scenarioDialogOpen = true"
+    >{{ t('impact.panel.modeAdvanced') }}</button>
 
-    <ScenarioBuilder v-if="panelMode === 'advanced' && canAccessScenarioModeling" />
+    <Teleport to="body">
+      <div v-if="scenarioDialogOpen" class="scenario-dialog-overlay" @click.self="scenarioDialogOpen = false">
+        <div class="scenario-dialog-card">
+          <div class="scenario-dialog-header">
+            <h3>{{ t('impact.panel.modeAdvanced') }}</h3>
+            <button type="button" class="scenario-dialog-close" @click="scenarioDialogOpen = false" :aria-label="t('app.close')">✕</button>
+          </div>
+          <div class="scenario-dialog-body">
+            <ScenarioBuilder />
+          </div>
+        </div>
+      </div>
+    </Teleport>
 
-    <template v-else>
     <div v-if="!selectedEvent" class="impact-empty">{{ t('impact.panel.selectPrompt') }}</div>
 
     <template v-else>
@@ -528,11 +594,16 @@ onMounted(async () => {
             <span>{{ t('disasters.' + selectedEvent.type) }}</span>
             <span>{{ t('severity.' + selectedEvent.severity) }}</span>
           </div>
-          <svg v-if="trend" class="trend-sparkline" viewBox="0 0 100 30" preserveAspectRatio="none">
-            <polyline
-              :points="trend.points.map((v, i) => `${(i / (trend.points.length - 1 || 1)) * 100},${30 - (v / Math.max(...trend.points, 1)) * 28}`).join(' ')"
-              :class="'trend-' + trend.direction"
-            />
+          <svg v-if="trendPath" class="trend-sparkline" :class="'trend-' + trend.direction" viewBox="0 0 100 30" preserveAspectRatio="none">
+            <defs>
+              <linearGradient :id="'trend-fill-' + trend.direction" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stop-color="currentColor" stop-opacity="0.35" />
+                <stop offset="100%" stop-color="currentColor" stop-opacity="0" />
+              </linearGradient>
+            </defs>
+            <path :d="trendPath.areaPath" :fill="`url(#trend-fill-${trend.direction})`" stroke="none" />
+            <path :d="trendPath.linePath" class="trend-sparkline-line" fill="none" />
+            <circle :cx="trendPath.lastPoint.x" :cy="trendPath.lastPoint.y" r="2.2" class="trend-sparkline-dot" />
           </svg>
         </div>
         <!-- spec 050 US1: vertical intensity control for the map's impact
@@ -648,7 +719,7 @@ onMounted(async () => {
         <div v-if="result && result !== 'error'" class="impact-critical">
           <h5>{{ t('impact.panel.criticalInfrastructureTitle') }}</h5>
           <div v-if="criticalInfrastructure === 'error'" class="impact-notice impact-notice-error">{{ t('impact.panel.error') }}</div>
-          <div v-else-if="!criticalInfrastructure || !criticalInfrastructure.length" class="impact-notice">{{ t('impact.panel.criticalInfrastructureEmpty') }}</div>
+          <div v-else-if="!filteredCriticalInfrastructure || !filteredCriticalInfrastructure.length" class="impact-notice">{{ t('impact.panel.criticalInfrastructureEmpty') }}</div>
           <ul v-else class="impact-critical-list">
             <li v-for="[category, count] in criticalInfrastructureSummary" :key="category">
               <span>{{ t('assetCategory.' + category, category) }}</span>
@@ -717,13 +788,20 @@ onMounted(async () => {
         />
       </div>
     </template>
-    </template>
   </div>
 </template>
 
 <style scoped>
 .impact-panel {
-  width: 320px; max-width: 90vw; height: 100%; overflow-y: auto;
+  /* spec 069 follow-up: was a hardcoded `320px`, completely independent of
+     .impact-panel-dock's own `width: var(--impact-panel-width)` in
+     MapView.vue — widening that var (320px -> 352px) grew the DOCK but not
+     this component inside it, leaving a transparent gap between this
+     panel's actual (still-320px) content and the dock's new right edge,
+     exposing the map through it ("darlığı hala aynı... yandan haritayla
+     arasına yer açıldı"). Filling the parent instead means any future
+     --impact-panel-width change actually reaches this component too. */
+  width: 100%; max-width: 90vw; height: 100%; overflow-y: auto;
   background: rgba(15,17,23,.92); border-left: 1px solid rgba(255,255,255,.1);
   padding: 16px; color: #e2e8f0; font-size: .85rem;
 }
@@ -742,11 +820,22 @@ onMounted(async () => {
 }
 .impact-event h4 { margin: 0 0 6px; font-size: 1rem; }
 .impact-event-meta { display: flex; gap: 8px; font-size: .75rem; color: var(--color-text-muted, #94a3b8); margin-bottom: 8px; }
-.trend-sparkline { width: 100%; height: 30px; margin-bottom: 12px; }
-.trend-sparkline polyline { fill: none; stroke-width: 2; }
-.trend-up { stroke: #ef4444; }
-.trend-down { stroke: #22c55e; }
-.trend-stable { stroke: #94a3b8; }
+.trend-sparkline { width: 100%; height: 34px; margin-bottom: 12px; color: #94a3b8; overflow: visible; }
+.trend-sparkline.trend-up { color: #ef4444; }
+.trend-sparkline.trend-down { color: #22c55e; }
+.trend-sparkline.trend-stable { color: #94a3b8; }
+.trend-sparkline-line {
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+}
+.trend-sparkline-dot {
+  fill: currentColor;
+  stroke: rgba(15, 17, 23, 0.9);
+  stroke-width: 1;
+}
 .impact-field { display: flex; flex-direction: column; gap: 4px; font-size: .75rem; color: var(--color-text-muted, #94a3b8); margin-bottom: 10px; }
 .impact-field input, .impact-field select {
   background: #1e2330; border: 1px solid rgba(255,255,255,.15); border-radius: 8px;
@@ -774,9 +863,64 @@ onMounted(async () => {
 .impact-admin-level-selector { display: flex; gap: 6px; margin-bottom: 8px; }
 .admin-level-btn { flex: 1; padding: 4px 8px; font-size: .72rem; border-radius: 6px; border: 1px solid rgba(255,255,255,.12); background: transparent; color: inherit; cursor: pointer; }
 .admin-level-btn.active { background: rgba(59,130,246,.25); border-color: rgba(59,130,246,.5); }
-.impact-mode-toggle { display: flex; gap: 6px; margin-bottom: 12px; }
-.impact-mode-btn { flex: 1; padding: 6px 10px; font-size: .8rem; font-weight: 600; border-radius: 8px; border: 1px solid rgba(255,255,255,.12); background: transparent; color: inherit; cursor: pointer; }
+/* spec 069 follow-up: was a flex:none slot squeezed next to a "Standart"
+   label (.impact-mode-toggle/.impact-mode-label, now removed) — the button
+   text didn't fit there. Now its own full-width row right under the dock
+   header instead. */
+.impact-mode-btn { display: block; width: 100%; margin-bottom: 12px; padding: 8px 10px; font-size: .8rem; font-weight: 600; text-align: center; border-radius: 8px; border: 1px solid rgba(255,255,255,.12); background: transparent; color: inherit; cursor: pointer; }
 .impact-mode-btn.active { background: rgba(59,130,246,.25); border-color: rgba(59,130,246,.5); }
+.impact-mode-btn-advanced { border-color: rgba(59,130,246,.4); color: #93c5fd; }
+.impact-mode-btn-advanced:hover { background: rgba(59,130,246,.15); }
+
+/* spec 069 follow-up: "Gelişmiş: Risk ve Senaryo Modelleme" as a wide
+   dialog instead of replacing this narrow dock's own content — same
+   overlay/card pattern ConfirmDialog.vue already uses elsewhere in the
+   app, just sized for real width/height instead of a small confirm box. */
+.scenario-dialog-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+.scenario-dialog-card {
+  background: #161b26;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 12px;
+  width: min(1100px, 92vw);
+  height: min(820px, 88vh);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.scenario-dialog-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  flex-shrink: 0;
+}
+.scenario-dialog-header h3 { margin: 0; font-size: 1rem; color: #e2e8f0; }
+.scenario-dialog-close {
+  border: none;
+  background: transparent;
+  color: #e2e8f0;
+  font-size: 1rem;
+  cursor: pointer;
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+}
+.scenario-dialog-close:hover { background: rgba(255, 255, 255, 0.1); }
+.scenario-dialog-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 20px;
+}
 .impact-result { text-align: center; padding: 10px; background: rgba(34,197,94,.08); border-radius: 8px; margin-bottom: 10px; }
 .impact-result-value { font-size: 1.6rem; font-weight: 800; color: #22c55e; }
 .impact-result-label { font-size: .72rem; color: var(--color-text-muted, #94a3b8); }

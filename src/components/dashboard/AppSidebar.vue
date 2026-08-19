@@ -1,21 +1,11 @@
 <script setup>
 import { computed } from 'vue'
-import { AlertTriangle, Siren, Home, Mountain, Megaphone, ChevronRight, ChevronsUpDown, LogOut, UserCircle } from '@lucide/vue'
+import { ChevronRight } from '@lucide/vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useUIStore } from '@/stores/ui.js'
 import { useAuthStore } from '@/stores/auth.js'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
-import { Avatar, AvatarFallback } from '@/components/ui/avatar'
-import SettingsPanel from '@/components/SettingsPanel.vue'
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu'
 import {
   Sidebar,
   SidebarContent,
@@ -55,18 +45,6 @@ const router = useRouter()
 const { t } = useI18n()
 const uiStore = useUIStore()
 const authStore = useAuthStore()
-
-// Same set of pages Settings' quick-access list links to (SettingsPanel.vue)
-// — rendered inline in the Dashboard's own content area (see
-// DashboardPlaceholder.vue's ADMIN_TAB_PANELS), same pattern as the admin
-// tabs below, instead of navigating away to their own /alerts/cap etc. route.
-const navItems = [
-  { id: 'cap', titleKey: 'dashboard.navCap', icon: AlertTriangle },
-  { id: 'incidents', titleKey: 'dashboard.navIncidents', icon: Siren },
-  { id: 'shelters', titleKey: 'dashboard.navShelters', icon: Home },
-  { id: 'hazards', titleKey: 'dashboard.navHazards', icon: Mountain },
-  { id: 'report', titleKey: 'dashboard.navReport', icon: Megaphone },
-]
 
 // Mirrors AdminView.vue's own CATEGORIES/ADMIN_TABS nav structure (same
 // ids/icons/i18n keys) so this reads as "the same admin menu, here too" —
@@ -130,13 +108,7 @@ const canAccessAdmin = computed(() =>
 )
 
 const userEmail = computed(() => authStore.session?.email ?? '')
-const userInitials = computed(() => (userEmail.value ? userEmail.value.slice(0, 2).toUpperCase() : '?'))
 const userRoleLabel = computed(() => authStore.session?.role?.replace(/_/g, ' ') ?? '')
-
-async function handleLogout() {
-  await authStore.logout()
-  router.push('/login')
-}
 
 function navigateTo(url) {
   uiStore.toggleDashboardPanel()
@@ -181,7 +153,11 @@ function navigateToAdminTab(tabId) {
         <SidebarGroupLabel>{{ t('settings.admin') }}</SidebarGroupLabel>
         <SidebarGroupContent>
           <SidebarMenu>
-            <Collapsible v-for="cat in adminCategories" :key="cat.id" as-child class="group/collapsible">
+            <!-- Kullanıcı isteği (2026-08-18): panel ilk açıldığında tüm
+                 kategoriler kapalı geliyordu, kullanıcı her birini tek tek
+                 açmak zorunda kalıyordu — default-open ile hepsi baştan
+                 açık, tüm alt seçenekler ilk bakışta görünür durumda. -->
+            <Collapsible v-for="cat in adminCategories" :key="cat.id" as-child default-open class="group/collapsible">
               <SidebarMenuItem>
                 <CollapsibleTrigger as-child>
                   <SidebarMenuButton :tooltip="t(cat.labelKey)">
@@ -207,84 +183,42 @@ function navigateToAdminTab(tabId) {
         </SidebarGroupContent>
       </SidebarGroup>
 
-      <SidebarGroup>
-        <SidebarGroupLabel>{{ t('dashboard.navGroupTitle') }}</SidebarGroupLabel>
-        <SidebarGroupContent>
-          <SidebarMenu>
-            <SidebarMenuItem v-for="item in navItems" :key="item.id">
-              <SidebarMenuButton :is-active="activeAdminTab === item.id" @click="emit('select-admin-tab', item.id)">
-                <component :is="item.icon" />
-                <span>{{ t(item.titleKey) }}</span>
-              </SidebarMenuButton>
-            </SidebarMenuItem>
-          </SidebarMenu>
-        </SidebarGroupContent>
-      </SidebarGroup>
+      <!-- 2026-08-19: the standalone public portal page (/portal,
+           PublicPortalView.vue) was removed — its citizen web-push opt-in
+           moved into IntegrationsPanel.vue (below the credential form), and
+           the page itself (anonymous alert listing) is retired. No link to
+           it belongs here anymore. -->
 
-      <!-- The old right-hand "⚙️ Ayarlar" panel (SidebarPanel.vue's gear
-           button, now removed) folded in here instead — same SettingsPanel
-           component, `embedded` hides its Quick Access / Account sections
-           since those are already covered by the Sayfalar group above and
-           the account footer below. -->
-      <SidebarGroup>
-        <SidebarMenu>
-          <Collapsible as-child class="group/collapsible">
-            <SidebarMenuItem>
-              <CollapsibleTrigger as-child>
-                <SidebarMenuButton :tooltip="t('settings.title')">
-                  <span>⚙️</span>
-                  <span>{{ t('settings.title') }}</span>
-                  <ChevronRight class="ml-auto transition-transform group-data-[state=open]/collapsible:rotate-90" />
-                </SidebarMenuButton>
-              </CollapsibleTrigger>
-              <CollapsibleContent>
-                <SettingsPanel embedded hide-header />
-              </CollapsibleContent>
-            </SidebarMenuItem>
-          </Collapsible>
-        </SidebarMenu>
-      </SidebarGroup>
+      <!-- spec 069 follow-up: the "Sayfalar" group (CAP/Olay Takibi/
+           Barınaklar/Tehlike Ansiklopedisi/Vatandaş Bildirimi) that used to
+           render here is removed — the same five pages are already reachable
+           without opening this Panel dialog at all now, via AppHeader.vue's
+           quick-access icons and HazardTypeNav.vue's "?" button (both open
+           the same QuickPageDialog), so keeping a second, redundant entry
+           point to them here was no longer earning its place (explicit
+           request, confirmed 2026-08-18).
+           The "⚙️ Ayarlar" collapsible that used to embed SettingsPanel.vue
+           here is removed too — that panel's only embedded-mode content
+           (Language, Appearance & Accessibility) has moved to
+           AppHeader.vue's dropdowns (its Quick Access/Account sections were
+           already hidden here via the `embedded` prop, in favor of the
+           Sayfalar group above and the account footer below), so embedding
+           it here would now render nothing. -->
     </SidebarContent>
+    <!-- spec 069 follow-up: this used to be a DropdownMenu (avatar/email/
+         role trigger opening account-security/logout actions) — those
+         actions now live in AppHeader.vue's own account dropdown (069
+         shell work), so keeping a second, duplicate menu here would edit
+         the same state from two places. Kept as a plain, non-interactive
+         identity readout (email + role text only, no avatar) instead of
+         removing it outright, per request. -->
     <SidebarFooter>
       <SidebarMenu>
         <SidebarMenuItem>
-          <DropdownMenu>
-            <DropdownMenuTrigger as-child>
-              <SidebarMenuButton size="lg">
-                <Avatar class="size-8 rounded-lg">
-                  <AvatarFallback class="rounded-lg">{{ userInitials }}</AvatarFallback>
-                </Avatar>
-                <div class="grid flex-1 text-left text-sm leading-tight">
-                  <span class="truncate font-medium">{{ userEmail }}</span>
-                  <span class="truncate text-xs capitalize">{{ userRoleLabel }}</span>
-                </div>
-                <ChevronsUpDown class="ml-auto size-4" />
-              </SidebarMenuButton>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent class="w-(--reka-dropdown-menu-trigger-width) min-w-56 rounded-lg" side="top" align="start">
-              <DropdownMenuLabel class="p-0 font-normal">
-                <div class="flex items-center gap-2 px-1 py-1.5 text-left text-sm">
-                  <Avatar class="size-8 rounded-lg">
-                    <AvatarFallback class="rounded-lg">{{ userInitials }}</AvatarFallback>
-                  </Avatar>
-                  <div class="grid flex-1 text-left text-sm leading-tight">
-                    <span class="truncate font-medium">{{ userEmail }}</span>
-                    <span class="truncate text-xs capitalize">{{ userRoleLabel }}</span>
-                  </div>
-                </div>
-              </DropdownMenuLabel>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem @click="navigateTo('/account-security')">
-                <UserCircle />
-                {{ t('accountSecurity.title') }}
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem @click="handleLogout">
-                <LogOut />
-                {{ t('admin.header.logout') }}
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+          <div class="flex flex-col gap-0.5 px-2 py-1.5 text-sm leading-tight">
+            <span class="truncate text-xs capitalize text-muted-foreground">{{ userRoleLabel }}</span>
+            <span class="truncate font-medium">{{ userEmail }}</span>
+          </div>
         </SidebarMenuItem>
       </SidebarMenu>
     </SidebarFooter>

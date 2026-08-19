@@ -1020,6 +1020,86 @@ services:
     networks:
       - mhews
 
+  # ── GDO SPI / Kontur Population / WFP HungerMap — moved from Supabase
+  # pg_cron + Edge Function 2026-08-19 (GDO SPI's Edge Function can't even
+  # deploy — geotiff/esm.sh bundler regression, same as worldpop/ghsl;
+  # Kontur/WFP deployed fine but had no Docker equivalent, so Supabase's
+  # own pg_cron was the only thing running them — moving here and
+  # unscheduling that pg_cron, see the matching migration, leaves exactly
+  # one engine owning each source. Same one-shot + always-on pair as the
+  # 5 above.
+  #   docker compose run --rm gdo-spi-importer
+  #   docker compose run --rm kontur-population-importer
+  #   docker compose run --rm wfp-hungermap-importer
+  gdo-spi-importer:
+    build:
+      context: .
+      dockerfile: raster-importer/Dockerfile
+    container_name: mhews-gdo-spi-importer
+    command: ["raster-importer/import-gdo-spi.ts"]
+    env_file:
+      - ./server/.env
+    networks:
+      - mhews
+
+  kontur-population-importer:
+    build:
+      context: .
+      dockerfile: raster-importer/Dockerfile
+    container_name: mhews-kontur-population-importer
+    command: ["raster-importer/import-kontur-population.ts"]
+    env_file:
+      - ./server/.env
+    networks:
+      - mhews
+
+  wfp-hungermap-importer:
+    build:
+      context: .
+      dockerfile: raster-importer/Dockerfile
+    container_name: mhews-wfp-hungermap-importer
+    command: ["raster-importer/import-wfp-hungermap.ts"]
+    env_file:
+      - ./server/.env
+    networks:
+      - mhews
+
+  gdo-spi-importer-scheduled:
+    build:
+      context: .
+      dockerfile: raster-importer/Dockerfile
+    container_name: mhews-gdo-spi-importer-scheduled
+    restart: unless-stopped
+    command: ["raster-importer/cron.ts", "gdo-spi"]
+    env_file:
+      - ./server/.env
+    networks:
+      - mhews
+
+  kontur-population-importer-scheduled:
+    build:
+      context: .
+      dockerfile: raster-importer/Dockerfile
+    container_name: mhews-kontur-population-importer-scheduled
+    restart: unless-stopped
+    command: ["raster-importer/cron.ts", "kontur-population"]
+    env_file:
+      - ./server/.env
+    networks:
+      - mhews
+
+  wfp-hungermap-importer-scheduled:
+    build:
+      context: .
+      dockerfile: raster-importer/Dockerfile
+    container_name: mhews-wfp-hungermap-importer-scheduled
+    restart: unless-stopped
+    command: ["raster-importer/cron.ts", "wfp-hungermap"]
+    env_file:
+      - ./server/.env
+    networks:
+      - mhews
+
   # ── GHSL importer, always-on / monthly-scheduled ─────────────────────────────
   # Same as ghsl-importer above, but stays running and fires itself monthly
   # via Deno.cron (raster-importer/cron.ts) instead of needing a human (or

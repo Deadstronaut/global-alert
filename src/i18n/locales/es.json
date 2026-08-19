@@ -1,4 +1,18 @@
 {
+  "mainLayout": {
+    "header": {
+      "location": "Ubicación"
+    },
+    "hazardNav": {
+      "label": "Tipos de peligro"
+    },
+    "hazardSummary": {
+      "label": "Resumen de peligros seleccionados",
+      "activeCount": "Eventos activos",
+      "topSeverity": "Severidad máxima",
+      "noSeverity": "Ninguna"
+    }
+  },
   "app": {
     "title": "Multi-Hazard Early Warning Systems",
     "subtitle": "Multi-Hazard Early Warning Systems",
@@ -93,7 +107,10 @@
     "cyclone": "Ciclón",
     "volcano": "Volcán",
     "epidemic": "Epidemia",
-    "landslide": "Deslizamiento de Tierra"
+    "landslide": "Deslizamiento de Tierra",
+    "dust_storm": "Tormenta de Polvo",
+    "heatwave": "Ola de Calor",
+    "coldwave": "Ola de Frío"
   },
   "severity": {
     "critical": "Crítico",
@@ -124,8 +141,8 @@
     "layerInactiveHint": "Active esta capa para ver sus detalles.",
     "loadingEllipsis": "Cargando…",
     "calendar": "Calendario",
-    "view2D": "Vista 2D",
-    "view3D": "Vista 3D",
+    "view2D": "2D",
+    "view3D": "3D",
     "toggle3DAria": "Alternar Modo Globo 3D",
     "filters": "Filtros",
     "magnitude": "MAGNITUD",
@@ -138,6 +155,15 @@
     "viewModeSection": "Modo de Vista",
     "modeNormal": "Estado",
     "modeHexagon": "Hexágonos",
+    "modeChoropleth": "Riesgo por país",
+    "modeTerminator": "Línea día/noche",
+    "modeNightLights": "Luces nocturnas",
+    "modeTimeline": "Línea de tiempo",
+    "modeDynamicAtmosphere": "Atmósfera dinámica",
+    "modeHoverCards": "Tarjetas de información",
+    "modeFlights": "Vuelos en vivo",
+    "globeLayersGroup": "Capas del globo",
+    "modeFlightsStale": "Vuelos en vivo (datos no disponibles — mostrando el último conocido)",
     "modeHeatmap": "Mapa de calor",
     "locationAlertSection": "Ubicación y Alertas",
     "wholeCountry": "Todo el País",
@@ -171,11 +197,12 @@
     "activeDroughts": "Zonas de sequía",
     "totalEvents": "Eventos totales",
     "sourcesOnline": "Fuentes en línea",
+    "sourcesOnlineDetails": "Ver informe de estado de las fuentes de datos",
     "activeFoodSecurity": "Alertas de Seguridad Alimentaria"
   },
   "settings": {
     "title": "Ajustes",
-    "appearance": "Apariencia y Accesibilidad",
+    "appearance": "Accesibilidad",
     "quickAccess": "Acceso rápido",
     "capAlerts": "Alertas CAP",
     "incidentTracking": "Seguimiento de incidentes",
@@ -233,6 +260,10 @@
     "minutesAgo": "hace {count} minutos",
     "hoursAgo": "hace {count} horas",
     "daysAgo": "hace {count} días"
+  },
+  "accountMenu": {
+    "clearCache": "Borrar Caché",
+    "clearCacheConfirm": "Se eliminarán todos los datos de desastres almacenados localmente en este dispositivo y la página se recargará. ¿Continuar?"
   },
   "accountSecurity": {
     "title": "Seguridad de la Cuenta",
@@ -296,7 +327,8 @@
       "regionCodePlaceholder": "Estambul, Kadıköy...",
       "radiusKm": "Radio de Alerta (km)",
       "radiusKmPlaceholder": "ej. 25",
-      "radiusInvalid": "El radio de alerta debe ser un número positivo."
+      "radiusInvalid": "El radio de alerta debe ser un número positivo.",
+      "titleRequired": "El título es obligatorio."
     },
     "status": {
       "draft": "Borrador",
@@ -510,11 +542,13 @@
       "breakdownEmpty": "No hay datos de desglose.",
       "unclassified": "sin clasificar",
       "collapse": "Contraer análisis de impacto",
-      "expand": "Expandir análisis de impacto"
+      "expand": "Expandir análisis de impacto",
+      "expandWide": "Ensanchar panel",
+      "contract": "Estrechar panel"
     },
     "geocoding": {
       "label": "Buscar país, provincia, dirección o coordenadas en el mapa",
-      "placeholder": "Buscar país, provincia, dirección o coordenadas...",
+      "placeholder": "P. ej. Turquía, Estambul, Ankara, 39.92, 32.85",
       "help": "Búsqueda de ubicación: p. ej. Turquía, Estambul, Ankara, 39.92, 32.85",
       "search": "Buscar",
       "searching": "Buscando...",
@@ -680,7 +714,7 @@
     "impactSnapshotUnavailable": "Los datos de impacto no estaban disponibles al momento de la difusión."
   },
   "portal": {
-    "title": "🌍 GEWS — Alertas Activas",
+    "title": "🌍 MHEWS — Alertas Activas",
     "subtitle": "Portal Público de Alertas",
     "empty": "No hay alertas activas en este momento.",
     "issuedLabel": "Emitido",
@@ -1171,7 +1205,12 @@
   "assetCategory": {
     "critical_infrastructure_health": "Centro de Salud",
     "critical_infrastructure_education": "Centro Educativo",
-    "critical_infrastructure_emergency": "Servicio de Emergencia"
+    "critical_infrastructure_emergency": "Servicio de Emergencia",
+    "critical_infrastructure_transport": "Aeropuerto",
+    "critical_infrastructure_industrial": "Zona Industrial Organizada",
+    "critical_infrastructure_military": "Instalación Militar/de Seguridad",
+    "critical_infrastructure_fuel": "Estación de Combustible",
+    "critical_infrastructure_cemetery": "Cementerio"
   },
   "facilityType": {
     "hospital": "Hospital",
@@ -1183,6 +1222,10 @@
     "police": "Comisaría",
     "townhall": "Ayuntamiento",
     "government_office": "Oficina Gubernamental",
+    "aerodrome": "Aeropuerto",
+    "cemetery": "Cementerio",
+    "organized_industrial_zone": "Zona Industrial Organizada",
+    "fuel": "Estación de Combustible",
     "unknown": "Desconocido"
   },
   "ai": {
@@ -1227,13 +1270,17 @@
     "greetingChatOnly": "¡Hola, soy Deadstro! No hay una tarea guiada en esta página, pero puedes chatear conmigo abajo.",
     "typePlaceholder": "Escribe un mensaje...",
     "send": "Enviar",
-    "noCountryContext": "Aún no hay un contexto de país configurado en este navegador — primero abre la pestaña \"AI Yardımı\" en AdminView y activa una capacidad para un país.",
+    "noCountryContext": "Aún no hay un contexto de país configurado en este navegador — primero abre la pestaña \"AI Yardımı\" en el panel y activa una capacidad para un país.",
     "waitingServer": "Esperando respuesta del servidor..."
   },
   "flowPanel": {
     "forecast": {
       "rowLabel": "Pronóstico",
       "dayLabel": "Día {n} · {date}",
+      "rangeLabel": "Rango: {min}–{max} {unit}",
+      "play": "Reproducir días de pronóstico",
+      "pause": "Pausar",
+      "loadingFrames": "Cargando fotogramas de pronóstico…",
       "noData": "Aún no hay datos de pronóstico para este día.",
       "panelExpand": "Abrir panel de pronóstico",
       "panelCollapse": "Cerrar panel de pronóstico"
@@ -1243,6 +1290,14 @@
     "toggleLabel": "Viento",
     "currentsToggleLabel": "Corrientes Oceánicas",
     "panelTitle": "Viento y Corrientes",
+    "masterToggleOff": "Apagar todo",
+    "masterToggleAllOff": "Nada seleccionado",
+    "masterClearLabel": "Borrar",
+    "directionLabel": "Dirección",
+    "spreadNoDirection": "Sin dirección de propagación clara en este momento",
+    "spreadAreaTitle": "Área de impacto posible (causada por el viento)",
+    "spreadAsOf": "Actualizado: {time}",
+    "spreadAnalyzeButton": "Analizar en Análisis de Impacto",
     "panelExpand": "Abrir panel de control de viento",
     "panelCollapse": "Cerrar panel de control de viento",
     "unavailable": "Datos no disponibles",
@@ -1264,5 +1319,58 @@
     "pm25ToggleLabel": "PM2.5 (Calidad del aire)",
     "modeDisabledNote": "Aún no hay fuente de datos para este modo",
     "waveHeightLegendLabel": "Altura de las olas"
+  },
+  "lateralRisk": {
+    "sectionTitle": "Riesgos secundarios potenciales",
+    "noFindings": "No se detectó ningún riesgo secundario significativo",
+    "finding": {
+      "fire_spread_potential": {
+        "title": "Riesgo potencial de propagación de incendios",
+        "description": "Condiciones de sequía u ola de calor cercanas pueden aumentar el riesgo de incendio."
+      },
+      "epidemic_risk_potential": {
+        "title": "Riesgo potencial de epidemia",
+        "description": "El agua estancada y los problemas sanitarios tras una inundación pueden aumentar el riesgo de enfermedad."
+      },
+      "access_capacity_risk_potential": {
+        "title": "Riesgo potencial de acceso/capacidad",
+        "description": "Una baja densidad vial cerca de una instalación crítica puede limitar el acceso de emergencia."
+      },
+      "wind_spread_potential": {
+        "title": "Potencial de propagación por viento",
+        "description": "El viento sopla hacia {deg}° a {speed} m/s — la propagación podría seguir esa dirección."
+      },
+      "tsunami_risk_potential": {
+        "title": "Riesgo potencial de tsunami",
+        "description": "Solo una estimación aproximada de proximidad costera — no es una simulación real de olas."
+      }
+    },
+    "institution": {
+      "fireDepartment": "Bomberos",
+      "health": "Servicios de salud",
+      "disasterManagement": "Gestión de desastres",
+      "waterInfrastructure": "Servicios de agua/infraestructura"
+    },
+    "triggerLabel": "Riesgo crítico cruzado detectado — ver informe de previsión",
+    "viewReportButton": "Ver informe de previsión",
+    "menu": {
+      "title": "Eventos críticos — {country}"
+    },
+    "report": {
+      "title": "Informe de previsión cruzada",
+      "disclaimer": "PREVISIÓN HEURÍSTICA — no es una simulación física real, no está verificada, es una función piloto/de prueba.",
+      "loading": "Generando informe…",
+      "sectionRegions": "Ciudades/pueblos afectados",
+      "sectionFacilities": "Instalaciones críticas afectadas",
+      "sectionFindings": "Riesgos secundarios potenciales",
+      "sectionInstitutions": "Tipos de instituciones que podrían necesitar ser informadas",
+      "noRegions": "No se pudo determinar una ciudad/pueblo afectado",
+      "noFacilities": "No se encontraron instalaciones críticas cercanas",
+      "noInstitutions": "No se sugiere ningún tipo de institución",
+      "summaryFindings": "Hallazgos",
+      "summaryRegions": "Regiones",
+      "summaryFacilities": "Instalaciones",
+      "summaryPopulation": "Población"
+    }
   }
 }

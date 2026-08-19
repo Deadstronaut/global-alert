@@ -67,11 +67,22 @@ function getSeverityLabel(severity) {
 <style scoped>
 .alert-panel {
   position: fixed;
-  top: 0;
+  /* Kullanıcı bulgusu (2026-08-18): top:0/height:100vh, header (AppHeader +
+     HazardTypeNav'ın afet tipi çubuğu) ve footer'ı (FooterStatusRow +
+     DateScrubberFooter — "Aktif değil" takvim butonu, "Çevrimiçi Kaynak"
+     satırı dahil) hesaba katmıyordu — panel ikisinin de üstüne biniyor,
+     alttaki kapat/durum alanları okunamaz kalıyordu. Diğer sabit-pozisyonlu
+     overlay'lerin (MapView.vue) zaten kullandığı, canlı ölçülen shell
+     yüksekliği CSS değişkenleriyle sınırlandırıldı (MainLayout.vue'nun
+     ResizeObserver'ı, headerChromeEl/footerChromeEl her ikisini de —
+     AppHeader+HazardTypeNav ve FooterStatusRow+DateScrubberFooter — TEK
+     wrapper olarak ölçüyor, ekstra pay eklemeye gerek yok). */
+  top: var(--shell-header-height, 0px);
   right: 0;
   width: 340px;
   max-width: 90%;
-  height: 100vh;
+  height: auto;
+  bottom: var(--shell-footer-height, 0px);
   z-index: var(--z-alerts);
   display: flex;
   flex-direction: column;

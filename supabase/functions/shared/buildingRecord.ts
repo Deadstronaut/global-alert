@@ -15,12 +15,20 @@ export interface BuildingRecord {
   // less-mapped areas) come through as Point.
   geometry: { type: 'Polygon' | 'Point'; coordinates: unknown }
   countryCode: string
-  assetCategory: 'critical_infrastructure_health' | 'critical_infrastructure_education' | 'critical_infrastructure_emergency'
+  assetCategory:
+    | 'critical_infrastructure_health'
+    | 'critical_infrastructure_education'
+    | 'critical_infrastructure_emergency'
+    | 'critical_infrastructure_transport'
+    | 'critical_infrastructure_industrial'
+    | 'critical_infrastructure_military'
+    | 'critical_infrastructure_fuel'
+    | 'critical_infrastructure_cemetery'
   // Feeds exposure_features.sector (Impact Analysis "Sektöre Göre"
   // breakdown, compute_sector_breakdown) — a coarser, human-facing grouping
   // than assetCategory's own critical_infrastructure_* taxonomy (which
   // powers a different feature, get_critical_infrastructure_features()).
-  sector: 'health' | 'education' | 'emergency'
+  sector: 'health' | 'education' | 'emergency' | 'transport' | 'industrial' | 'military' | 'fuel' | 'cemetery'
   // capacity/beds/phone: OSM's own tags, present only when a mapper bothered
   // to add them — coverage is spotty (most facilities have none of these),
   // never treat their absence as "capacity is zero" or "no phone line".
@@ -28,7 +36,9 @@ export interface BuildingRecord {
     facilityType: string
     name?: string
     osmId: number
-    osmType: 'node' | 'way'
+    // 'relation' only occurs for a center-based (extended-category) record —
+    // see osmBuildingsFetch.ts's mapOverpassResponseToBuildingRecords.
+    osmType: 'node' | 'way' | 'relation'
     capacity?: string
     beds?: string
     phone?: string

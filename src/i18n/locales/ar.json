@@ -1,4 +1,18 @@
 {
+  "mainLayout": {
+    "header": {
+      "location": "الموقع"
+    },
+    "hazardNav": {
+      "label": "أنواع الأخطار"
+    },
+    "hazardSummary": {
+      "label": "ملخص الأخطار المحددة",
+      "activeCount": "الأحداث النشطة",
+      "topSeverity": "أعلى شدة",
+      "noSeverity": "لا يوجد"
+    }
+  },
   "app": {
     "title": "Multi-Hazard Early Warning Systems",
     "subtitle": "Multi-Hazard Early Warning Systems",
@@ -93,7 +107,10 @@
     "cyclone": "إعصار",
     "volcano": "بركان",
     "epidemic": "وباء",
-    "landslide": "انزلاق أرضي"
+    "landslide": "انزلاق أرضي",
+    "dust_storm": "عاصفة ترابية",
+    "heatwave": "موجة حر",
+    "coldwave": "موجة برد"
   },
   "severity": {
     "critical": "حرجة",
@@ -124,8 +141,8 @@
     "layerInactiveHint": "قم بتفعيل هذه الطبقة لرؤية التفاصيل.",
     "loadingEllipsis": "جارٍ التحميل…",
     "calendar": "التقويم",
-    "view2D": "عرض ثنائي الأبعاد",
-    "view3D": "عرض ثلاثي الأبعاد",
+    "view2D": "ثنائي الأبعاد",
+    "view3D": "ثلاثي الأبعاد",
     "toggle3DAria": "تبديل وضع الكرة الأرضية ثلاثي الأبعاد",
     "filters": "المرشحات",
     "magnitude": "الشدة",
@@ -138,6 +155,15 @@
     "viewModeSection": "وضع العرض",
     "modeNormal": "الحالة",
     "modeHexagon": "خلايا سداسية",
+    "modeChoropleth": "مخاطر الدولة",
+    "modeTerminator": "خط الليل والنهار",
+    "modeNightLights": "أضواء الليل",
+    "modeTimeline": "الجدول الزمني",
+    "modeDynamicAtmosphere": "الغلاف الجوي الديناميكي",
+    "modeHoverCards": "بطاقات المعلومات",
+    "modeFlights": "الرحلات الجوية المباشرة",
+    "globeLayersGroup": "طبقات الكرة الأرضية",
+    "modeFlightsStale": "الرحلات الجوية المباشرة (البيانات غير متاحة — يتم عرض آخر بيانات معروفة)",
     "modeHeatmap": "خريطة حرارية",
     "locationAlertSection": "الموقع والتنبيهات",
     "wholeCountry": "الدولة بأكملها",
@@ -171,11 +197,12 @@
     "activeDroughts": "مناطق الجفاف",
     "totalEvents": "إجمالي الأحداث",
     "sourcesOnline": "المصادر المتصلة",
+    "sourcesOnlineDetails": "عرض تقرير سلامة مصادر البيانات",
     "activeFoodSecurity": "تنبيهات الأمن الغذائي"
   },
   "settings": {
     "title": "الإعدادات",
-    "appearance": "المظهر وإمكانية الوصول",
+    "appearance": "إمكانية الوصول",
     "quickAccess": "الوصول السريع",
     "capAlerts": "تنبيهات CAP",
     "incidentTracking": "تتبع الحوادث",
@@ -233,6 +260,10 @@
     "minutesAgo": "منذ {count} دقائق",
     "hoursAgo": "منذ {count} ساعات",
     "daysAgo": "منذ {count} أيام"
+  },
+  "accountMenu": {
+    "clearCache": "مسح ذاكرة التخزين المؤقت",
+    "clearCacheConfirm": "سيتم حذف جميع بيانات الكوارث المخزنة محليًا على هذا الجهاز وستتم إعادة تحميل الصفحة. هل تريد المتابعة؟"
   },
   "accountSecurity": {
     "title": "أمان الحساب",
@@ -296,7 +327,8 @@
       "regionCodePlaceholder": "إسطنبول، قاضي كوي...",
       "radiusKm": "نطاق التحذير (كم)",
       "radiusKmPlaceholder": "مثال: 25",
-      "radiusInvalid": "يجب أن يكون نطاق التحذير رقمًا موجبًا."
+      "radiusInvalid": "يجب أن يكون نطاق التحذير رقمًا موجبًا.",
+      "titleRequired": "العنوان مطلوب."
     },
     "status": {
       "draft": "مسودة",
@@ -510,11 +542,13 @@
       "breakdownEmpty": "لا توجد بيانات توزيع.",
       "unclassified": "غير مصنف",
       "collapse": "طي تحليل التأثير",
-      "expand": "فتح تحليل التأثير"
+      "expand": "فتح تحليل التأثير",
+      "expandWide": "توسيع اللوحة",
+      "contract": "تضييق اللوحة"
     },
     "geocoding": {
       "label": "ابحث في الخريطة عن دولة أو منطقة أو عنوان أو إحداثيات",
-      "placeholder": "دولة أو منطقة أو عنوان أو إحداثيات...",
+      "placeholder": "مثل Turkey أو Istanbul أو Ankara أو 39.92, 32.85",
       "help": "بحث موقع: مثل Turkey أو Istanbul أو Ankara أو 39.92, 32.85",
       "search": "بحث",
       "searching": "جارٍ البحث...",
@@ -680,7 +714,7 @@
     "impactSnapshotUnavailable": "لم تكن بيانات التأثير متوفرة وقت البث."
   },
   "portal": {
-    "title": "🌍 GEWS — التنبيهات النشطة",
+    "title": "🌍 MHEWS — التنبيهات النشطة",
     "subtitle": "بوابة التنبيهات العامة",
     "empty": "لا توجد تنبيهات نشطة حاليًا.",
     "issuedLabel": "تاريخ الإصدار",
@@ -1171,7 +1205,12 @@
   "assetCategory": {
     "critical_infrastructure_health": "منشأة صحية",
     "critical_infrastructure_education": "مؤسسة تعليمية",
-    "critical_infrastructure_emergency": "خدمة طوارئ"
+    "critical_infrastructure_emergency": "خدمة طوارئ",
+    "critical_infrastructure_transport": "مطار",
+    "critical_infrastructure_industrial": "منطقة صناعية منظمة",
+    "critical_infrastructure_military": "منشأة عسكرية/أمنية",
+    "critical_infrastructure_fuel": "محطة وقود",
+    "critical_infrastructure_cemetery": "مقبرة"
   },
   "facilityType": {
     "hospital": "مستشفى",
@@ -1183,6 +1222,10 @@
     "police": "مركز شرطة",
     "townhall": "مبنى البلدية",
     "government_office": "مكتب حكومي",
+    "aerodrome": "مطار",
+    "cemetery": "مقبرة",
+    "organized_industrial_zone": "منطقة صناعية منظمة",
+    "fuel": "محطة وقود",
     "unknown": "غير معروف"
   },
   "ai": {
@@ -1227,13 +1270,17 @@
     "greetingChatOnly": "مرحبًا، أنا Deadstro! لا توجد مهمة موجهة متاحة في هذه الصفحة، لكن يمكنك الدردشة معي أدناه.",
     "typePlaceholder": "اكتب رسالة...",
     "send": "إرسال",
-    "noCountryContext": "لم يتم تكوين سياق بلد في هذا المتصفح بعد — افتح أولاً علامة التبويب \"AI Yardımı\" في AdminView وفعّل إمكانية لبلد ما.",
+    "noCountryContext": "لم يتم تكوين سياق بلد في هذا المتصفح بعد — افتح أولاً علامة التبويب \"AI Yardımı\" في اللوحة وفعّل إمكانية لبلد ما.",
     "waitingServer": "بانتظار الرد من الخادم..."
   },
   "flowPanel": {
     "forecast": {
       "rowLabel": "التوقعات",
       "dayLabel": "اليوم {n} · {date}",
+      "rangeLabel": "النطاق: {min}–{max} {unit}",
+      "play": "تشغيل أيام التوقعات",
+      "pause": "إيقاف مؤقت",
+      "loadingFrames": "جارٍ تحميل إطارات التوقعات…",
       "noData": "لا تتوفر بيانات توقعات لهذا اليوم بعد.",
       "panelExpand": "فتح لوحة التوقعات",
       "panelCollapse": "إغلاق لوحة التوقعات"
@@ -1243,6 +1290,14 @@
     "toggleLabel": "الرياح",
     "currentsToggleLabel": "التيارات المحيطية",
     "panelTitle": "الرياح والتيارات",
+    "masterToggleOff": "إيقاف كل شيء",
+    "masterToggleAllOff": "لا شيء محدد",
+    "masterClearLabel": "مسح",
+    "directionLabel": "الاتجاه",
+    "spreadNoDirection": "لا يوجد اتجاه انتشار واضح حاليًا",
+    "spreadAreaTitle": "منطقة التأثير المحتملة (بسبب الرياح)",
+    "spreadAsOf": "حتى: {time}",
+    "spreadAnalyzeButton": "تحليل في تحليل التأثير",
     "panelExpand": "فتح لوحة تحكم الرياح",
     "panelCollapse": "إغلاق لوحة تحكم الرياح",
     "unavailable": "البيانات غير متوفرة حاليًا",
@@ -1264,5 +1319,58 @@
     "pm25ToggleLabel": "PM2.5 (جودة الهواء)",
     "modeDisabledNote": "لا يوجد مصدر بيانات لهذا الوضع بعد",
     "waveHeightLegendLabel": "ارتفاع الأمواج"
+  },
+  "lateralRisk": {
+    "sectionTitle": "المخاطر الثانوية المحتملة",
+    "noFindings": "لم يتم رصد خطر ثانوي ملحوظ",
+    "finding": {
+      "fire_spread_potential": {
+        "title": "احتمال خطر اندلاع/انتشار حريق",
+        "description": "قد تزيد ظروف الجفاف أو موجة الحر النشطة القريبة من خطر الحريق."
+      },
+      "epidemic_risk_potential": {
+        "title": "احتمال خطر وبائي",
+        "description": "قد تزيد المياه الراكدة ومشاكل الصرف الصحي بعد الفيضان من خطر الأمراض."
+      },
+      "access_capacity_risk_potential": {
+        "title": "احتمال خطر الوصول/السعة",
+        "description": "قد تحد كثافة الطرق المنخفضة قرب منشأة حيوية من الوصول في حالات الطوارئ."
+      },
+      "wind_spread_potential": {
+        "title": "احتمال الانتشار بفعل الرياح",
+        "description": "تهب الرياح باتجاه {deg}° بسرعة {speed} م/ث — قد يتجه الانتشار في هذا الاتجاه."
+      },
+      "tsunami_risk_potential": {
+        "title": "احتمال خطر تسونامي",
+        "description": "مجرد تقدير تقريبي للقرب من الساحل — وليس محاكاة حقيقية للأمواج."
+      }
+    },
+    "institution": {
+      "fireDepartment": "الدفاع المدني/الإطفاء",
+      "health": "الخدمات الصحية",
+      "disasterManagement": "إدارة الكوارث",
+      "waterInfrastructure": "خدمات المياه والبنية التحتية"
+    },
+    "triggerLabel": "تم رصد خطر متقاطع حرج — عرض تقرير التوقعات",
+    "viewReportButton": "عرض تقرير التوقعات",
+    "menu": {
+      "title": "الأحداث الحرجة — {country}"
+    },
+    "report": {
+      "title": "تقرير التوقعات المتقاطعة",
+      "disclaimer": "توقع حدسي — ليس محاكاة فيزيائية حقيقية، وغير موثّق، وهو ميزة تجريبية/اختبارية.",
+      "loading": "جارٍ إنشاء التقرير…",
+      "sectionRegions": "المدن/البلدات المتأثرة",
+      "sectionFacilities": "المنشآت الحيوية المتأثرة",
+      "sectionFindings": "المخاطر الثانوية المحتملة",
+      "sectionInstitutions": "أنواع المؤسسات التي قد يلزم إبلاغها",
+      "noRegions": "تعذر تحديد مدينة/بلدة متأثرة",
+      "noFacilities": "لم يتم العثور على منشآت حيوية قريبة",
+      "noInstitutions": "لا يوجد نوع مؤسسة مقترح",
+      "summaryFindings": "النتائج",
+      "summaryRegions": "المناطق",
+      "summaryFacilities": "المنشآت",
+      "summaryPopulation": "السكان"
+    }
   }
 }

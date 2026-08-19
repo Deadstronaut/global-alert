@@ -7,7 +7,7 @@ import { useGeolocationStore } from '@/stores/geolocation.js'
 import { useI18n } from 'vue-i18n'
 import { numericToAlpha2 } from '@/data/isoMapping.js'
 import { getSeverityHex, getDisasterIcon } from '@/services/adapters/DisasterEvent.js'
-import { polygonToCells, cellToParent, getResolution, latLngToCell } from 'h3-js'
+import { polygonToCells, cellToParent, getResolution, latLngToCell, cellToBoundary } from 'h3-js'
 import HexWorker from '@/workers/hexWorker.js?worker'
 import ProvinceAggregationWorker from '@/workers/provinceAggregationWorker.js?worker'
 import { feature } from 'topojson-client'
@@ -30,13 +30,12 @@ import maplibreWorkerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?url'
 // and build) sidesteps the relative-URL lookup entirely.
 maplibregl.setWorkerUrl(maplibreWorkerUrl)
 import ImpactPanel from '@/components/impact/ImpactPanel.vue'
-import GeocodingSearch from '@/components/impact/GeocodingSearch.vue'
 import SettingsPanel from '@/components/SettingsPanel.vue'
 import PanelCollapseToggle from '@/components/PanelCollapseToggle.vue'
 import FlowControlPanel from '@/components/FlowControlPanel.vue'
 import ForecastPanel from '@/components/ForecastPanel.vue'
+import QuickAccessGrid from '@/components/QuickAccessGrid.vue'
 import LayerPanelGroup from '@/components/map/LayerPanelGroup.vue'
-import RadarScanBadge from '@/components/RadarScanBadge.vue'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { useMapLayersStore } from '@/stores/mapLayers.js'
@@ -54,6 +53,18 @@ import { defaultBufferRadiusKm } from '@/lib/hazardBuffer.js'
 import { buildFeaturePopupHtml } from '@/utils/exposureFeaturePopup.js'
 import { disasterSourceBadges } from '@/utils/disasterSourceBadges.js'
 import { fetchLatestFlowSnapshot, fetchLatestOverlaySnapshot, buildWindSpeedOverlayDataUrl } from '@/utils/windLayerData.js'
+import { windDirectionAtPoint } from '@/utils/windDirectionAtPoint.js'
+import { computeSpreadProjection, computeCoveringRadiusKm, WIND_AFFECTED_HAZARD_TYPES } from '@/utils/windSpreadPrediction.js'
+import {
+  evaluateLateralRisks,
+  accessRiskFinding,
+  windSpreadAsFinding,
+  coastalDistanceKm,
+  computeTsunamiRiskFinding,
+  DEFAULT_HEX_RINGS,
+  DEFAULT_WITHIN_HOURS,
+  gridDisk as gridDiskForLateralRisk,
+} from '@/utils/lateralRiskRules.js'
 import { fetchForecastDayList, fetchForecastSnapshot } from '@/utils/forecastLayerData.js'
 import { SimpleWindLayer } from '@/vendor/simple-wind-layer.js'
 // Isolated per-layer-type engines (2026-08-06 split — see each file's own
@@ -770,6 +781,169 @@ function setExposureLayerOpacity(dataset, value) {
 // set from marker clicks below — independent of the existing popup behavior.
 const selectedImpactEvent = ref(null)
 
+// Spec 070 (US2) — "olası etki alanı" for whichever event is currently
+// selected for Impact Analysis. null whenever: no event selected, event's
+// type isn't wind-affected, or there's no usable wind data (FR-005 — never
+// a fabricated projection). windSpreadNoDirection distinguishes "not
+// applicable" (this event doesn't use wind) from "applicable but no clear
+// direction right now" (US2 Acceptance Scenario 2), so T012's message only
+// shows in the latter case.
+const windSpreadProjection = ref(null)
+const windSpreadNoDirection = ref(false)
+// Spec 070 (US3/T015) — the km ImpactPanel's radiusOverride should be set
+// to; passed down as a prop and watched there (see ImpactPanel.vue).
+const windSpreadRadiusRequestKm = ref(null)
+function applyWindSpreadRadiusToImpactAnalysis() {
+  if (!windSpreadProjection.value) return
+  windSpreadRadiusRequestKm.value = computeCoveringRadiusKm(windSpreadProjection.value)
+}
+
+function formatIssuedAtShort(iso) {
+  if (!iso) return ''
+  return new Date(iso).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+}
+
+function renderWindSpreadHexes(projection) {
+  if (!map || !map.getSource('wind-spread-projection')) return
+  const features = (projection?.projectedHexIds ?? []).map((h3Id) => {
+    const boundary = cellToBoundary(h3Id)
+    const ring = boundary.map(([lat, lng]) => [lng, lat])
+    ring.push(ring[0])
+    return { type: 'Feature', properties: { h3Id }, geometry: { type: 'Polygon', coordinates: [ring] } }
+  })
+  map.getSource('wind-spread-projection').setData({ type: 'FeatureCollection', features })
+}
+
+async function updateWindSpreadProjection() {
+  const event = selectedImpactEvent.value
+  windSpreadRadiusRequestKm.value = null
+  if (!event || !event.h3_id || !WIND_AFFECTED_HAZARD_TYPES.has(event.type)) {
+    windSpreadProjection.value = null
+    windSpreadNoDirection.value = false
+    renderWindSpreadHexes(null)
+    return
+  }
+
+  const snapshot = lastWindSnapshot ?? (await fetchLatestFlowSnapshot('wind', heightLabelToLevel(uiStore.selectedHeight)))
+  const windCondition = snapshot ? await windDirectionAtPoint(event.lat, event.lng, snapshot) : null
+  const projection = computeSpreadProjection(event, windCondition)
+
+  // Stale-selection guard: bail if the user selected a different event (or
+  // cleared it) while the async fetch/decode above was in flight.
+  if (selectedImpactEvent.value !== event) return
+
+  windSpreadProjection.value = projection
+  windSpreadNoDirection.value = !projection
+  renderWindSpreadHexes(projection)
+}
+
+watch(selectedImpactEvent, updateWindSpreadProjection)
+
+// Spec 071 (Çapraz-Afet Risk Çıkarımı) — "potential secondary risk"
+// findings for whichever event is selected for Impact Analysis. Generalizes
+// spec 070's own wind-spread finding into a wider list (research.md R1).
+const secondaryRiskFindings = ref([])
+
+// research.md R3/R6 — proximity lookup over the already-fetched
+// disasterStore.allEvents (no new network round-trip), same gridDisk +
+// time-window pattern spec 070's own spread projection uses. Injected into
+// evaluateLateralRisks() so the rule-matching logic itself stays pure/
+// DOM-and-store-free (contracts.md).
+function buildNearbyEventsLookup(sourceEvent) {
+  const candidateHexIds = new Set(gridDiskForLateralRisk(sourceEvent.h3_id, DEFAULT_HEX_RINGS))
+  const cutoffMs = Date.now() - DEFAULT_WITHIN_HOURS * 60 * 60 * 1000
+  return (hazardType, subtype) => {
+    return disasterStore.allEvents.filter((e) => {
+      if (e.id === sourceEvent.id) return false
+      if (!e.h3_id || !candidateHexIds.has(e.h3_id)) return false
+      if (subtype ? e.type !== 'disaster' || e.subtype !== subtype : e.type !== hazardType) return false
+      if (!e.time) return true // no timestamp — don't silently exclude, just can't freshness-filter it
+      return new Date(e.time).getTime() >= cutoffMs
+    })
+  }
+}
+
+// research.md R4 — reuses the SAME compute_zonal_stats RPC ImpactPanel.vue
+// already calls, just against the 'osm' (road network) exposure dataset
+// instead of a population/hazard one; low road-feature density near a
+// quake/flood + a nearby critical facility reads as an access/capacity
+// risk. No new RPC, no new dataset fetch — exposureLayersStore.datasets is
+// already loaded for the map.
+const ACCESS_RISK_RADIUS_KM = 5
+const ACCESS_RISK_LOW_ROAD_COUNT = 2
+
+// 2026-08-19 bugfix: `selectedCountryCode` is only set once a country
+// polygon has actually been clicked on the map — selecting an event MARKER
+// directly (the common path) leaves it null, and every real dataset row
+// has a real (truthy) country_code, so the old `d.country_code ===
+// selectedCountryCode.value` filter matched NOTHING whenever a country
+// hadn't separately been clicked, silently returning "no risk" always
+// ("kritik binalar hep sıfır" — user-reported, same bug in
+// LateralRiskReport.vue's independent copy). Querying every matching-
+// source dataset (one per served country, e.g. tr/mg) and summing
+// sidesteps needing to resolve the event's country at all — only the
+// actually-matching country's dataset ever returns a non-zero count.
+async function sumZonalFeatureCount(sourceName, event, radiusKm) {
+  const matches = exposureLayersStore.datasets.filter((d) => d.source_name === sourceName)
+  if (!matches.length) return 0
+  const results = await Promise.all(
+    matches.map((d) => supabase.rpc('compute_zonal_stats', { dataset_id: d.id, center_lat: event.lat, center_lng: event.lng, radius_km: radiusKm })),
+  )
+  return results.reduce((sum, r) => sum + (r.data?.[0]?.feature_count ?? 0), 0)
+}
+
+async function detectAccessRisk(event) {
+  const hasRoadDataset = exposureLayersStore.datasets.some((d) => d.source_name === 'osm')
+  const hasInfraDataset = exposureLayersStore.datasets.some((d) => d.source_name === 'osm-buildings')
+  if (!hasRoadDataset || !hasInfraDataset) return false
+
+  const [roadCount, infraCount] = await Promise.all([
+    sumZonalFeatureCount('osm', event, ACCESS_RISK_RADIUS_KM),
+    sumZonalFeatureCount('osm-buildings', event, ACCESS_RISK_RADIUS_KM),
+  ])
+  // Only a risk when there's actually something nearby (a facility) whose
+  // access could be affected AND the surrounding road network is sparse —
+  // sparse roads in the middle of nowhere with no facility nearby isn't a
+  // finding worth surfacing (FR-003: no fabricated risk).
+  return infraCount > 0 && roadCount <= ACCESS_RISK_LOW_ROAD_COUNT
+}
+
+async function updateSecondaryRiskFindings() {
+  const event = selectedImpactEvent.value
+  if (!event || !event.h3_id) {
+    secondaryRiskFindings.value = []
+    return
+  }
+
+  const ruleFindings = evaluateLateralRisks(event, buildNearbyEventsLookup(event))
+  const accessRisk = await detectAccessRisk(event)
+  if (selectedImpactEvent.value !== event) return // stale-selection guard
+
+  const findings = [...ruleFindings]
+  const access = accessRiskFinding(accessRisk)
+  if (access) findings.push(access)
+
+  // FR-005 — spec 070's own wind-spread projection (if any) folded in as a
+  // line item, not recomputed.
+  const windFinding = windSpreadAsFinding(windSpreadProjection.value)
+  if (windFinding) findings.push(windFinding)
+
+  // Spec 071 US3 (FR-012) — coastal-proximity tsunami heuristic, derived
+  // from the same country boundary polygons already loaded for the map
+  // (research.md R2), not a new data source.
+  if (event.type === 'earthquake') {
+    const distanceKm = coastalDistanceKm(event.lat, event.lng, { features: _allCountryFeatures })
+    const tsunamiFinding = computeTsunamiRiskFinding(event, distanceKm)
+    if (tsunamiFinding) findings.push(tsunamiFinding)
+  }
+
+  secondaryRiskFindings.value = findings
+}
+
+watch([selectedImpactEvent, windSpreadProjection], () => {
+  updateSecondaryRiskFindings()
+})
+
 // Impact halo (spec 050 US1/US2): a translucent circle at the selected
 // event's existing defaultBufferRadiusKm() radius, plus distance-graded
 // severity coloring for critical-infrastructure points inside it. Purely
@@ -884,7 +1058,16 @@ watch(externalHaloRadiusKm, () => updateImpactHalo())
 // the population layer's hexagon/province/district/village toggle row,
 // but purely a client-side MapLibre filter — no new fetch, the points are
 // already loaded.
-const CRITICAL_INFRA_CATEGORIES = ['critical_infrastructure_health', 'critical_infrastructure_education', 'critical_infrastructure_emergency']
+const CRITICAL_INFRA_CATEGORIES = [
+  'critical_infrastructure_health',
+  'critical_infrastructure_education',
+  'critical_infrastructure_emergency',
+  'critical_infrastructure_transport',
+  'critical_infrastructure_industrial',
+  'critical_infrastructure_military',
+  'critical_infrastructure_fuel',
+  'critical_infrastructure_cemetery',
+]
 const criticalInfraCategoryFilter = ref(Object.fromEntries(CRITICAL_INFRA_CATEGORIES.map((c) => [c, true])))
 
 function isCriticalInfraCategoryActive(category) {
@@ -895,6 +1078,12 @@ function toggleCriticalInfraCategory(category) {
   criticalInfraCategoryFilter.value = { ...criticalInfraCategoryFilter.value, [category]: !isCriticalInfraCategoryActive(category) }
   applyCriticalInfraCategoryFilter()
 }
+
+// Fed into ImpactPanel below so the same active/inactive chip state that
+// hides categories on the map also narrows its critical-infrastructure
+// count/list — a category hidden here shouldn't still be counted as
+// "affected" in the analysis panel.
+const activeCriticalInfraCategories = computed(() => CRITICAL_INFRA_CATEGORIES.filter((c) => isCriticalInfraCategoryActive(c)))
 
 function applyCriticalInfraCategoryFilter() {
   if (!map) return
@@ -910,17 +1099,6 @@ function applyCriticalInfraCategoryFilter() {
   if (map.getLayer(fillLayerId)) map.setFilter(fillLayerId, ['all', ['==', ['geometry-type'], 'Polygon'], categoryFilter])
   if (map.getLayer(lineLayerId)) map.setFilter(lineLayerId, ['all', ['in', ['geometry-type'], ['literal', ['LineString', 'Polygon']]], categoryFilter])
   if (map.getLayer(pointLayerId)) map.setFilter(pointLayerId, ['all', ['==', ['geometry-type'], 'Point'], categoryFilter])
-}
-
-function onLocationSelected(location) {
-  if (!map) return
-  // Live-testing finding, 2026-08-07: searching a new location while an
-  // event's Etki Analizi panel is open left the panel showing the PREVIOUS
-  // event's analysis (wrong country's exposure datasets alongside it) —
-  // nothing ever cleared selectedImpactEvent when the map's focus moved
-  // elsewhere. A fresh search is a clear signal the operator has moved on.
-  selectedImpactEvent.value = null
-  map.flyTo({ center: [location.lng, location.lat], zoom: location.zoom || 10 })
 }
 
 /**
@@ -1241,6 +1419,46 @@ watch(
 function buildSignalMap(displayRes) {
   const sigRes = Math.min(displayRes, DB_HEX_RES)
   const sigMap = new Map()
+
+  // spec 069 follow-up: prefer the server-aggregated signal
+  // (disasterStore.aggregatedH3Data, via the get_aggregated_disasters RPC)
+  // over the client-computed h3Events fallback below. h3Events is derived
+  // from allEvents, which for a high-volume type like wildfire is capped at
+  // whatever Supabase's platform max-rows setting allows per fetch (as low
+  // as 1000 rows, confirmed live 2026-08-18, against a real recent-30-day
+  // count of 214K+) — so its hex counts badly undercount. aggregatedH3Data
+  // is computed server-side (GROUP BY) over the full matching row set, not
+  // a client-truncated slice. Falls through to h3Events when
+  // aggregatedH3Data hasn't loaded yet (e.g. first paint, or the RPC
+  // returned nothing) so hex mode isn't left empty during that gap.
+  const aggregated = disasterStore.aggregatedH3Data
+  if (aggregated.length) {
+    for (const row of aggregated) {
+      const h3id = row.h3_id
+      if (!h3id) continue
+
+      let key = h3id
+      try {
+        const evRes = getResolution(h3id)
+        if (evRes > sigRes) key = cellToParent(h3id, sigRes)
+        else if (evRes < sigRes) continue
+      } catch {
+        continue
+      }
+
+      const count = Number(row.event_count) || 0
+      const ex = sigMap.get(key)
+      if (!ex) {
+        sigMap.set(key, { count, maxSeverity: row.max_severity || 'minimal' })
+      } else {
+        ex.count += count
+        if (SEV_ORDER.indexOf(row.max_severity) > SEV_ORDER.indexOf(ex.maxSeverity))
+          ex.maxSeverity = row.max_severity
+      }
+    }
+    return { sigMap, sigRes }
+  }
+
   for (const ev of disasterStore.h3Events) {
     // Resolve h3_id: use stored value or compute from coordinates
     let h3id = ev.h3_id
@@ -1690,6 +1908,17 @@ function addSourcesAndLayers() {
     data: { type: 'FeatureCollection', features: [] },
   })
 
+  // Spec 070 (US2) — "olası etki alanı" (possible impact area) hexes
+  // projected downwind of a selected wind-affected hazard. A separate
+  // source/layer from disaster-hex on purpose: that one drives the density
+  // heatmap (color/opacity per-cell intensity), this one is a single-color
+  // highlight for a specific selected event's projection, and the two can
+  // legitimately be visible at the same time.
+  map.addSource('wind-spread-projection', {
+    type: 'geojson',
+    data: { type: 'FeatureCollection', features: [] },
+  })
+
   map.addSource('hex-world-bg', {
     type: 'geojson',
     data: { type: 'FeatureCollection', features: [] },
@@ -1964,6 +2193,27 @@ function addSourcesAndLayers() {
         'line-opacity': 0.7,
       },
       layout: { visibility: 'none' },
+    },
+    before,
+  )
+
+  // Spec 070 (US2/T011) — distinct amber/orange so it never reads as one
+  // more density-heatmap color band.
+  map.addLayer(
+    {
+      id: 'wind-spread-fill',
+      type: 'fill',
+      source: 'wind-spread-projection',
+      paint: { 'fill-color': '#f59e0b', 'fill-opacity': 0.28 },
+    },
+    before,
+  )
+  map.addLayer(
+    {
+      id: 'wind-spread-stroke',
+      type: 'line',
+      source: 'wind-spread-projection',
+      paint: { 'line-color': '#f59e0b', 'line-width': 1.5, 'line-opacity': 0.85, 'line-dasharray': [2, 1] },
     },
     before,
   )
@@ -2520,6 +2770,9 @@ function initMap() {
   map.on('moveend', () => {
     currentZoom.value = Math.round(map.getZoom() * 10) / 10
   })
+  // Spec 070 (US1) — recompute wind direction at the new map center as the
+  // user pans/zooms while the Wind Animate layer is active.
+  map.on('moveend', onMapMoveEndForWindDirection)
 
   map.on('load', () => {
     mapLoaded = true
@@ -2951,6 +3204,21 @@ const FLOW_LAYER_IDS = { wind: 'flow-wind', ocean_current: 'flow-ocean-current',
 // ocean_current/wave always run at 'sfc' regardless of Height.
 const LEVEL_AWARE_FLOW_KEYS = new Set(['wind'])
 
+// Spec 070 (US1) — kept as the last-fetched wind snapshot so moveend can
+// recompute direction at the new map center without re-fetching the texture.
+let lastWindSnapshot = null
+
+async function updateWindDirectionAtCenter() {
+  if (!map || !lastWindSnapshot) return
+  const center = map.getCenter()
+  const condition = await windDirectionAtPoint(center.lat, center.lng, lastWindSnapshot)
+  uiStore.setCurrentWindDirection(condition)
+}
+
+function onMapMoveEndForWindDirection() {
+  if (uiStore.activeAnimateLayer === 'wind') updateWindDirectionAtCenter()
+}
+
 async function setFlowLayerEnabled(layerType, enabled, level = 'sfc') {
   if (!map || !mapLoaded) return
   const layerId = FLOW_LAYER_IDS[layerType]
@@ -2958,6 +3226,10 @@ async function setFlowLayerEnabled(layerType, enabled, level = 'sfc') {
   if (!enabled) {
     if (map.getLayer(layerId)) map.removeLayer(layerId)
     flowLayerInstances[layerType] = null
+    if (layerType === 'wind') {
+      lastWindSnapshot = null
+      uiStore.setCurrentWindDirection(null)
+    }
     return
   }
 
@@ -2995,6 +3267,11 @@ async function setFlowLayerEnabled(layerType, enabled, level = 'sfc') {
   })
   flowLayerInstances[layerType] = layer
   map.addLayer(layer)
+
+  if (layerType === 'wind') {
+    lastWindSnapshot = snapshot
+    updateWindDirectionAtCenter()
+  }
 }
 
 watch(
@@ -3246,26 +3523,55 @@ watch(
 // setOverlayLayerEnabled — forecast_snapshots textures are the identical
 // pre-colored-PNG-with-bounds shape overlay_snapshots already has (spec
 // 055 data-model.md), so no new rendering code path is warranted.
-const FORECAST_LAYER_ID = 'forecast-overlay'
-const FORECAST_SOURCE_ID = `${FORECAST_LAYER_ID}-source`
+const FORECAST_LAYER_PREFIX = 'forecast-overlay'
+const FORECAST_TARGET_OPACITY = 0.65
+// spec 069 follow-up: three attempts landed here.
+//   1. Fixed 300ms remove-then-add — left a visible blank gap ("göz
+//      kırpıyor") once caching made same-frame fetches resolve instantly.
+//   2. Crossfade the new frame in ON TOP of the outgoing one — two
+//      different pre-colored forecast textures stacked with partial
+//      opacity don't blend cleanly (each is its own fixed color scale, not
+//      a shared gradient), so the overlap window read as a wrong-color
+//      flash, not a soft dissolve ("resimler üst üste biniyor... acı
+//      renkler parlıyor").
+//   3. Same-tick instant swap (add new, remove old, no gap between the two
+//      calls) — no color-mixing, but an instant frame-to-frame cut still
+//      reads as a blink with no transition at all.
+// Landed on fade-OUT the outgoing layer to 0 first, THEN swap layers, THEN
+// fade the new one IN from 0 — the two textures are never simultaneously
+// visible at the same time (avoids attempt 2's color-mixing entirely),
+// but there IS a brief moment of full transparency between them instead
+// of an instant cut (softens attempt 3's abruptness) — a "quick fade
+// out/fade in" rather than a true crossfade, exactly what was asked for.
+const FORECAST_FADE_MS = 350 // per half — ~700ms total for a full out/in cycle, well under the 2.2s playback interval
 // Incrementing request token (research.md §5) — a rapid slider drag can
 // fire several selections before any one fetch resolves; without this, an
 // earlier request resolving AFTER a later one could leave a stale day
-// rendered (spec.md Edge Cases). Every await checks this hasn't advanced
-// past its own token before touching the map.
+// rendered (spec.md Edge Cases). Every await (including the fade-out wait
+// below) checks this hasn't advanced past its own token before touching
+// the map. Doubles as each generation's unique layer/source id suffix, so
+// a new layer never collides with the one it's about to replace.
 let forecastRequestToken = 0
+let activeForecastGenerationId = null
+
+function removeForecastGeneration(genId) {
+  if (!map || !genId) return
+  if (map.getLayer(genId)) map.removeLayer(genId)
+  if (map.getSource(`${genId}-source`)) map.removeSource(`${genId}-source`)
+}
 
 async function setForecastLayerEnabled(variable, dayIndex) {
   if (!map || !mapLoaded) return
   const requestToken = ++forecastRequestToken
 
-  // Always tear down first — FR-006 ("no stale/duplicate overlay may
-  // remain visible") applies on every variable/day change, not just on/off
-  // transitions, unlike setOverlayLayerEnabled's own enabled/disabled gate.
-  if (map.getLayer(FORECAST_LAYER_ID)) map.removeLayer(FORECAST_LAYER_ID)
-  if (map.getSource(FORECAST_SOURCE_ID)) map.removeSource(FORECAST_SOURCE_ID)
-
-  if (!variable) return // forecast selection turned off — nothing more to do
+  if (!variable) {
+    // Turning the forecast overlay off entirely (not swapping to another
+    // day/variable) — an immediate removal reads correctly here, nothing to
+    // crossfade into.
+    removeForecastGeneration(activeForecastGenerationId)
+    activeForecastGenerationId = null
+    return
+  }
 
   const dayList = await fetchForecastDayList(variable)
   if (requestToken !== forecastRequestToken) return // a newer selection has since started
@@ -3289,8 +3595,41 @@ async function setForecastLayerEnabled(variable, dayIndex) {
   // (belt-and-suspenders alongside the token checks above).
   if (uiStore.selectedForecastVariable !== variable || uiStore.selectedForecastDayIndex !== dayIndex) return
 
-  map.addSource(FORECAST_SOURCE_ID, { type: 'image', url: snapshot.textureUrl, coordinates: snapshot.coordinates })
-  map.addLayer({ id: FORECAST_LAYER_ID, type: 'raster', source: FORECAST_SOURCE_ID, paint: { 'raster-opacity': 0.65 } }, overlayBeforeId())
+  const previousGenId = activeForecastGenerationId
+
+  // Fade the outgoing frame out first — if the browser never paints a
+  // moment where both textures have non-zero opacity, they can't mix
+  // colors, which was the actual problem with the crossfade attempt above.
+  if (previousGenId && map.getLayer(previousGenId)) {
+    map.setPaintProperty(previousGenId, 'raster-opacity', 0)
+    await new Promise((resolve) => setTimeout(resolve, FORECAST_FADE_MS))
+    if (requestToken !== forecastRequestToken) return // a newer selection took over while this was fading out
+  }
+  removeForecastGeneration(previousGenId)
+
+  const genId = `${FORECAST_LAYER_PREFIX}-${requestToken}`
+  const sourceId = `${genId}-source`
+
+  map.addSource(sourceId, { type: 'image', url: snapshot.textureUrl, coordinates: snapshot.coordinates })
+  map.addLayer({
+    id: genId,
+    type: 'raster',
+    source: sourceId,
+    paint: {
+      'raster-opacity': 0,
+      'raster-opacity-transition': { duration: FORECAST_FADE_MS },
+    },
+  }, overlayBeforeId())
+  activeForecastGenerationId = genId
+
+  // Setting the target opacity in the same tick as addLayer wouldn't
+  // animate (a transition fires on a value CHANGE, and there's nothing to
+  // change from yet on the layer's first paint) — one rAF later so the 0
+  // actually lands first.
+  requestAnimationFrame(() => {
+    if (requestToken !== forecastRequestToken || !map?.getLayer(genId)) return
+    map.setPaintProperty(genId, 'raster-opacity', FORECAST_TARGET_OPACITY)
+  })
 }
 
 watch(
@@ -3866,7 +4205,18 @@ function downloadMap() {
 watch(
   () => uiStore.selectedRegion,
   (region) => {
-    if (region && map) flyToRegion(region.lat, region.lng, region.zoom)
+    if (region && map) {
+      // spec 069 follow-up: was onLocationSelected's own fix (that handler
+      // is gone now that GeocodingSearch moved to AppHeader.vue and drives
+      // this same uiStore.selectedRegion watcher instead of calling into
+      // MapView directly) — live-testing finding, 2026-08-07: jumping to a
+      // new region while an event's Etki Analizi panel is open left the
+      // panel showing the PREVIOUS event's analysis. Kept here since every
+      // caller of transitionToMap (search, hazard-chip focus, the 3D/2D
+      // toggle, country selection) is equally a "moved on" signal.
+      selectedImpactEvent.value = null
+      flyToRegion(region.lat, region.lng, region.zoom)
+    }
   },
 )
 
@@ -4053,30 +4403,41 @@ onBeforeUnmount(() => {
     mapLoaded = false
   }
 })
+
+// 2026-08-19 bugfix: HomeView.vue's own "ÜLKE FİLTRESİ AKTİF" badge X
+// button used to have its own simplified clear (router.push('/') + a
+// hardcoded flyTo target) — it never actually reset the country
+// selection/dimming feature-state or flew back to the REAL captured
+// defaultCameraState this function already does, because HomeView had no
+// way to reach this (component-internal) function. That gap only became
+// visible once MapView's own redundant "Türkiye" badge — the only other
+// UI element that called clearCountrySelection() — was removed per an
+// earlier request ("ülke hâlâ yeşilimsi duruyor, zoom out sonuna kadar
+// gitmiyor" — user-reported). Exposing it so HomeView can call the real
+// thing via a template ref instead of re-guessing a simplified version.
+defineExpose({ clearCountrySelection })
 </script>
 
 <template>
   <div
     class="map-view-wrapper"
-    :class="{ 'impact-panel-collapsed': uiStore.impactPanelCollapsed }"
+    :class="{ 'impact-panel-collapsed': uiStore.impactPanelCollapsed, 'impact-panel-expanded': uiStore.impactPanelExpanded }"
   >
     <div ref="mapContainer" class="map-leaflet"></div>
 
     <!-- spec 068 follow-up (partner review map layout reference, page 5):
-         print/export button top-left. -->
-    <button
-      class="map-download-btn map-download-btn--top-left"
+         print/export button top-left. spec 072 Phase 5: absorbed into the
+         shared QuickAccessGrid (same downloadMap() handler, same fixed
+         top-left positioning tied to the sidebar width) alongside three
+         more quick-access toggles — see QuickAccessGrid.vue. -->
+    <QuickAccessGrid
+      :ref="(el) => { sheltersHintAnchorEl = el; exposureHintAnchorEl = el }"
+      class="map-quick-access map-quick-access--top-left"
       :class="{ 'legend-sidebar-collapsed': uiStore.sidebarCollapsed }"
-      type="button"
-      :title="t('impact.downloadMap')"
-      :aria-label="t('impact.downloadMap')"
-      @click="downloadMap"
-    >
-      <svg class="map-download-icon" viewBox="0 0 24 24" aria-hidden="true">
-        <path d="M12 3v12m0 0 5-5m-5 5-5-5M5 21h14a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2" />
-      </svg>
-      <span class="sr-only">{{ t('impact.downloadMap') }}</span>
-    </button>
+      :capture-fn="downloadMap"
+      :shelters-click="toggleShelters"
+      :layers-click="toggleExposurePanelOpen"
+    />
 
     <!-- spec 068 follow-up: basemap picker as a row of directly-selectable
          thumbnails (dark/satellite/street), top-right — replaces the old
@@ -4097,22 +4458,59 @@ onBeforeUnmount(() => {
       </button>
     </div>
 
-    <!-- spec 068 follow-up: Wind & Current (radar) trigger, relocated here
-         right above the basemap picker per follow-up request ("radarı
-         haritaların üstüne yerleştir") — opens LEFTWARD now (was rightward
-         when it lived on the left side, in .severity-legend-stack), since
-         it sits near the map's right edge here. -->
-    <div class="radar-trigger-anchor">
-      <FlowControlPanel opens-leftward />
-      <button
-        type="button"
-        class="radar-trigger-btn"
-        :aria-label="uiStore.flowPanelOpen ? t('windLayer.panelCollapse') : t('windLayer.panelExpand')"
-        :title="uiStore.flowPanelOpen ? t('windLayer.panelCollapse') : t('windLayer.panelExpand')"
-        @click="uiStore.toggleFlowPanel()"
-      >
-        <RadarScanBadge class="radar-trigger-icon" />
-      </button>
+    <!-- spec 069 follow-up: radar + forecast triggers moved off the
+         bottom-right stack (above the basemap picker) into their own
+         vertically-centered column on the right edge, per request ("sağ
+         ortasında... sağ dayalı olsun ama centered olsun ekranın ortasında
+         olsun") — still right-aligned, but centered on the viewport height
+         instead of anchored to the footer. -->
+    <!-- spec 069 follow-up: Radar/Forecast swapped top-bottom per request
+         ("radarla öngörünün yerlerini değiştir, altüst") — Radar now first
+         (top), Forecast second (bottom). Forecast's own flyout now opens
+         DOWNWARD (opens-downward prop) since it's no longer the topmost
+         item — opening upward from the bottom slot ran it straight into
+         Radar's own trigger/panel above it ("rüzgar akıntıyla üst üste
+         biniyorlar"). -->
+    <div class="right-center-control-stack">
+      <div class="radar-trigger-anchor">
+        <FlowControlPanel opens-leftward />
+        <button
+          type="button"
+          class="radar-trigger-btn"
+          :aria-label="uiStore.flowPanelOpen ? t('windLayer.panelCollapse') : t('windLayer.panelExpand')"
+          :title="uiStore.flowPanelOpen ? t('windLayer.panelCollapse') : t('windLayer.panelExpand')"
+          @click="uiStore.toggleFlowPanel()"
+        >
+          <!-- spec 072 follow-up: swapped from RadarScanBadge to a plain wind
+               icon — the radar-sweep animation is now reserved for the new
+               top-left QuickAccessGrid's flights toggle (2026-08-20 request:
+               "rüzgar ve hava için başka bir ikona ayarlarız"), so it reads
+               as one consistent visual meaning ("radar" = flights) instead
+               of the same animation doing two unrelated jobs in two places. -->
+          <svg class="wind-trigger-icon" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M3 8h11a3 3 0 1 0-2.5-4.7" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" />
+            <path d="M3 12h15a3 3 0 1 1-2.5 4.7" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" />
+            <path d="M3 16h9a2.4 2.4 0 1 1-2 3.7" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" />
+          </svg>
+        </button>
+      </div>
+
+      <div class="forecast-trigger-anchor">
+        <ForecastPanel opens-leftward opens-downward />
+        <button
+          type="button"
+          class="forecast-trigger-btn"
+          :class="{ active: uiStore.forecastPanelOpen }"
+          :aria-label="uiStore.forecastPanelOpen ? t('flowPanel.forecast.panelCollapse') : t('flowPanel.forecast.panelExpand')"
+          :title="uiStore.forecastPanelOpen ? t('flowPanel.forecast.panelCollapse') : t('flowPanel.forecast.panelExpand')"
+          @click="uiStore.toggleForecastPanel()"
+        >
+          <svg class="forecast-trigger-icon" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M6 14a4 4 0 0 1 .5-7.94 5 5 0 0 1 9.53-1.4A4.5 4.5 0 0 1 18.5 14H6z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" />
+            <path d="M8 17v2M12 17v3M16 17v2" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" />
+          </svg>
+        </button>
+      </div>
     </div>
 
     <!-- spec 068 follow-up: zoom control top-right, stacked below the
@@ -4173,27 +4571,6 @@ onBeforeUnmount(() => {
 
       <!-- Hexbin / marker severity legend -->
       <div v-else-if="uiStore.showHexbins || (!uiStore.showHeatmap && !uiStore.showHexbins)" class="severity-legend-stack">
-        <!-- spec 068 follow-up: Forecast/"Foresight" panel stands alone here
-             now — Wind & Current (radar) moved out to its own spot near the
-             basemap picker (bottom-right), per follow-up request: "radarı
-             haritaların üstüne yerleştir, paneli sola doğru açılsın,
-             Forecast burada tek başına dursun". Same 0-size-when-closed
-             flyout pattern as before. -->
-        <ForecastPanel />
-
-        <button
-          type="button"
-          class="severity-legend-stack-forecast-btn"
-          :class="{ active: uiStore.forecastPanelOpen }"
-          :aria-label="uiStore.forecastPanelOpen ? t('flowPanel.forecast.panelCollapse') : t('flowPanel.forecast.panelExpand')"
-          :title="uiStore.forecastPanelOpen ? t('flowPanel.forecast.panelCollapse') : t('flowPanel.forecast.panelExpand')"
-          @click="uiStore.toggleForecastPanel()"
-        >
-          <svg class="severity-legend-stack-forecast-icon" viewBox="0 0 24 24" aria-hidden="true">
-            <path d="M6 14a4 4 0 0 1 .5-7.94 5 5 0 0 1 9.53-1.4A4.5 4.5 0 0 1 18.5 14H6z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" />
-            <path d="M8 17v2M12 17v3M16 17v2" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" />
-          </svg>
-        </button>
         <div class="map-legend">
           <div class="legend-title">Şiddet</div>
           <div class="legend-severity-rows">
@@ -4281,14 +4658,6 @@ onBeforeUnmount(() => {
       >{{ hoveredCountryName }}</div>
     </Transition>
 
-    <!-- Selected country badge -->
-    <Transition name="country-badge">
-      <div v-if="selectedCountryName" class="country-badge">
-        <span class="country-badge-name">{{ selectedCountryName }}</span>
-        <div class="country-badge-close" @click="clearCountrySelection" title="Temizle">✕</div>
-      </div>
-    </Transition>
-
     <!-- Impact Analysis (spec 008): geocoding search + split-view side panel -->
     <!-- Top controls row (UX follow-up): shelters/reports, geocoding search,
          and WMS/exposure layers used to be three independently absolute-
@@ -4344,28 +4713,18 @@ onBeforeUnmount(() => {
 
         <!-- Exposure layers (spec 042): roads/population/rivers/basins etc, generic
              geometry-driven rendering + click-to-inspect. Toggle + opacity share the
-             same session-only state shape as the WMS/WFS panel above. -->
+             same session-only state shape as the WMS/WFS panel above.
+             spec 072 follow-up (2026-08-20): standalone trigger button removed —
+             QuickAccessGrid's "layers" icon (top-left) IS this trigger now
+             (same toggleExposurePanelOpen(), same icon/color copied over,
+             same exposureHintAnchorEl), flagged as a confusing visual
+             duplicate once both existed side by side ("burada iki tane
+             katman oldu"). This wrapper's only remaining job is anchoring
+             the flyout body at its existing position. -->
         <div
           v-if="exposureLayersStore.loaded"
           class="exposure-layers-panel"
         >
-          <Button
-            ref="exposureHintAnchorEl"
-            type="button"
-            variant="ghost"
-            size="icon"
-            class="exposure-layers-collapse-btn"
-            :aria-label="exposureLayersPanelCollapsed ? t('exposureLayers.expand') : t('exposureLayers.collapse')"
-            :title="exposureLayersPanelCollapsed ? t('exposureLayers.expand') : t('exposureLayers.collapse')"
-            @click="toggleExposurePanelOpen()"
-          >
-            <svg class="exposure-layers-icon" viewBox="0 0 24 24" aria-hidden="true">
-              <path d="M12 2 L2 7 L12 12 L22 7 Z" />
-              <path d="M2 12 L12 17 L22 12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" />
-              <path d="M2 17 L12 22 L22 17" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" />
-            </svg>
-          </Button>
-
           <Transition name="flow-panel-expand">
           <div v-if="!exposureLayersPanelCollapsed" class="map-layers-panel exposure-layers-panel-body">
             <h4 class="map-layers-title">{{ t('exposureLayers.panelTitle') }}</h4>
@@ -4430,18 +4789,19 @@ onBeforeUnmount(() => {
               >{{ regionViewLoadingFor(dataset, 'village') ? t('exposureLayers.loading') : t('exposureLayers.regionView.villageOption') }}</button>
             </div>
             <!-- spec 050 follow-up: category filter for critical infrastructure
-                 (schools/health/emergency) — e.g. hide schools for a
-                 night-time event, or after a category's buildings are known
-                 destroyed. Pure client-side filter, no new fetch. -->
+                 (schools/health/emergency/transport/industrial/military/
+                 fuel/cemetery) — e.g. hide schools for a night-time event,
+                 or after a category's buildings are known destroyed. Pure
+                 client-side filter, no new fetch. -->
             <div
               v-if="dataset.source_name === 'osm-buildings' && isLayerVisible(`exposure-dataset-${dataset.id}`)"
-              class="population-view-toggle"
+              class="critical-infra-toggle"
             >
               <button
                 v-for="category in CRITICAL_INFRA_CATEGORIES"
                 :key="category"
                 type="button"
-                class="population-view-btn"
+                class="critical-infra-btn"
                 :class="{ active: isCriticalInfraCategoryActive(category) }"
                 @click="toggleCriticalInfraCategory(category)"
               >{{ t('assetCategory.' + category, category) }}</button>
@@ -4452,29 +4812,16 @@ onBeforeUnmount(() => {
         </div>
       </div>
 
-      <!-- Shelter map layer toggle (spec 027) — always visible, independent of WMS/WFS layers.
-           Persistent icon button + Transition-driven flyout body, matching the wind/currents
-           flow-control panel's calm fade+scale expand (live-testing ask, 2026-08-05: "aynı
-           geçiş efektini sığınak ve etki alanı katmanlarında da kullan").
-           spec 068 follow-up: now to the RIGHT of the layer stack above
-           (was above it) — see .top-controls-left-column's own comment. -->
+      <!-- Shelter map layer toggle (spec 027) — flyout body only now (spec
+           072 follow-up, 2026-08-20): the trigger button that used to live
+           right here was removed as a duplicate — QuickAccessGrid's shelters
+           icon (top-left) now calls the same toggleShelters() and is the
+           sheltersHintAnchorEl, so this wrapper's only job left is hosting
+           the Transition-driven flyout body at its existing anchored
+           position. Matching wind/currents flow-control panel's calm
+           fade+scale expand (live-testing ask, 2026-08-05: "aynı geçiş
+           efektini sığınak ve etki alanı katmanlarında da kullan"). -->
       <div class="shelters-layer-panel">
-        <Button
-          ref="sheltersHintAnchorEl"
-          type="button"
-          variant="ghost"
-          size="icon"
-          class="shelters-layer-collapse-btn"
-          :aria-label="sheltersLayerPanelCollapsed ? t('shelters.map.panelExpand') : t('shelters.map.panelCollapse')"
-          :title="sheltersLayerPanelCollapsed ? t('shelters.map.panelExpand') : t('shelters.map.panelCollapse')"
-          @click="toggleShelters()"
-        >
-          <svg class="shelters-layer-icon" viewBox="0 0 24 24" aria-hidden="true">
-            <path d="M12 2a7 7 0 0 0-7 7c0 5.25 7 13 7 13s7-7.75 7-13a7 7 0 0 0-7-7z" />
-            <circle cx="12" cy="9" r="2.6" fill="rgba(0,0,0,.35)" />
-          </svg>
-        </Button>
-
         <Transition name="flow-panel-expand">
           <div v-if="!sheltersLayerPanelCollapsed" class="shelters-layer-panel-body">
             <h4 class="map-layers-title">{{ t('shelters.map.panelTitle') }}</h4>
@@ -4493,8 +4840,6 @@ onBeforeUnmount(() => {
         </Transition>
       </div>
       </div>
-
-      <GeocodingSearch @location-selected="onLocationSelected" />
     </div>
 
     <!-- Collapsed shelters/exposure-layers panel hints (see
@@ -4518,7 +4863,7 @@ onBeforeUnmount(() => {
       </Transition>
     </Teleport>
 
-    <div class="impact-panel-dock" :class="{ collapsed: uiStore.impactPanelCollapsed }">
+    <div class="impact-panel-dock" :class="{ collapsed: uiStore.impactPanelCollapsed, expanded: uiStore.impactPanelExpanded }">
       <!-- Persistent header — always here regardless of which face
            (Impact Analysis / Settings) is flipped up, so the collapse
            toggle has a real, stable menu bar to anchor to (top:100%/
@@ -4538,6 +4883,25 @@ onBeforeUnmount(() => {
         >
           ✕
         </Button>
+        <!-- 2026-08-19 ask: a wide-drawer toggle, distinct from the
+             collapse toggle below — widens the dock instead of hiding it,
+             map stays visible/interactive underneath (no darkened overlay,
+             unlike LateralRiskReport.vue's modal). Hidden while collapsed;
+             collapsing while expanded resets expanded (see ui.js). -->
+        <button
+          v-if="!uiStore.impactPanelCollapsed"
+          type="button"
+          class="dock-expand-toggle"
+          :title="uiStore.impactPanelExpanded ? t('impact.panel.contract') : t('impact.panel.expandWide')"
+          :aria-label="uiStore.impactPanelExpanded ? t('impact.panel.contract') : t('impact.panel.expandWide')"
+          @click="uiStore.toggleImpactPanelExpanded()"
+        >
+          <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true">
+            <path v-if="!uiStore.impactPanelExpanded" d="M9 3H5a2 2 0 0 0-2 2v4M21 9V5a2 2 0 0 0-2-2h-4M3 15v4a2 2 0 0 0 2 2h4M15 21h4a2 2 0 0 0 2-2v-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+            <path v-else d="M8 3v4a1 1 0 0 1-1 1H3M16 3v4a1 1 0 0 0 1 1h4M8 21v-4a1 1 0 0 0-1-1H3M16 21v-4a1 1 0 0 1 1-1h4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+          </svg>
+        </button>
+
         <div class="panel-collapse-toggle-slot">
           <PanelCollapseToggle
             mirrored
@@ -4558,10 +4922,63 @@ onBeforeUnmount(() => {
         :class="{ flipped: uiStore.settingsPanelOpen }"
       >
         <div class="dock-face dock-face-front">
+          <!-- Spec 070 (US2/T012) — only rendered for a wind-affected
+               selected hazard; the "günlük" impact chip (existing hex
+               highlight, T011) speaks for itself when a projection exists,
+               so this is deliberately only the null-case message (FR-005:
+               never implies a direction when there isn't one). -->
+          <p v-if="windSpreadNoDirection" class="wind-spread-no-direction-note">
+            {{ t('windLayer.spreadNoDirection') }}
+          </p>
+          <div v-else-if="windSpreadProjection" class="wind-spread-summary-note">
+            <span class="wind-spread-summary-title">{{ t('windLayer.spreadAreaTitle') }}</span>
+            <span class="wind-spread-summary-meta">
+              {{ t('windLayer.spreadAsOf', { time: formatIssuedAtShort(windSpreadProjection.windCondition.issuedAt) }) }}
+            </span>
+            <button
+              type="button"
+              class="wind-spread-analyze-btn"
+              @click="applyWindSpreadRadiusToImpactAnalysis"
+            >{{ t('windLayer.spreadAnalyzeButton') }}</button>
+          </div>
+
+          <!-- Spec 071 (US1/T011) — potential secondary risks for the
+               selected event, cross-referencing surrounding layers
+               (research.md). Only shown when an event with an h3_id is
+               selected; an empty list explicitly says "belirgin bir
+               ikincil risk tespit edilmedi" rather than staying silent
+               (FR-003) so the absence of risk is a deliberate statement,
+               not an ambiguous blank. -->
+          <div v-if="selectedImpactEvent && selectedImpactEvent.h3_id" class="lateral-risk-block">
+            <span class="lateral-risk-block-title">{{ t('lateralRisk.sectionTitle') }}</span>
+            <p v-if="secondaryRiskFindings.length === 0" class="lateral-risk-none-note">
+              {{ t('lateralRisk.noFindings') }}
+            </p>
+            <ul v-else class="lateral-risk-findings-list">
+              <li v-for="finding in secondaryRiskFindings" :key="finding.ruleId" class="lateral-risk-finding">
+                <span class="lateral-risk-finding-title">{{ t(`lateralRisk.finding.${finding.riskId}.title`) }}</span>
+                <span class="lateral-risk-finding-desc">{{ t(`lateralRisk.finding.${finding.riskId}.description`, finding.data ?? {}) }}</span>
+              </li>
+            </ul>
+            <!-- Spec 071 (US2) — this is what actually opens the tek
+                 sayfalık öngörü raporu for the CURRENTLY selected event.
+                 Previously only the rare header-level critical-event
+                 trigger could open it, which made the report unreachable
+                 for whatever the user was already looking at — live-testing
+                 finding, user-reported: "buna tıklayınca bir şey açılmıyor". -->
+            <button
+              type="button"
+              class="lateral-risk-report-btn"
+              @click="uiStore.openLateralRiskReport(selectedImpactEvent)"
+            >{{ t('lateralRisk.viewReportButton') }}</button>
+          </div>
+
           <ImpactPanel
             :selected-event="selectedImpactEvent"
             :country-code="selectedCountryCode"
             :halo-opacity="haloOpacity"
+            :radius-override-request-km="windSpreadRadiusRequestKm"
+            :active-critical-infra-categories="activeCriticalInfraCategories"
             @update:halo-opacity="haloOpacity = $event"
             @update:halo-radius-km="externalHaloRadiusKm = $event"
           />
@@ -4576,10 +4993,22 @@ onBeforeUnmount(() => {
 
 <style scoped>
 .map-view-wrapper {
-  --impact-panel-width: 320px;
+  /* spec 069 follow-up: widened ~10% (320px -> 352px) per request — the
+     Impact Analysis panel's "Gelişmiş: Risk ve Senaryo Modelleme" button
+     was cramped at this width (see ImpactPanel.vue's .impact-mode-toggle,
+     also moved to its own full-width row at the bottom of that panel in
+     the same follow-up). */
+  --impact-panel-width: 352px;
   --map-control-offset: calc(var(--impact-panel-width) + 16px);
   width: 100%;
-  height: 100vh;
+  /* spec 069 Revision 2: was 100vh (the full browser window) — correct only
+     when this wrapper filled the whole screen. Now it sits inside
+     MainLayout's content area (below the header/hazard-nav rows, above the
+     footer rows), so 100vh made the map render taller than its actually
+     visible box, pushing/overflowing its content past the real bottom edge
+     (matches .impact-panel-dock's own height:100% right below, which never
+     had this bug). */
+  height: 100%;
   position: relative;
   z-index: 1;
   isolation: isolate;
@@ -4590,9 +5019,21 @@ onBeforeUnmount(() => {
   --map-control-offset: calc(var(--impact-panel-width) + 12px);
 }
 
+/* 2026-08-19 — wide-drawer mode. Still just a wider absolutely-positioned
+   panel (.impact-panel-dock never becomes a modal/backdrop), so the map
+   underneath the UNCOVERED area stays fully interactive — only the drawer's
+   own width changes. --map-control-offset cascades automatically so the
+   radar/forecast/basemap floating controls shift left with it. */
+.map-view-wrapper.impact-panel-expanded {
+  --impact-panel-width: min(760px, 70vw);
+  --map-control-offset: calc(var(--impact-panel-width) + 16px);
+}
+
 .map-leaflet {
   width: 100%;
-  height: 100vh;
+  /* Same fix as .map-view-wrapper above — must match its actual container,
+     not the raw browser window. */
+  height: 100%;
 }
 
 .top-controls-row {
@@ -4602,11 +5043,20 @@ onBeforeUnmount(() => {
      width, so the auto-sized middle column (the search bar) sits exactly
      centered in the row regardless of how wide the two side panels
      currently are — collapsed vs. expanded, sidebar open vs. closed. */
-  position: absolute;
-  /* spec 068 follow-up: pushed down from 16px so it clears the print/export
-     button (.map-download-btn--top-left, 22px tall + 16px top) now pinned
-     just above it at the same left edge — see that class's own comment. */
-  top: 56px;
+  /* spec 069 Revision 2, second pass: same fix as .map-legend-group's own
+     comment below — `position: absolute` here trusted the map wrapper's
+     percentage-height/layout chain to already account for the header/
+     hazard-nav shell above it, which live-testing showed doesn't reliably
+     hold. `fixed` + the real measured header-chrome height sidesteps that
+     entirely, same technique that fixed the bottom-anchored controls. */
+  position: fixed;
+  /* spec 068 follow-up: pushed down so it clears whatever's pinned above it
+     at the same left edge. spec 072 follow-up (2026-08-20): that was the
+     print/export button (22px tall + 16px top); it's now QuickAccessGrid's
+     2x2 icon grid instead (2×32px + 6px gap = 70px tall + 16px top = 86px),
+     noticeably taller — pushed this further down to match or the row would
+     overlap the grid's bottom row of icons. */
+  top: calc(var(--shell-header-height, 110px) + 96px);
   left: calc(var(--sidebar-width, 280px) + 12px);
   right: calc(var(--map-control-offset) + 12px);
   z-index: 20;
@@ -4683,30 +5133,6 @@ onBeforeUnmount(() => {
   position: relative;
   z-index: 40;
 }
-.exposure-layers-collapse-btn {
-  width: 36px;
-  height: 36px;
-  border-radius: 8px;
-  border: 1px solid rgba(255, 255, 255, 0.18);
-  background: rgba(20, 24, 33, 0.92);
-  color: #e2e8f0;
-  padding: 0;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.28);
-  backdrop-filter: blur(8px);
-  transition: background 0.15s ease;
-}
-.exposure-layers-collapse-btn:hover {
-  background: rgba(35, 41, 56, 0.95);
-}
-.exposure-layers-icon {
-  width: 22px;
-  height: 22px;
-  fill: #4da3ff;
-}
 .exposure-layers-panel-body {
   position: absolute;
   top: calc(100% + 10px);
@@ -4762,6 +5188,30 @@ onBeforeUnmount(() => {
   0%, 100% { opacity: .5; }
   50% { opacity: .9; }
 }
+.critical-infra-toggle {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 6px;
+}
+.critical-infra-btn {
+  flex: 1 1 auto;
+  min-width: fit-content;
+  font-size: .68rem;
+  padding: 3px 8px;
+  border-radius: 6px;
+  border: 1px solid rgba(255,255,255,.15);
+  background: transparent;
+  color: var(--color-text-muted,#94a3b8);
+  cursor: pointer;
+  white-space: nowrap;
+  text-align: center;
+}
+.critical-infra-btn.active {
+  background: rgba(203, 24, 29, .25);
+  border-color: rgba(203, 24, 29, .6);
+  color: #fff;
+}
 .exposure-layer-swatch {
   width: 10px;
   height: 10px;
@@ -4803,30 +5253,6 @@ onBeforeUnmount(() => {
   z-index: 40;
 }
 
-.shelters-layer-collapse-btn {
-  width: 36px;
-  height: 36px;
-  border-radius: 8px;
-  border: 1px solid rgba(255, 255, 255, 0.18);
-  background: rgba(20, 24, 33, 0.92);
-  color: #e2e8f0;
-  padding: 0;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.28);
-  backdrop-filter: blur(8px);
-  transition: background 0.15s ease;
-}
-.shelters-layer-collapse-btn:hover {
-  background: rgba(35, 41, 56, 0.95);
-}
-.shelters-layer-icon {
-  width: 22px;
-  height: 22px;
-  fill: #e0453f;
-}
 
 .shelters-layer-panel-body {
   position: absolute;
@@ -4971,8 +5397,11 @@ onBeforeUnmount(() => {
    (corrected — not top-right; the reference shows it low, near the
    coordinate readout, separate from the top-right zoom cluster). */
 .basemap-picker {
-  position: absolute;
-  bottom: 20px;
+  /* spec 069 Revision 2, second pass: same fix as .map-legend-group above —
+     `position: fixed` + a real measured footer-height clearance instead of
+     trusting the map wrapper's percentage-height chain. */
+  position: fixed;
+  bottom: calc(var(--shell-footer-height, 90px) + 20px);
   right: var(--map-control-offset);
   z-index: 10;
   display: flex;
@@ -4997,32 +5426,104 @@ onBeforeUnmount(() => {
 .basemap-picker-thumb.active {
   border-color: #4da3ff;
 }
-/* spec 068 follow-up: Wind & Current radar trigger, above the basemap
-   picker (right-anchored, opens leftward via FlowControlPanel's
-   opens-leftward prop — see that component's own CSS for the flyout). */
-.radar-trigger-anchor {
-  position: absolute;
-  bottom: 80px; /* .basemap-picker's bottom(20) + height(48) + 12px gap */
+/* spec 069 follow-up: radar + forecast triggers no longer footer-anchored
+   above the basemap picker — moved to their own column, right-aligned but
+   vertically centered on the viewport, per request ("sağ ortasında...
+   ekranın ortasında olsun"). top:50%/translateY(-50%) instead of a
+   bottom:calc(shell-footer-height + Npx) chain, since this stack is no
+   longer relative to the footer chrome at all. */
+.right-center-control-stack {
+  position: fixed;
+  /* Kullanıcı bulgusu (2026-08-18): top:50% tüm viewport'a göre (header
+     dahil) ortalıyordu, header/footer'ı hariç tutan gerçek içerik alanına
+     göre değil — bu yüzden Rüzgar & Akıntı paneli yukarı açıldığında
+     tetikleyici düğme header'a çok yakın kalıyor, panelin üst kısmı
+     (başlık, "Temizle") header'ın (z-index'i daha yüksek) arkasında
+     kayboluyor duruyordu. content alanının [header_bottom, viewport_bottom
+     - footer_height] dikey ortasına göre ortalanıyor artık — header/footer
+     eşit olmayan yüksekliklerde bile doğru merkez. */
+  top: calc(50vh + (var(--shell-header-height, 0px) - var(--shell-footer-height, 0px)) / 2);
   right: var(--map-control-offset);
+  transform: translateY(-50%);
   z-index: 30;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 14px;
+}
+
+/* Wind & Current radar trigger (right-anchored, opens leftward via
+   FlowControlPanel's opens-leftward prop — see that component's own CSS
+   for the flyout). Now a plain flex item inside .right-center-control-stack
+   rather than its own fixed-positioned anchor. */
+.radar-trigger-anchor {
+  position: relative;
   display: flex;
   justify-content: flex-end;
 }
 .radar-trigger-btn {
-  border: none;
-  background: none;
+  /* spec 069 follow-up: explicit 44px box — matches .forecast-trigger-btn's
+     44px diameter directly, "iki logonun çapları aynı olmalı" — same
+     footprint so both buttons' right edges and centers line up when
+     stacked. spec 072 follow-up: now a plain round button (previously
+     borderless, relying on RadarScanBadge's own painted circle) since the
+     icon inside is a plain stroke SVG now — matches .forecast-trigger-btn's
+     round/bordered styling for visual consistency between the two. */
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  background: rgba(20, 24, 33, 0.85);
+  color: #e2e8f0;
   padding: 0;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: transform 0.15s ease;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.28);
+  transition: transform 0.15s ease, border-color 0.15s, color 0.15s;
 }
 .radar-trigger-btn:hover {
   transform: scale(1.08);
 }
-.radar-trigger-icon {
-  transform: scale(1.3);
+.wind-trigger-icon {
+  width: 26px;
+  height: 26px;
+}
+
+/* spec 069 follow-up: Forecast trigger, sits above the radar trigger inside
+   the same .right-center-control-stack (also a plain flex item now, not
+   its own fixed anchor). 44px round button (was 32px) per request to
+   enlarge it. */
+.forecast-trigger-anchor {
+  position: relative;
+  display: flex;
+  justify-content: flex-end;
+}
+.forecast-trigger-btn {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  background: rgba(20, 24, 33, 0.85);
+  color: #e2e8f0;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.28);
+  transition: transform 0.15s ease, border-color 0.15s, color 0.15s;
+}
+.forecast-trigger-btn:hover {
+  transform: scale(1.08);
+}
+.forecast-trigger-btn.active {
+  border-color: #d4a94a;
+  color: #d4a94a;
+}
+.forecast-trigger-icon {
+  width: 26px;
+  height: 26px;
 }
 
 .basemap-picker-label {
@@ -5073,8 +5574,19 @@ onBeforeUnmount(() => {
    narrow; right-aligned to the same column edge so it still reads as part
    of the same stack rather than a floating, unrelated panel. */
 .terrain-tuning-panel {
-  position: absolute;
-  bottom: 158px; /* .terrain-toggle-btn's bottom(126) + height(22) + 10px gap */
+  /* spec 069 follow-up: was `position: absolute; bottom: 158px` anchored
+     (per its own comment) to .map-download-btn's old bottom-right position
+     — that button was relocated to top-left in spec 068 and no longer
+     exists there, so this and .terrain-toggle-btn below were floating
+     relative to a stale/nonexistent reference (the same "hardcoded offset
+     that doesn't account for real shell chrome" bug class already fixed
+     for .map-legend-group/.basemap-picker/.radar-trigger-anchor/etc.) —
+     root cause of "3B dağ yapısı gitmiş" (the terrain toggle wasn't gone,
+     just no longer positioned anywhere visible). Restacked directly above
+     .basemap-picker — that column's own bottom-anchored stack is otherwise
+     empty now that radar/forecast moved into .right-center-control-stack. */
+  position: fixed;
+  bottom: calc(var(--shell-footer-height, 90px) + 112px); /* terrain-toggle-btn's clearance(80) + its height(22) + 10px gap */
   right: var(--map-control-offset);
   z-index: 10;
   /* Spans exactly from .zoom-control-bar's left edge to .map-download-btn's
@@ -5111,8 +5623,12 @@ onBeforeUnmount(() => {
    download button in the same right-hand control column (same 64px width),
    so the two read as one stacked group. */
 .terrain-toggle-btn {
-  position: absolute;
-  bottom: 126px; /* .map-download-btn's bottom(96) + height(22) + 8px gap */
+  /* spec 069 follow-up: see .terrain-tuning-panel's comment above — same
+     stale-anchor bug, same fix (fixed + measured footer-height clearance,
+     restacked directly above .basemap-picker instead of the no-longer-
+     existent bottom-right .map-download-btn). */
+  position: fixed;
+  bottom: calc(var(--shell-footer-height, 90px) + 80px); /* .basemap-picker's clearance(20) + its height(48) + 12px gap */
   right: var(--map-control-offset);
   z-index: 10;
   width: 64px;
@@ -5144,55 +5660,19 @@ onBeforeUnmount(() => {
   outline-offset: 2px;
 }
 
-.map-download-btn {
-  width: 64px;
-  height: 22px;
-  padding: 0;
-  border-radius: 6px;
-  border: 1px solid rgba(77, 163, 255, 0.65);
-  background: rgba(20, 24, 33, 0.96);
-  color: #fff;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
-  transition: background 0.15s, border-color 0.15s;
-}
-/* spec 068 follow-up (partner review map layout reference, page 5): print/
-   export button moved from the bottom-right satellite-thumbnail column to
-   the top-left corner, standing alone (no longer stacked above anything).
-   left offset matches .top-controls-row's own left edge (just right of
-   SidebarPanel.vue's fixed, full-height, z-index:92 column) — NOT a raw
-   16px from the viewport edge, which would render underneath the sidebar
-   and be invisible. */
-.map-download-btn--top-left {
-  position: absolute;
-  top: 16px;
+/* spec 072 Phase 5: the standalone download button above was absorbed into
+   QuickAccessGrid.vue — same fixed top-left positioning logic (still tied
+   to the sidebar width, still transitions on collapse), just sized for a
+   2x2 icon grid instead of a single pill button. */
+.map-quick-access--top-left {
+  position: fixed;
+  top: calc(var(--shell-header-height, 110px) + 16px);
   left: calc(var(--sidebar-width, 280px) + 12px);
   z-index: 10;
   transition: left 0.35s ease;
 }
-.map-download-btn--top-left.legend-sidebar-collapsed {
+.map-quick-access--top-left.legend-sidebar-collapsed {
   left: calc(var(--sidebar-collapsed, 56px) + 12px);
-}
-.map-download-btn:hover {
-  background: #164f7a;
-  border-color: #75bfff;
-}
-.map-download-btn:focus-visible {
-  outline: 2px solid #75bfff;
-  outline-offset: 2px;
-}
-.map-download-icon {
-  width: 12px;
-  height: 12px;
-  flex: 0 0 12px;
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 2;
-  stroke-linecap: round;
-  stroke-linejoin: round;
 }
 .sr-only {
   position: absolute;
@@ -5231,8 +5711,23 @@ onBeforeUnmount(() => {
    bottoms — was flex-end, which let a taller exposure legend hang above a
    shorter severity card with mismatched tops. */
 .map-legend-group {
+  /* spec 069 Revision 2, second pass: `position: absolute` relative to
+     .map-view-wrapper turned out to still be unreliable in practice — live
+     testing (DevTools) showed the MapLibre canvas's own inline-styled
+     height going stale after the header/footer shell was added (well past
+     what CSS said the container should be), and this legend rendered
+     behind the footer regardless. Back to `position: fixed`, but now with
+     real clearance: MainLayout.vue measures the footer chrome's actual
+     rendered height via ResizeObserver and exposes it as
+     `--shell-footer-height` on :root, so `bottom` is computed from a real
+     pixel measurement instead of trusting any percentage-height chain
+     through home-view/map-container/map-view-wrapper to resolve correctly. */
   position: fixed;
-  bottom: 38px;
+  /* spec 069 follow-up: was +12px, .basemap-picker (the other bottom-right
+     card at this same height) is +20px — the two read as sitting at
+     slightly different heights on screen. Matched to +20px so the severity
+     legend and the basemap thumbnails align exactly. */
+  bottom: calc(var(--shell-footer-height, 90px) + 20px);
   left: calc(var(--sidebar-width, 280px) + 12px);
   transition: left 0.35s ease;
   z-index: 10;
@@ -5268,34 +5763,6 @@ onBeforeUnmount(() => {
   align-items: center;
   gap: 8px;
 }
-/* spec 068 follow-up: Forecast trigger — deliberately a plain icon button
-   (not RadarScanBadge's animated look) so the two are visually distinct at
-   a glance, per partner review's "Foresight needs its own place" ask. */
-.severity-legend-stack-forecast-btn {
-  width: 32px;
-  height: 32px;
-  border-radius: 50%;
-  border: 1px solid rgba(255, 255, 255, 0.25);
-  background: rgba(20, 24, 33, 0.85);
-  color: #e2e8f0;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: transform 0.15s ease, border-color 0.15s ease, color 0.15s ease;
-}
-.severity-legend-stack-forecast-btn:hover {
-  transform: scale(1.08);
-}
-.severity-legend-stack-forecast-btn.active {
-  border-color: #d4a94a;
-  color: #d4a94a;
-}
-.severity-legend-stack-forecast-icon {
-  width: 20px;
-  height: 20px;
-}
-
 .marker-truncation-note {
   margin: 8px 0 0;
   padding-top: 8px;
@@ -5436,85 +5903,6 @@ onBeforeUnmount(() => {
   z-index: 1200;
 }
 
-/* ── Selected country badge ── */
-.country-badge {
-  position: absolute;
-  bottom: 28px;
-  left: 50%;
-  transform: translateX(-50%);
-  background: var(--glass-bg);
-  backdrop-filter: blur(24px) saturate(180%);
-  -webkit-backdrop-filter: blur(24px) saturate(180%);
-  padding: 8px 14px 8px 18px;
-  border-radius: 100px;
-  border: 1px solid var(--glass-border);
-  box-shadow:
-    0 4px 6px -1px rgba(0, 0, 0, 0.1),
-    0 2px 4px -1px rgba(0, 0, 0, 0.06),
-    inset 0 0 0 1px rgba(255, 255, 255, 0.05);
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  z-index: 1000;
-  cursor: default;
-  animation: badgeIn 0.5s cubic-bezier(0.16, 1, 0.3, 1);
-  pointer-events: auto;
-}
-
-@keyframes badgeIn {
-  from {
-    opacity: 0;
-    transform: translateX(-50%) translateY(10px) scale(0.95);
-  }
-  to {
-    opacity: 1;
-    transform: translateX(-50%) translateY(0) scale(1);
-  }
-}
-
-.country-badge-name {
-  font-family: var(--font-primary);
-  font-weight: 700;
-  font-size: 0.9rem;
-  color: #4ade80;
-  letter-spacing: -0.01em;
-  text-shadow: 0 0 12px rgba(74, 222, 128, 0.3);
-}
-
-.country-badge-close {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 24px;
-  height: 24px;
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.1);
-  color: var(--color-text-secondary);
-  font-size: 10px;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  border: 1px solid transparent;
-}
-
-.country-badge-close:hover {
-  background: rgba(239, 68, 68, 0.2);
-  color: #ef4444;
-  border-color: rgba(239, 68, 68, 0.3);
-  transform: rotate(90deg);
-}
-
-.country-badge-enter-active,
-.country-badge-leave-active {
-  transition:
-    opacity 0.2s ease,
-    transform 0.2s ease;
-}
-.country-badge-enter-from,
-.country-badge-leave-to {
-  opacity: 0;
-  transform: translateX(-50%) translateY(8px);
-}
-
 /* Impact Analysis (spec 008): split-view side panel dock */
 .impact-panel-dock {
   position: absolute;
@@ -5547,12 +5935,14 @@ onBeforeUnmount(() => {
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  /* This panel's content (a single title line) is shorter than
-     .sidebar-header's (icon + title + subtitle), so matching padding alone
-     undershot — 36px verified live (DevTools) to land the two collapse
-     toggles at the same height. Keep in sync with SidebarPanel.vue if
-     either header's content changes. */
-  padding: 36px 16px;
+  /* spec 069 follow-up: was `padding: 36px 16px`, oversized on purpose to
+     match SidebarPanel.vue's own header height (that file no longer exists
+     — deleted when its functionality moved into the header/footer shell —
+     so the justification is gone, and the leftover padding just left large
+     empty gaps above/below "Etki Analizi" ("üstteki ve alttaki boşlukları
+     al"). align-items: center above already centers the title within
+     whatever height this header actually needs now. */
+  padding: 14px 16px;
   background: rgba(15, 17, 23, 0.92);
   border-bottom: 1px solid rgba(255, 255, 255, 0.1);
   color: #e2e8f0;
@@ -5584,6 +5974,126 @@ onBeforeUnmount(() => {
   transform: translate(50%, -50%);
 }
 
+.dock-expand-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  flex-shrink: 0;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: transparent;
+  color: #cbd5e1;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.dock-expand-toggle:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: #f8fafc;
+}
+
+.wind-spread-no-direction-note {
+  margin: 8px 12px 0;
+  padding: 6px 10px;
+  font-size: 0.75rem;
+  color: #cbd5e1;
+  background: rgba(148, 163, 184, 0.12);
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  border-radius: 6px;
+}
+
+.wind-spread-summary-note {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 8px 12px 0;
+  padding: 6px 10px;
+  font-size: 0.75rem;
+  background: rgba(245, 158, 11, 0.12);
+  border: 1px solid rgba(245, 158, 11, 0.3);
+  border-radius: 6px;
+}
+.wind-spread-summary-title {
+  color: #fbbf24;
+  font-weight: 600;
+}
+.wind-spread-summary-meta {
+  color: #cbd5e1;
+  font-size: 0.7rem;
+}
+.wind-spread-analyze-btn {
+  flex-shrink: 0;
+  padding: 3px 8px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: #1c1917;
+  background: #fbbf24;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
+.wind-spread-analyze-btn:hover {
+  background: #f59e0b;
+}
+
+.lateral-risk-block {
+  margin: 8px 12px 0;
+  padding: 8px 10px;
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  border-radius: 6px;
+  background: rgba(30, 41, 59, 0.35);
+}
+.lateral-risk-block-title {
+  display: block;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #e2e8f0;
+  margin-bottom: 4px;
+}
+.lateral-risk-none-note {
+  font-size: 0.72rem;
+  color: #94a3b8;
+  margin: 0;
+}
+.lateral-risk-findings-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.lateral-risk-finding {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.lateral-risk-finding-title {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: #fbbf24;
+}
+.lateral-risk-finding-desc {
+  font-size: 0.7rem;
+  color: #cbd5e1;
+}
+.lateral-risk-report-btn {
+  margin-top: 8px;
+  width: 100%;
+  padding: 5px 8px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: #1c1917;
+  background: #fbbf24;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
+.lateral-risk-report-btn:hover {
+  background: #f59e0b;
+}
+
 /* Card-flip between Impact Analysis (front) and Settings (back). Both faces
    stay mounted the whole time — only the 3D transform + backface-visibility
    decide which one is interactive/visible, so the flip animation always has
@@ -5602,7 +6112,17 @@ onBeforeUnmount(() => {
   backface-visibility: hidden;
   -webkit-backface-visibility: hidden;
   transition: transform 0.5s cubic-bezier(0.4, 0, 0.2, 1);
-  transform: rotateY(0deg);
+  /* spec 069 follow-up: was `transform: rotateY(0deg)` at rest — visually
+     identical to `none`, but a literal non-none transform forces this
+     element onto its own composited 3D layer permanently, not just during
+     the flip animation. Reported symptom: mouse-wheel scroll not reaching
+     .impact-panel's own `overflow-y: auto` content inside this face — a
+     known class of bug where a scrollable descendant of an always-
+     transformed/composited ancestor can fail wheel hit-testing in Chromium.
+     `none` at rest (only becoming a real transform during the actual flip
+     transition below) keeps the resting, interactive state off that
+     compositing path. */
+  transform: none;
   pointer-events: auto;
 }
 
@@ -5619,7 +6139,10 @@ onBeforeUnmount(() => {
 }
 
 .dock-flip.flipped .dock-face-back {
-  transform: rotateY(0deg);
+  /* Same reasoning as .dock-face's own base `transform: none` above — this
+     is the resting/interactive state once flipped, so it gets the same
+     treatment rather than a literal rotateY(0deg). */
+  transform: none;
   pointer-events: auto;
 }
 
@@ -5675,18 +6198,12 @@ onBeforeUnmount(() => {
      longer bottom-anchored above the mobile impact-panel dock, so their old
      bottom-clearance overrides here were removed as dead/inert.
      .layer-switcher no longer exists (replaced by .basemap-picker, also
-     top-anchored, no mobile override needed for the same reason). */
-  .terrain-toggle-btn {
-    bottom: calc(var(--impact-panel-mobile-height) + 16px);
-  }
-
-  .terrain-tuning-panel {
-    bottom: calc(var(--impact-panel-mobile-height) + 48px);
-  }
-
-  .country-badge {
-    bottom: calc(var(--impact-panel-mobile-height, 0px) + 16px);
-  }
+     top-anchored, no mobile override needed for the same reason).
+     spec 069 follow-up: .terrain-toggle-btn/.terrain-tuning-panel's own
+     mobile override removed too — they're restacked into the same
+     shell-footer-height-anchored right-hand column as .basemap-picker/
+     .radar-trigger-anchor/.forecast-trigger-anchor now, none of which need
+     (or have) a mobile-specific override either. */
 
   /* The sidebar is a bottom sheet here, not a left rail — --sidebar-width
      doesn't apply, so the calc()-based offset would push these toward the

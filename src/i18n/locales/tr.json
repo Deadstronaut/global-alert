@@ -1,4 +1,18 @@
 {
+  "mainLayout": {
+    "header": {
+      "location": "Konum"
+    },
+    "hazardNav": {
+      "label": "Afet türleri"
+    },
+    "hazardSummary": {
+      "label": "Seçili afetlerin özeti",
+      "activeCount": "Aktif olay",
+      "topSeverity": "En yüksek şiddet",
+      "noSeverity": "Yok"
+    }
+  },
   "app": {
     "title": "Multi-Hazard Early Warning Systems",
     "subtitle": "Multi-Hazard Early Warning Systems",
@@ -93,6 +107,9 @@
     "volcano": "Volkan",
     "epidemic": "Salgın",
     "landslide": "Heyelan",
+    "dust_storm": "Toz Fırtınası",
+    "heatwave": "Sıcak Hava Dalgası",
+    "coldwave": "Soğuk Hava Dalgası",
     "all": "Tüm Afetler"
   },
   "severity": {
@@ -101,6 +118,18 @@
     "moderate": "Orta",
     "low": "Düşük",
     "minimal": "Minimum"
+  },
+  "hazardEventsList": {
+    "openTitle": "Olayları Listele",
+    "empty": "Bu filtrelerle eşleşen olay yok.",
+    "colSeverity": "Şiddet",
+    "colTitle": "Olay",
+    "colMagnitude": "Büyüklük",
+    "colSource": "Kaynak",
+    "colTime": "Zaman",
+    "colCountry": "Ülke",
+    "allCountries": "Tüm Ülkeler",
+    "noCountryData": "Ülke verisi yok"
   },
   "sidebar": {
     "title": "Afet Katmanları",
@@ -124,8 +153,8 @@
     "layerInactiveHint": "Detayları görmek için bu katmanı açın.",
     "loadingEllipsis": "Yükleniyor…",
     "calendar": "Takvim",
-    "view2D": "2B Görünüm",
-    "view3D": "3B Görünüm",
+    "view2D": "2B",
+    "view3D": "3B",
     "toggle3DAria": "3D Küre Modunu Aç/Kapat",
     "filters": "Filtreler",
     "magnitude": "BÜYÜKLÜK",
@@ -145,6 +174,15 @@
     "viewModeSection": "Görünüm Modu",
     "modeNormal": "Durum",
     "modeHexagon": "Petek",
+    "modeChoropleth": "Ülke Riski",
+    "modeTerminator": "Gece/Gündüz Çizgisi",
+    "modeNightLights": "Gece Işıkları",
+    "modeTimeline": "Zaman Çizelgesi",
+    "modeDynamicAtmosphere": "Dinamik Atmosfer",
+    "modeHoverCards": "Bilgi Kartları",
+    "modeFlights": "Canlı Uçuşlar",
+    "globeLayersGroup": "Globe katmanları",
+    "modeFlightsStale": "Canlı Uçuşlar (veri güncellenemiyor — son bilinen gösteriliyor)",
     "modeHeatmap": "Isı",
     "locationAlertSection": "Konum & Uyarı",
     "wholeCountry": "Tüm Ülke",
@@ -178,11 +216,12 @@
     "activeDroughts": "Aktif Kuraklık",
     "activeFoodSecurity": "Aktif Gıda Güvenliği",
     "totalEvents": "Toplam Olay",
-    "sourcesOnline": "Çevrimiçi Kaynak"
+    "sourcesOnline": "Çevrimiçi Kaynak",
+    "sourcesOnlineDetails": "Veri kaynağı sağlık raporunu görüntüle"
   },
   "settings": {
     "title": "Ayarlar",
-    "appearance": "Görünüm & Erişilebilirlik",
+    "appearance": "Erişilebilirlik",
     "quickAccess": "Hızlı Erişim",
     "capAlerts": "CAP Uyarılar",
     "incidentTracking": "Olay Takip",
@@ -242,6 +281,10 @@
     "minutesAgo": "{count} dakika önce",
     "hoursAgo": "{count} saat önce",
     "daysAgo": "{count} gün önce"
+  },
+  "accountMenu": {
+    "clearCache": "Önbelleği Temizle",
+    "clearCacheConfirm": "Cihazınızda saklanan tüm afet verisi önbelleği silinecek ve sayfa yeniden yüklenecek. Devam edilsin mi?"
   },
   "accountSecurity": {
     "title": "Hesap Güvenliği",
@@ -305,7 +348,8 @@
       "regionCodePlaceholder": "İstanbul, Kadıköy...",
       "radiusKm": "Alarm Yarıçapı (km)",
       "radiusKmPlaceholder": "örn. 25",
-      "radiusInvalid": "Alarm yarıçapı pozitif bir sayı olmalıdır."
+      "radiusInvalid": "Alarm yarıçapı pozitif bir sayı olmalıdır.",
+      "titleRequired": "Başlık zorunludur."
     },
     "status": {
       "draft": "Taslak",
@@ -520,6 +564,8 @@
       "unclassified": "sınıflandırılmamış",
       "collapse": "Etki analizini küçült",
       "expand": "Etki analizini aç",
+      "expandWide": "Paneli genişlet",
+      "contract": "Paneli daralt",
       "autoSummaryTitle": "Etkilenen Kaynaklar (Otomatik)",
       "autoSummaryEmpty": "Bu ülke için etkilenme veri seti bulunmuyor.",
       "detailedTitle": "Detaylı Analiz",
@@ -536,7 +582,7 @@
     },
     "geocoding": {
       "label": "Haritada ülke, il, adres veya koordinat ara",
-      "placeholder": "Ülke, il, adres veya koordinat ara...",
+      "placeholder": "Örn. Türkiye, İstanbul, Ankara, 39.92, 32.85",
       "help": "Konum araması: ör. Türkiye, İstanbul, Ankara, 39.92, 32.85",
       "search": "Ara",
       "searching": "Aranıyor...",
@@ -781,7 +827,7 @@
     "impactSnapshotUnavailable": "Yayın anında impact verisi mevcut değildi."
   },
   "portal": {
-    "title": "🌍 GEWS — Aktif Uyarılar",
+    "title": "🌍 MHEWS — Aktif Uyarılar",
     "subtitle": "Public Alert Portal",
     "empty": "Şu anda aktif bir uyarı yok.",
     "issuedLabel": "Yayın",
@@ -915,6 +961,7 @@
     "noHeadline": "(başlık yok)",
     "viewRaw": "Ham CAP verisini görüntüle",
     "promote": "Taslağa dönüştür",
+    "reject": "Reddet",
     "noAlerts": "Henüz gelen uyarı yok.",
     "statusValue": {
       "received": "Alındı",
@@ -1355,7 +1402,12 @@
   "assetCategory": {
     "critical_infrastructure_health": "Sağlık Tesisi",
     "critical_infrastructure_education": "Eğitim Kurumu",
-    "critical_infrastructure_emergency": "Acil Durum Hizmeti"
+    "critical_infrastructure_emergency": "Acil Durum Hizmeti",
+    "critical_infrastructure_transport": "Havalimanı",
+    "critical_infrastructure_industrial": "Organize Sanayi Bölgesi",
+    "critical_infrastructure_military": "Askeri/Güvenlik Tesisi",
+    "critical_infrastructure_fuel": "Akaryakıt İstasyonu",
+    "critical_infrastructure_cemetery": "Mezarlık"
   },
   "facilityType": {
     "hospital": "Hastane",
@@ -1367,6 +1419,10 @@
     "police": "Polis Merkezi",
     "townhall": "Belediye Binası",
     "government_office": "Devlet Dairesi",
+    "aerodrome": "Havalimanı",
+    "cemetery": "Mezarlık",
+    "organized_industrial_zone": "Organize Sanayi Bölgesi",
+    "fuel": "Akaryakıt İstasyonu",
     "unknown": "Bilinmiyor"
   },
   "ai": {
@@ -1411,13 +1467,17 @@
     "greetingChatOnly": "Merhaba, ben Deadstro! Bu sayfada hazır bir görev yok ama aşağıdan benimle sohbet edebilirsin.",
     "typePlaceholder": "Bir mesaj yaz...",
     "send": "Gönder",
-    "noCountryContext": "Bu tarayıcıda henüz bir ülke bağlamı ayarlanmamış — önce AdminView'daki \"AI Yardımı\" sekmesinden bir ülke için bir yetenek aç.",
+    "noCountryContext": "Bu tarayıcıda henüz bir ülke bağlamı ayarlanmamış — önce Panel'deki \"AI Yardımı\" sekmesinden bir ülke için bir yetenek aç.",
     "waitingServer": "Sunucudan cevap bekleniyor..."
   },
   "flowPanel": {
     "forecast": {
       "rowLabel": "Öngörü",
       "dayLabel": "{n}. Gün · {date}",
+      "rangeLabel": "Aralık: {min}–{max} {unit}",
+      "play": "Öngörü günlerini oynat",
+      "pause": "Duraklat",
+      "loadingFrames": "Öngörü kareleri indiriliyor…",
       "noData": "Bu gün için henüz öngörü verisi yok.",
       "panelExpand": "Öngörü panelini aç",
       "panelCollapse": "Öngörü panelini kapat"
@@ -1427,6 +1487,14 @@
     "toggleLabel": "Rüzgar",
     "currentsToggleLabel": "Okyanus Akıntıları",
     "panelTitle": "Rüzgar & Akıntı",
+    "masterToggleOff": "Hepsini kapat",
+    "masterToggleAllOff": "Hiçbiri seçili değil",
+    "masterClearLabel": "Temizle",
+    "directionLabel": "Yön",
+    "spreadNoDirection": "Şu anda belirgin bir yayılım yönü yok",
+    "spreadAreaTitle": "Olası etki alanı (rüzgara bağlı)",
+    "spreadAsOf": "Güncel: {time}",
+    "spreadAnalyzeButton": "Etki Analizi ile incele",
     "panelExpand": "Rüzgar kontrol panelini aç",
     "panelCollapse": "Rüzgar kontrol panelini kapat",
     "unavailable": "Veri şu anda kullanılamıyor",
@@ -1448,5 +1516,58 @@
     "pm25ToggleLabel": "PM2.5 (Hava Kalitesi)",
     "modeDisabledNote": "Bu mod için henüz veri kaynağı yok",
     "waveHeightLegendLabel": "Dalga Yüksekliği"
+  },
+  "lateralRisk": {
+    "sectionTitle": "Potansiyel ikincil riskler",
+    "noFindings": "Belirgin bir ikincil risk tespit edilmedi",
+    "finding": {
+      "fire_spread_potential": {
+        "title": "Yangın çıkma/yayılma riski potansiyeli",
+        "description": "Yakında aktif kuraklık veya sıcak hava dalgası koşulları yangın riskini artırabilir."
+      },
+      "epidemic_risk_potential": {
+        "title": "Salgın hastalık riski potansiyeli",
+        "description": "Sel sonrası durgun su ve sıhhi altyapı sorunları hastalık riskini artırabilir."
+      },
+      "access_capacity_risk_potential": {
+        "title": "Erişim/kapasite riski potansiyeli",
+        "description": "Kritik bir tesise yakın düşük yol yoğunluğu acil erişimi kısıtlayabilir."
+      },
+      "wind_spread_potential": {
+        "title": "Rüzgara bağlı yayılım potansiyeli",
+        "description": "Rüzgar {deg}° yönüne doğru {speed} m/s hızla esiyor — yayılım bu yönde olabilir."
+      },
+      "tsunami_risk_potential": {
+        "title": "Tsunami riski potansiyeli",
+        "description": "Sadece kaba bir kıyı-yakınlık tahmini — gerçek bir dalga simülasyonu değildir."
+      }
+    },
+    "institution": {
+      "fireDepartment": "İtfaiye",
+      "health": "Sağlık kuruluşları",
+      "disasterManagement": "Afet yönetimi",
+      "waterInfrastructure": "Su/altyapı hizmetleri"
+    },
+    "triggerLabel": "Kritik çapraz-afet riski tespit edildi — öngörü raporunu görüntüle",
+    "viewReportButton": "Öngörü raporunu görüntüle",
+    "menu": {
+      "title": "Kritik olaylar — {country}"
+    },
+    "report": {
+      "title": "Çapraz-afet öngörü raporu",
+      "disclaimer": "SEZGİSEL ÖNGÖRÜ — gerçek fiziksel simülasyon değildir, doğrulanmamıştır, bir pilot/test uygulamasıdır.",
+      "loading": "Rapor hazırlanıyor…",
+      "sectionRegions": "Etkilenen şehirler/kasabalar",
+      "sectionFacilities": "Etkilenen kritik tesisler",
+      "sectionFindings": "Potansiyel ikincil riskler",
+      "sectionInstitutions": "Haber verilmesi önerilen kurum türleri",
+      "noRegions": "Etkilenen bir şehir/kasaba belirlenemedi",
+      "noFacilities": "Yakında kritik tesis bulunamadı",
+      "noInstitutions": "Önerilen bir kurum türü yok",
+      "summaryFindings": "Bulgular",
+      "summaryRegions": "Bölgeler",
+      "summaryFacilities": "Tesisler",
+      "summaryPopulation": "Nüfus"
+    }
   }
 }

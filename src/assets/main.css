@@ -7,6 +7,21 @@
 @custom-variant dark (&:is(.dark *));
 
 :root {
+  /* spec 069 follow-up: real values are set by MainLayout.vue's
+     ResizeObserver (onMounted) — but Vue mounts child components before
+     their parent (GlobeView/MapView measure their container's size in
+     their OWN onMounted, which fires before MainLayout's), so the very
+     first measurement always saw these as unset (0px), making
+     `calc(100dvh - 0 - 0)` in HomeView.vue's .home-view briefly resolve to
+     the FULL viewport height. WebGL canvases (globe.gl, MapLibre) don't
+     reliably self-correct from that wrong initial size later even once the
+     real value lands. Reasonable static estimates here (close to, not
+     exactly, this app's actual header/footer content height) mean the
+     very first paint is already approximately right instead of off by an
+     entire chrome's worth of pixels — MainLayout's measured values still
+     override these the moment they're available. */
+  --shell-header-height: 120px;
+  --shell-footer-height: 110px;
   --color-bg: #070b14;
   --color-bg-soft: #0f1628;
   --color-panel: rgba(12, 19, 36, 0.62);
@@ -34,6 +49,10 @@
   --z-stats: 90;
   --z-sidebar: 92;
   --z-alerts: 94;
+  /* spec 069: MainLayout's header/hazard-nav/footer shell — above the
+     floating sidebar/alerts overlays (which sit inside the routed content
+     area below it), still under shadcn's teleported popover layer. */
+  --z-shell: 96;
   /* shadcn-vue floating layers (Popover/Calendar, Select, Tooltip, etc.) —
      Tailwind's default z-50 loses to --z-sidebar (92)/--z-alerts (94), so
      any popover anchored inside the sidebar/dock renders visually behind
@@ -41,8 +60,18 @@
      nesting). Above every other app layer, below only the loading screen. */
   --z-popover: 950;
   --z-loading: 999;
-  --sidebar-width: 280px;
-  --sidebar-collapsed: 56px;
+  /* spec 069 Revision 2: SidebarPanel.vue (the left rail these offset
+     MapView.vue's legend/top-controls/download-button around) is removed.
+     Zeroed rather than deleted — MapView.vue's `calc(var(--sidebar-width,
+     280px) + 12px)` rules still reference these names, and zeroing here
+     collapses every one of them to a plain left-edge margin without
+     touching MapView.vue itself (out of this shell feature's scope, see
+     plan.md). NOT the same token as shadcn's `--sidebar-width` (that one is
+     always locally overridden by SidebarProvider.vue's own inline style
+     where it's actually used, e.g. the Dashboard's AppSidebar.vue, so it's
+     unaffected by this global default changing). */
+  --sidebar-width: 0px;
+  --sidebar-collapsed: 0px;
   --space-xs: 4px;
   /* shadcn-vue tokens aliased to the app's own palette above instead of
      the CLI's default oklch grayscale — this is what keeps every shadcn
@@ -286,7 +315,22 @@ html[data-theme='light'] .space-background {
 .map-container {
   position: absolute;
   inset: 0;
-  height: 100dvh;
+  /* spec 069 follow-up: was `height: 100dvh` — an explicit height wins over
+     what `inset: 0` would otherwise derive from the parent (.home-view,
+     already correctly sized by HomeView.vue's own
+     `calc(100dvh - var(--shell-header-height) - var(--shell-footer-height))`).
+     100dvh forced this element back to the FULL viewport height regardless,
+     so it (and everything absolutely positioned inside it, including
+     MapView.vue's .impact-panel-dock) extended ~header+footer-height's
+     worth of pixels past .home-view's real bottom edge, running directly
+     under the footer chrome. Confirmed live (measured
+     .impact-panel-dock's bottom at 1009px vs the footer's own top at
+     817px, a 192px overlap) — the footer sits on top of that overlap
+     (later sibling, opaque), which is why scrolling the Impact Analysis
+     panel to its later content (scenario save/rename rows) looked "stuck"
+     or cramped: that content was there, just visually hidden behind the
+     footer bar. Dropping the explicit height lets `inset: 0` size this
+     against the already-correct parent instead. */
 }
 
 .globe-container {

@@ -287,11 +287,53 @@ const activeModeInfo = computed(() => MODES.find((m) => m.id === uiStore.selecte
       <div v-if="uiStore.flowPanelOpen" class="flow-control-panel-body">
         <div class="flow-control-panel-header">
           <h4 class="flow-control-panel-title">{{ t('windLayer.panelTitle') }}</h4>
+          <!-- spec 069 follow-up: too many independent selections in this
+               panel (Overlay/Height/Mode/Animate) to hunt down and turn off
+               one at a time. Deliberately a labeled action button, not a
+               switch/pill-with-dot — a switch shape implies a bidirectional
+               on/off control the user flips both ways themselves, but this
+               only ever does one thing (clear everything back to the
+               opening-state defaults); there's no "turn it back on"
+               action, so it shouldn't look like there is one. Red +
+               disabled once nothing is left to clear, green + clickable
+               the moment anything differs from default — explicit user
+               correction after the first (switch-shaped) version. -->
+          <button
+            type="button"
+            class="flow-control-clear-btn"
+            :class="{ 'flow-control-clear-btn--active': uiStore.hasActiveFlowSelections }"
+            :disabled="!uiStore.hasActiveFlowSelections"
+            :title="uiStore.hasActiveFlowSelections ? t('windLayer.masterToggleOff') : t('windLayer.masterToggleAllOff')"
+            :aria-label="uiStore.hasActiveFlowSelections ? t('windLayer.masterToggleOff') : t('windLayer.masterToggleAllOff')"
+            @click="uiStore.resetAllFlowSettings()"
+          >{{ t('windLayer.masterClearLabel') }}</button>
         </div>
 
         <div class="flow-view-bar-row">
           <span class="flow-view-bar-label">Source</span>
           <span class="flow-view-source-text">{{ MODE_SOURCE[uiStore.selectedMode] }}{{ FIRE_SOURCE_SUFFIX }}</span>
+        </div>
+
+        <!-- Spec 070 (US1) — Kaynak / Rüzgar Yön / Hız / Mod sırası
+             (live-testing ask 2026-08-18: yön bilgisi hızın üstünde, kaynağın
+             hemen altında görünsün). Only rendered while Wind Animate is on
+             AND we actually have a decoded direction for the current map
+             center (FR-005: never a fabricated/default arrow). -->
+        <div v-if="uiStore.windEnabled && uiStore.currentWindDirection" class="flow-view-bar-row flow-wind-direction-row">
+          <span class="flow-view-bar-label">{{ t('windLayer.directionLabel') }}</span>
+          <span class="flow-wind-direction-value">
+            <svg
+              class="flow-wind-direction-arrow"
+              :style="{ transform: `rotate(${uiStore.currentWindDirection.windDirectionDeg}deg)` }"
+              viewBox="0 0 24 24"
+              width="16"
+              height="16"
+              aria-hidden="true"
+            >
+              <path d="M12 2 L18 14 L12 10.5 L6 14 Z" fill="currentColor" />
+            </svg>
+            {{ Math.round(uiStore.currentWindDirection.windDirectionDeg) }}° · {{ uiStore.currentWindDirection.windSpeed.toFixed(1) }} m/s
+          </span>
         </div>
 
         <div class="flow-view-legend">
@@ -456,17 +498,66 @@ const activeModeInfo = computed(() => MODES.find((m) => m.id === uiStore.selecte
      edge of the map (end of the bottom-left legend group). */
   transform-origin: bottom left;
   z-index: 40;
-  max-height: 78vh;
+  /* Kullanıcı bulgusu (2026-08-18): kısa bir viewport'ta panel yukarı doğru
+     78vh'ye kadar büyüyünce üst kısmı (başlık, "Temizle" butonu) header'ın
+     ARKASINDA kalıyordu — header'ın z-index'i (--z-shell: 96) bu panelin
+     kendi z-index'inden (40) yüksek olduğu için üstüne biniyor. Panel
+     kendi kutusunun asla header'ın kapladığı alana taşmamasını garantiye
+     alan bir üst sınır eklendi — --shell-header-height (MainLayout.vue'nun
+     canlı ölçtüğü gerçek header yüksekliği) ne olursa olsun, panel artık
+     header'ın ALTINDA kalan boşluğu asla aşamıyor. */
+  max-height: min(78vh, calc(100vh - var(--shell-header-height, 0px) - 20px));
   overflow-y: auto;
 }
 
 /* spec 068 follow-up: when mounted near the right edge (radar-trigger-anchor
    in MapView.vue, above the basemap picker), open leftward instead so the
-   panel doesn't run off the right edge of the screen. */
+   panel doesn't run off the right edge of the screen.
+   spec 069 follow-up: briefly tried anchoring this to `top: 0` (opening
+   flush with the trigger's own height, no vertical growth) to dodge an
+   off-screen-clipping issue at short viewports — but that made the panel
+   grow DOWNWARD from a fixed top, which then genuinely overlapped
+   Forecast's own downward-opening panel below it (live screenshot: Öngörü
+   floating on top of Rüzgar & Akıntı's middle). Reverted: Radar (now the
+   TOP item of .right-center-control-stack) keeps opening UPWARD — away
+   from Forecast below it — while Forecast opens downward — away from
+   Radar above it. Two panels growing in OPPOSITE directions from
+   adjacent-but-separate triggers is what actually avoids the overlap
+   (explicit correction: "üst üste açılmamalıdır" — up/down, not "on top of
+   each other"). */
 .flow-control-panel--opens-leftward .flow-control-panel-body {
   left: auto;
-  right: -8px;
+  /* spec 069 follow-up: net +3vw left, then -3vw right ("çok oldu" —
+     too much, walked back), then corrected to -2vw right = +1vw overall
+     from the original -8px; -5vh lower from the first request still
+     applies. Final micro-nudge (explicit ask: "bir piksel sağ bir piksel
+     yukarı olacak şekilde bir yüzdelik" — a percentage sized to read as
+     about a single pixel at typical screen sizes) — 0.1vw/0.1vh is ~1-2px
+     at common desktop widths/heights. vw/vh throughout (not flat px) so
+     every shift scales with the viewport, matching how each request was
+     phrased as a percentage. */
+  right: calc(-8px + 1vw - 0.1vw);
+  bottom: calc(100% + 10px - 5vh + 0.1vh);
   transform-origin: bottom right;
+  /* spec 069 follow-up: the base 78vh max-height assumed the trigger sits
+     near the bottom of the screen (its original mount point) — plenty of
+     room to grow upward underneath it. This trigger now sits in
+     .right-center-control-stack, vertically centered — originally on the
+     full viewport, which is exactly why this cap kept being wrong.
+     2026-08-18: MapView.vue's .right-center-control-stack now centers on
+     the actual content band BETWEEN header and footer (not the raw
+     viewport), so this cap is rewritten to match: half of that same
+     content band, minus ~70px for the stack's own button+gap footprint
+     above the trigger. Plain 50vh-70px (pre-fix) or a 100vh-header-only
+     cap (this file's own first follow-up attempt) both still let a short
+     viewport's panel top land behind the header — verified live via
+     Playwright at 1920x1080 (panel top landed at y=74, header bottom at
+     y=107, a 33px overlap) before this fix; content-band-relative math is
+     what actually closes that gap regardless of header/footer height. */
+  max-height: min(
+    78vh,
+    calc((100vh - var(--shell-header-height, 0px) - var(--shell-footer-height, 0px)) / 2 - 70px)
+  );
 }
 
 .flow-control-panel-header {
@@ -481,6 +572,34 @@ const activeModeInfo = computed(() => MODES.find((m) => m.id === uiStore.selecte
   font-size: 0.8rem;
   font-weight: 700;
   color: #e2e8f0;
+}
+
+/* spec 069 follow-up: labeled clear-all action button (was a switch/
+   pill-with-dot — corrected per explicit feedback: a switch shape reads as
+   a control the user flips both ways, but this only ever clears, never
+   "turns on"). Disabled + dim red once there's nothing left to clear;
+   solid green + clickable while anything differs from default. */
+.flow-control-clear-btn {
+  flex-shrink: 0;
+  padding: 3px 9px;
+  border-radius: 5px;
+  border: 1px solid rgba(239, 68, 68, 0.4);
+  background: rgba(239, 68, 68, 0.12);
+  color: rgba(255, 255, 255, 0.4);
+  font-size: 0.65rem;
+  font-weight: 700;
+  cursor: default;
+  transition: background 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+}
+.flow-control-clear-btn--active {
+  border-color: #22c55e;
+  background: #22c55e;
+  color: #0b1220;
+  cursor: pointer;
+  box-shadow: 0 0 8px 1px rgba(34, 197, 94, 0.5);
+}
+.flow-control-clear-btn--active:hover {
+  background: #1fae54;
 }
 
 .flow-control-note {
@@ -600,6 +719,22 @@ const activeModeInfo = computed(() => MODES.find((m) => m.id === uiStore.selecte
 .flow-view-source-text {
   font-size: 0.7rem;
   color: #8c97a8;
+}
+
+.flow-wind-direction-row {
+  align-items: center;
+}
+.flow-wind-direction-value {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.75rem;
+  color: #e6ebf2;
+}
+.flow-wind-direction-arrow {
+  color: #7ec8ff;
+  transition: transform 0.3s ease;
+  flex-shrink: 0;
 }
 
 .flow-view-gear-row {

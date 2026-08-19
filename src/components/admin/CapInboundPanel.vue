@@ -76,6 +76,12 @@ async function promote(alert) {
   else await loadAlerts()
 }
 
+async function reject(alert) {
+  const { error: err } = await supabase.rpc('reject_cap_inbound_alert', { p_inbound_id: alert.id })
+  if (err) error.value = err.message
+  else await loadAlerts()
+}
+
 function statusLabel(status) {
   return t(`capInbound.statusValue.${status}`)
 }
@@ -137,7 +143,10 @@ function statusLabel(status) {
           <summary>{{ t('capInbound.viewRaw') }}</summary>
           <pre>{{ a.raw_payload }}</pre>
         </details>
-        <button v-if="a.status !== 'promoted'" class="btn-submit" @click="promote(a)">{{ t('capInbound.promote') }}</button>
+        <div v-if="a.status !== 'promoted' && a.status !== 'rejected'" class="inbound-actions">
+          <button class="btn-submit" @click="promote(a)">{{ t('capInbound.promote') }}</button>
+          <button class="btn-reject" @click="reject(a)">{{ t('capInbound.reject') }}</button>
+        </div>
       </div>
       <p v-if="!loading && !alerts.length" class="empty-row">{{ t('capInbound.noAlerts') }}</p>
     </div>
@@ -161,6 +170,8 @@ function statusLabel(status) {
 .btn-link { background: none; border: none; color: #4aa3ff; cursor: pointer; font-size: .78rem; padding: 0; }
 .btn-submit { padding: 8px 16px; background: rgba(34,197,94,.2); border: 1px solid rgba(34,197,94,.4); border-radius: 8px; color: #22c55e; font-weight: 600; cursor: pointer; font-size: .82rem; margin-top: 8px; }
 .btn-submit:disabled { opacity: .45; cursor: not-allowed; }
+.inbound-actions { display: flex; gap: 8px; }
+.btn-reject { padding: 8px 16px; background: rgba(239,68,68,.15); border: 1px solid rgba(239,68,68,.4); border-radius: 8px; color: #ef4444; font-weight: 600; cursor: pointer; font-size: .82rem; margin-top: 8px; }
 .form-error { color: #ef4444; font-size: .8rem; margin-bottom: 8px; }
 .tab-loading, .empty-row { font-size: .82rem; color: var(--color-text-muted,#94a3b8); }
 .inbound-row { background: rgba(255,255,255,.03); border: 1px solid rgba(255,255,255,.08); border-radius: 10px; padding: 12px 14px; margin-bottom: 10px; }

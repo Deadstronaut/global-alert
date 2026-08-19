@@ -125,11 +125,13 @@ async function loadDrafts() {
 
 function startBlankDraft() {
   selectedSourceEventId.value = null
+  error.value = null
   showForm.value = true
 }
 
 function startFromEvent(event) {
   selectedSourceEventId.value = String(event.id ?? '')
+  error.value = null
   form.value.hazard_type = event.type || form.value.hazard_type
   form.value.severity = event.severity || form.value.severity
   form.value.area_desc = event.title || form.value.area_desc
@@ -144,7 +146,7 @@ function isRadiusValid() {
 }
 
 async function submitDraft() {
-  if (!form.value.title.trim()) return
+  if (!form.value.title.trim()) { error.value = t('cap.form.titleRequired'); return }
   if (!isRadiusValid()) { error.value = t('cap.form.radiusInvalid'); return }
   submitting.value = true
   error.value = null

@@ -182,6 +182,11 @@ async function fetchCountryBoundary(countryCode: string): Promise<GeoJSON.Geomet
     .from('country_boundaries')
     .select('geojson')
     .eq('country_code', countryCode)
+    // See ghslFetch.ts's fetchCountryBoundary for why: district-level rows
+    // added 2026-07-29 broke .maybeSingle() (multi-row -> PGRST116, treated
+    // as "no boundary" here). GDO SPI kept reporting 'healthy' regardless
+    // because this fetch no-ops (0 rows) without throwing.
+    .eq('level', 'province')
     .maybeSingle()
   if (error || !data) return null
   const geojson = data.geojson as { type: string; features?: GeoJSON.Feature[]; geometry?: GeoJSON.Geometry }

@@ -20,7 +20,7 @@ defineProps({
   embedded: { type: Boolean, default: false },
 })
 
-const { t, locale } = useI18n()
+const { t } = useI18n()
 const router = useRouter()
 const uiStore = useUIStore()
 const authStore = useAuthStore()
@@ -37,13 +37,14 @@ async function handleLogout() {
   router.push('/login')
 }
 
-function changeLanguage(lang) {
-  locale.value = lang
-}
-
 function navigateTo(path) {
   uiStore.toggleSettings()
   router.push(path)
+}
+
+function openAdminDashboard() {
+  uiStore.toggleSettings()
+  uiStore.dashboardPanelOpen = true
 }
 </script>
 
@@ -58,92 +59,14 @@ function navigateTo(path) {
       <Button variant="ghost" size="icon" @click="uiStore.toggleSettings()">✕</Button>
     </div>
 
-      <!-- Language -->
-      <div class="settings-section">
-        <h4 class="settings-section-title">{{ t('settings.language') }}</h4>
-        <div class="language-buttons">
-          <Button
-            :variant="locale === 'en' ? 'default' : 'ghost'"
-            class="lang-btn"
-            @click="changeLanguage('en')"
-          >
-            EN
-          </Button>
-          <Button
-            :variant="locale === 'es' ? 'default' : 'ghost'"
-            class="lang-btn"
-            @click="changeLanguage('es')"
-          >
-            ES
-          </Button>
-          <Button
-            :variant="locale === 'fr' ? 'default' : 'ghost'"
-            class="lang-btn"
-            @click="changeLanguage('fr')"
-          >
-            FR
-          </Button>
-          <Button
-            :variant="locale === 'ru' ? 'default' : 'ghost'"
-            class="lang-btn"
-            @click="changeLanguage('ru')"
-          >
-            RU
-          </Button>
-          <Button
-            :variant="locale === 'ar' ? 'default' : 'ghost'"
-            class="lang-btn"
-            @click="changeLanguage('ar')"
-          >
-            AR
-          </Button>
-          <Button
-            :variant="locale === 'zh' ? 'default' : 'ghost'"
-            class="lang-btn"
-            @click="changeLanguage('zh')"
-          >
-            ZH
-          </Button>
-          <Button
-            :variant="locale === 'tr' ? 'default' : 'ghost'"
-            class="lang-btn"
-            @click="changeLanguage('tr')"
-          >
-            TR
-          </Button>
-        </div>
-      </div>
-
-      <!-- Appearance & Accessibility -->
-      <div class="settings-section">
-        <h4 class="settings-section-title">{{ t('settings.appearance') }}</h4>
-
-        <label class="settings-toggle">
-          <span>{{ uiStore.darkMode ? 'Dark Mode' : 'Light Mode' }}</span>
-          <input type="checkbox" v-model="uiStore.darkMode" />
-          <span class="toggle-switch"></span>
-        </label>
-
-        <label class="settings-toggle">
-          <span>{{ t('settings.highContrast') }}</span>
-          <input type="checkbox" v-model="uiStore.highContrast" />
-          <span class="toggle-switch"></span>
-        </label>
-
-        <label class="settings-toggle">
-          <span>{{ t('settings.colorblindMode') }}</span>
-          <input type="checkbox" v-model="uiStore.colorblindMode" />
-          <span class="toggle-switch"></span>
-        </label>
-        <p class="settings-desc">{{ t('settings.colorblindDesc') }}</p>
-
-        <label class="settings-toggle">
-          <span>{{ t('settings.safeMode') }}</span>
-          <input type="checkbox" v-model="uiStore.safeMode" />
-          <span class="toggle-switch"></span>
-        </label>
-        <p class="settings-desc">{{ t('settings.safeModeDesc') }}</p>
-      </div>
+      <!-- spec 069 follow-up: Language and Appearance & Accessibility
+           (dark mode / high contrast / colorblind / safe mode) moved to
+           AppHeader.vue's dropdowns — this panel is reused in several
+           places (Dashboard's embedded "Ayarlar", the globe-view settings
+           dock, MapView's impact-panel-dock flip-face), so removing them
+           here (not duplicating) keeps language/appearance a single
+           always-visible control in the header instead of scattered
+           across every place this panel happens to be open. -->
 
       <!-- Quick Access -->
       <div v-if="!embedded" class="settings-section">
@@ -169,12 +92,10 @@ function navigateTo(path) {
             <span>📢 {{ t('communityReport.form.title') }}</span>
             <span class="quick-access-arrow">›</span>
           </Button>
-          <!-- Admin entry intentionally left as the legacy element — Settings
-               migration excludes anything admin-related per project owner. -->
           <button
             v-if="canAccessAdmin"
             class="quick-access-link"
-            @click="navigateTo('/admin')"
+            @click="openAdminDashboard"
           >
             <span>🛡️ {{ t('settings.admin') }}</span>
             <span class="quick-access-arrow">›</span>
@@ -243,71 +164,11 @@ function navigateTo(path) {
   color: var(--color-text-muted);
 }
 
-.settings-toggle {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 8px 0;
-  font-size: 0.85rem;
-  cursor: pointer;
-  color: var(--color-text-secondary);
-}
-
-.settings-toggle input {
-  display: none;
-}
-
-.toggle-switch {
-  width: 40px;
-  height: 22px;
-  background: rgba(255, 255, 255, 0.1);
-  border-radius: 11px;
-  position: relative;
-  transition: background var(--transition-normal);
-  flex-shrink: 0;
-}
-
-.toggle-switch::after {
-  content: '';
-  position: absolute;
-  top: 3px;
-  left: 3px;
-  width: 16px;
-  height: 16px;
-  background: var(--color-text-secondary);
-  border-radius: 50%;
-  transition: all var(--transition-normal);
-}
-
-.settings-toggle input:checked + .toggle-switch {
-  background: var(--color-accent);
-}
-
-.settings-toggle input:checked + .toggle-switch::after {
-  left: 21px;
-  background: white;
-}
-
 .settings-desc {
   font-size: 0.7rem;
   color: var(--color-text-muted);
   line-height: 1.4;
   margin-top: -4px;
-}
-
-.language-buttons {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.lang-btn {
-  flex: 1 1 calc(33% - 8px);
-  min-width: 60px;
-  font-size: 0.75rem;
-  font-family: var(--font-mono);
-  font-weight: 700;
-  padding: 8px;
 }
 
 .settings-actions {

@@ -36,6 +36,13 @@ async function fetchCountryBoundary(countryCode: string): Promise<GeoJSON.Geomet
     .from('country_boundaries')
     .select('geojson')
     .eq('country_code', countryCode)
+    // 20260729_district-level rows added a second row per country
+    // (level='district' alongside the original level='province') —
+    // .maybeSingle() over 2 rows errors (PGRST116), which this function
+    // swallowed into a silent "no boundary, skip" return, so this whole
+    // fetch has been a no-op since 2026-07-29 despite reporting 'success'.
+    // 'province' is the original whole-country level this always meant.
+    .eq('level', 'province')
     .maybeSingle()
   if (error || !data) return null
   const geojson = data.geojson as { type: string; features?: GeoJSON.Feature[]; geometry?: GeoJSON.Geometry }

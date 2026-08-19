@@ -35,7 +35,7 @@ vi.mock('@/services/api/config.js', () => ({
 import { useAuthStore } from '@/stores/auth.js'
 import { routes, authGuard } from '@/router/index.js'
 
-async function navigateAs(role, path = '/admin') {
+async function navigateAs(role, path = '/shelters') {
   const router = createRouter({ history: createMemoryHistory(), routes })
   router.beforeEach(authGuard)
 
@@ -50,29 +50,12 @@ async function navigateAs(role, path = '/admin') {
   return router.currentRoute.value.name
 }
 
-describe('role-based /admin route guard (spec 004 US1)', () => {
-  beforeEach(() => {
-    setActivePinia(createPinia())
-    mockState.aal = { currentLevel: 'aal2', nextLevel: 'aal2' }
-    mockState.rolePolicyRequired = false
-    mockState.factors = [{ id: 'factor-1' }]
-  })
-
-  it('redirects a viewer away from /admin without reaching the admin route', async () => {
-    expect(await navigateAs('viewer')).toBe('home')
-  })
-
-  it.each(['super_admin', 'country_admin', 'org_admin'])(
-    'allows %s to reach /admin',
-    async (role) => {
-      expect(await navigateAs(role)).toBe('admin')
-    },
-  )
-
-  it('redirects a logged-out visitor to login', async () => {
-    expect(await navigateAs(null)).toBe('login')
-  })
-})
+// Spec 004 US1's router-level /admin role guard was removed along with the
+// /admin route itself (2026-08-19): admin functionality now lives inside the
+// Dashboard panel (DashboardPlaceholder.vue/AppSidebar.vue), which gates its
+// own "Yönetim" nav group with the same three-role check (canAccessAdmin) at
+// the component level instead of the router. See src/components/dashboard/
+// AppSidebar.vue's canAccessAdmin for that check's test coverage.
 
 describe('AAL-gating for a pending MFA challenge (spec 005 US2, T010)', () => {
   beforeEach(() => {
@@ -83,13 +66,13 @@ describe('AAL-gating for a pending MFA challenge (spec 005 US2, T010)', () => {
 
   it('redirects any authenticated role to mfa-challenge when aal1->aal2 is pending', async () => {
     mockState.aal = { currentLevel: 'aal1', nextLevel: 'aal2' }
-    expect(await navigateAs('super_admin', '/admin')).toBe('mfa-challenge')
+    expect(await navigateAs('super_admin', '/shelters')).toBe('mfa-challenge')
     expect(await navigateAs('viewer', '/')).toBe('mfa-challenge')
   })
 
   it('does not redirect when already at aal2 (challenge already completed)', async () => {
     mockState.aal = { currentLevel: 'aal2', nextLevel: 'aal2' }
-    expect(await navigateAs('super_admin', '/admin')).toBe('admin')
+    expect(await navigateAs('super_admin', '/shelters')).toBe('shelters')
   })
 
   it('does not redirect when no factor is enrolled (aal1 stays aal1)', async () => {
@@ -112,18 +95,18 @@ describe('per-role mandatory MFA redirect (spec 005 US4)', () => {
   it('routes an unenrolled user of a required role into account-security', async () => {
     mockState.rolePolicyRequired = true
     mockState.factors = []
-    expect(await navigateAs('country_admin', '/admin')).toBe('account-security')
+    expect(await navigateAs('country_admin', '/shelters')).toBe('account-security')
   })
 
   it('does not redirect an already-enrolled user even if their role requires MFA', async () => {
     mockState.rolePolicyRequired = true
     mockState.factors = [{ id: 'factor-1' }]
-    expect(await navigateAs('country_admin', '/admin')).toBe('admin')
+    expect(await navigateAs('country_admin', '/shelters')).toBe('shelters')
   })
 
   it('does not redirect when the role does not require MFA', async () => {
     mockState.rolePolicyRequired = false
     mockState.factors = []
-    expect(await navigateAs('org_admin', '/admin')).toBe('admin')
+    expect(await navigateAs('org_admin', '/shelters')).toBe('shelters')
   })
 })

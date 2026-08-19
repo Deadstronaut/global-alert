@@ -1,4 +1,18 @@
 {
+  "mainLayout": {
+    "header": {
+      "location": "Location"
+    },
+    "hazardNav": {
+      "label": "Hazard types"
+    },
+    "hazardSummary": {
+      "label": "Selected hazards summary",
+      "activeCount": "Active events",
+      "topSeverity": "Top severity",
+      "noSeverity": "None"
+    }
+  },
   "app": {
     "title": "Multi-Hazard Early Warning Systems",
     "subtitle": "Multi-Hazard Early Warning Systems",
@@ -93,6 +107,9 @@
     "volcano": "Volcano",
     "epidemic": "Epidemic",
     "landslide": "Landslide",
+    "dust_storm": "Dust Storm",
+    "heatwave": "Heatwave",
+    "coldwave": "Coldwave",
     "all": "All Disasters"
   },
   "severity": {
@@ -101,6 +118,18 @@
     "moderate": "Moderate",
     "low": "Low",
     "minimal": "Minimal"
+  },
+  "hazardEventsList": {
+    "openTitle": "List Events",
+    "empty": "No events match these filters.",
+    "colSeverity": "Severity",
+    "colTitle": "Event",
+    "colMagnitude": "Magnitude",
+    "colSource": "Source",
+    "colTime": "Time",
+    "colCountry": "Country",
+    "allCountries": "All Countries",
+    "noCountryData": "No country data"
   },
   "sidebar": {
     "title": "Disaster Layers",
@@ -124,8 +153,8 @@
     "layerInactiveHint": "Turn this layer on to see its details.",
     "loadingEllipsis": "Loading…",
     "calendar": "Calendar",
-    "view2D": "View 2D",
-    "view3D": "View 3D",
+    "view2D": "2D",
+    "view3D": "3D",
     "toggle3DAria": "Toggle 3D Globe Mode",
     "filters": "Filters",
     "magnitude": "MAGNITUDE",
@@ -145,6 +174,15 @@
     "viewModeSection": "View Mode",
     "modeNormal": "Status",
     "modeHexagon": "Hexbin",
+    "modeChoropleth": "Country Risk",
+    "modeTerminator": "Day/Night Line",
+    "modeNightLights": "Night Lights",
+    "modeTimeline": "Timeline",
+    "modeDynamicAtmosphere": "Dynamic Atmosphere",
+    "modeHoverCards": "Info Cards",
+    "modeFlights": "Live Flights",
+    "globeLayersGroup": "Globe layers",
+    "modeFlightsStale": "Live Flights (data unavailable — showing last known)",
     "modeHeatmap": "Heatmap",
     "locationAlertSection": "Location & Alerts",
     "wholeCountry": "Whole Country",
@@ -178,11 +216,12 @@
     "activeDroughts": "Drought Zones",
     "activeFoodSecurity": "Food Security Alerts",
     "totalEvents": "Total Events",
-    "sourcesOnline": "Sources Online"
+    "sourcesOnline": "Sources Online",
+    "sourcesOnlineDetails": "View data source health report"
   },
   "settings": {
     "title": "Settings",
-    "appearance": "Appearance & Accessibility",
+    "appearance": "Accessibility",
     "quickAccess": "Quick Access",
     "capAlerts": "CAP Alerts",
     "incidentTracking": "Incident Tracking",
@@ -242,6 +281,10 @@
     "minutesAgo": "{count} minutes ago",
     "hoursAgo": "{count} hours ago",
     "daysAgo": "{count} days ago"
+  },
+  "accountMenu": {
+    "clearCache": "Clear Cache",
+    "clearCacheConfirm": "All locally cached disaster data on this device will be deleted and the page will reload. Continue?"
   },
   "accountSecurity": {
     "title": "Account Security",
@@ -305,7 +348,8 @@
       "regionCodePlaceholder": "Istanbul, Kadikoy...",
       "radiusKm": "Warning Radius (km)",
       "radiusKmPlaceholder": "e.g. 25",
-      "radiusInvalid": "Warning radius must be a positive number."
+      "radiusInvalid": "Warning radius must be a positive number.",
+      "titleRequired": "Title is required."
     },
     "status": {
       "draft": "Draft",
@@ -520,6 +564,8 @@
       "unclassified": "unclassified",
       "collapse": "Collapse impact analysis",
       "expand": "Expand impact analysis",
+      "expandWide": "Widen panel",
+      "contract": "Narrow panel",
       "autoSummaryTitle": "Affected Resources (Automatic)",
       "autoSummaryEmpty": "No exposure datasets available for this country.",
       "detailedTitle": "Detailed Analysis",
@@ -536,7 +582,7 @@
     },
     "geocoding": {
       "label": "Search country, province, address, or coordinates on the map",
-      "placeholder": "Search country, province, address, or coordinates...",
+      "placeholder": "e.g. Turkey, Istanbul, Ankara, 39.92, 32.85",
       "help": "Location search: e.g. Turkey, Istanbul, Ankara, 39.92, 32.85",
       "search": "Search",
       "searching": "Searching...",
@@ -781,7 +827,7 @@
     "impactSnapshotUnavailable": "Impact data was not available at broadcast time."
   },
   "portal": {
-    "title": "🌍 GEWS — Active Alerts",
+    "title": "🌍 MHEWS — Active Alerts",
     "subtitle": "Public Alert Portal",
     "empty": "There are no active alerts right now.",
     "issuedLabel": "Issued",
@@ -915,6 +961,7 @@
     "noHeadline": "(no headline)",
     "viewRaw": "View raw CAP payload",
     "promote": "Promote to draft",
+    "reject": "Reject",
     "noAlerts": "No inbound alerts received yet.",
     "statusValue": {
       "received": "Received",
@@ -1355,7 +1402,12 @@
   "assetCategory": {
     "critical_infrastructure_health": "Health Facility",
     "critical_infrastructure_education": "Education Facility",
-    "critical_infrastructure_emergency": "Emergency Service"
+    "critical_infrastructure_emergency": "Emergency Service",
+    "critical_infrastructure_transport": "Airport",
+    "critical_infrastructure_industrial": "Organized Industrial Zone",
+    "critical_infrastructure_military": "Military/Security Facility",
+    "critical_infrastructure_fuel": "Fuel Station",
+    "critical_infrastructure_cemetery": "Cemetery"
   },
   "facilityType": {
     "hospital": "Hospital",
@@ -1367,6 +1419,10 @@
     "police": "Police Station",
     "townhall": "Town Hall",
     "government_office": "Government Office",
+    "aerodrome": "Airport",
+    "cemetery": "Cemetery",
+    "organized_industrial_zone": "Organized Industrial Zone",
+    "fuel": "Fuel Station",
     "unknown": "Unknown"
   },
   "ai": {
@@ -1411,13 +1467,17 @@
     "greetingChatOnly": "Hi, I'm Deadstro! No guided task is available on this page, but you can chat with me below.",
     "typePlaceholder": "Type a message...",
     "send": "Send",
-    "noCountryContext": "No country context is configured in this browser yet — open AdminView's \"AI Yardımı\" tab and enable a capability for a country first.",
+    "noCountryContext": "No country context is configured in this browser yet — open the Dashboard panel's \"AI Yardımı\" tab and enable a capability for a country first.",
     "waitingServer": "Waiting for a response from the server..."
   },
   "flowPanel": {
     "forecast": {
       "rowLabel": "Forecast",
       "dayLabel": "Day {n} · {date}",
+      "rangeLabel": "Range: {min}–{max} {unit}",
+      "play": "Play forecast days",
+      "pause": "Pause",
+      "loadingFrames": "Loading forecast frames…",
       "noData": "No forecast data for this day yet.",
       "panelExpand": "Open forecast panel",
       "panelCollapse": "Close forecast panel"
@@ -1427,6 +1487,14 @@
     "toggleLabel": "Wind",
     "currentsToggleLabel": "Ocean Currents",
     "panelTitle": "Wind & Currents",
+    "masterToggleOff": "Turn everything off",
+    "masterToggleAllOff": "Nothing selected",
+    "masterClearLabel": "Clear",
+    "directionLabel": "Direction",
+    "spreadNoDirection": "No clear spread direction right now",
+    "spreadAreaTitle": "Possible impact area (wind-driven)",
+    "spreadAsOf": "As of: {time}",
+    "spreadAnalyzeButton": "Analyze in Impact Analysis",
     "panelExpand": "Open wind control panel",
     "panelCollapse": "Close wind control panel",
     "unavailable": "Data currently unavailable",
@@ -1448,5 +1516,58 @@
     "pm25ToggleLabel": "PM2.5 (Air Quality)",
     "modeDisabledNote": "No data source for this mode yet",
     "waveHeightLegendLabel": "Wave Height"
+  },
+  "lateralRisk": {
+    "sectionTitle": "Potential secondary risks",
+    "noFindings": "No significant secondary risk detected",
+    "finding": {
+      "fire_spread_potential": {
+        "title": "Fire spread/ignition risk potential",
+        "description": "Active drought or heatwave conditions nearby may increase fire risk."
+      },
+      "epidemic_risk_potential": {
+        "title": "Epidemic risk potential",
+        "description": "Standing water and sanitation disruption after a flood may increase disease risk."
+      },
+      "access_capacity_risk_potential": {
+        "title": "Access/capacity risk potential",
+        "description": "Low road density near a critical facility may limit emergency access."
+      },
+      "wind_spread_potential": {
+        "title": "Wind-driven spread potential",
+        "description": "Wind blowing toward {deg}° at {speed} m/s may drive spread in that direction."
+      },
+      "tsunami_risk_potential": {
+        "title": "Tsunami risk potential",
+        "description": "Rough coastal-proximity estimate only — not a real wave simulation."
+      }
+    },
+    "institution": {
+      "fireDepartment": "Fire department",
+      "health": "Health services",
+      "disasterManagement": "Disaster management",
+      "waterInfrastructure": "Water/infrastructure services"
+    },
+    "triggerLabel": "Critical cross-hazard risk detected — view forecast report",
+    "viewReportButton": "View forecast report",
+    "menu": {
+      "title": "Critical events — {country}"
+    },
+    "report": {
+      "title": "Cross-hazard forecast report",
+      "disclaimer": "HEURISTIC FORECAST — not a real physical simulation, not verified, a pilot/test feature.",
+      "loading": "Generating report…",
+      "sectionRegions": "Affected cities/towns",
+      "sectionFacilities": "Affected critical facilities",
+      "sectionFindings": "Potential secondary risks",
+      "sectionInstitutions": "Institution types that may need to be informed",
+      "noRegions": "No affected city/town could be determined",
+      "noFacilities": "No critical facilities found nearby",
+      "noInstitutions": "No institution type suggested",
+      "summaryFindings": "Findings",
+      "summaryRegions": "Regions",
+      "summaryFacilities": "Facilities",
+      "summaryPopulation": "Population"
+    }
   }
 }

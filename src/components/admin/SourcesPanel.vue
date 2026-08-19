@@ -1,6 +1,7 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { useAuthStore } from '@/stores/auth.js'
+import { useUIStore } from '@/stores/ui.js'
 import { useSourcesStore } from '@/stores/sources.js'
 import { groupSourcesByScope, sortSources, SOURCE_SORT_MODES } from '@/utils/sourceScope.js'
 import { computeDisplayState } from '@/utils/sourceDisplayState.js'
@@ -9,7 +10,17 @@ import SourceFormModal from '@/components/admin/SourceFormModal.vue'
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
 import { supabase } from '@/services/api/config.js'
 
+const props = defineProps({
+  // Set from the footer's "X/Y kaynaklar çevrimiçi" click (FooterStatusRow.vue
+  // -> uiStore.openDashboardAdminTab('sources', { openHealth: true })) —
+  // runs the same read-only diagnostic the 🩺 button below triggers
+  // manually, so that click lands on an already-open report instead of just
+  // the bare source grid.
+  autoOpenHealth: { type: Boolean, default: false },
+})
+
 const auth = useAuthStore()
+const uiStore = useUIStore()
 const sourcesStore = useSourcesStore()
 
 const canAdmin = computed(() => auth.isSuperAdmin || auth.session?.role === 'country_admin')
@@ -197,8 +208,14 @@ function closeAudit() {
   auditData.value = null
 }
 
-onMounted(() => {
-  if (!sourcesStore.sources.length) sourcesStore.fetchSources()
+onMounted(async () => {
+  if (!sourcesStore.sources.length) await sourcesStore.fetchSources()
+  if (props.autoOpenHealth) {
+    runHealthDiagnostic()
+    // One-shot: clear so revisiting this tab later in the same panel
+    // session doesn't keep re-opening the report on its own.
+    uiStore.dashboardPanelAutoOpenHealth = false
+  }
 })
 </script>
 

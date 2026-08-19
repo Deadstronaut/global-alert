@@ -65,7 +65,7 @@ export class NotificationService {
         try {
             const {data, error} = await supabase.functions.invoke('send-alert', {
                 body: {
-                    title: `GEWS Uyarısı: ${disaster.type.toUpperCase()}`,
+                    title: `MHEWS Uyarısı: ${disaster.type.toUpperCase()}`,
                     body: `${disaster.title} konumunuza yaklaştı! Şiddet: ${disaster.severity}`,
                     severity: disaster.severity,
                     tokens: [token] // Target this specific device

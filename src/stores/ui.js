@@ -24,6 +24,21 @@ export const useUIStore = defineStore('ui', () => {
     // Tenant country config — null means global view
     const activeCountryConfig = ref(null);
 
+    // Spec 071 — the cross-hazard forecast report (LateralRiskReport.vue) is
+    // mounted once (in AppHeader.vue, Teleport'ed to <body>) but can be
+    // opened from two independent, sibling call sites: AppHeader's own
+    // header-level critical-event trigger, AND MapView's per-selected-event
+    // "Raporu Görüntüle" button in the Impact Analysis dock. Neither has a
+    // direct prop path to the other, so this shared store state (not a
+    // second component instance) is the connecting point.
+    const lateralRiskReportEvent = ref(null); // DisasterEvent | null
+    function openLateralRiskReport(event) {
+        if (event) lateralRiskReportEvent.value = event;
+    }
+    function closeLateralRiskReport() {
+        lateralRiskReportEvent.value = null;
+    }
+
     // Sidebar
     const sidebarOpen = ref(true);
     const sidebarCollapsed = ref(false);
@@ -34,6 +49,20 @@ export const useUIStore = defineStore('ui', () => {
     const impactPanelCollapsed = ref(false);
     function toggleImpactPanel() {
         impactPanelCollapsed.value = !impactPanelCollapsed.value;
+        if (impactPanelCollapsed.value) impactPanelExpanded.value = false;
+    }
+
+    // 2026-08-19 ask: the dock got too cramped once spec 071's secondary-
+    // risk block landed on top of the existing Impact Analysis content
+    // ("çok daraldı burası") — a wide-drawer mode instead of a full modal,
+    // since the map behind it should stay visible/interactive (unlike
+    // LateralRiskReport.vue's dimmed backdrop). Expanding un-collapses the
+    // dock (the two states don't make sense combined); collapsing again
+    // resets expanded back to false so it doesn't silently reopen wide.
+    const impactPanelExpanded = ref(false);
+    function toggleImpactPanelExpanded() {
+        impactPanelExpanded.value = !impactPanelExpanded.value;
+        if (impactPanelExpanded.value) impactPanelCollapsed.value = false;
     }
 
     // Panels
@@ -89,6 +118,38 @@ export const useUIStore = defineStore('ui', () => {
         showCommunityReports.value = !showCommunityReports.value;
     }
 
+    // Country-level choropleth (globe view only) — colors each country by its
+    // active event weight (country_code already on every event, no extra
+    // fetch needed). Off by default, same reasoning as showShelters: don't
+    // clutter the globe before the user asks for it.
+    const showChoropleth = ref(false);
+    function toggleChoropleth() {
+        showChoropleth.value = !showChoropleth.value;
+    }
+
+    // Day/night terminator line and real sun-relative night lights (globe
+    // view only), independently toggleable from GlobeView's own layer dock.
+    // Off by default (2026-08-19 feedback) — every globe layer toggle
+    // starts off so the first-look globe matches what the user already
+    // knew, same reasoning as showShelters/showChoropleth above.
+    const showTerminator = ref(false);
+    function toggleTerminator() {
+        showTerminator.value = !showTerminator.value;
+    }
+    const showNightLights = ref(false);
+    function toggleNightLights() {
+        showNightLights.value = !showNightLights.value;
+    }
+
+    // Live flight tracking (spec 072, globe view only) — real aircraft
+    // positions from fetch-live-flights (OpenSky), off by default like every
+    // other globe layer toggle. Also drivable from the top-left
+    // QuickAccessGrid (same state, second entry point — spec FR-009).
+    const showFlights = ref(false);
+    function toggleFlights() {
+        showFlights.value = !showFlights.value;
+    }
+
     // Animate row (Wind/Currents/Waves) — single-select "radio button with
     // toggle-off" (spec 053/054 follow-up, corrected 2026-08-05): earlier
     // this was three fully-independent flags, then earth.nullschool.net's
@@ -101,9 +162,27 @@ export const useUIStore = defineStore('ui', () => {
     // single nullable ref (not three booleans) makes mutual exclusion
     // automatic instead of something every toggle function has to
     // remember to enforce.
+    // Spec 070 (Rüzgar Yönüne Dayalı Yayılım Tahmini) US1 — the wind
+    // direction at the map's current center, decoded by MapView.vue
+    // (windDirectionAtPoint.js) whenever the Wind Animate layer is on and
+    // the map moves. Lives here (not local to MapView.vue) so
+    // FlowControlPanel.vue can show it next to its own existing wind
+    // speed/source info without a prop-drilling path between two siblings
+    // — same reasoning as activeOverlayKey/selectedHeight already living
+    // here for the same two components.
+    const currentWindDirection = ref(null); // { windSpeed, windDirectionDeg, issuedAt } | null
+    function setCurrentWindDirection(value) {
+        currentWindDirection.value = value;
+    }
+
     const activeAnimateLayer = ref(null); // null | 'wind' | 'ocean_current' | 'wave'
     function toggleAnimateLayer(key) {
         activeAnimateLayer.value = activeAnimateLayer.value === key ? null : key;
+        // Turning Wind off — either directly, or by switching to a different
+        // Animate layer entirely — makes the last-computed direction stale.
+        // Cleared rather than left as a frozen arrow pointing a way the wind
+        // isn't necessarily blowing anymore once the layer driving it is gone.
+        if (activeAnimateLayer.value !== 'wind') currentWindDirection.value = null;
     }
     // Read-only computed booleans, kept so MapView.vue's existing per-layer
     // watches (`() => uiStore.windEnabled`, etc.) didn't need to change
@@ -147,6 +226,32 @@ export const useUIStore = defineStore('ui', () => {
         activeOverlayKey.value = null;
         selectedForecastVariable.value = null;
     }
+
+    // spec 069 follow-up: FlowControlPanel.vue's own "master off" button —
+    // user report: too many independent selections in this panel (Overlay,
+    // Height, Mode, Animate) to hunt down and turn off one at a time.
+    // Unlike resetFlowSelections above (used internally when Mode/view
+    // itself changes, so it deliberately leaves Mode/Height alone — they're
+    // about to be reset to a NEW value by whatever called it), this is the
+    // explicit "clear everything back to its opening-state default" action,
+    // so it also resets Mode and Height, which resetFlowSelections never
+    // touched.
+    function resetAllFlowSettings() {
+        selectedMode.value = 'air';
+        selectedHeight.value = 'Sfc';
+        resetFlowSelections();
+    }
+    // True while at least one FlowControlPanel.vue selection differs from
+    // its opening-state default — drives the panel header's red/green
+    // status indicator (green = something's on, red = nothing is).
+    const hasActiveFlowSelections = computed(
+        () =>
+            activeAnimateLayer.value !== null ||
+            activeOverlayKey.value !== null ||
+            selectedForecastVariable.value !== null ||
+            selectedMode.value !== 'air' ||
+            selectedHeight.value !== 'Sfc',
+    );
 
     // Height selector (spec 054 follow-up, 2026-08-06) — 'Sfc' or a GFS
     // pressure-level string ('1000'|'850'|'700'|'500'|'250'|'70'|'10').
@@ -362,6 +467,21 @@ export const useUIStore = defineStore('ui', () => {
         dashboardPanelOpen.value = !dashboardPanelOpen.value;
     }
 
+    // Deep-link into a specific admin tab inside the Dashboard panel (e.g.
+    // footer's "X/Y kaynaklar çevrimiçi" -> Sources tab, health report
+    // pre-run) — admin no longer lives on its own /admin page, it's a tab
+    // inside this panel (DashboardPlaceholder.vue), so opening it needs to
+    // both show the panel and select the tab. Consumed once by
+    // DashboardPlaceholder's watcher, then cleared, so reopening the panel
+    // later (e.g. via the header toggle) lands on the overview as before.
+    const dashboardPanelInitialTab = ref(null);
+    const dashboardPanelAutoOpenHealth = ref(false);
+    function openDashboardAdminTab(tabId, { openHealth = false } = {}) {
+        dashboardPanelInitialTab.value = tabId;
+        dashboardPanelAutoOpenHealth.value = openHealth;
+        dashboardPanelOpen.value = true;
+    }
+
     function setCountryConfig(config) {
         activeCountryConfig.value = config;
     }
@@ -375,10 +495,15 @@ export const useUIStore = defineStore('ui', () => {
         sidebarCollapsed,
         impactPanelCollapsed,
         toggleImpactPanel,
+        impactPanelExpanded,
+        toggleImpactPanelExpanded,
         alertPanelOpen,
         settingsPanelOpen,
         dashboardPanelOpen,
         toggleDashboardPanel,
+        dashboardPanelInitialTab,
+        dashboardPanelAutoOpenHealth,
+        openDashboardAdminTab,
         emergencyPopupOpen,
         activeEmergency,
         darkMode,
@@ -395,6 +520,16 @@ export const useUIStore = defineStore('ui', () => {
         toggleShelters,
         showCommunityReports,
         toggleCommunityReports,
+        showChoropleth,
+        toggleChoropleth,
+        showTerminator,
+        toggleTerminator,
+        showNightLights,
+        toggleNightLights,
+        showFlights,
+        toggleFlights,
+        currentWindDirection,
+        setCurrentWindDirection,
         activeAnimateLayer,
         toggleAnimateLayer,
         windEnabled,
@@ -413,6 +548,8 @@ export const useUIStore = defineStore('ui', () => {
         toggleForecastPanel,
         activeOverlayKey,
         toggleOverlay,
+        resetAllFlowSettings,
+        hasActiveFlowSelections,
         selectedForecastVariable,
         selectedForecastDayIndex,
         setSelectedForecastVariable,
@@ -431,6 +568,9 @@ export const useUIStore = defineStore('ui', () => {
         toggleAlertPanel,
         toggleSettings,
         activeCountryConfig,
+        lateralRiskReportEvent,
+        openLateralRiskReport,
+        closeLateralRiskReport,
         setCountryConfig
     };
 });

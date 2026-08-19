@@ -1,4 +1,18 @@
 {
+  "mainLayout": {
+    "header": {
+      "location": "位置"
+    },
+    "hazardNav": {
+      "label": "灾害类型"
+    },
+    "hazardSummary": {
+      "label": "已选灾害摘要",
+      "activeCount": "活跃事件",
+      "topSeverity": "最高严重度",
+      "noSeverity": "无"
+    }
+  },
   "app": {
     "title": "Multi-Hazard Early Warning Systems",
     "subtitle": "Multi-Hazard Early Warning Systems",
@@ -93,7 +107,10 @@
     "cyclone": "气旋",
     "volcano": "火山",
     "epidemic": "流行病",
-    "landslide": "山体滑坡"
+    "landslide": "山体滑坡",
+    "dust_storm": "沙尘暴",
+    "heatwave": "热浪",
+    "coldwave": "寒潮"
   },
   "severity": {
     "critical": "极端",
@@ -124,8 +141,8 @@
     "layerInactiveHint": "打开此图层以查看详情。",
     "loadingEllipsis": "加载中…",
     "calendar": "日历",
-    "view2D": "2D 视图",
-    "view3D": "3D 视图",
+    "view2D": "2D",
+    "view3D": "3D",
     "toggle3DAria": "切换 3D 地球模式",
     "filters": "筛选条件",
     "magnitude": "震级",
@@ -138,6 +155,15 @@
     "viewModeSection": "视图模式",
     "modeNormal": "状态",
     "modeHexagon": "六边形",
+    "modeChoropleth": "国家风险",
+    "modeTerminator": "昼夜分界线",
+    "modeNightLights": "夜间灯光",
+    "modeTimeline": "时间轴",
+    "modeDynamicAtmosphere": "动态大气",
+    "modeHoverCards": "信息卡",
+    "modeFlights": "实时航班",
+    "globeLayersGroup": "地球图层",
+    "modeFlightsStale": "实时航班（数据不可用 — 显示最后已知数据）",
     "modeHeatmap": "热图",
     "locationAlertSection": "位置与警报",
     "wholeCountry": "全国",
@@ -171,11 +197,12 @@
     "activeDroughts": "干旱区",
     "totalEvents": "总计事件",
     "sourcesOnline": "在线来源",
+    "sourcesOnlineDetails": "查看数据源健康报告",
     "activeFoodSecurity": "粮食安全警报"
   },
   "settings": {
     "title": "设置",
-    "appearance": "外观与无障碍",
+    "appearance": "无障碍",
     "quickAccess": "快速访问",
     "capAlerts": "CAP 警报",
     "incidentTracking": "事件跟踪",
@@ -233,6 +260,10 @@
     "minutesAgo": "{count} 分钟前",
     "hoursAgo": "{count} 小时前",
     "daysAgo": "{count} 天前"
+  },
+  "accountMenu": {
+    "clearCache": "清除缓存",
+    "clearCacheConfirm": "此设备上本地缓存的所有灾害数据将被删除，页面将重新加载。是否继续？"
   },
   "accountSecurity": {
     "title": "账户安全",
@@ -296,7 +327,8 @@
       "regionCodePlaceholder": "伊斯坦布尔，卡德柯伊...",
       "radiusKm": "预警半径 (公里)",
       "radiusKmPlaceholder": "例如 25",
-      "radiusInvalid": "预警半径必须为正数。"
+      "radiusInvalid": "预警半径必须为正数。",
+      "titleRequired": "标题为必填项。"
     },
     "status": {
       "draft": "草稿",
@@ -510,11 +542,13 @@
       "breakdownEmpty": "没有细分数据。",
       "unclassified": "未分类",
       "collapse": "收起影响分析",
-      "expand": "展开影响分析"
+      "expand": "展开影响分析",
+      "expandWide": "加宽面板",
+      "contract": "收窄面板"
     },
     "geocoding": {
       "label": "在地图上搜索国家、省份、地址或坐标",
-      "placeholder": "搜索国家、省份、地址或坐标...",
+      "placeholder": "例如 Turkey、Istanbul、Ankara、39.92, 32.85",
       "help": "位置搜索：例如 Turkey、Istanbul、Ankara、39.92, 32.85",
       "search": "搜索",
       "searching": "搜索中...",
@@ -680,7 +714,7 @@
     "impactSnapshotUnavailable": "广播时影响数据不可用。"
   },
   "portal": {
-    "title": "🌍 GEWS — 当前警报",
+    "title": "🌍 MHEWS — 当前警报",
     "subtitle": "公共警报门户",
     "empty": "目前没有活动警报。",
     "issuedLabel": "发布时间",
@@ -1171,7 +1205,12 @@
   "assetCategory": {
     "critical_infrastructure_health": "卫生设施",
     "critical_infrastructure_education": "教育机构",
-    "critical_infrastructure_emergency": "应急服务"
+    "critical_infrastructure_emergency": "应急服务",
+    "critical_infrastructure_transport": "机场",
+    "critical_infrastructure_industrial": "有组织工业区",
+    "critical_infrastructure_military": "军事/安保设施",
+    "critical_infrastructure_fuel": "加油站",
+    "critical_infrastructure_cemetery": "墓地"
   },
   "facilityType": {
     "hospital": "医院",
@@ -1183,6 +1222,10 @@
     "police": "警察局",
     "townhall": "市政厅",
     "government_office": "政府办公室",
+    "aerodrome": "机场",
+    "cemetery": "墓地",
+    "organized_industrial_zone": "有组织工业区",
+    "fuel": "加油站",
     "unknown": "未知"
   },
   "ai": {
@@ -1227,13 +1270,17 @@
     "greetingChatOnly": "你好,我是 Deadstro!此页面没有可用的引导任务,但你可以在下方与我聊天。",
     "typePlaceholder": "输入消息...",
     "send": "发送",
-    "noCountryContext": "此浏览器中尚未配置国家上下文 — 请先在 AdminView 的“AI Yardımı”标签页中为某个国家启用一项功能。",
+    "noCountryContext": "此浏览器中尚未配置国家上下文 — 请先在面板的“AI Yardımı”标签页中为某个国家启用一项功能。",
     "waitingServer": "正在等待服务器响应..."
   },
   "flowPanel": {
     "forecast": {
       "rowLabel": "预报",
       "dayLabel": "第 {n} 天 · {date}",
+      "rangeLabel": "范围: {min}–{max} {unit}",
+      "play": "播放预报天数",
+      "pause": "暂停",
+      "loadingFrames": "正在加载预报帧…",
       "noData": "该日期暂无预报数据。",
       "panelExpand": "打开预报面板",
       "panelCollapse": "关闭预报面板"
@@ -1243,6 +1290,14 @@
     "toggleLabel": "风",
     "currentsToggleLabel": "洋流",
     "panelTitle": "风与洋流",
+    "masterToggleOff": "全部关闭",
+    "masterToggleAllOff": "未选择任何内容",
+    "masterClearLabel": "清除",
+    "directionLabel": "风向",
+    "spreadNoDirection": "目前没有明确的蔓延方向",
+    "spreadAreaTitle": "可能影响区域（受风力影响）",
+    "spreadAsOf": "更新于：{time}",
+    "spreadAnalyzeButton": "在影响分析中查看",
     "panelExpand": "打开风力控制面板",
     "panelCollapse": "关闭风力控制面板",
     "unavailable": "数据暂不可用",
@@ -1264,5 +1319,58 @@
     "pm25ToggleLabel": "PM2.5(空气质量)",
     "modeDisabledNote": "该模式暂无数据源",
     "waveHeightLegendLabel": "波高"
+  },
+  "lateralRisk": {
+    "sectionTitle": "潜在次生风险",
+    "noFindings": "未检测到明显的次生风险",
+    "finding": {
+      "fire_spread_potential": {
+        "title": "潜在火灾蔓延风险",
+        "description": "附近存在干旱或热浪等活跃状况可能增加火灾风险。"
+      },
+      "epidemic_risk_potential": {
+        "title": "潜在疫情风险",
+        "description": "洪水后的积水和卫生设施中断可能增加疾病风险。"
+      },
+      "access_capacity_risk_potential": {
+        "title": "潜在通道/容量风险",
+        "description": "关键设施附近道路密度较低可能限制紧急通道。"
+      },
+      "wind_spread_potential": {
+        "title": "风力驱动的蔓延潜力",
+        "description": "风向 {deg}°，风速 {speed} m/s——蔓延可能沿此方向发展。"
+      },
+      "tsunami_risk_potential": {
+        "title": "潜在海啸风险",
+        "description": "仅为粗略的沿海距离估算——并非真实的海浪模拟。"
+      }
+    },
+    "institution": {
+      "fireDepartment": "消防部门",
+      "health": "卫生服务机构",
+      "disasterManagement": "灾害管理部门",
+      "waterInfrastructure": "供水/基础设施服务"
+    },
+    "triggerLabel": "检测到关键跨灾害风险——查看预测报告",
+    "viewReportButton": "查看预测报告",
+    "menu": {
+      "title": "关键事件 — {country}"
+    },
+    "report": {
+      "title": "跨灾害预测报告",
+      "disclaimer": "启发式预测——并非真实的物理模拟，未经验证，属于试点/测试功能。",
+      "loading": "正在生成报告…",
+      "sectionRegions": "受影响的城市/城镇",
+      "sectionFacilities": "受影响的关键设施",
+      "sectionFindings": "潜在次生风险",
+      "sectionInstitutions": "可能需要告知的机构类型",
+      "noRegions": "无法确定受影响的城市/城镇",
+      "noFacilities": "附近未发现关键设施",
+      "noInstitutions": "未提出建议的机构类型",
+      "summaryFindings": "发现项",
+      "summaryRegions": "地区",
+      "summaryFacilities": "设施",
+      "summaryPopulation": "人口"
+    }
   }
 }

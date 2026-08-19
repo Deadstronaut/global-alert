@@ -103,6 +103,7 @@ from overlay_texture import (
     netcdf_sulfate_aod_to_overlay_texture,
 )
 from wave_vector import wave_grib2_to_flow_texture
+from hazard_detector import detect_dust_storm_events, detect_temperature_extreme_events
 
 # GFS-native scalar Overlay fields (spec 054 follow-up, 2026-08-05) — each
 # entry is (fetch_fn, convert_fn); dict-driven so run_once_overlay doesn't
@@ -520,6 +521,23 @@ def run_once_overlay(overlay_type: str, level: str = "sfc") -> None:
     print(f"[wind-importer] Uploaded overlay texture to {OVERLAY_STORAGE_BUCKET}/{storage_path}")
     _insert_overlay_snapshot_row(overlay_type, level, issued_at, texture, storage_path)
     print(f"[wind-importer] Inserted overlay_snapshots row for {overlay_type}@{level} @ {issued_at.isoformat()}")
+
+    # Hazard detection (2026-08-18, dust_storm/heatwave/coldwave) — reuses
+    # the SAME raw_bytes already fetched above for the Overlay texture, no
+    # second network fetch. 'temperature' only at 'sfc': the heatwave/
+    # coldwave hazard types mean "at ground level", not "at 500mb", so a
+    # non-surface Height-selector run must not also emit hazard events.
+    # A detector failure must never take down an otherwise-successful
+    # overlay run (the texture above is already uploaded/inserted) — logged
+    # and swallowed, same convention as _run_once_forecast_15d's per-
+    # variable try/except.
+    try:
+        if overlay_type == "dust_aod":
+            detect_dust_storm_events(raw_bytes, issued_at)
+        elif overlay_type == "temperature" and level == "sfc":
+            detect_temperature_extreme_events(raw_bytes, issued_at)
+    except Exception as e:  # noqa: BLE001 - see comment above: must not fail an already-successful overlay run
+        print(f"[wind-importer] Hazard detection FAILED for {overlay_type}@{level}: {e}", file=sys.stderr)
 
 
 # Full GFS_OVERLAY_FIELDS expansion (spec 055 follow-up, 2026-08-06 — user

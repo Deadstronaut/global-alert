@@ -64,8 +64,17 @@ export const useDisasterStore = defineStore('disaster', () => {
   const aggregatedH3Data = ref([]);
 
   const activeLayers = ref(new Set([
-    'earthquake', 'wildfire', 'flood', 'drought', 'food_security', 
-    'tsunami', 'cyclone', 'volcano', 'epidemic', 'disaster'
+    'earthquake', 'wildfire', 'flood', 'drought', 'food_security',
+    'tsunami', 'cyclone', 'volcano', 'epidemic', 'disaster',
+    // dust_storm/heatwave/coldwave (2026-08-18) have no dedicated table —
+    // their rows live inside the generic 'disaster' bucket, so 'disaster'
+    // itself must stay in this Set for them to be FETCHED at all (as it
+    // already was). These 3 are listed separately here only so each has
+    // its own default-on entry for allEvents' per-subtype filter below —
+    // toggling one off does not touch 'disaster' itself, which still needs
+    // to stay on for every OTHER type that also falls into that bucket
+    // (e.g. landslide_susceptibility-adjacent future additions).
+    'dust_storm', 'heatwave', 'coldwave',
   ]));
   const activeSeverities = ref(new Set(['critical', 'high', 'moderate', 'low', 'minimal']));
 
@@ -134,14 +143,39 @@ export const useDisasterStore = defineStore('disaster', () => {
     disaster: otherDisasters,
   }));
 
+  // Hazard types with no dedicated table (their rows live inside the
+  // generic 'disaster' bucket, otherDisasters) but that DO get their own
+  // toggleable chip in HazardTypeNav.vue — unlike every other type in that
+  // bucket (e.g. a future landslide_susceptibility-adjacent addition),
+  // which stays permanently visible since it has no chip of its own.
+  const DISASTER_BUCKET_SUBTYPES = new Set(['dust_storm', 'heatwave', 'coldwave']);
+
   // ─────────────────────────────────────────
   // Computed
   // ─────────────────────────────────────────
   const allEvents = computed(() => {
     const rawEvents = [];
     for (const type of activeLayers.value) {
+      // dust_storm/heatwave/coldwave have no dedicated storeMap entry —
+      // their rows live inside 'disaster' (otherDisasters) and are handled
+      // by that branch below via DISASTER_BUCKET_SUBTYPES. They're still
+      // listed in activeLayers as their OWN toggle entries so
+      // isLayerActive()/toggleLayer() have something to flip; this loop
+      // just has nothing to fetch for them directly.
+      if (DISASTER_BUCKET_SUBTYPES.has(type)) continue;
       const store = storeMap.value[type];
-      if (store) rawEvents.push(...store.value);
+      if (!store) continue;
+      if (type === 'disaster') {
+        // The generic bucket can hold several real hazard types mixed
+        // together — only sub-filter the ones that have their own
+        // independent toggle (DISASTER_BUCKET_SUBTYPES); everything else
+        // in this bucket follows 'disaster' itself, same as before.
+        rawEvents.push(...store.value.filter(
+          (e) => !DISASTER_BUCKET_SUBTYPES.has(e.type) || activeLayers.value.has(e.type),
+        ));
+      } else {
+        rawEvents.push(...store.value);
+      }
     }
 
     // 1. Zaman aralığı sınırlarını hesapla
@@ -468,6 +502,23 @@ export const useDisasterStore = defineStore('disaster', () => {
     } else {
       aggregatedH3Data.value = [];
     }
+  }, {immediate: false});
+
+  // spec 069 follow-up: toggleLayer()/toggleSeverity() never refreshed
+  // aggregatedH3Data — MapView.vue's hex/"Petek" signal now prefers that
+  // server-aggregated data over the client-computed (and per-type-capped)
+  // h3Events fallback (see buildSignalMap in MapView.vue), so a stale
+  // aggregation would keep showing hex counts for whatever types/severities
+  // were active the last time fetchAggregatedData() happened to run instead
+  // of the user's current toggle state. Same country-history guard as the
+  // date-range watch above — same reasoning (get_aggregated_disasters has no
+  // bbox param; re-fetching here while a country's full history is already
+  // loaded client-side is redundant AND would send an unscoped global query).
+  watch([activeLayers, activeSeverities], () => {
+    const countryHistoryLoaded = activeBbox.value != null
+      && _countryHistoryLoadedForBboxKey.value === JSON.stringify(activeBbox.value);
+    if (countryHistoryLoaded) return;
+    fetchAggregatedData();
   }, {immediate: false});
 
   // ─────────────────────────────────────────

@@ -31,22 +31,33 @@
  * (checked their seed migration — genuinely never scheduled, not just
  * broken) — monthly here is a reasonable default (river/basin networks
  * change rarely), not inherited from anywhere.
+ *
+ * gdo-spi/kontur-population/wfp-hungermap added 2026-08-19, same reasoning:
+ * gdo-spi's Edge Function can't even deploy (geotiff/esm.sh bundler
+ * regression, same as worldpop/ghsl); kontur/wfp-hungermap deployed fine
+ * but had their own pg_cron left running alongside no Docker equivalent —
+ * moving them here and unscheduling the Supabase side (see the matching
+ * migration) leaves ingestion owned by exactly one engine per source.
  */
 import { runGhslImport } from './import-ghsl.ts'
 import { runChirpsImport } from './import-chirps.ts'
 import { runGlofasImport } from './import-glofas.ts'
 import { runGdoAnomalyImport } from './import-gdo-anomaly.ts'
+import { runGdoSpiImport } from './import-gdo-spi.ts'
 import { runWorldPopImport } from './import-worldpop.ts'
 import { runHydroBasinsImport } from './import-hydrobasins.ts'
 import { runHydroRiversImport } from './import-hydrorivers.ts'
 import { runOsmBuildingsImport } from './import-osm-buildings.ts'
 import { runOsmRoadsImport } from './import-osm-roads.ts'
 import { runOsmSheltersImport } from './import-osm-shelters.ts'
+import { runKonturPopulationImport } from './import-kontur-population.ts'
+import { runWfpHungerMapImport } from './import-wfp-hungermap.ts'
 
 const JOBS: Record<string, { name: string; run: () => Promise<void>; schedule: string }> = {
   ghsl: { name: 'ghsl-population-import', run: runGhslImport, schedule: '0 3 1 * *' },
   glofas: { name: 'glofas-river-discharge-import', run: runGlofasImport, schedule: '0 4 * * *' },
   'gdo-anomaly': { name: 'gdo-anomaly-import', run: runGdoAnomalyImport, schedule: '0 5 1 * *' },
+  'gdo-spi': { name: 'gdo-spi-import', run: runGdoSpiImport, schedule: '0 3 1 * *' }, // matches old import-gdo-spi-monthly
   chirps: { name: 'chirps-rainfall-import', run: runChirpsImport, schedule: '0 6 1 * *' },
   worldpop: { name: 'worldpop-population-import', run: runWorldPopImport, schedule: '0 7 1 * *' }, // matches old import-worldpop-monthly
   hydrobasins: { name: 'hydrobasins-import', run: runHydroBasinsImport, schedule: '0 8 1 * *' },
@@ -57,6 +68,8 @@ const JOBS: Record<string, { name: string; run: () => Promise<void>; schedule: s
   'osm-roads': { name: 'osm-roads-import', run: runOsmRoadsImport, schedule: '0 4 * * 7' }, // matches old import-osm-roads-weekly
   'osm-buildings': { name: 'osm-buildings-import', run: runOsmBuildingsImport, schedule: '0 5 * * 7' }, // matches old import-osm-buildings-weekly
   'osm-shelters': { name: 'osm-shelters-import', run: runOsmSheltersImport, schedule: '0 6 * * 7' },
+  'kontur-population': { name: 'kontur-population-import', run: runKonturPopulationImport, schedule: '0 7 * * 7' }, // matches old import-kontur-population-weekly
+  'wfp-hungermap': { name: 'wfp-hungermap-import', run: runWfpHungerMapImport, schedule: '0 * * * *' }, // matches old fetch-wfp-hungermap (hourly)
 }
 
 const jobKey = Deno.args[0]

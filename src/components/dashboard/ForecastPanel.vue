@@ -98,8 +98,17 @@ async function loadAllVariables() {
 }
 onMounted(loadAllVariables)
 
+// spec 069 follow-up: was `.slice(0, dayCount.value)` — a count of ARRAY
+// ELEMENTS, not a filter on the real `day` value. toDailySeries' own day
+// list is sparse (only the actually-ingested forecast steps, e.g. day
+// 1/3/5 — same as ForecastPanel.vue's own day list, not every day 1-15),
+// so "first 2 elements" could mean days [1, 3] rather than [1, 2] — live
+// report: slider said "2. Gün" while the chart below it showed "1. Gün"
+// through "3. Gün", visibly inconsistent with the slider's own label.
+// Filtering by the real day value instead guarantees the chart never shows
+// anything past the day the slider actually displays.
 function seriesFor(v) {
-  return toDailySeries(allVariableRows.value[v] ?? []).slice(0, dayCount.value)
+  return toDailySeries(allVariableRows.value[v] ?? []).filter((d) => d.day <= dayCount.value)
 }
 function latestValueFor(v) {
   const series = seriesFor(v)
@@ -230,11 +239,20 @@ const confidencePct = computed(() =>
       <div class="forecast-horizon-row">
         <div class="forecast-day-slider">
           <span class="forecast-day-slider-label">{{ t('dashboard.forecast.dayLabel', { n: dayCount }) }}</span>
+          <!-- spec 069 follow-up: step 1 -> 2. Real forecast_snapshots rows
+               only exist every OTHER day across the 15-day horizon (1, 3,
+               5, ... 15 — same underlying sparse cadence the small
+               ForecastPanel.vue's own day list already reflects), so a
+               step-1 slider routinely landed on a day with zero rows —
+               empty chart below, no indication why. Landing only on days
+               that actually have data keeps the slider and the chart it
+               drives consistent with each other (explicit ask: "yukarıdaki
+               aşağıdaki tutarlı olmalı"). -->
           <Slider
             :model-value="[dayCount]"
             :min="1"
             :max="15"
-            :step="1"
+            :step="2"
             class="forecast-day-slider-control"
             @update:model-value="onDaySliderChange"
           />
@@ -309,14 +327,28 @@ const confidencePct = computed(() =>
         </div>
 
         <p v-if="isVariableUnavailable(detailVariable)" class="forecast-status">{{ t('dashboard.forecast.unavailable') }}</p>
+        <!-- spec 069 follow-up: this bottom detail chart's own x-axis, specifically —
+             `num-ticks` was only a hint Unovis was free to thin out when it decided the
+             labels wouldn't fit (live report: "cetvel çok seyrek", only every ~4th day
+             showing, e.g. 5/9/13 instead of 1-15). `tick-values` forces every real day
+             in the series to get its own tick instead of Unovis silently dropping most
+             of them. `x-domain` pins the plotted line's own left/right edges to the
+             series' actual first/last day (was left to auto-pad, so day 1 and day 15
+             sat inset from the chart's corners instead of touching them — "solu bir se
+             en sağa 15 olmalı"). Deliberately scoped to ONLY this chart, not the 14
+             small sparkline cards above ("kalan bir yere elleme"). -->
         <ChartContainer v-else :config="detailChartConfig" class="aspect-auto h-35 w-full">
-          <VisXYContainer :data="detailSeries" :margin="{ left: 4, right: 4 }">
+          <VisXYContainer
+            :data="detailSeries"
+            :margin="{ left: 4, right: 4 }"
+            :x-domain="[detailSeries[0]?.day, detailSeries[detailSeries.length - 1]?.day]"
+          >
             <VisArea :x="(d) => d.day" :y="(d) => d.valueMax" color="var(--color-valueMax)" :opacity="0.3" />
             <VisLine :x="(d) => d.day" :y="(d) => d.valueMax" :color="() => 'var(--color-valueMax)'" />
             <VisAxis
               type="x"
-              :tick-format="(i) => detailSeries[i] !== undefined ? t('dashboard.forecast.dayLabel', { n: detailSeries[i].day }) : ''"
-              :num-ticks="detailSeries.length"
+              :tick-format="(v) => t('dashboard.forecast.dayLabel', { n: v })"
+              :tick-values="detailSeries.map((d) => d.day)"
               :grid-line="false"
               :domain-line="false"
             />

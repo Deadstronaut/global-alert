@@ -4,11 +4,47 @@ import { useI18n } from 'vue-i18n'
 import { useIntegrationTypesStore } from '@/stores/integrationTypes.js'
 import { useIntegrationSettingsStore, formatIntegrationStatus, mergeTemplateAndCustomFields } from '@/stores/integrationSettings.js'
 import { useAuthStore } from '@/stores/auth.js'
+import { isPushSupported, subscribeToPush, unsubscribeFromPush, getExistingPushSubscription } from '@/utils/webPush.js'
 
 const { t } = useI18n()
 const typesStore = useIntegrationTypesStore()
 const settingsStore = useIntegrationSettingsStore()
 const auth = useAuthStore()
+
+// 2026-08-19: moved here from the retired standalone /portal page — was a
+// public/anonymous opt-in there, now lives alongside the other dissemination
+// channel settings (WhatsApp etc. above) instead of its own separate page.
+// Subscribes THIS browser (whoever has this panel open) to web push for
+// whichever country is currently selected above — same webPush.js utility,
+// just scoped to selectedCountry instead of its own country dropdown.
+const pushSupported = isPushSupported()
+const pushSubscribed = ref(false)
+const pushBusy = ref(false)
+const pushError = ref(null)
+
+async function refreshPushState() {
+  if (!pushSupported) return
+  pushSubscribed.value = !!(await getExistingPushSubscription())
+}
+
+async function togglePush() {
+  pushError.value = null
+  pushBusy.value = true
+  try {
+    if (pushSubscribed.value) {
+      await unsubscribeFromPush()
+      pushSubscribed.value = false
+    } else {
+      if (!selectedCountry.value) { pushError.value = t('integrations.noCountry'); return }
+      await subscribeToPush({ countryCode: selectedCountry.value })
+      pushSubscribed.value = true
+    }
+  } catch (err) {
+    pushError.value = err.message
+  } finally {
+    pushBusy.value = false
+  }
+}
 
 const selectedCountry = ref(auth.isSuperAdmin ? '' : (auth.countryCode || ''))
 const selectedTypeCode = ref('')
@@ -28,6 +64,7 @@ const status = computed(() => {
 onMounted(() => {
   if (!typesStore.loaded) typesStore.fetchIntegrationTypes()
   if (selectedCountry.value) settingsStore.fetchSettings(selectedCountry.value)
+  refreshPushState()
 })
 
 watch(selectedCountry, (c) => {
@@ -102,6 +139,21 @@ async function save() {
     </div>
 
     <template v-if="selectedCountry">
+      <div v-if="pushSupported" class="push-optin">
+        <template v-if="pushSubscribed">
+          <span class="push-status">{{ t('portal.pushSubscribed') }}</span>
+          <button class="push-btn push-btn-secondary" :disabled="pushBusy" @click="togglePush">
+            {{ pushBusy ? '...' : t('portal.pushUnsubscribe') }}
+          </button>
+        </template>
+        <template v-else>
+          <button class="push-btn" :disabled="pushBusy" @click="togglePush">
+            {{ pushBusy ? '...' : t('portal.pushSubscribe') }}
+          </button>
+        </template>
+        <p v-if="pushError" class="form-error">{{ pushError }}</p>
+      </div>
+
       <label class="form-field"><span>{{ t('integrations.typeLabel') }}</span>
         <select v-model="selectedTypeCode">
           <option value="">{{ t('integrations.selectType') }}</option>
@@ -150,6 +202,11 @@ async function save() {
 
 <style scoped>
 .integrations-panel { padding: 4px 0; max-width: 520px; }
+.push-optin { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 18px; padding: 10px 12px; background: rgba(255,255,255,.03); border: 1px solid rgba(255,255,255,.1); border-radius: 8px; }
+.push-status { font-size: .8rem; color: #22c55e; }
+.push-btn { padding: 7px 14px; background: rgba(34,197,94,.2); border: 1px solid rgba(34,197,94,.4); border-radius: 8px; color: #22c55e; font-weight: 600; cursor: pointer; font-size: .8rem; }
+.push-btn:disabled { opacity: .45; cursor: not-allowed; }
+.push-btn-secondary { background: rgba(148,163,184,.15); border-color: rgba(148,163,184,.35); color: #94a3b8; }
 .panel-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; }
 .panel-header h3 { margin: 0; color: #e2e8f0; }
 .country-input {

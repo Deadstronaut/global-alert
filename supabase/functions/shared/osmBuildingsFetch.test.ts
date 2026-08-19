@@ -1,5 +1,14 @@
 import { assertEquals, assert } from 'https://deno.land/std@0.224.0/assert/mod.ts'
-import { mapOverpassResponseToBuildingRecords, buildQuery } from './osmBuildingsFetch.ts'
+import {
+  mapOverpassResponseToBuildingRecords,
+  buildQuery,
+  buildFuelQuery,
+  buildAerowayQuery,
+  buildCemeteryQuery,
+  buildOsbQuery,
+  buildMilitaryQuery,
+  buildExtendedQueries,
+} from './osmBuildingsFetch.ts'
 
 Deno.test('buildQuery: uppercases the country code for the ISO3166-1 filter', () => {
   const query = buildQuery('tr')
@@ -11,6 +20,29 @@ Deno.test('buildQuery: includes both the amenity and office=government branches'
   const query = buildQuery('mg')
   assert(query.includes('"amenity"~"^('))
   assert(query.includes('"office"="government"'))
+})
+
+Deno.test('buildQuery: core query excludes fuel (moved to the extended queries)', () => {
+  const query = buildQuery('tr')
+  assert(!query.includes('fuel'))
+})
+
+Deno.test('extended query builders: each targets one category with `out center;`, not `out geom;`', () => {
+  assert(buildFuelQuery('tr').includes('"amenity"="fuel"'))
+  assert(buildAerowayQuery('tr').includes('"aeroway"~"^('))
+  assert(buildCemeteryQuery('tr').includes('"landuse"~"^('))
+  assert(buildOsbQuery('tr').includes('"landuse"="industrial"]["name"~"Organize Sanayi"'))
+  assert(buildMilitaryQuery('tr').includes('nwr["military"]'))
+  for (const query of [buildFuelQuery('tr'), buildAerowayQuery('tr'), buildCemeteryQuery('tr'), buildOsbQuery('tr'), buildMilitaryQuery('tr')]) {
+    assert(query.includes('ISO3166-1"="TR"'))
+    assert(query.includes('out center;'))
+    assert(!query.includes('out geom;'))
+  }
+})
+
+Deno.test('buildExtendedQueries: returns one labeled query per extended category', () => {
+  const queries = buildExtendedQueries('tr')
+  assertEquals(queries.map((q) => q.label), ['fuel', 'aeroway', 'cemetery', 'osb', 'military'])
 })
 
 interface FixtureElement {
@@ -119,6 +151,86 @@ Deno.test('mapOverpassResponseToBuildingRecords: skips elements with no matching
   const records = mapOverpassResponseToBuildingRecords(FIXTURE_RESPONSE, 'TR')
   assert(!records.some((r) => r.properties.osmId === 444))
   assert(!records.some((r) => r.properties.osmId === 555))
+})
+
+const NEW_CATEGORY_FIXTURE: { elements: FixtureElement[] } = {
+  elements: [
+    { type: 'node', id: 3001, lat: 40.1, lon: 32.6, tags: { aeroway: 'aerodrome', name: 'Esenboğa Airport' } },
+    { type: 'node', id: 3002, lat: 40.2, lon: 32.7, tags: { landuse: 'cemetery', name: 'Karşıyaka Mezarlığı' } },
+    { type: 'node', id: 3003, lat: 40.3, lon: 32.8, tags: { amenity: 'fuel', name: 'Shell' } },
+    { type: 'node', id: 3004, lat: 40.4, lon: 32.9, tags: { landuse: 'industrial', name: 'Ankara Organize Sanayi Bölgesi' } },
+    // Same landuse=industrial tag but no OSB name match — must be skipped.
+    { type: 'node', id: 3005, lat: 40.5, lon: 33.0, tags: { landuse: 'industrial', name: 'Generic Depot Site' } },
+    { type: 'node', id: 3006, lat: 40.6, lon: 33.1, tags: { military: 'base', name: 'Example Base' } },
+  ],
+}
+
+Deno.test('mapOverpassResponseToBuildingRecords: aeroway=aerodrome maps to transport category', () => {
+  const records = mapOverpassResponseToBuildingRecords(NEW_CATEGORY_FIXTURE, 'TR')
+  const airport = records.find((r) => r.properties.osmId === 3001)!
+  assertEquals(airport.assetCategory, 'critical_infrastructure_transport')
+  assertEquals(airport.sector, 'transport')
+  assertEquals(airport.properties.facilityType, 'aerodrome')
+})
+
+Deno.test('mapOverpassResponseToBuildingRecords: landuse=cemetery maps to cemetery category', () => {
+  const records = mapOverpassResponseToBuildingRecords(NEW_CATEGORY_FIXTURE, 'TR')
+  const cemetery = records.find((r) => r.properties.osmId === 3002)!
+  assertEquals(cemetery.assetCategory, 'critical_infrastructure_cemetery')
+  assertEquals(cemetery.sector, 'cemetery')
+})
+
+Deno.test('mapOverpassResponseToBuildingRecords: amenity=fuel maps to fuel category', () => {
+  const records = mapOverpassResponseToBuildingRecords(NEW_CATEGORY_FIXTURE, 'TR')
+  const fuel = records.find((r) => r.properties.osmId === 3003)!
+  assertEquals(fuel.assetCategory, 'critical_infrastructure_fuel')
+  assertEquals(fuel.sector, 'fuel')
+})
+
+Deno.test('mapOverpassResponseToBuildingRecords: landuse=industrial named "Organize Sanayi" maps to industrial category', () => {
+  const records = mapOverpassResponseToBuildingRecords(NEW_CATEGORY_FIXTURE, 'TR')
+  const osb = records.find((r) => r.properties.osmId === 3004)!
+  assertEquals(osb.assetCategory, 'critical_infrastructure_industrial')
+  assertEquals(osb.sector, 'industrial')
+})
+
+Deno.test('mapOverpassResponseToBuildingRecords: landuse=industrial without OSB name is skipped', () => {
+  const records = mapOverpassResponseToBuildingRecords(NEW_CATEGORY_FIXTURE, 'TR')
+  assert(!records.some((r) => r.properties.osmId === 3005))
+})
+
+Deno.test('mapOverpassResponseToBuildingRecords: a way with `center` (out center) maps to a Point, not a Polygon', () => {
+  const response = {
+    elements: [
+      { type: 'way' as const, id: 4001, center: { lat: 41.03, lon: 28.99 }, tags: { landuse: 'cemetery', name: 'Karşıyaka Mezarlığı' } },
+    ],
+  }
+  const records = mapOverpassResponseToBuildingRecords(response, 'TR')
+  const cemetery = records.find((r) => r.properties.osmId === 4001)!
+  assertEquals(cemetery.geometry.type, 'Point')
+  assertEquals(cemetery.geometry.coordinates, [28.99, 41.03])
+  assertEquals(cemetery.properties.osmType, 'way')
+})
+
+Deno.test('mapOverpassResponseToBuildingRecords: a relation with `center` maps to a Point (unlike a geometry-only relation, which is skipped)', () => {
+  const response = {
+    elements: [
+      { type: 'relation' as const, id: 4002, center: { lat: 40.5, lon: 32.5 }, tags: { military: 'base', name: 'Example Base' } },
+    ],
+  }
+  const records = mapOverpassResponseToBuildingRecords(response, 'TR')
+  const base = records.find((r) => r.properties.osmId === 4002)!
+  assertEquals(base.geometry.type, 'Point')
+  assertEquals(base.assetCategory, 'critical_infrastructure_military')
+  assertEquals(base.properties.osmType, 'relation')
+})
+
+Deno.test('mapOverpassResponseToBuildingRecords: military=* maps to military category', () => {
+  const records = mapOverpassResponseToBuildingRecords(NEW_CATEGORY_FIXTURE, 'TR')
+  const base = records.find((r) => r.properties.osmId === 3006)!
+  assertEquals(base.assetCategory, 'critical_infrastructure_military')
+  assertEquals(base.sector, 'military')
+  assertEquals(base.properties.facilityType, 'military_base')
 })
 
 Deno.test('mapOverpassResponseToBuildingRecords: skips relations even if tagged', () => {

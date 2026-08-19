@@ -157,10 +157,25 @@ function resetToOverview() {
 }
 
 // Reopening the dashboard later should always land back on the overview,
-// not silently resume whichever admin tab was open when it was last closed.
+// not silently resume whichever admin tab was open when it was last closed
+// — UNLESS a deep link (uiStore.openDashboardAdminTab, e.g. footer's source
+// count -> Sources tab) asked for a specific tab, in which case honor that
+// once and then clear it so the next plain open still lands on overview.
 watch(() => uiStore.dashboardPanelOpen, (open) => {
-  if (!open) activeAdminTab.value = null
+  if (!open) {
+    activeAdminTab.value = null
+    return
+  }
+  if (uiStore.dashboardPanelInitialTab) {
+    activeAdminTab.value = uiStore.dashboardPanelInitialTab
+    uiStore.dashboardPanelInitialTab = null
+  }
 })
+
+// SourcesPanel itself clears uiStore.dashboardPanelAutoOpenHealth once it
+// has consumed it (onMounted), so this stays true only for that one mount —
+// revisiting the tab later within the same panel session won't re-trigger it.
+const autoOpenSourceHealth = computed(() => activeAdminTab.value === 'sources' && uiStore.dashboardPanelAutoOpenHealth)
 </script>
 
 <template>
@@ -171,7 +186,14 @@ watch(() => uiStore.dashboardPanelOpen, (open) => {
       @click.self="uiStore.toggleDashboardPanel()"
     >
       <div class="dashboard-dialog glass-panel" role="dialog" aria-modal="true">
-        <SidebarProvider class="h-full min-h-0">
+        <!-- spec 069 follow-up: explicit true, not left to SidebarProvider's
+             own default — that default reads a `sidebar_state` cookie from
+             any PRIOR collapse (shadcn's own persistence, meant for a real
+             full-page app sidebar navigated daily), so this small dialog
+             could start collapsed on a later visit even though "open" is
+             the underlying framework default. Always-open on mount here,
+             regardless of any earlier toggle (explicit ask). -->
+        <SidebarProvider class="h-full min-h-0" :default-open="true">
           <AppSidebar
             variant="inset"
             :active-admin-tab="activeAdminTab"
@@ -238,6 +260,7 @@ watch(() => uiStore.dashboardPanelOpen, (open) => {
                 :is="ADMIN_TAB_PANELS[activeAdminTab]"
                 v-else
                 :embedded="PAGE_TAB_IDS.has(activeAdminTab) ? true : undefined"
+                v-bind="activeAdminTab === 'sources' ? { autoOpenHealth: autoOpenSourceHealth } : {}"
                 @go-to-hazard-taxonomy="activeAdminTab = 'hazardTaxonomy'"
               />
             </div>
@@ -252,7 +275,13 @@ watch(() => uiStore.dashboardPanelOpen, (open) => {
 .dashboard-backdrop {
   position: fixed;
   inset: 0;
-  z-index: var(--z-alerts);
+  /* spec 069 follow-up: was var(--z-alerts) (94) — the header/footer shell
+     rows sit at var(--z-shell) (96), so they rendered ON TOP of this
+     dialog's top/bottom edges once the shell existed (user report: "üstten
+     ve alttan header footer geliyor"). A modal dialog should always sit
+     above the persistent shell chrome when open, same convention as
+     ConfirmDialog.vue/ImpactPanel.vue's scenario dialog (both z-index:1000). */
+  z-index: 1000;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -271,8 +300,12 @@ watch(() => uiStore.dashboardPanelOpen, (open) => {
   position: relative;
   width: 96vw;
   max-width: 96vw;
-  height: 92dvh;
-  max-height: 92dvh;
+  /* spec 069 follow-up: 92dvh -> 84dvh (~9% shorter), user request now that
+     the dialog properly overlays the header/footer shell (see z-index fix
+     above) — leaves visible breathing room above/below instead of nearly
+     touching both edges. */
+  height: 84dvh;
+  max-height: 84dvh;
   display: flex;
   flex-direction: column;
   background: rgba(15, 17, 23, 0.95);

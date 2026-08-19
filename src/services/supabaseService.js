@@ -124,7 +124,7 @@ export async function fetchRecentDisasters(options = {}) {
         Object.entries(TABLE_MAP).map(async ([table, type]) => {
             let query = client
                 .from(table)
-                .select('id,type,lat,lng,h3_id,severity,magnitude,depth,title,description,time,source,source_url,extra,received_at')
+                .select('id,type,lat,lng,h3_id,severity,magnitude,depth,title,description,time,source,source_url,extra,received_at,country_code')
                 .gte('time', fromDate);
 
             if (toDate) {

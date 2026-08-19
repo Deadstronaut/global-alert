@@ -85,20 +85,30 @@ Deno.serve(async (req) => {
       continue
     }
 
-    const { featureCount } = await writeExposureDataset(
-      'osm-buildings',
-      countryCode,
-      'count',
-      validRecords.map((record) => ({
-        geometry: record.geometry,
-        metricValue: 1,
-        properties: record.properties,
-        assetCategory: record.assetCategory,
-        sector: record.sector,
-      })),
-    )
-    countriesProcessed += 1
-    featuresImported += featureCount
+    // writeExposureDataset throws on a failed insert (e.g. a DB statement
+    // timeout) — catch it per-country rather than letting it propagate and
+    // abort every remaining country in this loop. Same "skip, don't fail
+    // the batch" convention as a fetch failure just above (mirrors
+    // raster-importer/import-osm-buildings.ts's identical fix).
+    try {
+      const { featureCount } = await writeExposureDataset(
+        'osm-buildings',
+        countryCode,
+        'count',
+        validRecords.map((record) => ({
+          geometry: record.geometry,
+          metricValue: 1,
+          properties: record.properties,
+          assetCategory: record.assetCategory,
+          sector: record.sector,
+        })),
+      )
+      countriesProcessed += 1
+      featuresImported += featureCount
+    } catch (e) {
+      console.error(`[${countryCode}] writeExposureDataset failed, skipping: ${e instanceof Error ? e.message : e}`)
+      countriesSkipped.push(countryCode)
+    }
   }
 
   // Same "a completed run is a success even with zero features" convention

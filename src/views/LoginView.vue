@@ -5,6 +5,7 @@ import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { supabase } from '@/services/api/config.js'
 import { Button } from '@/components/ui/button'
+import AnimatedEarthLogo from '@/components/AnimatedEarthLogo.vue'
 
 const { t } = useI18n()
 const auth = useAuthStore()
@@ -120,11 +121,11 @@ async function handleRecoveryCodeVerify() {
     <div class="login-card">
       <div class="login-header">
         <div class="login-logo-ring">
-          <span class="login-logo-icon">🌍</span>
+          <AnimatedEarthLogo :size="56" />
         </div>
         <div class="login-brand">
-          <h1 class="login-title">GEWS</h1>
-          <p class="login-subtitle">Global Emergency Warning System</p>
+          <h1 class="login-title">MHEWS</h1>
+          <p class="login-subtitle">Multi-Hazard Early Warning Systems</p>
         </div>
         <div class="login-status">
           <span class="status-dot" />
@@ -335,10 +336,6 @@ async function handleRecoveryCodeVerify() {
   align-items: center;
   justify-content: center;
   box-shadow: 0 0 24px rgba(74, 163, 255, 0.2), inset 0 0 20px rgba(74, 163, 255, 0.05);
-}
-
-.login-logo-icon {
-  font-size: 2.2rem;
 }
 
 .login-brand {

@@ -13,90 +13,93 @@ export const routes = [
       meta: { public: true }
     },
     {
-      path: '/portal',
-      name: 'public-portal',
-      component: () => import('@/views/PublicPortalView.vue'),
-      meta: { public: true }
-    },
-    {
-      path: '/',
-      name: 'home',
-      component: () => import('@/views/HomeView.vue')
-    },
-    {
-      path: '/map',
-      name: 'map',
-      component: () => import('@/views/HomeView.vue')
-    },
-    {
-      path: '/:countryCode',
-      name: 'country',
-      component: () => import('@/views/HomeView.vue'),
-      props: true
-    },
-    {
-      path: '/:countryCode/map',
-      name: 'country-map',
-      component: () => import('@/views/HomeView.vue'),
-      props: true
-    },
-    {
-      path: '/alerts/cap',
-      name: 'cap',
-      component: () => import('@/views/CapView.vue'),
-    },
-    {
-      path: '/alerts/incidents',
-      name: 'incidents',
-      component: () => import('@/views/IncidentsView.vue'),
-    },
-    {
-      path: '/shelters',
-      name: 'shelters',
-      component: () => import('@/views/ShelterInfoView.vue'),
-      // spec 021 FR-008: shelter availability is life-safety information —
-      // no meta.roles, reachable by every authenticated role including
-      // viewer, same as /alerts/incidents above. The full CRUD management
-      // UI stays inside /admin (spec 004's tested viewer boundary is
-      // untouched); this route is read-only for accounts without manage
-      // access, matching SheltersPanel.vue's own canManage gate.
-    },
-    {
-      path: '/hazards',
-      name: 'hazards',
-      component: () => import('@/views/HazardEncyclopediaView.vue'),
-      // spec 024 FR-008: same pattern as /shelters above — reference/
-      // educational info, no meta.roles, reachable by every authenticated
-      // role including viewer. Parent-relationship editing stays inside
-      // /admin's Hazard Taxonomy tab (unchanged access control).
-    },
-    {
       path: '/report',
       name: 'report-hazard',
       component: () => import('@/views/ReportHazardView.vue'),
       // spec 036 FR-001: the submission form itself must be reachable with
-      // NO login at all (an anonymous citizen), same as /portal above —
-      // meta.public bypasses the base !auth.isLoggedIn redirect entirely.
+      // NO login at all (an anonymous citizen) — meta.public bypasses the
+      // base !auth.isLoggedIn redirect entirely.
       meta: { public: true }
-    },
-    {
-      path: '/admin',
-      name: 'admin',
-      component: () => import('@/views/AdminView.vue'),
-      meta: { roles: ['super_admin', 'country_admin', 'org_admin'] }
     },
     {
       path: '/mfa-challenge',
       name: 'mfa-challenge',
       component: () => import('@/views/LoginView.vue'),
+      // spec 069: kept outside MainLayout, same as the other routes in this
+      // top-level block — login isn't "complete" until MFA clears, so the
+      // authenticated app shell (account menu, hazard nav) has no business
+      // rendering yet. Not meta.public (authGuard still requires a session).
     },
+    // spec 069: everything below is nested under MainLayout (header +
+    // hazard-type nav + footer date scrubber) via the parent route further
+    // down this file. Route names/paths/props/meta are unchanged from
+    // before — only nesting depth changed. See specs/069-main-layout-nesting/
+    // contracts/router-contract.md for the full before/after table.
     {
-      path: '/account-security',
-      name: 'account-security',
-      component: () => import('@/views/AccountSecurityView.vue'),
-      // No meta.roles — reachable by every authenticated role regardless of
-      // /admin access (spec 005 clarification: Viewers must be able to reach
-      // this page even though spec 004 blocks them from /admin).
+      path: '/',
+      component: () => import('@/layouts/MainLayout.vue'),
+      children: [
+        {
+          path: '',
+          name: 'home',
+          component: () => import('@/views/HomeView.vue')
+        },
+        {
+          path: 'map',
+          name: 'map',
+          component: () => import('@/views/HomeView.vue')
+        },
+        {
+          path: ':countryCode',
+          name: 'country',
+          component: () => import('@/views/HomeView.vue'),
+          props: true
+        },
+        {
+          path: ':countryCode/map',
+          name: 'country-map',
+          component: () => import('@/views/HomeView.vue'),
+          props: true
+        },
+        {
+          path: 'alerts/cap',
+          name: 'cap',
+          component: () => import('@/views/CapView.vue'),
+        },
+        {
+          path: 'alerts/incidents',
+          name: 'incidents',
+          component: () => import('@/views/IncidentsView.vue'),
+        },
+        {
+          path: 'shelters',
+          name: 'shelters',
+          component: () => import('@/views/ShelterInfoView.vue'),
+          // spec 021 FR-008: shelter availability is life-safety information —
+          // no meta.roles, reachable by every authenticated role including
+          // viewer, same as /alerts/incidents above. The full CRUD management
+          // UI stays inside /admin (spec 004's tested viewer boundary is
+          // untouched); this route is read-only for accounts without manage
+          // access, matching SheltersPanel.vue's own canManage gate.
+        },
+        {
+          path: 'hazards',
+          name: 'hazards',
+          component: () => import('@/views/HazardEncyclopediaView.vue'),
+          // spec 024 FR-008: same pattern as /shelters above — reference/
+          // educational info, no meta.roles, reachable by every authenticated
+          // role including viewer. Parent-relationship editing stays inside
+          // /admin's Hazard Taxonomy tab (unchanged access control).
+        },
+        {
+          path: 'account-security',
+          name: 'account-security',
+          component: () => import('@/views/AccountSecurityView.vue'),
+          // No meta.roles — reachable by every authenticated role regardless of
+          // /admin access (spec 005 clarification: Viewers must be able to reach
+          // this page even though spec 004 blocks them from /admin).
+        },
+      ],
     },
   ];
 

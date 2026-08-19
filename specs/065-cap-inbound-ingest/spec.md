@@ -47,6 +47,14 @@ header, and confirm a new `cap_inbound_alerts` row appears with parsed fields an
    — never `approved` or `broadcast` — still subject to the existing four-eyes approval workflow.
 4. **Given** an inbound alert has already been promoted, **When** promotion is attempted again,
    **Then** it is rejected (no duplicate draft).
+5. **Given** a valid, active ingest token but a body that isn't shaped like a CAP alert at all (no
+   `<alert>` root element, or missing both `<identifier>` and `<info>`/`<event>`), **When** POSTed,
+   **Then** the row is still stored (for audit visibility) but pre-marked `status: 'rejected'` and
+   the response is `400`, instead of entering the `received` review queue as an empty/junk row.
+6. **Given** an admin reviews a `received` (or auto-`rejected`) inbound alert that is well-formed
+   but unwanted (duplicate, hoax, out-of-scope hazard), **When** they click "Reject", **Then**
+   `reject_cap_inbound_alert()` sets `status: 'rejected'` with `reviewed_by`/`reviewed_at` — an
+   already-`promoted` alert cannot be rejected.
 
 ### Edge Cases
 
@@ -54,6 +62,17 @@ header, and confirm a new `cap_inbound_alerts` row appears with parsed fields an
   XML schema validator — acceptable because a human always reviews `raw_payload` (kept verbatim)
   before promotion; imperfect parsing degrades to blank fields the admin can fill in, never silent
   corruption.
+- **Fix-up (2026-08-16)**: a manual-QA code pass found there was no reject path at all — not an
+  automatic one for structurally invalid payloads, nor a manual one for a human reviewer — even
+  though `cap_inbound_alerts.status` already allowed `'rejected'` and `CapInboundPanel.vue` already
+  had `status-rejected` styling with nothing to trigger it. `findStructuralIssue()` in
+  `cap-inbound-ingest/index.ts` now performs the minimal check in Acceptance Scenario 5 (still not
+  a full schema validator — same rationale as the parsing note above); `reject_cap_inbound_alert()`
+  (`supabase/migrations/20260816091000_cap_inbound_reject.sql`, mirroring
+  `promote_cap_inbound_alert()`'s own authorization shape) covers Acceptance Scenario 6, wired to a
+  new "Reddet" button in `CapInboundPanel.vue`. Migration applied by the user; `npm test` full-suite
+  (275/275) passed after the change. Live click-through with a real malformed/duplicate payload
+  against a deployed ingest token is still the user's to do.
 
 ## Requirements *(mandatory)*
 
@@ -70,6 +89,12 @@ header, and confirm a new `cap_inbound_alerts` row appears with parsed fields an
 - **FR-005**: This feature MUST NOT alter `cap_drafts`' existing approval/broadcast state machine
   (`guard_cap_draft_transition`) in any way — a promoted row enters at `draft` like any
   admin-authored one.
+- **FR-006** *(added 2026-08-16)*: `cap-inbound-ingest` MUST perform a minimal structural check
+  (payload is shaped like a CAP alert: `<alert>` root, `<identifier>`, and `<info>`/`<event>`) and
+  store — never silently drop — a failing payload as `status: 'rejected'` rather than `received`.
+  A country_admin/super_admin reviewer MUST also be able to manually reject any non-`promoted`
+  inbound alert via `reject_cap_inbound_alert()`, using the same authorization scoping as
+  `promote_cap_inbound_alert()` (FR-004).
 
 ### Key Entities
 

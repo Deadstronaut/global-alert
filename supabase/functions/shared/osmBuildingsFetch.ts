@@ -33,7 +33,7 @@ import type { BuildingRecord } from './buildingRecord.ts'
 
 const OVERPASS_ENDPOINT = 'https://overpass-api.de/api/interpreter'
 
-const AMENITY_CATEGORY: Record<string, BuildingRecord['assetCategory']> = {
+export const AMENITY_CATEGORY: Record<string, BuildingRecord['assetCategory']> = {
   hospital: 'critical_infrastructure_health',
   clinic: 'critical_infrastructure_health',
   school: 'critical_infrastructure_education',
@@ -47,11 +47,11 @@ const AMENITY_CATEGORY: Record<string, BuildingRecord['assetCategory']> = {
 
 // Non-amenity tag/value pairs, each their own Overpass query branch (see
 // buildQuery) since they don't share amenity's single-key regex filter.
-const AEROWAY_CATEGORY: Record<string, BuildingRecord['assetCategory']> = {
+export const AEROWAY_CATEGORY: Record<string, BuildingRecord['assetCategory']> = {
   aerodrome: 'critical_infrastructure_transport',
 }
 
-const LANDUSE_CATEGORY: Record<string, BuildingRecord['assetCategory']> = {
+export const LANDUSE_CATEGORY: Record<string, BuildingRecord['assetCategory']> = {
   cemetery: 'critical_infrastructure_cemetery',
 }
 
@@ -65,7 +65,7 @@ const OSB_LANDUSE_CATEGORY: BuildingRecord['assetCategory'] = 'critical_infrastr
 // Maps the same critical_infrastructure_* taxonomy above to
 // BuildingRecord.sector's coarser categories — one lookup instead of two
 // parallel tag-to-category tables to keep in sync by hand.
-const SECTOR_FOR_CATEGORY: Record<BuildingRecord['assetCategory'], BuildingRecord['sector']> = {
+export const SECTOR_FOR_CATEGORY: Record<BuildingRecord['assetCategory'], BuildingRecord['sector']> = {
   critical_infrastructure_health: 'health',
   critical_infrastructure_education: 'education',
   critical_infrastructure_emergency: 'emergency',
@@ -177,7 +177,7 @@ export function buildExtendedQueries(countryCode: string): { label: string; quer
   ]
 }
 
-function categoryFor(tags: Record<string, string>): BuildingRecord['assetCategory'] | null {
+export function categoryFor(tags: Record<string, string>): BuildingRecord['assetCategory'] | null {
   if (tags.amenity && AMENITY_CATEGORY[tags.amenity]) return AMENITY_CATEGORY[tags.amenity]
   if (tags.office === 'government') return 'critical_infrastructure_emergency'
   if (tags.aeroway && AEROWAY_CATEGORY[tags.aeroway]) return AEROWAY_CATEGORY[tags.aeroway]
@@ -187,7 +187,7 @@ function categoryFor(tags: Record<string, string>): BuildingRecord['assetCategor
   return null
 }
 
-function facilityTypeFor(tags: Record<string, string>): string {
+export function facilityTypeFor(tags: Record<string, string>): string {
   if (tags.amenity) return tags.amenity
   if (tags.office === 'government') return 'government_office'
   if (tags.aeroway) return tags.aeroway
@@ -200,7 +200,7 @@ function facilityTypeFor(tags: Record<string, string>): string {
 // OSM has two competing conventions for a phone number — plain `phone` and
 // the namespaced `contact:phone` — mappers use either inconsistently, so
 // this checks both rather than silently missing whichever one wasn't used.
-function phoneFor(tags: Record<string, string>): string | undefined {
+export function phoneFor(tags: Record<string, string>): string | undefined {
   return tags.phone ?? tags['contact:phone']
 }
 
@@ -328,25 +328,32 @@ export async function fetchOsmBuildings(countryCodes: string[]): Promise<Map<str
     }
 
     // One call per extended category (see buildExtendedQueries's comment).
+    // 'cemetery' is deliberately excluded from the required set below — by
+    // far the slowest/flakiest of the six queries in practice (large,
+    // node-heavy polygon ways even with `out center`) and, per explicit
+    // user decision 2026-08-20, not important enough to keep blocking every
+    // other category's update while it alone times out. A cemetery-query
+    // failure just means this run's dataset has no (or stale, from before
+    // this cutover) cemetery points — it no longer blocks the write.
     for (const { label, query } of buildExtendedQueries(countryCode)) {
       const body = await fetchOverpass(query, `${countryCode} (${label})`)
       if (body) {
         records.push(...mapOverpassResponseToBuildingRecords(body, countryCode))
-      } else {
+      } else if (label !== 'cemetery') {
         allQueriesSucceeded = false
       }
     }
 
     // writeExposureDataset supersedes (deletes) this country's PREVIOUS
     // osm-buildings dataset once the new one commits — so writing a
-    // partial result (some of the 6 queries above failed) doesn't just
+    // partial result (a required query above failed) doesn't just
     // under-report this run, it silently deletes categories that were
     // already correctly populated from an earlier successful run. Live-
     // verified 2026-08-19: a core-query timeout on an otherwise-successful
     // run wiped Turkey's health/education facilities down to 0 rows this
-    // way. A failed country is skipped entirely (old dataset stays
-    // intact, exactly as when a single query used to fail) rather than
-    // ever writing a known-incomplete replacement.
+    // way. A country with a failed required query is skipped entirely (old
+    // dataset stays intact) rather than ever writing a known-incomplete
+    // replacement — cemetery is the one deliberate exception, see above.
     if (allQueriesSucceeded && records.length > 0) {
       results.set(countryCode, records)
     } else if (!allQueriesSucceeded) {

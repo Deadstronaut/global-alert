@@ -1064,6 +1064,17 @@ services:
     networks:
       - mhews
 
+  live-flights-importer:
+    build:
+      context: .
+      dockerfile: raster-importer/Dockerfile
+    container_name: mhews-live-flights-importer
+    command: ["raster-importer/import-live-flights.ts"]
+    env_file:
+      - ./server/.env
+    networks:
+      - mhews
+
   gdo-spi-importer-scheduled:
     build:
       context: .
@@ -1095,6 +1106,18 @@ services:
     container_name: mhews-wfp-hungermap-importer-scheduled
     restart: unless-stopped
     command: ["raster-importer/cron.ts", "wfp-hungermap"]
+    env_file:
+      - ./server/.env
+    networks:
+      - mhews
+
+  live-flights-importer-scheduled:
+    build:
+      context: .
+      dockerfile: raster-importer/Dockerfile
+    container_name: mhews-live-flights-importer-scheduled
+    restart: unless-stopped
+    command: ["raster-importer/cron.ts", "live-flights"]
     env_file:
       - ./server/.env
     networks:

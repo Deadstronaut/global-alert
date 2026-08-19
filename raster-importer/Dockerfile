@@ -17,7 +17,14 @@
 #
 # Build context must be the repo root (see docker-compose.yml) so this can
 # COPY supabase/functions/shared alongside this file's own scripts.
-FROM denoland/deno:alpine-2.1.4
+#
+# Debian (not Alpine) base since 2026-08-20: osmPbfBuildings.ts shells out
+# to `osmium` (the osmium-tool CLI, not just the libosmium C++ library) to
+# process Geofabrik PBF extracts locally instead of querying the public
+# Overpass API — see osmPbfBuildings.ts's header for why. `osmium-tool` is
+# an apt package on Debian; Alpine's repos only carry libosmium/libosmium-
+# dev (the dev headers, no CLI binary), live-verified 2026-08-20.
+FROM denoland/deno:debian-2.1.4
 
 WORKDIR /app
 
@@ -25,7 +32,8 @@ WORKDIR /app
 # instead of this repo's in-memory unzipSingleEntry.ts, which explicitly
 # does not support ZIP64 and Meta/HDX's archives need it (see
 # download-meta.ts's header comment for the live-verified numbers).
-RUN apk add --no-cache unzip
+# osmium-tool — osmPbfBuildings.ts's local PBF filter+export pipeline.
+RUN apt-get update && apt-get install -y --no-install-recommends unzip osmium-tool && rm -rf /var/lib/apt/lists/*
 
 COPY supabase/functions/shared/ ./supabase/functions/shared/
 COPY raster-importer/import.ts ./raster-importer/import.ts
@@ -45,21 +53,28 @@ COPY raster-importer/import-building-footprints.ts ./raster-importer/import-buil
 COPY raster-importer/import-gdo-spi.ts ./raster-importer/import-gdo-spi.ts
 COPY raster-importer/import-kontur-population.ts ./raster-importer/import-kontur-population.ts
 COPY raster-importer/import-wfp-hungermap.ts ./raster-importer/import-wfp-hungermap.ts
+COPY raster-importer/import-live-flights.ts ./raster-importer/import-live-flights.ts
+COPY raster-importer/geofabrikIndex.ts ./raster-importer/geofabrikIndex.ts
+COPY raster-importer/osmPbfBuildings.ts ./raster-importer/osmPbfBuildings.ts
 COPY raster-importer/cron.ts ./raster-importer/cron.ts
 
 # Pre-resolve npm:/esm.sh imports at build time so a run with no outbound
 # access to those registries (only to Supabase, HDX, GHSL's own tile
 # host, EWDS, GDO's WCS, Overpass, netcdf-service, Copernicus's DEM tile
 # bucket, and Microsoft's building-footprints blob storage) still works.
-RUN deno cache raster-importer/import.ts raster-importer/import-ghsl.ts raster-importer/import-chirps.ts raster-importer/download-meta.ts raster-importer/import-glofas.ts raster-importer/import-gdo-anomaly.ts raster-importer/import-worldpop.ts raster-importer/import-hydrobasins.ts raster-importer/import-hydrorivers.ts raster-importer/import-osm-buildings.ts raster-importer/import-osm-roads.ts raster-importer/import-osm-shelters.ts raster-importer/import-dem-slope.ts raster-importer/import-building-footprints.ts raster-importer/import-gdo-spi.ts raster-importer/import-kontur-population.ts raster-importer/import-wfp-hungermap.ts raster-importer/cron.ts
+RUN deno cache raster-importer/import.ts raster-importer/import-ghsl.ts raster-importer/import-chirps.ts raster-importer/download-meta.ts raster-importer/import-glofas.ts raster-importer/import-gdo-anomaly.ts raster-importer/import-worldpop.ts raster-importer/import-hydrobasins.ts raster-importer/import-hydrorivers.ts raster-importer/import-osm-buildings.ts raster-importer/import-osm-roads.ts raster-importer/import-osm-shelters.ts raster-importer/import-dem-slope.ts raster-importer/import-building-footprints.ts raster-importer/import-gdo-spi.ts raster-importer/import-kontur-population.ts raster-importer/import-wfp-hungermap.ts raster-importer/import-live-flights.ts raster-importer/geofabrikIndex.ts raster-importer/osmPbfBuildings.ts raster-importer/cron.ts
 
 # --unstable-cron: Deno.cron() (cron.ts's scheduled mode) is not yet a
 # stable API as of Deno 2.1 — live-verified 2026-07-22 that `Deno.cron` is
 # `undefined` without this flag. Harmless to always pass it even for
 # scripts that never call Deno.cron.
-# --allow-run=unzip: download-meta.ts shells out to the system `unzip`
-# binary only — no other subprocess execution needed or granted.
-ENTRYPOINT ["deno", "run", "--allow-read", "--allow-write=/rasters,/manifest.json", "--allow-net", "--allow-env", "--allow-run=unzip", "--unstable-cron"]
+# --allow-run=unzip,osmium: download-meta.ts shells out to the system
+# `unzip` binary; osmPbfBuildings.ts shells out to `osmium` (see above) —
+# no other subprocess execution needed or granted.
+# --allow-write additionally covers /tmp: osmPbfBuildings.ts downloads and
+# processes each country's PBF extract in a Deno.makeTempDir() scratch
+# directory there, deleted after each country (see its own header comment).
+ENTRYPOINT ["deno", "run", "--allow-read", "--allow-write=/rasters,/manifest.json,/tmp", "--allow-net", "--allow-env", "--allow-run=unzip,osmium", "--unstable-cron"]
 # Default: the manifest-driven Meta/HDX one-shot importer.
 # docker-compose.yml overrides this CMD for the other run modes.
 CMD ["raster-importer/import.ts"]

@@ -16,16 +16,66 @@ const globeContainer = ref(null)
 let globeInstance = null
 let animationId = null
 
-// --- Live flight tracking (spec 072, real OpenSky data via fetch-live-flights) ---
-const flightsData = ref({ fetchedAt: null, stale: false, states: [] })
+// --- Live flight tracking (spec 072) ---
+// Reads the `live_flights` table directly rather than calling an Edge
+// Function — live-tested 2026-08-20, OpenSky never responds at all to
+// requests from Supabase's edge egress IPs (instant from a normal
+// residential/VPS IP, indefinite hang from Supabase's), so the actual
+// OpenSky fetch now happens from raster-importer/import-live-flights.ts
+// (its own Deno.cron, every 5 minutes) and just writes into this table.
+const flightsData = ref({ fetchedAt: null, stale: false, states: [], trails: [] })
 let flightsTimer = null
+const FLIGHTS_STALE_MS = 12 * 60 * 1000 // >2x the importer's 5-minute cycle
+// How far back to pull recorded positions for the trailing-tail effect —
+// short on purpose (real trail, not a route: research.md's "no arcs
+// without a real relationship" rule) and keeps the per-poll payload sane
+// (~2 points/aircraft rather than the table's full 25-min retention).
+const FLIGHTS_TRAIL_WINDOW_MS = 10 * 60 * 1000
 async function fetchFlights() {
-  const { data, error } = await supabase.functions.invoke('fetch-live-flights')
-  if (error) {
+  const cutoff = new Date(Date.now() - FLIGHTS_TRAIL_WINDOW_MS).toISOString()
+  const { data, error } = await supabase
+    .from('live_flights')
+    .select('icao24, callsign, origin_country, lat, lng, altitude_m, velocity_ms, heading_deg, recorded_at')
+    .gte('recorded_at', cutoff)
+    .order('recorded_at', { ascending: true })
+  if (error || !data || data.length === 0) {
     flightsData.value = { ...flightsData.value, stale: true }
     return
   }
-  flightsData.value = data
+
+  const byIcao = new Map()
+  for (const r of data) {
+    if (!byIcao.has(r.icao24)) byIcao.set(r.icao24, [])
+    byIcao.get(r.icao24).push(r)
+  }
+
+  const states = []
+  const trails = []
+  let latestMs = 0
+  for (const [icao24, rows] of byIcao) {
+    const last = rows[rows.length - 1]
+    const t = new Date(last.recorded_at).getTime()
+    if (t > latestMs) latestMs = t
+    states.push({
+      icao24,
+      callsign: last.callsign,
+      originCountry: last.origin_country,
+      lat: last.lat,
+      lng: last.lng,
+      altitudeM: last.altitude_m,
+      velocityMs: last.velocity_ms,
+      headingDeg: last.heading_deg,
+    })
+    // Real recorded positions only — a lone point has no trail to draw.
+    if (rows.length > 1) trails.push({ icao24, points: rows.map((r) => [r.lat, r.lng]) })
+  }
+
+  flightsData.value = {
+    fetchedAt: latestMs ? new Date(latestMs).toISOString() : null,
+    stale: latestMs ? Date.now() - latestMs > FLIGHTS_STALE_MS : true,
+    states,
+    trails,
+  }
 }
 function startFlightsPolling() {
   if (flightsTimer) return
@@ -35,18 +85,21 @@ function startFlightsPolling() {
 function stopFlightsPolling() {
   clearInterval(flightsTimer)
   flightsTimer = null
-  flightsData.value = { fetchedAt: null, stale: false, states: [] }
+  flightsData.value = { fetchedAt: null, stale: false, states: [], trails: [] }
 }
-// Small shared cone standing in for an aircraft icon — cloned per-datum by
-// three-globe automatically (see its objectThreeObject handling), so this
-// only ever needs to be built once per globe instance.
-function createAircraftObject(THREE) {
-  const geometry = new THREE.ConeGeometry(0.8, 2.4, 6)
-  const material = new THREE.MeshBasicMaterial({ color: '#7fd4ff' })
-  const cone = new THREE.Mesh(geometry, material)
-  cone.rotation.x = Math.PI / 2 // point the cone's tip along local +Y (heading direction)
-  return cone
-}
+// 2026-08-20 feedback, round 1: the earlier 3D cone (oriented per-aircraft
+// via objectFacesSurface/objectRotation) rendered huge and inconsistent —
+// without proper surface-facing alignment it could end up nearly edge-on
+// to the camera, and perspective blows an edge-on 3D shape up dramatically
+// at closer zoom. Switched to three-globe's PARTICLES layer (same system
+// its own bundled "satellites" example uses) — small camera-facing
+// billboards, consistent at any zoom.
+// 2026-08-20 round 2: user still couldn't see anything and explicitly said
+// the icon doesn't need to be plane-shaped, plain small dots are fine
+// ("küçük noktalar olabilir") — dropped the custom canvas texture
+// entirely in favor of particlesColor's plain-dot rendering, removing a
+// whole class of potential failure (texture decode/colorSpace/timing)
+// along with the simplification actually requested.
 
 function flightHoverLabel(d) {
   if (!showHoverInfo.value) return ''
@@ -57,7 +110,10 @@ function flightHoverLabel(d) {
 }
 function updateFlightsLayer() {
   if (!globeInstance) return
-  globeInstance.objectsData(uiStore.showFlights ? flightsData.value.states : [])
+  // particlesData is an array of GROUPS (each group = an array of
+  // individual particles) — one group holding all current aircraft.
+  globeInstance.particlesData(uiStore.showFlights ? [flightsData.value.states] : [])
+  updatePathsLayer()
 }
 
 // --- Timeline playback (real event timestamps, last 72h) ---
@@ -245,26 +301,51 @@ let sunTimer = null
 let ambientLight = null
 let sunLight = null
 let nightLightsMesh = null
+let nightMaskMesh = null
 
-// Toggling "Gece Işıkları" also reverts to three-globe's own flat default
-// lighting (ambient-only, no shading contrast) rather than just zeroing our
-// added light — matches how the globe looked before this feature existed.
-const FLAT_AMBIENT_INTENSITY = Math.PI
+// 2026-08-20 feedback, round 2: varying ambientLight/sunLight intensity to
+// darken the night side kept either doing nothing visible ("tül gibi hiç
+// etkili olmuyor") or, once pushed further, blowing out the Lambert-shaded
+// disaster markers again ("kalabalığı yakarız") — those two constraints
+// don't leave enough room for BOTH real contrast AND safe markers using
+// scene lights alone. Fixed by decoupling the two: the lights below now
+// stay at a single constant, marker-safe baseline always (never touched by
+// the toggle), and the actual day/night darkening is done by nightMaskMesh
+// (a separate shader-based overlay, see initGlobe) that only darkens the
+// GLOBE TEXTURE it sits on top of — markers/rings/hexbins render above it
+// and are lit by the constant lights only, so they never darken or blow out
+// no matter what the night-lights toggle is set to.
 function applyNightLightsToggle() {
-  if (!globeInstance || !ambientLight || !sunLight) return
+  if (!globeInstance) return
   const on = uiStore.showNightLights
-  ambientLight.intensity = on ? 1.9 : FLAT_AMBIENT_INTENSITY
-  sunLight.intensity = on ? 1.3 : 0
   if (nightLightsMesh) nightLightsMesh.visible = on
+  if (nightMaskMesh) nightMaskMesh.visible = on
+}
+let lastSubsolar = null
+function updatePathsLayer() {
+  if (!globeInstance) return
+  const terminator = uiStore.showTerminator && lastSubsolar
+    ? [{ kind: 'terminator', points: computeTerminatorPath(lastSubsolar) }]
+    : []
+  const trails = uiStore.showFlights
+    ? flightsData.value.trails.map((tr) => ({ kind: 'flight-trail', points: tr.points }))
+    : []
+  globeInstance.pathsData([...terminator, ...trails])
 }
 function updateSunPosition() {
   if (!globeInstance) return
   const subsolar = getSubsolarPoint(new Date())
-  globeInstance.pathsData(uiStore.showTerminator ? [computeTerminatorPath(subsolar)] : [])
+  lastSubsolar = subsolar
+  updatePathsLayer()
   if (sunLight) {
     const r = globeInstance.getGlobeRadius() * 5
     const v = subsolarToVector3(subsolar.lat, subsolar.lng, r)
     sunLight.position.set(v.x, v.y, v.z)
+  }
+  if (nightMaskMesh || nightLightsMesh) {
+    const d = subsolarToVector3(subsolar.lat, subsolar.lng, 1)
+    nightMaskMesh?.material.uniforms.sunDirection.value.set(d.x, d.y, d.z)
+    nightLightsMesh?.material.uniforms.sunDirection.value.set(d.x, d.y, d.z)
   }
 }
 
@@ -364,12 +445,24 @@ async function initGlobe() {
     // the tween both cut per-toggle cost and stop it from compounding.
     .hexBinMerge(true)
     .hexTransitionDuration(300)
-    // Day/night terminator line (real subsolar-point calc, see computeTerminatorPath)
+    // Shared paths layer: day/night terminator line (real subsolar-point
+    // calc) AND flight trails (real recorded position history, spec 072
+    // follow-up 2026-08-20) live in the same pathsData array, distinguished
+    // by `kind` — three-globe only supports one paths layer, see
+    // updatePathsLayer().
     .pathsData([])
-    .pathColor(() => 'rgba(255,255,255,0.35)')
-    .pathStroke(0.6)
-    .pathDashLength(0.4)
-    .pathDashGap(0.2)
+    .pathPoints((d) => d.points)
+    .pathPointLat((p) => p[0])
+    .pathPointLng((p) => p[1])
+    .pathColor((d) => {
+      if (d.kind === 'terminator') return 'rgba(255,255,255,0.35)'
+      // Real recorded positions only (never extrapolated) — fades in from
+      // faint (oldest) to solid (current position), like a comet tail.
+      return (t) => `rgba(127,212,255,${(0.08 + t * 0.55).toFixed(2)})`
+    })
+    .pathStroke((d) => (d.kind === 'terminator' ? 0.6 : null))
+    .pathDashLength((d) => (d.kind === 'terminator' ? 0.4 : 1))
+    .pathDashGap((d) => (d.kind === 'terminator' ? 0.2 : 0))
     .pathTransitionDuration(0)
     // Country choropleth (spec 072 Phase 1) — off until uiStore.showChoropleth
     .polygonsData([])
@@ -378,17 +471,19 @@ async function initGlobe() {
     .polygonStrokeColor(() => 'rgba(255,255,255,0.15)')
     .polygonLabel((feat) => polygonHoverLabel(feat))
     .polygonsTransitionDuration(300)
-    // Live flight tracking (spec 072) — separate custom-object layer, not
-    // merged into pointsData, so it can't regress the disaster-marker click/
-    // color/altitude behavior above (research.md §3).
-    .objectsData([])
-    .objectLat((d) => d.lat)
-    .objectLng((d) => d.lng)
-    .objectAltitude(0.02)
-    .objectFacesSurface(false)
-    .objectRotation((d) => ({ y: d.headingDeg || 0 }))
-    .objectThreeObject(() => createAircraftObject(THREE))
-    .objectLabel((d) => flightHoverLabel(d))
+    // Live flight tracking (spec 072) — three-globe's PARTICLES layer
+    // (small camera-facing billboard dots, same system used by its own
+    // bundled "satellites" example), not merged into pointsData, so it
+    // can't regress the disaster-marker click/color/altitude behavior
+    // above (research.md §3). Plain colored dots, no custom texture — see
+    // the comment above createAircraftTexture's old spot for why.
+    .particlesData([])
+    .particleLat('lat')
+    .particleLng('lng')
+    .particleAltitude(0.02)
+    .particlesSize(1.5)
+    .particlesColor(() => '#7fd4ff')
+    .particleLabel((d) => flightHoverLabel(d))
     // Click handler
     .onPointClick((point) => {
       if (point) {
@@ -419,32 +514,94 @@ async function initGlobe() {
       return el
     })(globeContainer.value)
 
-  // Real day/night shading: dim the flat default lighting and add a single
-  // directional light coming from the actual subsolar direction, so the
-  // Phong-shaded day texture goes dark on the night side on its own.
-  // Point/ring/hex layers use Lambert materials that also react to these
-  // lights — the first version here (ambient 1.1 + directional 2.4) blew
-  // the disaster markers out into harsh, oversaturated blocks under direct
-  // sun. Keeping total light energy close to three-globe's own flat default
-  // (ambient ~3.14) but shifting more of it into the directional component
-  // still gives a real day/night difference without that glare.
+  // Constant, marker-safe lighting — see applyNightLightsToggle's comment:
+  // this never changes with the night-lights toggle. Point/ring/hex layers
+  // use Lambert materials that also react to these lights, so this stays at
+  // a fixed baseline close to three-globe's own flat default (ambient
+  // ~3.14) rather than swinging with the toggle, which is what previously
+  // blew the disaster markers out into harsh blocks. Real day/night contrast
+  // is now nightMaskMesh's job (below), which doesn't touch these lights.
   ambientLight = new THREE.AmbientLight(0xffffff, 1.9)
   sunLight = new THREE.DirectionalLight(0xffffff, 1.3)
   globeInstance.lights([ambientLight, sunLight])
 
-  // Real NASA night-lights texture (public/textures/earth-night-lights.png),
-  // additive-blended just above the day globe — city lights read through on
-  // the dark side without needing a custom shader; on the lit side they're
-  // washed out by the much brighter day texture, same technique used in
-  // three.js's own earth demos.
-  const nightTexture = new THREE.TextureLoader().load('/textures/earth-night-lights.png')
   const radius = globeInstance.getGlobeRadius()
+
+  // Pure-visual night-side darkening — a thin shader overlay on the globe
+  // surface whose alpha is driven by the real subsolar direction (same
+  // uniform updated every 60s in updateSunPosition, alongside the
+  // terminator line and sunLight's position). Deliberately NOT a THREE
+  // light, so it darkens only the day texture underneath it and has zero
+  // effect on markers/rings/hexbins rendered above it.
+  nightMaskMesh = new THREE.Mesh(
+    new THREE.SphereGeometry(radius * 1.0005, 64, 32),
+    new THREE.ShaderMaterial({
+      uniforms: { sunDirection: { value: new THREE.Vector3(1, 0, 0) } },
+      vertexShader: `
+        varying vec3 vWorldNormal;
+        void main() {
+          vWorldNormal = normalize(mat3(modelMatrix) * normal);
+          gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+        }
+      `,
+      fragmentShader: `
+        uniform vec3 sunDirection;
+        varying vec3 vWorldNormal;
+        void main() {
+          float d = dot(normalize(vWorldNormal), sunDirection);
+          float night = smoothstep(0.15, -0.3, d);
+          gl_FragColor = vec4(0.0, 0.0, 0.02, night * 0.85);
+        }
+      `,
+      transparent: true,
+      depthWrite: false,
+      depthTest: false,
+    }),
+  )
+  nightMaskMesh.renderOrder = 1
+  globeInstance.scene().add(nightMaskMesh)
+
+  // Real NASA night-lights texture (public/textures/earth-night-lights.png).
+  // 2026-08-20 feedback, round 3 (screenshots comparing wide vs. zoomed-in
+  // views): a flat 0.85 additive opacity meant the city-light glow was
+  // still clearly visible even over clearly-daylit regions — "washed out by
+  // the brighter day texture" turned out not to be true once zoomed in, it
+  // just looked like a permanently-glowing overlay regardless of time of
+  // day. Switched from MeshBasicMaterial to a shader that multiplies the
+  // texture's contribution by the SAME day/night factor as nightMaskMesh
+  // (shared `night` formula, same sunDirection uniform data), so the glow's
+  // strength now actually goes to zero on the day side instead of just
+  // getting dimmed by blending.
+  const nightTexture = new THREE.TextureLoader().load('/textures/earth-night-lights.png')
   nightLightsMesh = new THREE.Mesh(
     new THREE.SphereGeometry(radius * 1.001, 96, 48),
-    new THREE.MeshBasicMaterial({
-      map: nightTexture,
+    new THREE.ShaderMaterial({
+      uniforms: {
+        sunDirection: { value: new THREE.Vector3(1, 0, 0) },
+        nightMap: { value: nightTexture },
+      },
+      vertexShader: `
+        varying vec3 vWorldNormal;
+        varying vec2 vUv;
+        void main() {
+          vWorldNormal = normalize(mat3(modelMatrix) * normal);
+          vUv = uv;
+          gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+        }
+      `,
+      fragmentShader: `
+        uniform vec3 sunDirection;
+        uniform sampler2D nightMap;
+        varying vec3 vWorldNormal;
+        varying vec2 vUv;
+        void main() {
+          float d = dot(normalize(vWorldNormal), sunDirection);
+          float night = smoothstep(0.15, -0.3, d);
+          vec3 lights = texture2D(nightMap, vUv).rgb;
+          gl_FragColor = vec4(lights, night);
+        }
+      `,
       transparent: true,
-      opacity: 0.85,
       blending: THREE.AdditiveBlending,
       depthWrite: false,
       depthTest: false,
@@ -455,6 +612,7 @@ async function initGlobe() {
   // exact same rotation or its texture drifts off the real coastlines
   // (this was the "landed on the ocean" bug).
   nightLightsMesh.rotation.y = -Math.PI / 2
+  nightLightsMesh.renderOrder = 2
   globeInstance.scene().add(nightLightsMesh)
   applyNightLightsToggle()
 
@@ -758,9 +916,15 @@ onBeforeUnmount(() => {
   if (nightLightsMesh) {
     globeInstance?.scene()?.remove(nightLightsMesh)
     nightLightsMesh.geometry?.dispose()
-    nightLightsMesh.material?.map?.dispose()
+    nightLightsMesh.material?.uniforms?.nightMap?.value?.dispose()
     nightLightsMesh.material?.dispose()
     nightLightsMesh = null
+  }
+  if (nightMaskMesh) {
+    globeInstance?.scene()?.remove(nightMaskMesh)
+    nightMaskMesh.geometry?.dispose()
+    nightMaskMesh.material?.dispose()
+    nightMaskMesh = null
   }
   if (globeInstance) {
     if (typeof globeInstance._destructor === 'function') {

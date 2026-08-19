@@ -301,6 +301,13 @@ async function addExposureLayer(dataset) {
         geometry: JSON.parse(row.geom_geojson),
         properties: {
           ...row.properties,
+          // Bug fix (2026-08-20): asset_category lives in its own
+          // exposure_features column, not inside the properties JSONB —
+          // get_dataset_features_geojson now returns it as a sibling field
+          // (see the matching migration), so it has to be merged in here
+          // explicitly for the critical-infra category filter's
+          // ['get', 'asset_category'] MapLibre expression to find anything.
+          asset_category: row.asset_category,
           __metricValue: row.metric_value,
           __metricValueLabel: isCriticalInfra
             ? String(row.properties?.name ?? '').slice(0, 28)
@@ -1002,45 +1009,49 @@ function representativePoint(geometry) {
 // color when no event is selected or the layer isn't on.
 function updateCriticalInfraSeverityColoring() {
   if (!map) return
-  const criticalInfraDataset = exposureLayersStore.datasets.find((d) => d.source_name === 'osm-buildings')
-  if (!criticalInfraDataset) return
-  const sourceId = exposureSourceId(criticalInfraDataset)
-  const source = map.getSource(sourceId)
-  const geojson = exposureFeatureCache.get(criticalInfraDataset.id)
-  if (!source || !geojson) return
+  // Same store-wide-vs-visible-dataset mismatch as applyCriticalInfraCategoryFilter
+  // above — apply to every osm-buildings dataset actually on the map, not
+  // just whichever one .find() happened to return first.
+  const criticalInfraDatasets = exposureLayersStore.datasets.filter((d) => d.source_name === 'osm-buildings')
+  for (const criticalInfraDataset of criticalInfraDatasets) {
+    const sourceId = exposureSourceId(criticalInfraDataset)
+    const source = map.getSource(sourceId)
+    const geojson = exposureFeatureCache.get(criticalInfraDataset.id)
+    if (!source || !geojson) continue
 
-  const event = selectedImpactEvent.value
-  const radius = haloRadiusKm.value
-  const pointLayerId = `${sourceId}-point`
-  const fillLayerId = `${sourceId}-fill`
-  if (!map.getLayer(pointLayerId)) return
+    const event = selectedImpactEvent.value
+    const radius = haloRadiusKm.value
+    const pointLayerId = `${sourceId}-point`
+    const fillLayerId = `${sourceId}-fill`
+    if (!map.getLayer(pointLayerId)) continue
 
-  const fixedColor = colorForDataset(criticalInfraDataset)
-  if (!event || radius == null) {
-    for (const feature of geojson.features) delete feature.properties.__haloSeverity
+    const fixedColor = colorForDataset(criticalInfraDataset)
+    if (!event || radius == null) {
+      for (const feature of geojson.features) delete feature.properties.__haloSeverity
+      source.setData(geojson)
+      map.setPaintProperty(pointLayerId, 'circle-color', fixedColor)
+      if (map.getLayer(fillLayerId)) map.setPaintProperty(fillLayerId, 'fill-color', fixedColor)
+      continue
+    }
+
+    for (const feature of geojson.features) {
+      const point = representativePoint(feature.geometry)
+      if (!point) continue
+      const [lng, lat] = point
+      const d = distanceKm(event.lat, event.lng, lat, lng)
+      feature.properties.__haloSeverity = d <= radius ? 1 - Math.min(d / radius, 1) : null
+    }
     source.setData(geojson)
-    map.setPaintProperty(pointLayerId, 'circle-color', fixedColor)
-    if (map.getLayer(fillLayerId)) map.setPaintProperty(fillLayerId, 'fill-color', fixedColor)
-    return
+    const severityColorExpression = [
+      'case',
+      ['==', ['get', '__haloSeverity'], null], fixedColor,
+      ['interpolate', ['linear'], ['get', '__haloSeverity'],
+        0, HALO_SEVERITY_RAMP[0],
+        1, HALO_SEVERITY_RAMP[HALO_SEVERITY_RAMP.length - 1]],
+    ]
+    map.setPaintProperty(pointLayerId, 'circle-color', severityColorExpression)
+    if (map.getLayer(fillLayerId)) map.setPaintProperty(fillLayerId, 'fill-color', severityColorExpression)
   }
-
-  for (const feature of geojson.features) {
-    const point = representativePoint(feature.geometry)
-    if (!point) continue
-    const [lng, lat] = point
-    const d = distanceKm(event.lat, event.lng, lat, lng)
-    feature.properties.__haloSeverity = d <= radius ? 1 - Math.min(d / radius, 1) : null
-  }
-  source.setData(geojson)
-  const severityColorExpression = [
-    'case',
-    ['==', ['get', '__haloSeverity'], null], fixedColor,
-    ['interpolate', ['linear'], ['get', '__haloSeverity'],
-      0, HALO_SEVERITY_RAMP[0],
-      1, HALO_SEVERITY_RAMP[HALO_SEVERITY_RAMP.length - 1]],
-  ]
-  map.setPaintProperty(pointLayerId, 'circle-color', severityColorExpression)
-  if (map.getLayer(fillLayerId)) map.setPaintProperty(fillLayerId, 'fill-color', severityColorExpression)
 }
 
 watch(selectedImpactEvent, () => {
@@ -1087,18 +1098,30 @@ const activeCriticalInfraCategories = computed(() => CRITICAL_INFRA_CATEGORIES.f
 
 function applyCriticalInfraCategoryFilter() {
   if (!map) return
-  const criticalInfraDataset = exposureLayersStore.datasets.find((d) => d.source_name === 'osm-buildings')
-  if (!criticalInfraDataset) return
-  const sourceId = exposureSourceId(criticalInfraDataset)
+  // Bug fix (2026-08-20, user-reported: "filtreye bastığımda kapatması
+  // lazımdı ama kapatmadı"): `.find()` here used to grab whichever
+  // osm-buildings row happened to come first out of exposureLayersStore's
+  // datasets — which holds EVERY served country's exposure_datasets at
+  // once (see the store's own header comment), not just the one actually
+  // toggled on. When the first match wasn't the country currently rendered
+  // on the map, map.getLayer() below silently no-opped on a source id that
+  // was never added, while the real, visible layer kept every category on.
+  // Loop over every osm-buildings dataset that actually has layers on the
+  // map right now instead of picking just one.
+  const criticalInfraDatasets = exposureLayersStore.datasets.filter((d) => d.source_name === 'osm-buildings')
+  if (!criticalInfraDatasets.length) return
   const activeCategories = CRITICAL_INFRA_CATEGORIES.filter((c) => isCriticalInfraCategoryActive(c))
   const categoryFilter = ['in', ['get', 'asset_category'], ['literal', activeCategories]]
 
-  const fillLayerId = `${sourceId}-fill`
-  const lineLayerId = `${sourceId}-line`
-  const pointLayerId = `${sourceId}-point`
-  if (map.getLayer(fillLayerId)) map.setFilter(fillLayerId, ['all', ['==', ['geometry-type'], 'Polygon'], categoryFilter])
-  if (map.getLayer(lineLayerId)) map.setFilter(lineLayerId, ['all', ['in', ['geometry-type'], ['literal', ['LineString', 'Polygon']]], categoryFilter])
-  if (map.getLayer(pointLayerId)) map.setFilter(pointLayerId, ['all', ['==', ['geometry-type'], 'Point'], categoryFilter])
+  for (const dataset of criticalInfraDatasets) {
+    const sourceId = exposureSourceId(dataset)
+    const fillLayerId = `${sourceId}-fill`
+    const lineLayerId = `${sourceId}-line`
+    const pointLayerId = `${sourceId}-point`
+    if (map.getLayer(fillLayerId)) map.setFilter(fillLayerId, ['all', ['==', ['geometry-type'], 'Polygon'], categoryFilter])
+    if (map.getLayer(lineLayerId)) map.setFilter(lineLayerId, ['all', ['in', ['geometry-type'], ['literal', ['LineString', 'Polygon']]], categoryFilter])
+    if (map.getLayer(pointLayerId)) map.setFilter(pointLayerId, ['all', ['==', ['geometry-type'], 'Point'], categoryFilter])
+  }
 }
 
 /**
@@ -5139,8 +5162,18 @@ defineExpose({ clearCountrySelection })
   left: 0;
   max-width: 420px;
   min-width: 280px;
-  max-height: calc(100vh - 140px);
+  /* Kullanıcı bulgusu (2026-08-20): sabit "100vh - 140px" tahmini, uzun
+     katman listesinde ("Kritik Tesisler" kategori çipleri dahil) alt
+     footer'ın (.Görünüm Modu bar) ve üst header'ın gerçek yüksekliğini
+     hesaba katmıyordu — kısa viewport'ta liste footer'ın ALTINA taşıyordu.
+     FlowControlPanel.vue'nun (Rüzgar & Akıntı) aynı deseni: gerçek
+     header/footer yüksekliğini canlı ölçen --shell-header-height /
+     --shell-footer-height değişkenleriyle üst sınır — panel artık hiçbir
+     viewport yüksekliğinde bu iki şeridin arkasına/altına taşamaz, taşan
+     içerik ise overflow-y:auto ile fare tekerleğiyle kaydırılır. */
+  max-height: min(70vh, calc(100vh - var(--shell-header-height, 0px) - var(--shell-footer-height, 0px) - 24px));
   overflow-y: auto;
+  overscroll-behavior: contain;
   transform-origin: top left;
   z-index: 40;
 }

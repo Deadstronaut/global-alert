@@ -52,6 +52,7 @@ import { runOsmRoadsImport } from './import-osm-roads.ts'
 import { runOsmSheltersImport } from './import-osm-shelters.ts'
 import { runKonturPopulationImport } from './import-kontur-population.ts'
 import { runWfpHungerMapImport } from './import-wfp-hungermap.ts'
+import { runLiveFlightsImport } from './import-live-flights.ts'
 
 const JOBS: Record<string, { name: string; run: () => Promise<void>; schedule: string }> = {
   ghsl: { name: 'ghsl-population-import', run: runGhslImport, schedule: '0 3 1 * *' },
@@ -70,6 +71,10 @@ const JOBS: Record<string, { name: string; run: () => Promise<void>; schedule: s
   'osm-shelters': { name: 'osm-shelters-import', run: runOsmSheltersImport, schedule: '0 6 * * 7' },
   'kontur-population': { name: 'kontur-population-import', run: runKonturPopulationImport, schedule: '0 7 * * 7' }, // matches old import-kontur-population-weekly
   'wfp-hungermap': { name: 'wfp-hungermap-import', run: runWfpHungerMapImport, schedule: '0 * * * *' }, // matches old fetch-wfp-hungermap (hourly)
+  // spec 072: every 5 minutes — real aircraft move fast enough that hourly
+  // (this file's usual cadence) would be stale; 5 min is frequent enough to
+  // feel live without hammering OpenSky's anonymous rate limit.
+  'live-flights': { name: 'live-flights-import', run: runLiveFlightsImport, schedule: '*/5 * * * *' },
 }
 
 const jobKey = Deno.args[0]

@@ -8,10 +8,18 @@
  * that Edge Function's own header comment already flagged this as a
  * 150s-idle-timeout risk. A container has no such ceiling.
  *
+ * Sources from a local Geofabrik PBF extract (osmPbfBuildings.ts), not
+ * live Overpass queries (osmBuildingsFetch.ts, still used by the Edge
+ * Function fallback and by osmPbfBuildings.ts's own category-mapping
+ * logic) — live-verified repeatedly 2026-08-19/20 that overpass-api.de
+ * rate-limits/times out/resets connections for a country as large as
+ * Turkey even split across six narrower queries. See osmPbfBuildings.ts's
+ * header for the full reasoning.
+ *
  * Run via `docker compose run --rm osm-buildings-importer` (see docker-compose.yml).
  */
 import { getServedCountryCodes } from '../supabase/functions/shared/servedCountries.ts'
-import { fetchOsmBuildings } from '../supabase/functions/shared/osmBuildingsFetch.ts'
+import { fetchOsmBuildingsFromPbf } from './osmPbfBuildings.ts'
 import { partitionBuildingRecords } from '../supabase/functions/shared/buildingImportPartition.ts'
 import { writeExposureDataset } from '../supabase/functions/shared/writeExposureDataset.ts'
 import { recordFetchOutcome, resolveSourceId, logRejectedPayload, isSourceActive } from '../supabase/functions/shared/sourceHealth.ts'
@@ -26,15 +34,15 @@ export async function runOsmBuildingsImport(): Promise<void> {
   }
 
   const servedCountryCodes = await getServedCountryCodes()
-  console.log(`Fetching OSM critical-facility buildings for ${servedCountryCodes.length} served countries: ${servedCountryCodes.join(', ')}`)
+  console.log(`Fetching OSM critical-facility buildings (local PBF) for ${servedCountryCodes.length} served countries: ${servedCountryCodes.join(', ')}`)
 
   let countryRecords: Map<string, BuildingRecord[]>
   try {
-    countryRecords = await fetchOsmBuildings(servedCountryCodes)
+    countryRecords = await fetchOsmBuildingsFromPbf(servedCountryCodes)
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e)
     if (sourceId) await recordFetchOutcome(sourceId, 'failure', message)
-    throw new Error(`fetchOsmBuildings failed: ${message}`)
+    throw new Error(`fetchOsmBuildingsFromPbf failed: ${message}`)
   }
 
   let countriesProcessed = 0
@@ -81,6 +89,7 @@ export async function runOsmBuildingsImport(): Promise<void> {
           metricValue: 1,
           properties: record.properties,
           assetCategory: record.assetCategory,
+          sector: record.sector,
         })),
       )
       console.log(`[${countryCode}] wrote dataset ${datasetId} (${featureCount} features)`)

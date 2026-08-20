@@ -24,6 +24,7 @@
     "settings": "设置",
     "dashboard": "仪表盘",
     "close": "关闭",
+    "resetPosition": "重置位置",
     "error": "错误",
     "retry": "重试",
     "noData": "未找到数据",

@@ -19,9 +19,17 @@ import { useUIStore } from '@/stores/ui.js'
 import { Slider } from '@/components/ui/slider'
 import { fetchLatestFlowSnapshot, fetchLatestOverlaySnapshot } from '@/utils/windLayerData.js'
 import { isFlowSnapshotStale } from '@/utils/flowSnapshotStaleness.js'
+import { useDraggableCard } from '@/composables/useDraggableCard.js'
 
 const { t } = useI18n()
 const uiStore = useUIStore()
+
+// Draggable card (position persists in localStorage, resets via the header's
+// reload button) — drag is scoped to the header only so the panel's own
+// Mode/Animate/Overlay chips, sliders, and checkboxes stay fully unaffected.
+const flowPanelBodyRef = ref(null)
+const flowPanelHeaderRef = ref(null)
+const { reset: resetFlowPanelPosition } = useDraggableCard('flow-control-panel', flowPanelBodyRef, flowPanelHeaderRef)
 
 // spec 068 follow-up: this panel can now mount in two places — its
 // original spot near the left-side severity legend (opens rightward, the
@@ -284,9 +292,21 @@ const activeModeInfo = computed(() => MODES.find((m) => m.id === uiStore.selecte
     :class="{ 'flow-control-panel--open': uiStore.flowPanelOpen, 'flow-control-panel--opens-leftward': opensLeftward }"
   >
     <Transition name="flow-panel-expand">
-      <div v-if="uiStore.flowPanelOpen" class="flow-control-panel-body">
-        <div class="flow-control-panel-header">
+      <div v-if="uiStore.flowPanelOpen" ref="flowPanelBodyRef" class="flow-control-panel-body">
+        <div ref="flowPanelHeaderRef" class="flow-control-panel-header flow-control-panel-header--draggable">
           <h4 class="flow-control-panel-title">{{ t('windLayer.panelTitle') }}</h4>
+          <div class="flow-control-panel-header-actions">
+          <button
+            type="button"
+            class="drag-card-reset-btn"
+            :title="t('app.resetPosition')"
+            :aria-label="t('app.resetPosition')"
+            @click.stop="resetFlowPanelPosition()"
+          >
+            <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true">
+              <path d="M20 12a8 8 0 1 1-2.34-5.66M20 4v5h-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+            </svg>
+          </button>
           <!-- spec 069 follow-up: too many independent selections in this
                panel (Overlay/Height/Mode/Animate) to hunt down and turn off
                one at a time. Deliberately a labeled action button, not a
@@ -307,6 +327,7 @@ const activeModeInfo = computed(() => MODES.find((m) => m.id === uiStore.selecte
             :aria-label="uiStore.hasActiveFlowSelections ? t('windLayer.masterToggleOff') : t('windLayer.masterToggleAllOff')"
             @click="uiStore.resetAllFlowSettings()"
           >{{ t('windLayer.masterClearLabel') }}</button>
+          </div>
         </div>
 
         <div class="flow-view-bar-row">
@@ -565,6 +586,35 @@ const activeModeInfo = computed(() => MODES.find((m) => m.id === uiStore.selecte
   align-items: center;
   justify-content: space-between;
   margin-bottom: 10px;
+}
+
+.flow-control-panel-header--draggable {
+  cursor: all-scroll;
+}
+
+.flow-control-panel-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.drag-card-reset-btn {
+  flex-shrink: 0;
+  width: 22px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border-radius: 5px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.65);
+  cursor: pointer;
+}
+.drag-card-reset-btn:hover {
+  background: rgba(255, 255, 255, 0.14);
+  color: #fff;
 }
 
 .flow-control-panel-title {

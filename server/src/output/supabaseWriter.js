@@ -130,7 +130,7 @@ async function mergeContributingSource(existingRow, incomingRow) {
   if (sources.length === 0) sources.push({ source: existingRow.source, magnitude: existingRow.magnitude });
   if (sources.some((s) => s.source === incomingRow.source)) return; // already have this agency
   sources.push({ source: incomingRow.source, magnitude: incomingRow.magnitude, sourceUrl: incomingRow.source_url, receivedAt: incomingRow.received_at });
-  const { error } = await supabase.from('earthquake').update({ contributing_sources: JSON.stringify(sources) }).eq('id', existingRow.id);
+  const { error } = await supabase.from('earthquake').update({ contributing_sources: sources }).eq('id', existingRow.id);
   if (error) console.warn(`[Supabase] contributing_sources merge failed for ${existingRow.id}:`, error.message);
 }
 
@@ -152,7 +152,7 @@ async function flushSourceMergeQueue() {
   sourceMergeTimer = null;
   const batch = sourceMergeQueue.splice(0, sourceMergeQueue.length);
   for (const { id, contributingSources } of batch) {
-    const { error } = await supabase.from('earthquake').update({ contributing_sources: JSON.stringify(contributingSources) }).eq('id', id);
+    const { error } = await supabase.from('earthquake').update({ contributing_sources: contributingSources }).eq('id', id);
     if (error) console.warn(`[Supabase] contributing_sources update failed for ${id}:`, error.message);
   }
 }
@@ -206,7 +206,7 @@ export async function writeEarlyWarning(warning) {
       lat: warning.earthquake.lat,
       lng: warning.earthquake.lng,
       earthquake_time: warning.earthquake.time,
-      affected_cities: JSON.stringify(warning.affectedCities),
+      affected_cities: warning.affectedCities,
       estimated_affected_pop: warning.estimatedAffectedPop,
       max_warning_time_sec: warning.maxWarningTimeSec,
       created_at: new Date().toISOString(),
@@ -232,12 +232,25 @@ function mapToRow(event) {
     source_url: event.sourceUrl,
     h3_id: event.h3Id ?? null,
     country_code: event.countryCode ?? null,
-    extra: JSON.stringify(event.extra || {}),
+    // Bug fix (2026-08-20, user-reported: raw/unreadable data surfacing in
+    // the app — traced here while fixing a separate "MNaN" title bug).
+    // extra/contributing_sources are jsonb columns; supabase-js's own
+    // PostgREST client already serializes a plain JS object/array to JSON
+    // for a jsonb column on insert/upsert. Calling JSON.stringify() on it
+    // here first turned the value into a STRING before handing it to
+    // supabase-js, which then serialized THAT string as the jsonb payload
+    // — so every row ended up with extra/contributing_sources stored as a
+    // jsonb string scalar wrapping the real JSON, not a real jsonb object.
+    // Any direct SQL (`extra->>'field'`) against these columns silently
+    // returned NULL as a result (only this file's own read paths and the
+    // frontend's rowToEvent() worked, because both defensively re-parse a
+    // string form). Passing the plain object/array through directly lets
+    // supabase-js store it as real jsonb.
+    extra: event.extra || {},
     received_at: event.receivedAt,
     ...(event.type === 'earthquake' ? {
-      contributing_sources: JSON.stringify(
+      contributing_sources:
         event.contributingSources ?? [{ source: event.source, magnitude: event.magnitude, sourceUrl: event.sourceUrl, receivedAt: event.receivedAt }],
-      ),
     } : {}),
   };
 }

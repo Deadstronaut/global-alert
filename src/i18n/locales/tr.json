@@ -24,6 +24,7 @@
     "settings": "Ayarlar",
     "dashboard": "Panel",
     "close": "Kapat",
+    "resetPosition": "Konumu sıfırla",
     "error": "Hata",
     "retry": "Tekrar Dene",
     "noData": "Veri bulunamadı",
@@ -129,7 +130,15 @@
     "colTime": "Zaman",
     "colCountry": "Ülke",
     "allCountries": "Tüm Ülkeler",
-    "noCountryData": "Ülke verisi yok"
+    "noCountryData": "Ülke verisi yok",
+    "heatmap": {
+      "eventsUnit": "olay",
+      "less": "Az",
+      "more": "Çok",
+      "mon": "Pzt",
+      "wed": "Çar",
+      "fri": "Cum"
+    }
   },
   "sidebar": {
     "title": "Afet Katmanları",

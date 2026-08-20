@@ -12,9 +12,18 @@ import { Play, Pause } from '@lucide/vue'
 import { useUIStore } from '@/stores/ui.js'
 import { Slider } from '@/components/ui/slider'
 import { fetchForecastDayList, fetchForecastSnapshot } from '@/utils/forecastLayerData.js'
+import { useDraggableCard } from '@/composables/useDraggableCard.js'
 
 const { t } = useI18n()
 const uiStore = useUIStore()
+
+// Draggable card (position persists in localStorage, resets via the header's
+// reload button) — drag is scoped to the header only, same as
+// FlowControlPanel.vue's sibling implementation, so the chip row/slider/play
+// button below stay fully unaffected.
+const forecastPanelBodyRef = ref(null)
+const forecastPanelHeaderRef = ref(null)
+const { reset: resetForecastPanelPosition } = useDraggableCard('forecast-panel', forecastPanelBodyRef, forecastPanelHeaderRef)
 
 // spec 069 follow-up: moved out of .severity-legend-stack (left side of the
 // map, disappeared whenever Isı/heatmap mode hid that whole stack) into its
@@ -161,9 +170,20 @@ function formatRangeValue(n) {
 <template>
   <div class="forecast-panel" :class="{ 'forecast-panel--opens-leftward': opensLeftward, 'forecast-panel--opens-downward': opensDownward }">
     <Transition name="flow-panel-expand">
-      <div v-if="uiStore.forecastPanelOpen" class="forecast-panel-body">
-        <div class="forecast-panel-header">
+      <div v-if="uiStore.forecastPanelOpen" ref="forecastPanelBodyRef" class="forecast-panel-body">
+        <div ref="forecastPanelHeaderRef" class="forecast-panel-header forecast-panel-header--draggable">
           <h4 class="forecast-panel-title">{{ t('flowPanel.forecast.rowLabel') }}</h4>
+          <button
+            type="button"
+            class="drag-card-reset-btn"
+            :title="t('app.resetPosition')"
+            :aria-label="t('app.resetPosition')"
+            @click.stop="resetForecastPanelPosition()"
+          >
+            <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true">
+              <path d="M20 12a8 8 0 1 1-2.34-5.66M20 4v5h-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+            </svg>
+          </button>
         </div>
 
         <div class="forecast-chip-row">
@@ -329,13 +349,36 @@ function formatRangeValue(n) {
 }
 
 .forecast-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
   margin-bottom: 10px;
 }
+.forecast-panel-header--draggable { cursor: all-scroll; }
 .forecast-panel-title {
   margin: 0;
   font-size: 0.8rem;
   font-weight: 700;
   color: #e2e8f0;
+}
+.drag-card-reset-btn {
+  flex-shrink: 0;
+  width: 22px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border-radius: 5px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.65);
+  cursor: pointer;
+}
+.drag-card-reset-btn:hover {
+  background: rgba(255, 255, 255, 0.14);
+  color: #fff;
 }
 
 .forecast-chip-row {

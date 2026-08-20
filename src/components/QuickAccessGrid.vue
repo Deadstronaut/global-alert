@@ -32,6 +32,18 @@ const props = defineProps({
   // duplicates ("burada iki tane katman oldu") — this one now IS that icon,
   // the old standalone trigger for it was removed.
   layersClick: { type: Function, required: true },
+  // Whether the exposure-layers flyout this icon opens is currently open —
+  // needed since, unlike Flights/Shelters (own uiStore booleans read
+  // directly below), that panel's open state lives in the parent's local
+  // component state, not a shared store.
+  layersActive: { type: Boolean, default: false },
+  // Same reasoning as layersActive above — uiStore.showShelters is the
+  // shelters MAP LAYER's own on/off (a checkbox inside the flyout, off by
+  // default even while the flyout is open), not whether this icon's flyout
+  // card itself is open, so it doesn't turn this icon yellow the moment you
+  // open the card the way Flights' single store boolean does (live-testing
+  // report, 2026-08-20: "uçuşlarda döndü ama shelter'da hâlâ yok").
+  sheltersActive: { type: Boolean, default: false },
 })
 
 const uiStore = useUIStore()
@@ -64,6 +76,7 @@ const { t } = useI18n()
     <button
       type="button"
       class="quick-access-btn"
+      :class="{ active: layersActive }"
       :title="t('mapLayers.panelTitle')"
       :aria-label="t('mapLayers.panelTitle')"
       @click="layersClick()"
@@ -77,7 +90,7 @@ const { t } = useI18n()
     <button
       type="button"
       class="quick-access-btn"
-      :class="{ active: uiStore.showShelters }"
+      :class="{ active: sheltersActive }"
       :title="t('shelters.map.toggleLabel')"
       :aria-label="t('shelters.map.toggleLabel')"
       @click="sheltersClick ? sheltersClick() : uiStore.toggleShelters()"
@@ -120,8 +133,8 @@ const { t } = useI18n()
 }
 
 .quick-access-btn.active {
-  border-color: rgba(120, 180, 255, 0.7);
-  color: #7fd4ff;
+  border-color: #d4a94a;
+  color: #d4a94a;
 }
 
 .quick-access-icon {

@@ -10,6 +10,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
+import HazardEventsHeatmap from '@/components/layout/HazardEventsHeatmap.vue'
 
 // Kullanıcı isteği (2026-08-18): afet tipi çipindeki zil ikonu "Olay Takibi"
 // (insan tarafından SOP'a bağlı incident yönetimi, IncidentsView.vue) sayfasını
@@ -219,6 +220,8 @@ function formatTime(iso) {
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
+
+        <HazardEventsHeatmap :events="filteredEvents" />
 
         <div class="hazard-events-body">
           <div v-if="pagedEvents.length === 0" class="hazard-events-empty">

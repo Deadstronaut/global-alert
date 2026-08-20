@@ -75,7 +75,23 @@ function parseKandilli(html) {
     if (!m) continue;
 
     const [, date, time, lat, lng, depth, md, ml, ms, loc] = m;
-    const mag = Math.max(parseFloat(md), parseFloat(ml), parseFloat(ms));
+    // Bug fix (2026-08-20, user-reported: title showed "MNaN - ...", and
+    // separately every recent Kandilli event's magnitude was silently 0).
+    // Kandilli reports "-.-" for a magnitude type it hasn't computed for a
+    // given event — true for MD (duration magnitude) and Mw (moment
+    // magnitude) on nearly every small/local Turkish quake, where only ML
+    // (local/Richter) is ever actually populated. "-.-" matches this
+    // regex's own [\d.-]+ capture group (it's just dots/hyphens), so
+    // parseFloat('-.-') is NaN — and Math.max(NaN, ml, NaN) is ALWAYS NaN
+    // regardless of a perfectly valid ml, since Math.max propagates a
+    // single NaN input to the result. That NaN used to leak straight into
+    // the title ("MNaN"); it was ALSO overwriting a real, known magnitude
+    // (e.g. ML 1.0) with a stored 0 — the more serious half of this bug,
+    // silently zeroing out real magnitude data for virtually every
+    // Turkish earthquake this source reported. Fixed by taking the max of
+    // only the finite candidates instead of feeding NaN into Math.max.
+    const magCandidates = [parseFloat(md), parseFloat(ml), parseFloat(ms)].filter((v) => !isNaN(v));
+    const displayMag = magCandidates.length ? Math.max(...magCandidates) : 0;
     const isoTime = `${date.replace(/\./g, '-')}T${time}`;
     const id = `kandilli-${date}-${time}-${lat}-${lng}`;
 
@@ -84,10 +100,10 @@ function parseKandilli(html) {
       type: 'earthquake',
       lat: parseFloat(lat),
       lng: parseFloat(lng),
-      magnitude: isNaN(mag) ? 0 : mag,
+      magnitude: displayMag,
       depth: parseFloat(depth),
-      title: `M${mag.toFixed(1)} - ${loc.trim()}`,
-      description: `M${mag.toFixed(1)} ${loc.trim()} | Derinlik: ${depth}km`,
+      title: `M${displayMag.toFixed(1)} - ${loc.trim()}`,
+      description: `M${displayMag.toFixed(1)} ${loc.trim()} | Derinlik: ${depth}km`,
       time: isoTime,
       source: 'Kandilli',
       sourceUrl: 'http://www.koeri.boun.edu.tr/scripts/lst0.asp',

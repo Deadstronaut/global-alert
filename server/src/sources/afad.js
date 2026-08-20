@@ -65,7 +65,14 @@ export function startAFAD(onEvent, opts = {}) {
 }
 
 function normalizeAFAD(e) {
-  const mag = parseFloat(e.magnitude || e.mag || 0);
+  // Bug fix (2026-08-20, same class of bug found in Kandilli's normalizer):
+  // e.magnitude can arrive as a non-numeric placeholder string (AFAD sends
+  // "-" for an event it hasn't computed a magnitude for yet) — that's
+  // truthy, so `e.magnitude || e.mag || 0` picks it over the 0 fallback,
+  // and parseFloat('-') is NaN. Unguarded, that NaN used to flow straight
+  // into magnitude AND into the title/description strings ("MNaN - ...").
+  const rawMag = parseFloat(e.magnitude || e.mag || 0);
+  const mag = isNaN(rawMag) ? 0 : rawMag;
   const lat = parseFloat(e.latitude || e.lat);
   const lng = parseFloat(e.longitude || e.lon || e.lng);
   if (isNaN(lat) || isNaN(lng)) return null;

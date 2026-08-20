@@ -35,7 +35,7 @@ import PanelCollapseToggle from '@/components/PanelCollapseToggle.vue'
 import FlowControlPanel from '@/components/FlowControlPanel.vue'
 import ForecastPanel from '@/components/ForecastPanel.vue'
 import QuickAccessGrid from '@/components/QuickAccessGrid.vue'
-import LayerPanelGroup from '@/components/map/LayerPanelGroup.vue'
+import { useDraggableCard } from '@/composables/useDraggableCard.js'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { useMapLayersStore } from '@/stores/mapLayers.js'
@@ -1291,6 +1291,32 @@ const sheltersLayerPanelCollapsed = ref(true)
 // one closes the other two (avoids two flyouts overlapping on top of each
 // other, live-testing concern).
 const mapLayersPanelOpen = ref(false)
+
+// Draggable flyout cards (position persists in localStorage, resettable via
+// each card's header reload button) — see useDraggableCard.js. Drag is
+// scoped to each card's own header (title) element only, so the checkboxes/
+// sliders/buttons inside the card body stay completely unaffected.
+const exposureLayersPanelBodyRef = ref(null)
+const exposureLayersPanelHeaderRef = ref(null)
+const { reset: resetExposureLayersPanelPosition } = useDraggableCard(
+  'exposure-layers-panel',
+  exposureLayersPanelBodyRef,
+  exposureLayersPanelHeaderRef,
+)
+const sheltersLayerPanelBodyRef = ref(null)
+const sheltersLayerPanelHeaderRef = ref(null)
+const { reset: resetSheltersLayerPanelPosition } = useDraggableCard(
+  'shelters-layer-panel',
+  sheltersLayerPanelBodyRef,
+  sheltersLayerPanelHeaderRef,
+)
+const mapLayersPanelBodyRef = ref(null)
+const mapLayersPanelHeaderRef = ref(null)
+const { reset: resetMapLayersPanelPosition } = useDraggableCard(
+  'wms-layers-panel',
+  mapLayersPanelBodyRef,
+  mapLayersPanelHeaderRef,
+)
 
 function openShelters() {
   sheltersLayerPanelCollapsed.value = false
@@ -2873,11 +2899,24 @@ function setupMapInteractions() {
     map.getCanvas().style.cursor = ''
   })
 
+  // A click whose real DOM target is (or is inside) a disaster-marker
+  // element — used to make the country-select/empty-click handlers below
+  // ignore marker clicks without resorting to ev.stopPropagation() on the
+  // marker itself, which also silently disables maplibre-gl's own built-in
+  // marker-popup-toggle (see the 2026-08-20 fix comment on the marker's own
+  // click listener, above, for the full explanation).
+  function isEventMarkerClick(e) {
+    return !!e.originalEvent?.target?.closest?.('.disaster-marker')
+  }
+
   // ── Single-click: select country ──
   map.on('click', interactionLayers, (e) => {
     // Don't trigger country select if clicking on an event hex popup target
     const hexFeats = map.queryRenderedFeatures(e.point, { layers: ['hex-fill'] })
     if (hexFeats.length > 0) return
+    // Bug fix (2026-08-20, user-reported: disaster marker popup cards
+    // stopped opening) — see isEventMarkerClick's own comment.
+    if (isEventMarkerClick(e)) return
 
     if (e.features.length > 0) {
       selectCountry(e.features[0])
@@ -2886,6 +2925,9 @@ function setupMapInteractions() {
 
   // ── Empty click: clear selection ──
   map.on('click', (e) => {
+    // Bug fix (2026-08-20, user-reported: disaster marker popup cards
+    // stopped opening) — see isEventMarkerClick's own comment.
+    if (isEventMarkerClick(e)) return
     const features = map.queryRenderedFeatures(e.point, { layers: interactionLayers })
     const hexFeats = map.queryRenderedFeatures(e.point, { layers: ['hex-fill'] })
     if (features.length === 0 && hexFeats.length === 0) {
@@ -3941,17 +3983,24 @@ function updateMarkers() {
 
     // Impact Analysis (spec 008): drive the split-view side panel independently
     // of the existing popup toggle behavior.
-    // stopPropagation is required, not cosmetic: MapLibre Markers are
-    // appended into getCanvasContainer() itself, so a click here also
-    // bubbles into the map's own 'click' handlers underneath (selectCountry
-    // / clearCountrySelection below). Without it, clicking an event marker
-    // that isn't over the currently-selected country's polygon (e.g. a
-    // marker outside the selected country's own dimmed/filtered fill) fell
-    // through to the empty-click handler and flew the camera back to
-    // defaultCameraState — reported 2026-08-07 as an unwanted zoom-out
-    // whenever clicking a marker outside the selected country.
-    el.addEventListener('click', (ev) => {
-      ev.stopPropagation()
+    // Bug fix (2026-08-20, user-reported: "kartları göremiyorum" — marker
+    // click popups stopped opening entirely, for a while, no console error).
+    // This used to call ev.stopPropagation() here to stop a marker click
+    // from also reaching the map's own 'click' handlers underneath
+    // (selectCountry / clearCountrySelection — see 2026-08-07 history below)
+    // — but MapLibre Markers are appended into getCanvasContainer() itself,
+    // and maplibre-gl's own Marker class wires its built-in popup-toggle
+    // (togglePopup, see maplibre-gl's Marker._onMapClick) through that SAME
+    // map-level 'click' event, sourced from the same underlying DOM click on
+    // that container. Calling stopPropagation() here silently prevented
+    // MapLibre's internal container-level click listener from ever firing
+    // too — collateral damage: it killed the marker's own popup-toggle
+    // alongside the country-select handler it was meant to suppress. Fixed
+    // by leaving DOM propagation alone and instead making the two handlers
+    // that used to misfire (selectCountry's click handler, and the empty-
+    // click handler below) explicitly ignore clicks whose real target was a
+    // marker — see isEventMarkerClick.
+    el.addEventListener('click', () => {
       selectedImpactEvent.value = event
     })
 
@@ -4459,7 +4508,9 @@ defineExpose({ clearCountrySelection })
       :class="{ 'legend-sidebar-collapsed': uiStore.sidebarCollapsed }"
       :capture-fn="downloadMap"
       :shelters-click="toggleShelters"
+      :shelters-active="!sheltersLayerPanelCollapsed"
       :layers-click="toggleExposurePanelOpen"
+      :layers-active="!exposureLayersPanelCollapsed"
     />
 
     <!-- spec 068 follow-up: basemap picker as a row of directly-selectable
@@ -4500,6 +4551,7 @@ defineExpose({ clearCountrySelection })
         <button
           type="button"
           class="radar-trigger-btn"
+          :class="{ active: uiStore.flowPanelOpen }"
           :aria-label="uiStore.flowPanelOpen ? t('windLayer.panelCollapse') : t('windLayer.panelExpand')"
           :title="uiStore.flowPanelOpen ? t('windLayer.panelCollapse') : t('windLayer.panelExpand')"
           @click="uiStore.toggleFlowPanel()"
@@ -4709,30 +4761,63 @@ defineExpose({ clearCountrySelection })
            one closes the other two so they never overlap). -->
       <div class="layer-panel-stack">
         <!-- OGC WMS/WFS Map Layers (spec 012): toggle + opacity, session-only state.
-             spec 068 US2: now wrapped in the shared collapsed-by-default
-             LayerPanelGroup accordion (previously always fully expanded
-             with no collapse control at all). -->
-        <LayerPanelGroup
-          v-if="mapLayersStore.activeMapLayers.length"
-          v-model:open="mapLayersPanelOpen"
-          :title="t('mapLayers.panelTitle')"
-          class="map-layers-panel"
-        >
-          <div v-for="layer in mapLayersStore.activeMapLayers" :key="layer.id" class="map-layer-row">
-            <label class="map-layer-toggle">
-              <Checkbox :model-value="isLayerVisible(layer.id)" @update:model-value="toggleMapLayer(layer)" />
-              <span>{{ layer.display_name }}</span>
-              <span class="map-layer-type">{{ layer.source_type.toUpperCase() }}</span>
-            </label>
-            <input
-              v-if="isLayerVisible(layer.id)"
-              type="range" min="0" max="1" step="0.05"
-              :value="getLayerOpacity(layer.id)"
-              @input="setMapLayerOpacity(layer, Number($event.target.value))"
-              class="map-layer-opacity"
-            />
-          </div>
-        </LayerPanelGroup>
+             spec 068 US2 originally wrapped this in the shared LayerPanelGroup
+             accordion (in-flow expand/collapse); spec-less follow-up
+             (2026-08-20, "layers'ı diğer kartlar gibi aynı yere getir sonra
+             drag ekle") switched it to the same absolute-positioned flyout
+             pattern as the Exposure/Shelters cards below, so it can be
+             draggable + reset like them — LayerPanelGroup.vue itself is left
+             untouched (still generic/reusable), this usage just no longer
+             uses it. -->
+        <div v-if="mapLayersStore.activeMapLayers.length" class="wms-layers-panel">
+          <button
+            type="button"
+            class="wms-layers-trigger-btn"
+            :class="{ 'wms-layers-trigger-btn--active': mapLayersPanelOpen }"
+            :title="t('mapLayers.panelTitle')"
+            :aria-label="t('mapLayers.panelTitle')"
+            @click="mapLayersPanelOpen = !mapLayersPanelOpen"
+          >
+            <svg class="wms-layers-trigger-icon" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M12 2 L2 7 L12 12 L22 7 Z" fill="#4da3ff" />
+              <path d="M2 12 L12 17 L22 12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" />
+              <path d="M2 17 L12 22 L22 17" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" />
+            </svg>
+            <span>{{ t('mapLayers.panelTitle') }}</span>
+          </button>
+          <Transition name="flow-panel-expand">
+            <div v-if="mapLayersPanelOpen" ref="mapLayersPanelBodyRef" class="map-layers-panel wms-layers-panel-body">
+              <div ref="mapLayersPanelHeaderRef" class="map-layers-title-row map-layers-title-row--draggable">
+                <h4 class="map-layers-title">{{ t('mapLayers.panelTitle') }}</h4>
+                <button
+                  type="button"
+                  class="drag-card-reset-btn"
+                  :title="t('app.resetPosition')"
+                  :aria-label="t('app.resetPosition')"
+                  @click.stop="resetMapLayersPanelPosition()"
+                >
+                  <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true">
+                    <path d="M20 12a8 8 0 1 1-2.34-5.66M20 4v5h-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+                  </svg>
+                </button>
+              </div>
+              <div v-for="layer in mapLayersStore.activeMapLayers" :key="layer.id" class="map-layer-row">
+                <label class="map-layer-toggle">
+                  <Checkbox :model-value="isLayerVisible(layer.id)" @update:model-value="toggleMapLayer(layer)" />
+                  <span>{{ layer.display_name }}</span>
+                  <span class="map-layer-type">{{ layer.source_type.toUpperCase() }}</span>
+                </label>
+                <input
+                  v-if="isLayerVisible(layer.id)"
+                  type="range" min="0" max="1" step="0.05"
+                  :value="getLayerOpacity(layer.id)"
+                  @input="setMapLayerOpacity(layer, Number($event.target.value))"
+                  class="map-layer-opacity"
+                />
+              </div>
+            </div>
+          </Transition>
+        </div>
 
         <!-- Exposure layers (spec 042): roads/population/rivers/basins etc, generic
              geometry-driven rendering + click-to-inspect. Toggle + opacity share the
@@ -4749,8 +4834,21 @@ defineExpose({ clearCountrySelection })
           class="exposure-layers-panel"
         >
           <Transition name="flow-panel-expand">
-          <div v-if="!exposureLayersPanelCollapsed" class="map-layers-panel exposure-layers-panel-body">
-            <h4 class="map-layers-title">{{ t('exposureLayers.panelTitle') }}</h4>
+          <div v-if="!exposureLayersPanelCollapsed" ref="exposureLayersPanelBodyRef" class="map-layers-panel exposure-layers-panel-body">
+            <div ref="exposureLayersPanelHeaderRef" class="map-layers-title-row map-layers-title-row--draggable">
+              <h4 class="map-layers-title">{{ t('exposureLayers.panelTitle') }}</h4>
+              <button
+                type="button"
+                class="drag-card-reset-btn"
+                :title="t('app.resetPosition')"
+                :aria-label="t('app.resetPosition')"
+                @click.stop="resetExposureLayersPanelPosition()"
+              >
+                <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true">
+                  <path d="M20 12a8 8 0 1 1-2.34-5.66M20 4v5h-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+                </svg>
+              </button>
+            </div>
             <!-- Gated on selectedCountryName, not selectedCountryCode: a custom
                  territory (e.g. KKTC) can be genuinely selected with no country
                  code at all, and should read as "no layers for this place" —
@@ -4846,8 +4944,21 @@ defineExpose({ clearCountrySelection })
            efektini sığınak ve etki alanı katmanlarında da kullan"). -->
       <div class="shelters-layer-panel">
         <Transition name="flow-panel-expand">
-          <div v-if="!sheltersLayerPanelCollapsed" class="shelters-layer-panel-body">
-            <h4 class="map-layers-title">{{ t('shelters.map.panelTitle') }}</h4>
+          <div v-if="!sheltersLayerPanelCollapsed" ref="sheltersLayerPanelBodyRef" class="shelters-layer-panel-body">
+            <div ref="sheltersLayerPanelHeaderRef" class="map-layers-title-row map-layers-title-row--draggable">
+              <h4 class="map-layers-title">{{ t('shelters.map.panelTitle') }}</h4>
+              <button
+                type="button"
+                class="drag-card-reset-btn"
+                :title="t('app.resetPosition')"
+                :aria-label="t('app.resetPosition')"
+                @click.stop="resetSheltersLayerPanelPosition()"
+              >
+                <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true">
+                  <path d="M20 12a8 8 0 1 1-2.34-5.66M20 4v5h-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+                </svg>
+              </button>
+            </div>
             <label class="map-layer-toggle">
               <Checkbox :model-value="uiStore.showShelters" @update:model-value="uiStore.toggleShelters()" />
               <span>{{ t('shelters.map.toggleLabel') }}</span>
@@ -5147,6 +5258,38 @@ defineExpose({ clearCountrySelection })
   color: #e2e8f0;
   font-size: .8rem;
 }
+.wms-layers-panel {
+  /* Same persistent-trigger + absolute flyout pattern as
+     .exposure-layers-panel/-body below, so this card is draggable +
+     resettable like its siblings (spec-less follow-up, 2026-08-20). */
+  position: relative;
+  z-index: 40;
+}
+.wms-layers-trigger-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: rgba(15, 18, 26, 0.9);
+  color: rgba(255, 255, 255, 0.85);
+  font-size: 0.78rem;
+  cursor: pointer;
+}
+.wms-layers-trigger-btn:hover { background: rgba(255, 255, 255, 0.1); }
+.wms-layers-trigger-btn--active { border-color: rgba(120, 180, 255, 0.7); color: #7fd4ff; }
+.wms-layers-trigger-icon { width: 16px; height: 16px; flex-shrink: 0; }
+.wms-layers-panel-body {
+  position: absolute;
+  top: calc(100% + 10px);
+  left: 0;
+  max-height: min(70vh, calc(100vh - var(--shell-header-height, 0px) - var(--shell-footer-height, 0px) - 24px));
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  transform-origin: top left;
+  z-index: 40;
+}
 .exposure-layers-panel {
   /* Persistent icon button + Transition-driven flyout body — same calm
      fade+scale expand as the wind/currents flow-control panel
@@ -5178,6 +5321,35 @@ defineExpose({ clearCountrySelection })
   z-index: 40;
 }
 .map-layers-title { margin: 0 0 10px; font-size: .8rem; font-weight: 700; }
+
+.map-layers-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.map-layers-title-row .map-layers-title { margin: 0; }
+.map-layers-title-row--draggable { cursor: all-scroll; }
+
+.drag-card-reset-btn {
+  flex-shrink: 0;
+  width: 22px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  margin-bottom: 10px;
+  border-radius: 5px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.65);
+  cursor: pointer;
+}
+.drag-card-reset-btn:hover {
+  background: rgba(255, 255, 255, 0.14);
+  color: #fff;
+}
 .map-layer-row { margin-bottom: 8px; }
 .map-layer-toggle { display: flex; align-items: center; gap: 6px; cursor: pointer; }
 .map-layer-type { margin-left: auto; font-size: .68rem; color: var(--color-text-muted,#94a3b8); }
@@ -5518,6 +5690,10 @@ defineExpose({ clearCountrySelection })
 }
 .radar-trigger-btn:hover {
   transform: scale(1.08);
+}
+.radar-trigger-btn.active {
+  border-color: #d4a94a;
+  color: #d4a94a;
 }
 .wind-trigger-icon {
   width: 26px;

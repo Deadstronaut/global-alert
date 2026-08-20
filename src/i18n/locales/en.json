@@ -24,6 +24,7 @@
     "settings": "Settings",
     "dashboard": "Dashboard",
     "close": "Close",
+    "resetPosition": "Reset position",
     "error": "Error",
     "retry": "Retry",
     "noData": "No data found",
@@ -129,7 +130,15 @@
     "colTime": "Time",
     "colCountry": "Country",
     "allCountries": "All Countries",
-    "noCountryData": "No country data"
+    "noCountryData": "No country data",
+    "heatmap": {
+      "eventsUnit": "events",
+      "less": "Less",
+      "more": "More",
+      "mon": "Mon",
+      "wed": "Wed",
+      "fri": "Fri"
+    }
   },
   "sidebar": {
     "title": "Disaster Layers",

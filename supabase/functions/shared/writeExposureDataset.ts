@@ -21,6 +21,7 @@
 import { getServiceClient } from './upsert.ts'
 import { geometryToWkt } from './geometryToWkt.ts'
 import { buildAdminBoundaryResolver } from './adminBoundaryLookup.ts'
+import { geometryToH3Cells } from './vectorToH3.ts'
 
 export interface ExposureFeatureInput {
   geometry: { type: string; coordinates: unknown }
@@ -90,7 +91,13 @@ export async function writeExposureDataset(
   // requirement for an import to succeed.
   const resolveAdminBoundary = await buildAdminBoundaryResolver(supabase, countryCode)
 
+  // id assigned client-side (not left to the column's gen_random_uuid()
+  // default) so the h3-cell index rows below can reference the right
+  // feature_id without depending on insert-returned rows coming back in
+  // the same order they were sent — Postgres/PostgREST never guarantees
+  // that for a multi-row INSERT.
   const rows = features.map((feature) => ({
+    id: crypto.randomUUID(),
     dataset_id: dataset.id,
     geom: `SRID=4326;${geometryToWkt(feature.geometry)}`,
     metric_value: feature.metricValue,
@@ -109,6 +116,36 @@ export async function writeExposureDataset(
       await supabase.from('exposure_datasets').delete().eq('id', dataset.id)
       throw new Error(`${featuresError.message} (failed at rows ${i}-${i + chunk.length})`)
     }
+  }
+
+  // H3 correlation index (spec-less follow-up, 2026-08-20 — "bütün
+  // katmanlarımız kendi arasında h3 hücre korelasyonuyla çalışmalı"): every
+  // exposure source, vector or raster, now gets its real geometry's
+  // covering h3 cells indexed here, so it can be correlated against a
+  // disaster event's own h3_id (or any other h3-indexed layer) the same
+  // way. Deliberately non-fatal on failure — the real exposure_features
+  // data already committed above; a missing h3 index row for one feature
+  // just means it won't surface in h3-based correlation until backfilled,
+  // never a reason to roll back the geometry import that already succeeded.
+  try {
+    const h3Rows = rows.flatMap((row, i) =>
+      geometryToH3Cells(features[i].geometry).map((h3Cell) => ({
+        feature_id: row.id,
+        dataset_id: dataset.id,
+        h3_cell: h3Cell,
+      })),
+    )
+    for (let i = 0; i < h3Rows.length; i += INSERT_CHUNK_SIZE) {
+      const { error: h3Error } = await supabase
+        .from('exposure_feature_h3_cells')
+        .insert(h3Rows.slice(i, i + INSERT_CHUNK_SIZE))
+      if (h3Error) {
+        console.error(`[writeExposureDataset] h3 index insert failed for ${sourceName}/${countryCode}: ${h3Error.message} (rows ${i}-${i + INSERT_CHUNK_SIZE})`)
+        break
+      }
+    }
+  } catch (e) {
+    console.error(`[writeExposureDataset] h3 index computation failed for ${sourceName}/${countryCode}: ${e instanceof Error ? e.message : e}`)
   }
 
   // Only now that the new dataset+features have fully committed: remove the

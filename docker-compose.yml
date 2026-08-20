@@ -875,6 +875,7 @@ services:
   #   docker compose run --rm hydrorivers-importer
   #   docker compose run --rm osm-buildings-importer
   #   docker compose run --rm osm-roads-importer
+  #   docker compose run --rm backfill-exposure-h3-cells
   worldpop-importer:
     build:
       context: .
@@ -940,6 +941,23 @@ services:
       dockerfile: raster-importer/Dockerfile
     container_name: mhews-osm-shelters-importer
     command: ["raster-importer/import-osm-shelters.ts"]
+    env_file:
+      - ./server/.env
+    networks:
+      - mhews
+
+  # ── One-off backfill: populates exposure_feature_h3_cells for every
+  # exposure_datasets row already imported before that index existed
+  # (writeExposureDataset.ts now populates it automatically for new imports
+  # going forward) — see backfill-exposure-h3-cells.ts's own header. Not
+  # scheduled — run once after deploying the h3-cells migration, safe to
+  # re-run (skips a dataset that's already indexed).
+  backfill-exposure-h3-cells:
+    build:
+      context: .
+      dockerfile: raster-importer/Dockerfile
+    container_name: mhews-backfill-exposure-h3-cells
+    command: ["raster-importer/backfill-exposure-h3-cells.ts"]
     env_file:
       - ./server/.env
     networks:

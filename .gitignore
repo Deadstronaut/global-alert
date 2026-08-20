@@ -70,3 +70,7 @@ __screenshots__/
 /tiles/
 
 .vercel
+
+# Working docs (plans, feedback/evidence reports, etc.) — not meant to be
+# part of the tracked repo history, kept local-only per request (2026-08-20).
+/docs/

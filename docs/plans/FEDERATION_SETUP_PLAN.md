@@ -106,10 +106,38 @@ olarak "sadece URL/anahtar değişir" olmalı. Ama doğrulanmadı:
 Bu madde **ilk gerçek self-host denemesinde** doğrulanmalı — teorik olarak
 plana yazıyoruz ama bir sürpriz riski var.
 
+**Güncelleme (2026-08-19):** Canlı bir audit'te sekiz kaynağın (WorldPop,
+HydroRIVERS, HydroBASINS, OSM Roads, OSM Buildings, Kontur Population, WFP
+HungerMap, GDO SPI) hem Docker'da (`raster-importer/cron.ts`) hem Supabase
+pg_cron'da **aynı anda, birbirinden habersiz** çalıştığı bulundu — gerçek
+mükerrer iş. Hepsi Docker'a taşındı (yeni script'ler:
+`import-gdo-spi.ts`, `import-kontur-population.ts`,
+`import-wfp-hungermap.ts`), Supabase tarafındaki karşılıkları
+`20260819130000_unschedule_docker_migrated_crons.sql` ile kapatıldı ve
+canlıda doğrulandı (`cron.job` tablosu sorgulanarak — 8 job de artık yok).
+
+Bu arada `import-gdo-spi`'nin Edge Function'ının zaten bundle
+edilemediği de doğrulandı (`node:vm` — bu maddenin öngördüğü tam risk,
+`import-worldpop`/`import-ghsl` ile aynı `geotiff`/esm.sh regresyonu).
+Yani bu risk teorik değil, GDO SPI özelinde **zaten gerçekleşmiş durumda**
+— self-host'ta da aynen çıkacağını varsaymak güvenli.
+
+Geriye kalan 13 pg_cron job'u (retention temizlikleri, rapor üretimleri,
+`ai-anomaly-check-15min`, `dispatch-auto-retry-15min`,
+`drill-scenario-steps-1min`, `import-country-risk-index-monthly`) DB-native
+işler — bir self-host kurulumunun kendi `supabase start` paketiyle
+otomatik gelir, ayrı bir taşıma/paketleme gerektirmez. Docker tarafı artık
+sadece gerçekten "sürekli/yüksek headroom gerektiren" kaynakları
+barındırıyor; Supabase tarafı sadece DB-içi bakım + birkaç Edge-Function-
+çağıran düşük frekanslı iş barındırıyor — §4'teki "deneme self-host
+kurulumu" adımı için mimari artık daha temiz bir başlangıç noktası.
+
 ## 4. Önerilen sıralama (bu büyüklükte bir iş tek seferde yapılmaz)
 
 1. **Deneme self-host kurulumu** (bu makinede veya bir test VPS'inde,
    gerçek bir ülke olmadan) — 3.3'teki varsayımları doğrula
+   ← **sıradaki somut adım** (2026-08-19 itibarıyla Docker/Supabase ayrımı
+   temizlendi, bu deneme artık daha az sürprizle yapılabilir)
 2. **İlk-hesap bootstrap script'i** (3.2) — küçük, izole, test edilebilir
 3. **Kurulum script'inin ilk versiyonu** (3.1) — muhtemelen Türkiye/
    Madagaskar için zaten kurulu olanı "yeniden kurulum" gibi simüle ederek

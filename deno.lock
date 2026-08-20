@@ -233,6 +233,7 @@
         "npm:@unovis/vue@^1.6.7",
         "npm:@vitejs/plugin-vue@^6.0.4",
         "npm:@vueuse/core@^14.4.0",
+        "npm:animejs@^4.5.0",
         "npm:axios@^1.13.5",
         "npm:class-variance-authority@~0.7.1",
         "npm:clsx@^2.1.1",
